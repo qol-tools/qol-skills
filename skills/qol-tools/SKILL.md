@@ -11,7 +11,7 @@ description: Use when working anywhere in the qol-tools org (qol-tray, qol-confi
 
 ## Workspace layout
 
-Repos are siblings under `/media/kmrh47/WD_SN850X/Git/qol-tools/`:
+Repos are siblings under the qol-tools workspace directory — typically `~/repos/private/qol-tools/` on Mac or `/media/kmrh47/WD_SN850X/Git/qol-tools/` on Linux. Adjust to your machine:
 
 - `workspace/` — the "meta" repo. Holds `docs/` (specs, plans, status notes), `.claude/skills/`, cross-repo scripts, planning material. No Rust code. Docs live under `docs/superpowers/specs/YYYY-MM-DD-*.md` and `docs/superpowers/plans/YYYY-MM-DD-*.md`. Currently on `main` — no feature branches here.
 - `qol-tray/` — the host app (Rust + Preact UI). The tray, plugin loader, resolver, plugin-store, dev-linking, HTTP server.
