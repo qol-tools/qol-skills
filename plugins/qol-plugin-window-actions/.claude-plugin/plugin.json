@@ -1,0 +1,8 @@
+{
+  "name": "qol-plugin-window-actions",
+  "description": "Skills for the qol-tray window actions plugin: window minimize/restore and monitor movement.",
+  "version": "0.1.0",
+  "author": {
+    "name": "KMRH47"
+  }
+}

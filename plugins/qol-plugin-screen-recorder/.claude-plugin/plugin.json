@@ -1,0 +1,8 @@
+{
+  "name": "qol-plugin-screen-recorder",
+  "description": "Skills for the qol-tray screen recorder plugin: ffmpeg recording flow and X11-based display capture.",
+  "version": "0.1.0",
+  "author": {
+    "name": "KMRH47"
+  }
+}
