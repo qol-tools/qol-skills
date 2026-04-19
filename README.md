@@ -2,106 +2,67 @@
 
 Claude Code skills for everything in the [qol-tools](https://github.com/qol-tools) GitHub org: the [qol-tray](https://github.com/qol-tools/qol-tray) host app, every plugin, the shared libraries, the workspace conventions, the CI/CD pipeline, and the language patterns the codebase relies on.
 
-This is a **plain skills repository** — every top-level directory is a skill, each containing a single `SKILL.md`. There is no `.claude-plugin/plugin.json`; the repo is a knowledge hub, not a coherent feature plugin. Drop the directory wherever Claude Code looks for skills (typically a `.claude/skills/` symlink in your workspace, or `~/.claude/skills/` for user-global) and every skill auto-discovers.
+This repo is a **Claude Code marketplace** — 12 fine-grained plugins, one per logical area, so you can toggle the scope you want on any given machine.
 
-## Pointing Claude Code at this repo
+## Install
 
-Clone once, then surface the skills into whichever workspace you want them active in.
+Install the marketplace once, then enable only the plugins you need:
 
-### Option A: workspace symlink (recommended)
-
-```bash
-git clone https://github.com/qol-tools/qol-skills ~/repos/private/qol-tools/qol-skills
-
-cd /path/to/your/workspace
-mkdir -p .claude
-ln -s ~/repos/private/qol-tools/qol-skills .claude/skills
+```
+/plugin marketplace add qol-tools/qol-skills
+/plugin install qol-host
+/plugin install qol-plugin-launcher
+# ...etc
 ```
 
-Claude Code reads `<workspace>/.claude/skills/*/SKILL.md` automatically. Updates are a `git pull` away.
+Or install everything via `/plugin` in the Claude Code UI and toggle plugins on/off per project.
 
-### Option B: user-global
+## Plugins
 
-If you want every Claude Code session everywhere to see these skills, symlink at the user level instead:
+| Plugin | Skills bundled |
+|---|---|
+| `qol-plugin-alt-tab` | `qol-plugin-alt-tab`, `plugin-alt-tab-release-flow` |
+| `qol-plugin-launcher` | `qol-plugin-launcher`, `plugin-launcher-release-flow` |
+| `qol-plugin-pointz` | `qol-plugin-pointz`, `pointz-client` |
+| `qol-plugin-ide-checkout` | `qol-plugin-ide-checkout`, `qol-tray-task-runner-ide-checkout` |
+| `qol-plugin-keyremap` | `qol-plugin-keyremap` |
+| `qol-plugin-lights` | `qol-plugin-lights` |
+| `qol-plugin-os-themes` | `qol-plugin-os-themes` |
+| `qol-plugin-screen-recorder` | `qol-plugin-screen-recorder` |
+| `qol-plugin-window-actions` | `qol-plugin-window-actions` |
+| `qol-host` | `qol-tray`, `qol-tray-dev-logging`, `qol-tray-feature-profile`, `qol-tray-release-flow`, `qol-tray-ui-systems`, `qol-world-canvas`, `qol-apps-testing` |
+| `qol-dev-conventions` | `rust`, `gpui`, `preact`, `commit`, `git-push`, `git-trees`, `coding-general`, `qol-architecture`, `qol-shared-libs`, `qol-plugin-template` |
+| `qol-ecosystem` | `qol-tools`, `qol-cicd` |
 
-```bash
-git clone https://github.com/qol-tools/qol-skills ~/repos/private/qol-tools/qol-skills
+Each plugin has its own `.claude-plugin/plugin.json`; every skill lives at `plugins/<plugin-name>/skills/<skill-name>/SKILL.md`.
 
-ln -s ~/repos/private/qol-tools/qol-skills ~/.claude/skills/qol-skills-bundle
+## Repo layout
+
 ```
-
-Note: `~/.claude/skills/` expects each child to be a skill folder with its own `SKILL.md`, not a parent directory of skills. Option A (per-workspace symlink to the qol-skills root) keeps each skill addressable as a top-level entry and is what this repo is designed for.
-
-### Option C: per-skill cherry-pick
-
-If you want only a subset, symlink individual skill directories:
-
-```bash
-ln -s ~/repos/private/qol-tools/qol-skills/rust /path/to/workspace/.claude/skills/rust
-ln -s ~/repos/private/qol-tools/qol-skills/coding-general /path/to/workspace/.claude/skills/coding-general
+qol-skills/
+├── .claude-plugin/
+│   └── marketplace.json         # lists all 12 plugins
+├── plugins/
+│   ├── qol-plugin-alt-tab/
+│   │   ├── .claude-plugin/plugin.json
+│   │   └── skills/
+│   │       ├── qol-plugin-alt-tab/SKILL.md
+│   │       └── plugin-alt-tab-release-flow/SKILL.md
+│   └── ...
+├── LICENSE
+└── README.md
 ```
-
-## What's in here
-
-32 skills organized by what they describe.
-
-### Org + workspace
-- `qol-tools` — org-level conventions, repo layout, dependency model, branch policy
-- `qol-cicd` — shared CI workflows and release/versioning standards
-- `git-push` — pre-push verification and rebase-before-push policy
-- `git-trees` — coordinated multi-repo worktrees by feature lane
-- `commit` — conventional commit message conventions
-
-### Language + framework
-- `coding-general` — universal coding guidelines (questionnaire, style, architecture, testing)
-- `rust` — Rust plugin patterns: cross-platform, error handling, process management, local CI verification
-- `gpui` — gpui 0.2 + gpui-component verified patterns and gotchas
-- `preact` — qol-tray Preact + htm patterns: hooks, icons, toasts, focus, surface trait architecture
-- `qol-architecture` — cross-platform strategy pattern (replaces `#[cfg(target_os)]` sprawl)
-- `qol-apps-testing` — when to use property tests, parameterized tests, what to avoid
-
-### qol-tray host app
-- `qol-tray` — core qol-tray: plugin system, tray platform modules, feature architecture
-- `qol-tray-ui-systems` — UI components, modals, keyboard nav, dropdowns, toggles, focus, selection wedge
-- `qol-tray-dev-logging` — frontend `createDebug` namespace + message-style rules
-- `qol-tray-feature-profile` — Profile feature: export/import, sync, backups, lock reconciliation
-- `qol-tray-task-runner-ide-checkout` — Task Runner HTTP API contract (browser-extension surface)
-- `qol-tray-release-flow` — qol-tray release tagging, commit format, CI triggers
-- `qol-world-canvas` — divable elements, dive traits, world navigation, plugin spatial layout
-- `qol-shared-libs` — shared library catalog (qol-plugin-api, qol-config, qol-platform, etc.)
-
-### Plugins (host-app concerns)
-- `qol-plugin-alt-tab` — alt-tab plugin: GPUI window list, X11 preview capture, settings UI
-- `qol-plugin-launcher` — launcher plugin: GPUI launcher behavior and architecture
-- `qol-plugin-screen-recorder` — screen recorder: ffmpeg flow, Linux display capture
-- `qol-plugin-window-actions` — window minimize/restore/snap/move-monitor
-- `qol-plugin-pointz` — pointz desktop server: UDP discovery, command transport, status HTTP
-- `qol-plugin-lights` — lights plugin: backend adapters, daemon, action stability
-- `qol-plugin-os-themes` — OS theming: shake-to-grow cursor, future GTK/Qt/icon work
-- `qol-plugin-keyremap` — macOS key/mouse/scroll remapping daemon
-- `qol-plugin-ide-checkout` — Task Runner plugin (Rust supervisor + Python daemon)
-- `qol-plugin-template` — bootstrapping new plugins from `plugin-template`
-
-### Plugin release flows
-- `plugin-alt-tab-release-flow` — alt-tab tag/release ritual
-- `plugin-launcher-release-flow` — launcher tag/release ritual
-
-### Adjacent client apps
-- `pointz-client` — PointZ Flutter mobile client (the other half of qol-plugin-pointz)
 
 ## Naming convention
 
 | Prefix | Scope |
 |---|---|
-| `qol-tools` | the GitHub org as a whole |
-| `qol-tray-*` | the qol-tray host app and its features (UI, profile, dev-logging, release flow, task-runner integration) |
 | `qol-plugin-*` | individual plugins under the qol-tools/plugin-* repos |
-| `qol-<topic>` | shared concerns that span multiple repos (architecture, cicd, shared-libs, world-canvas, apps-testing) |
-| `plugin-<id>-release-flow` | per-plugin tag/release ritual |
-| `pointz-client`, etc. | adjacent apps (mobile, web) that aren't tray-hosted |
-| `coding-general`, `commit`, `git-push`, `git-trees`, `rust`, `gpui`, `preact` | language and tooling skills with no qol-specific scope |
+| `qol-host` | qol-tray host app internals (core, UI systems, Profile, world canvas, release flow) |
+| `qol-dev-conventions` | language and cross-repo engineering skills (rust, gpui, preact, commit, git-*, qol-architecture, qol-shared-libs, qol-plugin-template, coding-general) |
+| `qol-ecosystem` | workspace- and org-level conventions (qol-tools, qol-cicd) |
 
-When adding a new plugin, the skill name follows: `qol-plugin-<plugin-id-without-the-plugin-prefix>` — e.g. `plugin-alt-tab` becomes `qol-plugin-alt-tab`. The `qol-` brand prefix disambiguates from the host-app `qol-tray-*` namespace.
+When adding a new plugin skill, the skill name follows: `qol-plugin-<plugin-id-without-the-plugin-prefix>` — e.g. `plugin-alt-tab` becomes `qol-plugin-alt-tab`.
 
 ## Updating skills
 
@@ -109,13 +70,13 @@ Skills are plain markdown. Edit, commit, push:
 
 ```bash
 cd qol-skills
-# edit foo/SKILL.md
-git add foo/SKILL.md
-git commit -m "docs(foo): clarify daemon lifecycle"
+# edit plugins/qol-host/skills/qol-tray/SKILL.md
+git add plugins/qol-host/skills/qol-tray/SKILL.md
+git commit -m "docs(qol-tray): clarify daemon lifecycle"
 git push
 ```
 
-Other machines pick up changes via `git pull`. Symlinked workspaces see the update immediately — no re-link.
+Installed plugins pick up changes via `/plugin marketplace update qol-skills`.
 
 ## Frontmatter
 
