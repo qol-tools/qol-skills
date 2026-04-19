@@ -10,9 +10,10 @@ Better Alt+Tab experience for qol-tray (Linux and macOS). Shows a GPUI window li
 - Runtime command: `alt-tab`
 - Runtime actions map:
   - `open -> ["--show"]`
+  - `open-reverse -> ["--show-reverse"]`
   - `settings -> ["--settings"]`
 - Daemon: **enabled**. Socket: `/tmp/qol-alt-tab.sock`. Command: `alt-tab` (no args → starts daemon).
-- Menu: `Open Alt Tab` (action `run`), separator, `Settings` (action `settings`).
+- Menu: `Alt Tab (Open/Next)` (action `run`), `Alt Tab (Previous)` (action `run`, id `open-reverse`), separator, `Settings` (action `settings`).
 - Platforms: `linux`, `macos`
 
 ## Contract Validation Test

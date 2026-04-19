@@ -19,6 +19,6 @@ Before creating any release tags, ALWAYS verify that there are no dangling refs 
 
 ## 3. Creating the Release
 - Release triggers solely rely on pushing a `v*` formatted tag (e.g. `v1.2.3`).
-- When a tag is pushed, it triggers the `.github/workflows/release.yml` workflow to create a remote release. (Note: macOS targets may be stubbed until fully supported in the plugin implementation).
+- When a tag is pushed, it triggers the `.github/workflows/release.yml` workflow. Both Linux and macOS targets are built — the workflow calls the shared `qol-tools/qol-cicd/.github/workflows/plugin-release.yml@main` reusable workflow (same as plugin-launcher).
 - Execute the tagging process: `git tag v1.2.3` and then push the tag `git push origin v1.2.3`. 
 - **DO NOT** push until the release commit itself has been pushed and verified.
