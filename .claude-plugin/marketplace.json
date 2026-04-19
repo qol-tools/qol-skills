@@ -1,0 +1,18 @@
+{
+  "name": "qol-skills",
+  "description": "Claude Code skills for the qol-tools ecosystem (qol-tray host app, plugins, shared libs, CI workflows, and general engineering practices)",
+  "owner": {
+    "name": "KMRH47"
+  },
+  "plugins": [
+    {
+      "name": "qol-skills",
+      "description": "All qol-tools Claude Code skills: per-plugin, host-app, shared-lib, CI, and general coding skills",
+      "version": "0.1.0",
+      "source": "./",
+      "author": {
+        "name": "KMRH47"
+      }
+    }
+  ]
+}
