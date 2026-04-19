@@ -1,9 +1,9 @@
 ---
 name: preact
-description: Use when writing Preact UI code in qol-tray. Covers htm tagged templates, hooks patterns, icon components, toast system, dissolve animations, keyboard focus trapping, and common gotchas.
+description: Use when writing Preact + htm code in this workspace. Covers generic htm tagged template gotchas, hook patterns, icon components, toast/dissolve helpers, keyboard focus trapping, custom input patterns, router guards, and provider gotchas. qol-tray-specific component hierarchy (Surface trait, plugin-config fields) lives in the `qol-tray-ui-systems` skill.
 ---
 
-# Preact Patterns (qol-tray)
+# Preact Patterns
 
 Preact + htm (tagged template literals), no JSX, no build step.
 
@@ -234,65 +234,6 @@ function ConfigProvider({ pluginId, children }) {
 
 This unmounts and remounts ALL children (including sidebar, config view, etc.) when `pluginId` changes. Module-level state or refs survive, component state does not.
 
-## Surface Trait Architecture
-
-All interactive elements in qol-tray derive from the `Surface` primordial. **Never write raw `data-selected-surface=""`** — use `Surface` or a hook.
-
-**Traits are hooks, shapes are components:**
-
-```js
-// Trait: useSurface — returns { attrs } for any navigable element
-import { useSurface, useInputSurface, Surface } from '../components/Surface.js';
-
-// Simple elements: use the Surface component
-html`<${Surface} as="button" className="btn" onActivate=${handler}>Save<//>`
-
-// Components needing DOM access: use useInputSurface (owns its ref)
-function MyListPanel({ items, highlightIndex }) {
-    const { ref, attrs } = useInputSurface();
-    useScrollFollow(ref, true, highlightIndex, '.item');
-    return html`<div ref=${ref} ...${attrs} class="my-panel">...</div>`;
-}
-
-// Specialized rows: compose ListRow (which composes Surface)
-html`<${LogRow} time="14:32" level="error" src="plugin" msg="failed" onActivate=${openDetail} />`
-```
-
-**Component hierarchy:**
-- `useSurface()` → primordial trait (navigable + activatable)
-- `useInputSurface()` → useSurface + ref ownership (for components needing DOM access)
-- `Surface` → component sugar for simple elements (buttons, toggle wrappers, depth diver)
-- `ListRow` → Surface + accent border + header/body strips + optional action column
-- `PluginRow`, `LogRow`, `SuppressedRow`, `BackupRow` → specialized rows composing ListRow
-- `Expander` → Surface + expand/collapse
-- `ViewTabs` tabs, `ModalFooter` buttons, `CommandPalette` items → all use Surface
-
-**Ref ownership rule:** Components that need DOM access create refs internally via `useInputSurface()`. Refs never cross component boundaries — no ref forwarding. If a parent needs access to a child's DOM, the child should own that concern as a self-contained component.
-
-**Reusable hooks:**
-- `useListSelection()` — manages selectedIndex + deselect, returns `{ index, select, deselect, selected }`
-- `useClickOutside(ref, active, callback)` — dismiss on outside pointer
-- `useScrollFollow(containerRef, active, index, selector)` — scroll item into view
-
-**Adding behaviors:** Each behavior is a hook. A component declares what it IS by calling the hooks it needs — no wrapper nesting, no middleware chains.
-
-## Plugin Config Field Integration
-
-Plugin config fields integrate with the wedge selection system via `data-plugin-config-field-id` and `data-plugin-config-index` attributes. Fields call `ctx.setSelectedFieldId(field.id)` on interaction.
-
-**Never bypass the selection system.** Components creating DOM outside Preact's render tree cannot participate in wedge selection. Use native Preact components with Surface for all interactive elements.
-
-**Pattern for shared config field components:**
-```js
-import { groupFields } from '../../auto-config/object-array-form.js';
-
-function ObjectArrayField({ field }) {
-    const ctx = usePluginConfigContext();
-    const groups = groupFields(field.item?.fields);
-    return html`...native Preact rendering with Surface integration...`;
-}
-```
-
 ## Persisting State Across Remounts
 
 When a component unmounts/remounts (e.g., due to provider switching), use module-level variables to preserve state:
@@ -309,25 +250,3 @@ export function MyComponent({ mode }) {
 ```
 
 For per-key persistence (e.g., selected section per plugin), use `usePersistedIndex(storageKey, default)` which reads/writes localStorage.
-
-## Verification In qol-tray
-
-For `qol-tray` UI work:
-
-```bash
-node --check path/to/edited-file.js
-```
-
-This only checks JavaScript syntax. It does not prove the app is green.
-
-When the UI change lives inside the `qol-tray` repo, also run the repo validation required by the `qol-tray` skill:
-
-```bash
-make build
-make test
-cargo build --features dev
-cargo fmt --all --check
-cargo clippy --all-targets --all-features -- -D warnings
-cargo build
-cargo test
-```

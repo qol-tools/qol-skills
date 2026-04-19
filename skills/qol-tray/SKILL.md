@@ -553,3 +553,41 @@ On macOS, `tray-icon` crate requires:
 3. Tokio runtime must run on a background thread
 
 The pattern is: main thread runs Cocoa event loop, background thread runs tokio for async operations (web server, etc.). Use `objc2` crate for Cocoa bindings.
+
+## Rust Gotchas (host-app)
+
+These platform rules apply to qol-tray and any plugin that embeds its own windowed UI (e.g. GPUI-based plugins):
+
+**macOS:**
+- UI frameworks (NSApplication, tray icons, GPUI windows) MUST be created on the main thread.
+- `NSApplication.run()` blocks the main thread until quit. Run async runtimes (Tokio) on background threads.
+- Use `objc2` for Cocoa bindings and CoreGraphics APIs directly for performance-critical operations.
+- Never shell-split paths for `Command` args — pass `Path` directly to `Command::new("open").arg(path)` to avoid crashes on paths with spaces (e.g., `.app` bundles).
+- `cx.hide()` hides the entire NSApplication — use `window.remove_window()` for popup-style windows that need to reappear later.
+
+**Linux:**
+- GTK event loops run in a separate thread, with `glib` polling for menu events (`src/tray/platform/linux.rs`).
+- X11 bindings (e.g. `x11rb`) handle low-level system interactions such as hotkey grabbing and window enumeration.
+
+**Windows:**
+- Menu events arrive on a spawned thread; the main thread uses Condvar-based blocking for lifecycle (`src/tray/platform/windows.rs`).
+
+## Local CI Verification (cargo stack)
+
+Beyond the repo-native `make build` / `make test` commands above, the raw cargo stack CI enforces is:
+
+```bash
+cargo fmt -- --check
+cargo clippy --all-targets --all-features --keep-going -- -D warnings
+cargo test --all-features
+```
+
+Critical rules:
+- Prefer `make build` / `make test` first; fall back to raw cargo commands when the Makefile doesn't cover your change.
+- `--keep-going` is required so ALL errors across all targets (lib, bin, tests, examples) are reported in one pass.
+- `--all-targets` is required — clippy errors in test files won't show up without it.
+- `-D warnings` is required — this is what CI uses. Warnings are errors.
+- `cargo check` or `cargo test` alone is NOT sufficient. Clippy is what CI enforces.
+- If local `rustc --version` doesn't match CI (CI uses latest stable via `dtolnay/rust-toolchain@stable`), update local Rust first (`rustup update stable`) or flag the version mismatch.
+- Fix ALL reported errors before committing. Never fix-commit-push iteratively.
+- If the user reports a build failure after you claimed success, rerun the user's exact failing command first and treat that command as the source of truth.
