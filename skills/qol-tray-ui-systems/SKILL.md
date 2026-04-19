@@ -169,3 +169,62 @@ For dynamic alpha: `rgba(var(--accent-rgb), 0.2)`. Available: `--accent-rgb`, `-
 | Swallowing events from disconnected DOM nodes | `if (!target.isConnected) return false` — let events fall through to the next handler |
 | Forgetting to update `hotkeysRef.current` eagerly after `setHotkeys` | `useStateRef` ref only updates on render; sync it manually: `d.hotkeysRef.current = nextHotkeys` |
 | Using Tab as implicit field navigation | Root-layer `Tab` cycles top-level views; any editor-specific Tab behavior must be implemented explicitly |
+
+## Surface Trait Architecture
+
+All interactive elements in qol-tray derive from the `Surface` primordial. **Never write raw `data-selected-surface=""`** — use `Surface` or a hook.
+
+**Traits are hooks, shapes are components:**
+
+```js
+// Trait: useSurface — returns { attrs } for any navigable element
+import { useSurface, useInputSurface, Surface } from '../lib/components/Surface.js';
+
+// Simple elements: use the Surface component
+html`<${Surface} as="button" className="btn" onActivate=${handler}>Save<//>`
+
+// Components needing DOM access: use useInputSurface (owns its ref)
+function MyListPanel({ items, highlightIndex }) {
+    const { ref, attrs } = useInputSurface();
+    useScrollFollow(ref, true, highlightIndex, '.item');
+    return html`<div ref=${ref} ...${attrs} class="my-panel">...</div>`;
+}
+
+// Specialized rows: compose ListRow (which composes Surface)
+html`<${LogRow} time="14:32" level="error" src="plugin" msg="failed" onActivate=${openDetail} />`
+```
+
+**Component hierarchy:**
+- `useSurface()` → primordial trait (navigable + activatable)
+- `useInputSurface()` → useSurface + ref ownership (for components needing DOM access)
+- `Surface` → component sugar for simple elements (buttons, toggle wrappers, depth diver)
+- `ListRow` → Surface + accent border + header/body strips + optional action column
+- `PluginRow`, `LogRow`, `SuppressedRow`, `BackupRow` → specialized rows composing ListRow
+- `Expander` → Surface + expand/collapse
+- `ViewTabs` tabs, `ModalFooter` buttons, `CommandPalette` items → all use Surface
+
+**Ref ownership rule:** Components that need DOM access create refs internally via `useInputSurface()`. Refs never cross component boundaries — no ref forwarding. If a parent needs access to a child's DOM, the child should own that concern as a self-contained component.
+
+**Reusable hooks** (in `ui/lib/hooks/`):
+- `useListSelection()` — manages selectedIndex + deselect, returns `{ index, select, deselect, selected }`
+- `useClickOutside(ref, active, callback)` — dismiss on outside pointer
+- `useScrollFollow(containerRef, active, index, selector)` — scroll item into view
+
+**Adding behaviors:** Each behavior is a hook. A component declares what it IS by calling the hooks it needs — no wrapper nesting, no middleware chains.
+
+## Plugin Config Field Integration
+
+Plugin config fields integrate with the wedge selection system via `data-plugin-config-field-id` and `data-plugin-config-index` attributes. Fields call `ctx.setSelectedFieldId(field.id)` on interaction.
+
+**Never bypass the selection system.** Components creating DOM outside Preact's render tree cannot participate in wedge selection. Use native Preact components with Surface for all interactive elements.
+
+**Pattern for shared config field components:**
+```js
+import { groupFields } from '../../auto-config/object-array-form.js';
+
+function ObjectArrayField({ field }) {
+    const ctx = usePluginConfigContext();
+    const groups = groupFields(field.item?.fields);
+    return html`...native Preact rendering with Surface integration...`;
+}
+```
