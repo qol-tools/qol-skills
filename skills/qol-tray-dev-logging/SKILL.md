@@ -44,10 +44,10 @@ Existing namespaces in qol-tray:
 |---|---|---|
 | `qol:app` | `ui/components/App.js` | App-level dive/ascend, view transitions, pluginDive useEffect |
 | `qol:camera` | `ui/lib/world-camera.js` | Camera pan/zoom/smooth animations |
-| `qol:nav` | `ui/components/app/useAppKeyboardRouting.js` | Keyboard routing, arrow/Tab/Enter/Escape dispatch |
+| `qol:nav` | `ui/app/useAppKeyboardRouting.js` | Keyboard routing, arrow/Tab/Enter/Escape dispatch |
 | `qol:spatial` | `ui/lib/spatial-nav.js`, `ui/lib/viewport-spatial.js` | Spatial navigation candidate scoring, slotAtCenter resolution |
-| `qol:wedge` | `ui/components/SelectionCursorOverlay.js` | Selection wedge visibility state transitions and focus tracking |
-| `qol:world` | `ui/components/app/WorldViewport.js`, `ui/components/app/RegionLabels.js` | Camera follow on focusin, ctrl-snap, viewport bounds, region label rendering |
+| `qol:wedge` | `ui/lib/components/SelectionCursorOverlay.js` | Selection wedge visibility state transitions and focus tracking |
+| `qol:world` | `ui/components/shell/WorldViewport.js`, `ui/components/shell/RegionLabels.js` | Camera follow on focusin, ctrl-snap, viewport bounds, region label rendering |
 
 **Before adding a new namespace**, check if your log belongs in an existing one. Camera-related → `qol:camera`. Keyboard → `qol:nav`. Layout math → `qol:spatial` or `qol:world`. Only create a new namespace if the area is genuinely orthogonal.
 

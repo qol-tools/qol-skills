@@ -1,6 +1,6 @@
 ---
 name: qol-tray-ui-systems
-description: Use when adding or modifying UI components, modals, keyboard navigation, dropdowns, toggles, focus management, or selection wedge behavior in qol-tray. Use when touching any file under ui/views/, ui/hooks/, ui/components/, or ui/styles/.
+description: Use when adding or modifying UI components, modals, keyboard navigation, dropdowns, toggles, focus management, or selection wedge behavior in qol-tray. Use when touching any file under ui/views/, ui/components/, ui/lib/components/, ui/lib/hooks/, ui/app/, or ui/styles/.
 ---
 
 # qol-tray UI Systems Reference
@@ -45,13 +45,13 @@ Every navigable element uses these attributes:
 - `data-selected-surface-priority="N"` — higher wins when multiple surfaces are selected (CustomSelect options use 10)
 - `data-selected-surface-motion="teleport"` — skip glide animation
 
-### Surface Resolution (`lib/selected-surface.js`)
+### Surface Resolution (`ui/lib/selected-surface.js`)
 `findActiveSelectedSurface()` resolves the active target:
 1. Focused surface (`:focus-within`) wins
 2. Highest-priority `data-selected="true"` surface
 3. Fallback to currentTarget
 
-### Input Mode Tracking (`SelectionCursorOverlay`)
+### Input Mode Tracking (`ui/lib/components/SelectionCursorOverlay.js`)
 - `data-input-mode="keyboard"` on `.app-container`: wedge visible
 - `data-input-mode="mouse"`: wedge hidden (CSS `opacity: 0`)
 - Switches on `keydown` (keyboard) / `pointerdown` or `wheel` (mouse)
@@ -63,7 +63,7 @@ Every navigable element uses these attributes:
 
 ## Shared Components
 
-### Modal (`components/ModalPreact.js`)
+### Modal (`ui/lib/components/ModalPreact.js`)
 ```javascript
 <${Modal} open=${true} onClose=${onClose} className="edit-modal">
     <div class="edit-modal-content">...</div>
@@ -77,13 +77,13 @@ Auto-focuses first `[data-selected-surface][data-selected="true"]` on open, fall
 ```
 Renders Cancel (Esc) + Save (Ctrl+Enter) buttons. `disabled` greys out Save.
 
-### CustomSelect (`components/CustomSelect.js`)
+### CustomSelect (`ui/lib/components/CustomSelect.js`)
 ```javascript
 <${CustomSelect} value=${string} options=${string[]} labels=${{ [value]: displayLabel }} onChange=${(value) => void} />
 ```
 Keyboard-navigable dropdown with animated highlight marker. Opens on click/Enter, arrow keys navigate, Enter selects, Escape closes. After selection, `focusFieldLevel` returns focus to nearest `[data-plugin-config-field-id]` or `[data-selected-surface]` ancestor.
 
-### ToggleSwitch (`components/ToggleSwitch.js`)
+### ToggleSwitch (`ui/lib/components/ToggleSwitch.js`)
 ```javascript
 <${ToggleSwitch} checked=${boolean} onChange=${(newValue) => void} label=${string} />
 ```
