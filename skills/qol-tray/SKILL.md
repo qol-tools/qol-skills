@@ -170,7 +170,7 @@ Every view is a citizen of the qol-tray dashboard. Adding a view without integra
 **Mandatory integration checklist for every new view:**
 
 1. **Global keyboard routing** (`useRegisterViewKeyboard`)
-   - Import from `../components/app/view-keyboard-context.js`
+   - Import from `../app/view-keyboard-context.js`
    - Register `handleKey` callback for the view ID
    - Arrow keys navigate content, Enter activates, Escape dismisses modals
    - `isBlocking` prevents Tab cycling during modal/edit states
@@ -186,12 +186,12 @@ Every view is a citizen of the qol-tray dashboard. Adding a view without integra
    - Register view-specific commands (e.g., "Clear suppressed", "Refresh logs")
    - Commands appear in the `>` action mode of the palette (Ctrl+E then `>`)
 
-4. **View registration** (`ui/components/app/views.js`)
+4. **View registration** (`ui/app/views.js`)
    - Add to `VIEW_LABELS`, `BASE_ORDER`, and `renderWorldViews`
    - Pass `active` prop if the view needs to know when it's visible
 
 5. **World labels/navigation**
-   - `WorldNav.js` and `RegionLabels.js` read the shared `VIEW_LABELS` map from `ui/components/app/views.js`
+   - `ui/app/WorldNav.js` and `ui/components/shell/RegionLabels.js` read the shared `VIEW_LABELS` map from `ui/app/views.js`
    - Do not introduce a second local label registry
 
 6. **CSS** (`ui/styles/`)
@@ -205,26 +205,33 @@ Every view is a citizen of the qol-tray dashboard. Adding a view without integra
 
 If any of these is missing, the view is broken.
 
-**ui/components/** - Shared components
+**UI component layout**
+
+- `ui/components/App.js`, `ui/components/PageHeader.js`, `ui/components/ViewTabs.js`, `ui/components/CommandPalette.js`, `ui/components/ApiErrorToast.js`: top-level app chrome.
+- `ui/components/shell/` — shell components: `WorldViewport.js`, `RegionLabels.js`, `AtmosphereLayer.js`, `PeripheralPreview.js`, `Minimap.js`.
+- `ui/components/domain-rows/` — specialized rows: `PluginRow.js`, `LogRow.js`, `SuppressedRow.js`, `BackupRow.js`, `HotkeyRow.js`, `ShortcutRow.js`, `DevPluginRow.js`, `StoreCard.js`.
+- `ui/lib/components/` — reusable primitives and controls: `Surface.js`, `ListRow.js`, `TableRow.js`, `Card.js`, `Button.js`, `Expander.js`, `CustomSelect.js`, `DropdownMenu.js`, `ModalPreact.js`, `ToggleSwitch.js`, `SelectionCursorOverlay.js`, `SelectionWedgeGlyph.js`, `SurfaceContainer.js`, `StatusIndicators.js`, `EmptyState.js`, `CodeBlock.js`, `NoiseBorder.js`, `NoiseReveal.js`, `ScrambleText.js`, `RecompileDissolve.js`, `ShortcutLegendPreact.js`.
+- `ui/app/` — app-level coordination: `views.js` (view registry: `VIEW_LABELS`, `BASE_ORDER`, `buildViewOrder`, `WorldViewSlot`/`renderWorldViews`), `useApp.js`, `useAppBootstrap.js`, `useAppKeyboardRouting.js`, `useAppUpdateCoordinator.js`, `useMountedViews.js`, `useSidebarActions.js`, `WorldNav.js`, `view-keyboard-context.js`, `dev-flows.js`, `use-dev-actions.js`, `use-dev-flows.js`, `use-update-checker.js`.
+
+**Component responsibilities**
+
 - `Surface.js`: Primordial component — all interactive elements derive from this. Exports `useSurface()` trait hook, `useInputSurface()` (with ref ownership), and `Surface` component. Never write raw `data-selected-surface=""`.
 - `ListRow.js`: Row component composing Surface — accent border, header/body strips, optional action column. Sub-components: `ListRowHeader`, `ListRowBody`, `ListRowTitle`, `ListRowText`. Container: `ListGroup` with deselect-on-blur.
-- `rows/PluginRow.js`, `rows/LogRow.js`, `rows/SuppressedRow.js`, `rows/BackupRow.js`: Specialized row components composing ListRow with variant-specific accent, badges, and actions.
-- `PageHeader.js`: Uniform 48px header with title, subtitle, optional badge, command palette, noise animations
+- `domain-rows/*`: Specialized row components composing ListRow with variant-specific accent, badges, and actions.
+- `PageHeader.js`: Uniform 48px header with title, subtitle, optional badge, command palette, noise animations.
 - `ViewTabs.js`: Shared tabbed content switcher — tab buttons use Surface, manages preview/activate routing. ANY view with tabs MUST use this component.
-- `Expander.js`: Expand/collapse component composing Surface
-- `CustomSelect.js`: Dropdown using Surface (trigger) + useInputSurface (list with ref ownership)
+- `Expander.js`: Expand/collapse component composing Surface.
+- `CustomSelect.js`: Dropdown using Surface (trigger) + useInputSurface (list with ref ownership).
 - `CommandPalette.js`: Global command palette, dual-mode: `>` prefix for actions, plain text for search. Items use Surface.
-- `ModalPreact.js`: Modal + ModalFooter, action buttons use Surface
-- `CodeBlock.js`: Formatted code display with click-to-copy
-- `SurfaceContainer.js`: Navigation region boundary (NOT a Surface — structural only)
-- `StatusIndicators.js`: Badge, HealthDot, Alert (display-only, no Surface)
-- `NoiseBorder.js`: Canvas-based noise accent line on PageHeader, activates when palette opens
-- `NoiseReveal.js`: Canvas-based bubble buoyancy reveal animation
-- `ScrambleText.js`: Random-order character reveal animation for titles
-- `WorldNav.js`: Command-palette and keyboard world navigation across root-layer views
-- `RegionLabels.js`: Overlay labels for world regions sourced from the shared view registry
-- `SidebarFooter.js`: Footer with recompile button and worktree picker (dev mode)
-- `app/views.js`: View registry (`VIEW_LABELS`, `BASE_ORDER`, `buildViewOrder`) and `WorldViewSlot`/`renderWorldViews` for layer-aware display toggling
+- `ModalPreact.js`: Modal + ModalFooter, action buttons use Surface.
+- `CodeBlock.js`: Formatted code display with click-to-copy.
+- `SurfaceContainer.js`: Navigation region boundary (NOT a Surface — structural only).
+- `StatusIndicators.js`: Badge, HealthDot, Alert (display-only, no Surface).
+- `NoiseBorder.js`: Canvas-based noise accent line on PageHeader, activates when palette opens.
+- `NoiseReveal.js`: Canvas-based bubble buoyancy reveal animation.
+- `ScrambleText.js`: Random-order character reveal animation for titles.
+- `WorldNav.js`: Command-palette and keyboard world navigation across root-layer views.
+- `RegionLabels.js`: Overlay labels for world regions sourced from the shared view registry.
 
 ### UI Component Rules (Mandatory)
 
@@ -245,14 +252,29 @@ If any of these is missing, the view is broken.
 - `registry.js`: Command registry for palette actions
 - `useRegisterCommands.js`: Hook for views to register their commands
 
-**ui/lib/** - Shared utilities
+**ui/lib/** - Shared utilities and hooks
 - `canvas.js`: Canvas helpers for noise/reveal animations (resolveColor, pixel manipulation)
 - `scramble.js`: Fisher-Yates shuffle, deterministic hash for per-pixel random phase/speed
-- `html.js`: htm + preact binding
+- `html.js`, `preact.module.js`, `hooks.module.js`, `htm.module.js`: htm + preact binding
+- `debug.js`: `createDebug(namespace)` logging utility (see `qol-tray-dev-logging` skill)
+- `selected-surface.js`, `spatial-nav.js`, `viewport-spatial.js`: wedge selection + spatial navigation
+- `world-camera.js`, `world-navigation.js`, `world-registry.js`, `world-settings.js`, `world-canvas-bg.js`: world canvas + camera
+- `atmosphere-presets.js`, `plugin-trait-overrides.js`: dive traits (see `qol-world-canvas` skill)
+- `dissolve.js` + `dissolve-gpu.js` + `dissolve-worker.js` + `dissolve-engine.js`, `glow.js`, `glitch-squares.js`: animations
+- `input-mode.js`, `ctrl-state.js`, `focus-grid.js`, `shared-slot.js`, `surface-traits.js`: input + focus helpers
+- `toast.js`: global toast system
+- `color.js`: color utilities
+- `hooks/`: hook library (`useModalKeyboard`, `useListKeyboard`, `useListSelection`, `useClickOutside`, `useScrollFollow`, `useStateRef`, `useViewTabs`, `useGridNav`, `useKeyboard`, `useHashSubPath`, `useQueryPoll`, `useRefreshOnFocus`, `useAsyncToken`, `useDispatchAction`, `usePersistedIndex`, `modifier-state-context.js`)
+- `components/`: reusable component primitives (see the component layout above)
 
-**ui/views/** - Page views (plugins, store, hotkeys, shortcuts, task-runner, profile, logs, dev)
-- Views use either a top-level coordinator file (`*-view.js`) or a feature subdirectory with `view.js` plus focused helpers/hooks for data/state
+**ui/views/** - Page views
+- Organised as feature subdirectories (`plugins/`, `store/`, `hotkeys/`, `shortcuts/`, `task-runner/`, `profile/`, `plugin-config/`, `dev/`)
+- Each view uses either a top-level `view.js` or a coordinator plus focused helpers/hooks for data/state
+- `plugin-config/fields/` renders individual field kinds in auto-config mode
+- `dev/` hosts `plugin-actions/`, `cpu/`, `mock/`, `discovery/`, `build-overlay/`, `components/`, `build/` subsections
 - Dev view uses Preact components (migrated from full-DOM string templates)
+
+**ui/hooks/** - Route-level hooks (`useRouter.js`, `useInstalling.js`, `useSSE.js`, `useSSEDebounce.js`). Most reusable hooks live under `ui/lib/hooks/`, not here.
 
 **ui/styles/** - CSS architecture
 - `theme-tokens.css`: Color palette and semantic tokens
