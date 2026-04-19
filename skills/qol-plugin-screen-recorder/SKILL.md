@@ -10,7 +10,7 @@ Screen recording plugin for qol-tray (Linux-focused). Binary-first runtime plugi
 - Runtime command: `screen-recorder`
 - Runtime actions map:
   - `record -> ["record"]`
-  - `audio-settings -> ["audio-settings"]`
+  - `settings -> ["settings"]`
 - Menu includes `toggle-config` checkbox (`audio-enable`) for config state; this does not require runtime action mapping.
 - No shell runtime entrypoint.
 
