@@ -1,0 +1,8 @@
+{
+  "name": "qol-plugin-launcher",
+  "description": "Skills for the qol-tray launcher plugin: GPUI launcher architecture, discovery/ranking, and release flow.",
+  "version": "0.1.0",
+  "author": {
+    "name": "KMRH47"
+  }
+}

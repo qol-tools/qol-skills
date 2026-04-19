@@ -1,15 +1,114 @@
 {
   "name": "qol-skills",
-  "description": "Claude Code skills for the qol-tools ecosystem (qol-tray host app, plugins, shared libs, CI workflows, and general engineering practices)",
+  "description": "Claude Code skills for the qol-tools ecosystem (qol-tray host app, plugins, shared libs, CI workflows, and general engineering practices) — split into fine-grained plugins for per-plugin toggling.",
   "owner": {
     "name": "KMRH47"
   },
   "plugins": [
     {
-      "name": "qol-skills",
-      "description": "All qol-tools Claude Code skills: per-plugin, host-app, shared-lib, CI, and general coding skills",
+      "name": "qol-plugin-alt-tab",
+      "description": "Skills for the qol-tray alt-tab plugin: GPUI window list, X11/macOS preview capture, daemon lifecycle, settings UI, and release flow.",
+      "source": "./plugins/qol-plugin-alt-tab",
       "version": "0.1.0",
-      "source": "./",
+      "author": {
+        "name": "KMRH47"
+      }
+    },
+    {
+      "name": "qol-plugin-launcher",
+      "description": "Skills for the qol-tray launcher plugin: GPUI launcher architecture, discovery/ranking, and release flow.",
+      "source": "./plugins/qol-plugin-launcher",
+      "version": "0.1.0",
+      "author": {
+        "name": "KMRH47"
+      }
+    },
+    {
+      "name": "qol-plugin-pointz",
+      "description": "Skills for the PointZ pair: qol-tray desktop server plugin and the Flutter mobile client (discovery, UDP transport, input injection).",
+      "source": "./plugins/qol-plugin-pointz",
+      "version": "0.1.0",
+      "author": {
+        "name": "KMRH47"
+      }
+    },
+    {
+      "name": "qol-plugin-ide-checkout",
+      "description": "Skills for the qol-tray ide-checkout (Task Runner) plugin: Rust supervisor + Python daemon internals and the task-runner HTTP API contract.",
+      "source": "./plugins/qol-plugin-ide-checkout",
+      "version": "0.1.0",
+      "author": {
+        "name": "KMRH47"
+      }
+    },
+    {
+      "name": "qol-plugin-keyremap",
+      "description": "Skills for the qol-tray key remap plugin (macOS only): CGEventTap daemon, rule kinds, per-app exclusions, and rule editor UI.",
+      "source": "./plugins/qol-plugin-keyremap",
+      "version": "0.1.0",
+      "author": {
+        "name": "KMRH47"
+      }
+    },
+    {
+      "name": "qol-plugin-lights",
+      "description": "Skills for the qol-tray lights plugin: Zigbee2MQTT backend adapter, daemon entrypoint, and auto-config settings UI.",
+      "source": "./plugins/qol-plugin-lights",
+      "version": "0.1.0",
+      "author": {
+        "name": "KMRH47"
+      }
+    },
+    {
+      "name": "qol-plugin-os-themes",
+      "description": "Skills for the qol-tray OS themes plugin: shake-to-grow cursor effect, X11 cursor manipulation via xfixes, and the broader theming roadmap.",
+      "source": "./plugins/qol-plugin-os-themes",
+      "version": "0.1.0",
+      "author": {
+        "name": "KMRH47"
+      }
+    },
+    {
+      "name": "qol-plugin-screen-recorder",
+      "description": "Skills for the qol-tray screen recorder plugin: ffmpeg recording flow and X11-based display capture.",
+      "source": "./plugins/qol-plugin-screen-recorder",
+      "version": "0.1.0",
+      "author": {
+        "name": "KMRH47"
+      }
+    },
+    {
+      "name": "qol-plugin-window-actions",
+      "description": "Skills for the qol-tray window actions plugin: window minimize/restore and monitor movement.",
+      "source": "./plugins/qol-plugin-window-actions",
+      "version": "0.1.0",
+      "author": {
+        "name": "KMRH47"
+      }
+    },
+    {
+      "name": "qol-host",
+      "description": "Host-app skills for qol-tray: core architecture, UI systems, dev logging, Profile feature, release flow, world canvas, and apps-testing conventions.",
+      "source": "./plugins/qol-host",
+      "version": "0.1.0",
+      "author": {
+        "name": "KMRH47"
+      }
+    },
+    {
+      "name": "qol-dev-conventions",
+      "description": "Cross-repo development conventions: rust, gpui, preact, qol-architecture, qol-shared-libs, qol-plugin-template, commit, git-push, git-trees, coding-general.",
+      "source": "./plugins/qol-dev-conventions",
+      "version": "0.1.0",
+      "author": {
+        "name": "KMRH47"
+      }
+    },
+    {
+      "name": "qol-ecosystem",
+      "description": "Org- and workspace-level conventions: qol-tools repo layout and dependency model, plus qol-cicd reusable workflows.",
+      "source": "./plugins/qol-ecosystem",
+      "version": "0.1.0",
       "author": {
         "name": "KMRH47"
       }

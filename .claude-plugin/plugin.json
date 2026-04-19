@@ -1,8 +1,0 @@
-{
-  "name": "qol-skills",
-  "description": "All qol-tools Claude Code skills: per-plugin, host-app, shared-lib, CI, and general coding skills",
-  "version": "0.1.0",
-  "author": {
-    "name": "KMRH47"
-  }
-}

@@ -1,0 +1,8 @@
+{
+  "name": "qol-plugin-ide-checkout",
+  "description": "Skills for the qol-tray ide-checkout (Task Runner) plugin: Rust supervisor + Python daemon internals and the task-runner HTTP API contract.",
+  "version": "0.1.0",
+  "author": {
+    "name": "KMRH47"
+  }
+}
