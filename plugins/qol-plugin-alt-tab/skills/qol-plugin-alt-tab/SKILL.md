@@ -61,8 +61,8 @@ toml = "0.9"
 | `src/picker/create.rs` | Window creation, `pre_create_offscreen()` for instant open |
 | `src/picker/reuse.rs` | Window reuse across opens (resize, reposition) |
 | `src/picker/gather.rs` | Window gathering from cache or live discovery |
-| `src/app/mod.rs` | `AltTabApp` GPUI component, focus handling, alt-key polling |
-| `src/app/render.rs` | UI rendering: grid layout, transparency, card styling |
+| `src/app/mod.rs` | `AltTabApp` GPUI component, focus + blur-out handling, centralized `dismiss()`, one-shot tap-too-fast Alt-release fallback |
+| `src/app/render.rs` | UI rendering: grid layout, transparency, card styling, `on_modifiers_changed` → dismiss when Alt drops in `HoldToSwitch` mode |
 | `src/discovery/platform/macos/` | macOS window enumeration via CoreGraphics (z-order = MRU) |
 | `src/discovery/platform/linux.rs` | Linux window enumeration via x11rb `_NET_CLIENT_LIST_STACKING` |
 | `src/capture/platform/macos.rs` | macOS preview capture via `CGWindowListCreateImage` |
