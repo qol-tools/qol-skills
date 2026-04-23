@@ -77,9 +77,6 @@ PROMPT_RULES=$(printf '%s\n' \
     "" \
     "Output now.")
 
-PROMPT=$(printf '%s\n\n%s\n\n<existing_memory>\n%s\n</existing_memory>\n\n<transcript_tail>\n%s\n</transcript_tail>\n\n%s\n' \
-    "$PROMPT_HEADER" "$PROMPT_AGENT" "$EXISTING_MEMORY" "$TRANSCRIPT_TAIL" "$PROMPT_RULES")
-
 if command -v timeout >/dev/null 2>&1; then
     TIMEOUT_CMD=(timeout 120)
 elif command -v gtimeout >/dev/null 2>&1; then
@@ -88,21 +85,69 @@ else
     TIMEOUT_CMD=()
 fi
 
-CLAUDE_STDERR=$(mktemp)
-RESPONSE=$(printf '%s' "$PROMPT" | ${TIMEOUT_CMD[@]+"${TIMEOUT_CMD[@]}"} claude -p --model claude-opus-4-7 --permission-mode bypassPermissions 2>"$CLAUDE_STDERR" || true)
-RESPONSE=$(printf '%s' "$RESPONSE" | sed -e 's/[[:space:]]*$//')
+# Run the CLI, with a single automatic retry on "Prompt is too long" where we
+# halve the transcript payload. This is a CLI-side truncation error, distinct
+# from the model returning prose/NONE, so it deserves its own trace category
+# *and* a retry because the first attempt never actually reached the model.
+run_claude() {
+    local prompt="$1"
+    local stderr_file; stderr_file=$(mktemp)
+    local out
+    out=$(printf '%s' "$prompt" | ${TIMEOUT_CMD[@]+"${TIMEOUT_CMD[@]}"} claude -p --model claude-opus-4-7 --permission-mode bypassPermissions 2>"$stderr_file" || true)
+    out=$(printf '%s' "$out" | sed -e 's/[[:space:]]*$//')
+    CLAUDE_STDERR_TAIL=$(tr '\n' ' ' < "$stderr_file" | cut -c1-400)
+    rm -f "$stderr_file"
+    printf '%s' "$out"
+}
+
+build_prompt() {
+    local transcript="$1"
+    printf '%s\n\n%s\n\n<existing_memory>\n%s\n</existing_memory>\n\n<transcript_tail>\n%s\n</transcript_tail>\n\n%s\n' \
+        "$PROMPT_HEADER" "$PROMPT_AGENT" "$EXISTING_MEMORY" "$transcript" "$PROMPT_RULES"
+}
+
+is_cli_truncation() {
+    case "$1" in
+        "Prompt is too long"*|*"prompt is too long"*|*"maximum context length"*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+is_cli_error() {
+    case "$1" in
+        "Error:"*|"error:"*|"Invalid"*|"API Error"*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+PROMPT=$(build_prompt "$TRANSCRIPT_TAIL")
+RESPONSE=$(run_claude "$PROMPT")
+
+if is_cli_truncation "$RESPONSE"; then
+    trace "cli truncation on first attempt; retrying with half transcript"
+    HALF_LEN=$(( ${#TRANSCRIPT_TAIL} / 2 ))
+    TRANSCRIPT_TAIL=${TRANSCRIPT_TAIL: -$HALF_LEN}
+    PROMPT=$(build_prompt "$TRANSCRIPT_TAIL")
+    RESPONSE=$(run_claude "$PROMPT")
+    if is_cli_truncation "$RESPONSE"; then
+        trace "cli truncation on retry too; giving up (transcript still exceeds limit)"
+        exit 0
+    fi
+fi
 
 if [ -z "$RESPONSE" ]; then
-    trace "claude returned empty; stderr: $(tr '\n' ' ' < "$CLAUDE_STDERR" | cut -c1-400)"
-    rm -f "$CLAUDE_STDERR"
+    trace "claude returned empty; stderr: $CLAUDE_STDERR_TAIL"
     exit 0
 fi
-rm -f "$CLAUDE_STDERR"
+if is_cli_error "$RESPONSE"; then
+    trace "cli error: $(printf '%s' "$RESPONSE" | cut -c1-200)"
+    exit 0
+fi
 if [ "$RESPONSE" = "NONE" ]; then trace "claude returned NONE (no lessons proposed)"; exit 0; fi
 
 BULLETS=$(printf '%s\n' "$RESPONSE" | grep -E '^[[:space:]]*-[[:space:]]' || true)
 if [ -z "$BULLETS" ]; then
-    trace "rejected: no bullets found in response (first 200 chars: $(printf '%s' "$RESPONSE" | tr '\n' ' ' | cut -c1-200))"
+    trace "model returned prose, not bullets (first 200 chars: $(printf '%s' "$RESPONSE" | tr '\n' ' ' | cut -c1-200))"
     exit 0
 fi
 RESPONSE="$BULLETS"
@@ -113,15 +158,37 @@ if [ "$SIZE" -gt 1500 ]; then
     exit 0
 fi
 
+# Dedupe by distinctive-word overlap. Literal substring matching is too strict
+# (missed paraphrases like "always use ToggleSwitch" vs "route through
+# ToggleSwitch"), so normalize both sides to lowercase-alphanumeric, pull the
+# ≥5-char words out of the candidate, and reject if ≥60% of those words
+# already appear in the memory file as whole-word matches.
+normalize() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed -e 's/[^a-z0-9 ]/ /g' -e 's/  */ /g'; }
+MEMORY_NORM=$(normalize "$(cat "$MEMORY_FILE" 2>/dev/null || true)")
+
+is_paraphrase_of_existing() {
+    local line_norm total=0 hits=0 word
+    line_norm=$(normalize "$1")
+    for word in $line_norm; do
+        [ ${#word} -lt 5 ] && continue
+        case "$word" in always|never|should|would|could|really|still|plugin|plugins) continue;; esac
+        total=$((total + 1))
+        if printf ' %s ' "$MEMORY_NORM" | grep -qF " $word "; then
+            hits=$((hits + 1))
+        fi
+    done
+    [ "$total" -ge 4 ] && [ $((hits * 100 / total)) -ge 60 ]
+}
+
 FILTERED=""
 while IFS= read -r line; do
     if [ -z "$line" ]; then continue; fi
     body=${line#*-}
     body=${body# }
     body_trim=$(printf '%s' "$body" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
-    if [ -n "$body_trim" ] && ! grep -qF -- "$body_trim" "$MEMORY_FILE"; then
-        FILTERED="${FILTERED}${line}"$'\n'
-    fi
+    if [ -z "$body_trim" ]; then continue; fi
+    if is_paraphrase_of_existing "$body_trim"; then continue; fi
+    FILTERED="${FILTERED}${line}"$'\n'
 done <<EOF
 $(printf '%s\n' "$RESPONSE" | grep -E '^[[:space:]]*-[[:space:]]')
 EOF
