@@ -44,25 +44,36 @@ if [ ! -f "$MEMORY_FILE" ]; then : > "$MEMORY_FILE"; fi
 trace() { printf '[%s] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >> "$TRACE_FILE"; }
 trace "fired for agent_type=$AGENT_TYPE dir=$AGENT_DIR_NAME"
 
-TRANSCRIPT_TAIL=$(tail -n 600 "$TRANSCRIPT" 2>/dev/null || true)
+# Cap by bytes not lines — tool-heavy sessions have long JSON lines that blow
+# past the CLI's 200k prompt ceiling. 120k leaves headroom for the prompt
+# scaffolding and existing memory.
+TRANSCRIPT_TAIL=$(tail -c 120000 "$TRANSCRIPT" 2>/dev/null || true)
 if [ -z "$TRANSCRIPT_TAIL" ]; then exit 0; fi
 
 EXISTING_MEMORY=$(cat "$MEMORY_FILE" 2>/dev/null || true)
 if [ -z "$EXISTING_MEMORY" ]; then EXISTING_MEMORY="(empty)"; fi
 
-PROMPT_HEADER="You are reviewing a Claude Code subagent run to propose durable additions to the agent's persistent MEMORY.md."
+PROMPT_HEADER="You are harvesting durable lessons from a Claude Code subagent run for the agent's persistent MEMORY.md. The agent WILL see this memory on its next run in a fresh context — your job is to make sure the things that surprised it this time don't surprise it again."
 PROMPT_AGENT="The agent ran as: ${AGENT_TYPE}"
 PROMPT_RULES=$(printf '%s\n' \
-    "Propose 0-3 durable, non-obvious lessons that will help this agent on FUTURE tasks in a different session." \
+    "Scan the transcript for signals worth remembering, then emit 0-3 bullets. Bias toward emitting — a mediocre bullet is better than losing a real lesson. Filter the output yourself; don't refuse the whole set because one candidate is borderline." \
     "" \
-    "STRICT RULES — a single violation means output NONE:" \
-    "- Never duplicate anything already in existing_memory." \
-    "- Never add ephemeral task details (current bug, current file, current feature)." \
-    "- Never add patterns derivable by reading the codebase." \
-    "- Never add git history or commit-specific facts." \
-    "- Only add: user preferences with why, repeat-offender failure modes, architectural constraints not obvious from a single file." \
-    "- Output format: markdown bullets starting with '- ', each under 150 chars. No preamble. No headings. No trailing prose." \
-    "- If nothing passes the bar, output the single word NONE." \
+    "STRONG SIGNALS (emit these):" \
+    "- User corrections: 'no', 'stop doing X', 'I told you already', 'why did you' — the correction rule itself is gold." \
+    "- User preferences expressed with reasons: 'we do X because Y', 'always', 'never', 'ask first before'." \
+    "- Gotchas the agent discovered the hard way: CSS transform breaks getBoundingClientRect, ResizeObserver doesn't fire on transformed parents, bash 3 array-expansion under set -u, hook dir name vs agent dir name, etc. Non-obvious cross-component coupling." \
+    "- Repeat-offender failure modes: 'the agent tried N before realizing M'." \
+    "- Tool/CLI quirks that cost the agent time: flag that doesn't exist on macOS, subcommand that silently swallows errors." \
+    "" \
+    "WEAK SIGNALS (skip these):" \
+    "- Descriptions of what the agent built this session (that's in the PR/commit)." \
+    "- File paths, line numbers, specific function names (they rot)." \
+    "- Things already in existing_memory (verbatim or paraphrased)." \
+    "- Generic best-practice platitudes the agent would know anyway." \
+    "" \
+    "FORMAT: markdown bullets starting with '- '. Each bullet ≤150 chars. Lead with the rule, then a short 'because …' clause if the reason matters. No preamble, no headings, no trailing prose." \
+    "" \
+    "If the transcript genuinely contains zero durable signals, output the single word NONE. But do not output NONE just because each candidate has a minor flaw — emit the best 1-3 you can." \
     "" \
     "Output now.")
 
@@ -89,14 +100,16 @@ fi
 rm -f "$CLAUDE_STDERR"
 if [ "$RESPONSE" = "NONE" ]; then trace "claude returned NONE (no lessons proposed)"; exit 0; fi
 
-if printf '%s\n' "$RESPONSE" | grep -qvE '^[[:space:]]*(-[[:space:]].*|$)'; then
-    trace "rejected: non-bullet line present"
+BULLETS=$(printf '%s\n' "$RESPONSE" | grep -E '^[[:space:]]*-[[:space:]]' || true)
+if [ -z "$BULLETS" ]; then
+    trace "rejected: no bullets found in response (first 200 chars: $(printf '%s' "$RESPONSE" | tr '\n' ' ' | cut -c1-200))"
     exit 0
 fi
+RESPONSE="$BULLETS"
 
 SIZE=$(printf '%s' "$RESPONSE" | wc -c | tr -d ' ')
-if [ "$SIZE" -gt 800 ]; then
-    trace "rejected: $SIZE bytes exceeds 800"
+if [ "$SIZE" -gt 1500 ]; then
+    trace "rejected: $SIZE bytes exceeds 1500"
     exit 0
 fi
 
