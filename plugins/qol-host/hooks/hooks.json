@@ -1,0 +1,15 @@
+{
+    "hooks": {
+        "SubagentStop": [
+            {
+                "matcher": "qol-tray-frontend|qol-tray-backend",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "${CLAUDE_PLUGIN_ROOT}/bin/reflect-agent.sh"
+                    }
+                ]
+            }
+        ]
+    }
+}
