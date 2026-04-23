@@ -31,11 +31,18 @@ if [ -z "$TRANSCRIPT" ] || [ ! -f "$TRANSCRIPT" ]; then
 fi
 if [ -z "$CWD" ]; then CWD="$(pwd)"; fi
 
-AGENT_DIR_NAME="${AGENT_TYPE#*:}"
+# Claude Code stores agent memory at `.claude/agent-memory/{plugin}-{agent}/`
+# (colon is not filesystem-safe), so mirror that exact naming here so the
+# memory we write is the same memory the agent auto-loads on next run.
+AGENT_DIR_NAME="${AGENT_TYPE//:/-}"
 MEMORY_DIR="$CWD/.claude/agent-memory/$AGENT_DIR_NAME"
 MEMORY_FILE="$MEMORY_DIR/MEMORY.md"
+TRACE_FILE="$MEMORY_DIR/.reflect-last.log"
 mkdir -p "$MEMORY_DIR"
 if [ ! -f "$MEMORY_FILE" ]; then : > "$MEMORY_FILE"; fi
+
+trace() { printf '[%s] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >> "$TRACE_FILE"; }
+trace "fired for agent_type=$AGENT_TYPE dir=$AGENT_DIR_NAME"
 
 TRANSCRIPT_TAIL=$(tail -n 600 "$TRANSCRIPT" 2>/dev/null || true)
 if [ -z "$TRANSCRIPT_TAIL" ]; then exit 0; fi
@@ -70,19 +77,26 @@ else
     TIMEOUT_CMD=()
 fi
 
-RESPONSE=$(printf '%s' "$PROMPT" | ${TIMEOUT_CMD[@]+"${TIMEOUT_CMD[@]}"} claude -p --model claude-opus-4-7 --permission-mode bypassPermissions 2>/dev/null || true)
+CLAUDE_STDERR=$(mktemp)
+RESPONSE=$(printf '%s' "$PROMPT" | ${TIMEOUT_CMD[@]+"${TIMEOUT_CMD[@]}"} claude -p --model claude-opus-4-7 --permission-mode bypassPermissions 2>"$CLAUDE_STDERR" || true)
 RESPONSE=$(printf '%s' "$RESPONSE" | sed -e 's/[[:space:]]*$//')
 
-if [ -z "$RESPONSE" ] || [ "$RESPONSE" = "NONE" ]; then exit 0; fi
+if [ -z "$RESPONSE" ]; then
+    trace "claude returned empty; stderr: $(tr '\n' ' ' < "$CLAUDE_STDERR" | cut -c1-400)"
+    rm -f "$CLAUDE_STDERR"
+    exit 0
+fi
+rm -f "$CLAUDE_STDERR"
+if [ "$RESPONSE" = "NONE" ]; then trace "claude returned NONE (no lessons proposed)"; exit 0; fi
 
 if printf '%s\n' "$RESPONSE" | grep -qvE '^[[:space:]]*(-[[:space:]].*|$)'; then
-    log "rejected: non-bullet line present"
+    trace "rejected: non-bullet line present"
     exit 0
 fi
 
 SIZE=$(printf '%s' "$RESPONSE" | wc -c | tr -d ' ')
 if [ "$SIZE" -gt 800 ]; then
-    log "rejected: $SIZE bytes exceeds 800"
+    trace "rejected: $SIZE bytes exceeds 800"
     exit 0
 fi
 
@@ -100,7 +114,7 @@ $(printf '%s\n' "$RESPONSE" | grep -E '^[[:space:]]*-[[:space:]]')
 EOF
 
 FILTERED=$(printf '%s' "$FILTERED" | sed -e 's/[[:space:]]*$//')
-if [ -z "$FILTERED" ]; then exit 0; fi
+if [ -z "$FILTERED" ]; then trace "all proposed bullets were duplicates of existing memory"; exit 0; fi
 
 {
     printf '\n## %s\n' "$(date -u +%Y-%m-%d)"
@@ -119,5 +133,7 @@ if [ -n "$REPO_ROOT" ]; then
         >/dev/null 2>&1 || true
 fi
 
+APPENDED_LINES=$(printf '%s\n' "$FILTERED" | grep -cE '^[[:space:]]*-[[:space:]]' || true)
+trace "appended $APPENDED_LINES lesson(s) to $MEMORY_FILE"
 log "appended lessons to $MEMORY_FILE"
 exit 0
