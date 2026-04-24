@@ -1,7 +1,7 @@
 {
   "name": "qol-plugin-alt-tab",
-  "description": "Skills for the qol-tray alt-tab plugin: GPUI window list, X11/macOS preview capture, daemon lifecycle, settings UI, and release flow.",
-  "version": "0.1.0",
+  "description": "Specialist agent and skills for the qol-tray alt-tab plugin: GPUI window list, X11/macOS preview capture, AX/CG discovery, daemon lifecycle, settings UI, release flow, and a SubagentStop hook that auto-curates agent MEMORY.md.",
+  "version": "0.2.0",
   "author": {
     "name": "KMRH47"
   }
