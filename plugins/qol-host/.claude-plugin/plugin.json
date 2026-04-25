@@ -1,7 +1,7 @@
 {
   "name": "qol-host",
   "description": "Host-app plugin for qol-tray: specialist agents (frontend, backend) with a self-improvement hook, plus deep skills for core architecture, UI systems, dev logging, Profile feature, release flow, world canvas, and apps-testing.",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "author": {
     "name": "KMRH47"
   }
