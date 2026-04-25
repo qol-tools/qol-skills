@@ -9,6 +9,19 @@
                         "command": "${CLAUDE_PLUGIN_ROOT}/bin/route-to-agent.sh"
                     }
                 ]
+            },
+            {
+                "matcher": "Bash",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "${CLAUDE_PLUGIN_ROOT}/bin/commit-skill-context.sh"
+                    },
+                    {
+                        "type": "command",
+                        "command": "${CLAUDE_PLUGIN_ROOT}/bin/commit-deny-coauthor.sh"
+                    }
+                ]
             }
         ],
         "SubagentStop": [
