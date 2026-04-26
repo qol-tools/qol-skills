@@ -1,10 +1,12 @@
 # qol-skills
 
-Claude Code skills for everything in the [qol-tools](https://github.com/qol-tools) GitHub org: the [qol-tray](https://github.com/qol-tools/qol-tray) host app, every plugin, the shared libraries, the workspace conventions, the CI/CD pipeline, and the language patterns the codebase relies on.
+Claude Code and Codex skills for everything in the [qol-tools](https://github.com/qol-tools) GitHub org: the [qol-tray](https://github.com/qol-tools/qol-tray) host app, every plugin, the shared libraries, the workspace conventions, the CI/CD pipeline, and the language patterns the codebase relies on.
 
-This repo is a **Claude Code marketplace** — 12 fine-grained plugins, one per logical area, so you can toggle the scope you want on any given machine.
+This repo is a **Claude Code and Codex marketplace** — 12 fine-grained plugins, one per logical area, so you can toggle the scope you want on any given machine.
 
 ## Install
+
+### Claude Code
 
 Install the marketplace once, then enable only the plugins you need:
 
@@ -16,6 +18,27 @@ Install the marketplace once, then enable only the plugins you need:
 ```
 
 Or install everything via `/plugin` in the Claude Code UI and toggle plugins on/off per project.
+
+### Codex
+
+Install the marketplace once, then enable only the plugins you need:
+
+```bash
+codex plugin marketplace add qol-tools/qol-skills
+codex
+```
+
+Inside Codex:
+
+```text
+/plugins
+```
+
+Install the relevant plugins, then invoke skills with `$`, for example:
+
+```text
+$qol-tray explain the daemon lifecycle and check this repo for mismatches
+```
 
 ## Plugins
 
@@ -34,7 +57,7 @@ Or install everything via `/plugin` in the Claude Code UI and toggle plugins on/
 | `qol-dev-conventions` | `rust`, `gpui`, `preact`, `commit`, `git-push`, `git-trees`, `coding-general`, `qol-architecture`, `qol-shared-libs`, `qol-plugin-template` |
 | `qol-ecosystem` | `qol-tools`, `qol-cicd` |
 
-Each plugin has its own `.claude-plugin/plugin.json`; every skill lives at `plugins/<plugin-name>/skills/<skill-name>/SKILL.md`.
+Each plugin has its own `.claude-plugin/plugin.json` and `.codex-plugin/plugin.json`; every skill lives at `plugins/<plugin-name>/skills/<skill-name>/SKILL.md`.
 
 ## Repo layout
 
@@ -42,9 +65,13 @@ Each plugin has its own `.claude-plugin/plugin.json`; every skill lives at `plug
 qol-skills/
 ├── .claude-plugin/
 │   └── marketplace.json         # lists all 12 plugins
+├── .agents/
+│   └── plugins/
+│       └── marketplace.json     # Codex marketplace
 ├── plugins/
 │   ├── qol-plugin-alt-tab/
 │   │   ├── .claude-plugin/plugin.json
+│   │   ├── .codex-plugin/plugin.json
 │   │   └── skills/
 │   │       ├── qol-plugin-alt-tab/SKILL.md
 │   │       └── plugin-alt-tab-release-flow/SKILL.md

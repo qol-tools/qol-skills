@@ -1,0 +1,9 @@
+{
+  "name": "qol-host",
+  "version": "0.1.0",
+  "description": "Host-app skills for qol-tray: core architecture, UI systems, dev logging, Profile feature, release flow, world canvas, and apps-testing conventions.",
+  "author": {
+    "name": "KMRH47"
+  },
+  "skills": "./skills/"
+}

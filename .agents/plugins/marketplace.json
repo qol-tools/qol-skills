@@ -1,0 +1,152 @@
+{
+  "name": "qol-skills",
+  "interface": {
+    "displayName": "qol-skills"
+  },
+  "plugins": [
+    {
+      "name": "qol-plugin-alt-tab",
+      "source": {
+        "source": "local",
+        "path": "./plugins/qol-plugin-alt-tab"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "qol-plugin-launcher",
+      "source": {
+        "source": "local",
+        "path": "./plugins/qol-plugin-launcher"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "qol-plugin-pointz",
+      "source": {
+        "source": "local",
+        "path": "./plugins/qol-plugin-pointz"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "qol-plugin-ide-checkout",
+      "source": {
+        "source": "local",
+        "path": "./plugins/qol-plugin-ide-checkout"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "qol-plugin-keyremap",
+      "source": {
+        "source": "local",
+        "path": "./plugins/qol-plugin-keyremap"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "qol-plugin-lights",
+      "source": {
+        "source": "local",
+        "path": "./plugins/qol-plugin-lights"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "qol-plugin-os-themes",
+      "source": {
+        "source": "local",
+        "path": "./plugins/qol-plugin-os-themes"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "qol-plugin-screen-recorder",
+      "source": {
+        "source": "local",
+        "path": "./plugins/qol-plugin-screen-recorder"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "qol-plugin-window-actions",
+      "source": {
+        "source": "local",
+        "path": "./plugins/qol-plugin-window-actions"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "qol-host",
+      "source": {
+        "source": "local",
+        "path": "./plugins/qol-host"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "qol-dev-conventions",
+      "source": {
+        "source": "local",
+        "path": "./plugins/qol-dev-conventions"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "qol-ecosystem",
+      "source": {
+        "source": "local",
+        "path": "./plugins/qol-ecosystem"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

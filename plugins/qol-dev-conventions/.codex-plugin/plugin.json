@@ -1,0 +1,9 @@
+{
+  "name": "qol-dev-conventions",
+  "version": "0.1.0",
+  "description": "Cross-repo development conventions: rust, gpui, preact, qol-architecture, qol-shared-libs, qol-plugin-template, commit, git-push, git-trees, coding-general.",
+  "author": {
+    "name": "KMRH47"
+  },
+  "skills": "./skills/"
+}
