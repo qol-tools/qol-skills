@@ -21,20 +21,14 @@ Or install everything via `/plugin` in the Claude Code UI and toggle plugins on/
 
 ### Codex
 
-Install the marketplace once, then enable only the plugins you need:
+Install the marketplace once to install all plugins by default:
 
 ```bash
 codex plugin marketplace add qol-tools/qol-skills
 codex
 ```
 
-Inside Codex:
-
-```text
-/plugins
-```
-
-Install the relevant plugins, then invoke skills with `$`, for example:
+Invoke skills with `$`, for example:
 
 ```text
 $qol-tray explain the daemon lifecycle and check this repo for mismatches

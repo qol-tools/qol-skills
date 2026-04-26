@@ -11,7 +11,7 @@
         "path": "./plugins/qol-plugin-alt-tab"
       },
       "policy": {
-        "installation": "AVAILABLE",
+        "installation": "INSTALLED_BY_DEFAULT",
         "authentication": "ON_INSTALL"
       },
       "category": "Productivity"
@@ -23,7 +23,7 @@
         "path": "./plugins/qol-plugin-launcher"
       },
       "policy": {
-        "installation": "AVAILABLE",
+        "installation": "INSTALLED_BY_DEFAULT",
         "authentication": "ON_INSTALL"
       },
       "category": "Productivity"
@@ -35,7 +35,7 @@
         "path": "./plugins/qol-plugin-pointz"
       },
       "policy": {
-        "installation": "AVAILABLE",
+        "installation": "INSTALLED_BY_DEFAULT",
         "authentication": "ON_INSTALL"
       },
       "category": "Productivity"
@@ -47,7 +47,7 @@
         "path": "./plugins/qol-plugin-ide-checkout"
       },
       "policy": {
-        "installation": "AVAILABLE",
+        "installation": "INSTALLED_BY_DEFAULT",
         "authentication": "ON_INSTALL"
       },
       "category": "Productivity"
@@ -59,7 +59,7 @@
         "path": "./plugins/qol-plugin-keyremap"
       },
       "policy": {
-        "installation": "AVAILABLE",
+        "installation": "INSTALLED_BY_DEFAULT",
         "authentication": "ON_INSTALL"
       },
       "category": "Productivity"
@@ -71,7 +71,7 @@
         "path": "./plugins/qol-plugin-lights"
       },
       "policy": {
-        "installation": "AVAILABLE",
+        "installation": "INSTALLED_BY_DEFAULT",
         "authentication": "ON_INSTALL"
       },
       "category": "Productivity"
@@ -83,7 +83,7 @@
         "path": "./plugins/qol-plugin-os-themes"
       },
       "policy": {
-        "installation": "AVAILABLE",
+        "installation": "INSTALLED_BY_DEFAULT",
         "authentication": "ON_INSTALL"
       },
       "category": "Productivity"
@@ -95,7 +95,7 @@
         "path": "./plugins/qol-plugin-screen-recorder"
       },
       "policy": {
-        "installation": "AVAILABLE",
+        "installation": "INSTALLED_BY_DEFAULT",
         "authentication": "ON_INSTALL"
       },
       "category": "Productivity"
@@ -107,7 +107,7 @@
         "path": "./plugins/qol-plugin-window-actions"
       },
       "policy": {
-        "installation": "AVAILABLE",
+        "installation": "INSTALLED_BY_DEFAULT",
         "authentication": "ON_INSTALL"
       },
       "category": "Productivity"
@@ -119,7 +119,7 @@
         "path": "./plugins/qol-host"
       },
       "policy": {
-        "installation": "AVAILABLE",
+        "installation": "INSTALLED_BY_DEFAULT",
         "authentication": "ON_INSTALL"
       },
       "category": "Productivity"
@@ -131,7 +131,7 @@
         "path": "./plugins/qol-dev-conventions"
       },
       "policy": {
-        "installation": "AVAILABLE",
+        "installation": "INSTALLED_BY_DEFAULT",
         "authentication": "ON_INSTALL"
       },
       "category": "Productivity"
@@ -143,7 +143,7 @@
         "path": "./plugins/qol-ecosystem"
       },
       "policy": {
-        "installation": "AVAILABLE",
+        "installation": "INSTALLED_BY_DEFAULT",
         "authentication": "ON_INSTALL"
       },
       "category": "Productivity"
