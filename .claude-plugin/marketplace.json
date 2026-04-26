@@ -52,9 +52,9 @@
     },
     {
       "name": "qol-plugin-lights",
-      "description": "Skills for the qol-tray lights plugin: Zigbee2MQTT backend adapter, daemon entrypoint, and auto-config settings UI.",
+      "description": "Specialist agent and skills for the qol-tray lights plugin: backend adapters (Zigbee2MQTT first), ZNP serial stack, daemon/runtime split, auto-config settings UI, and a SubagentStop hook that auto-curates agent MEMORY.md.",
       "source": "./plugins/qol-plugin-lights",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "author": {
         "name": "KMRH47"
       }

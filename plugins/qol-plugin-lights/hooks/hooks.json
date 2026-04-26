@@ -1,0 +1,15 @@
+{
+    "hooks": {
+        "SubagentStop": [
+            {
+                "matcher": "plugin-lights|qol-plugin-lights:plugin-lights",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "${CLAUDE_PLUGIN_ROOT}/bin/reflect-agent.sh"
+                    }
+                ]
+            }
+        ]
+    }
+}
