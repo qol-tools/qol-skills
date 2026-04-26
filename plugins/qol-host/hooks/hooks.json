@@ -1,5 +1,16 @@
 {
     "hooks": {
+        "SessionStart": [
+            {
+                "matcher": "startup|resume|clear",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "${CLAUDE_PLUGIN_ROOT}/bin/inject-dev-recompile-context.sh"
+                    }
+                ]
+            }
+        ],
         "PreToolUse": [
             {
                 "matcher": "Edit|Write|NotebookEdit",
