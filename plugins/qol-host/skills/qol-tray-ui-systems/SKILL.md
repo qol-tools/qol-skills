@@ -169,6 +169,14 @@ For dynamic alpha: `rgba(var(--accent-rgb), 0.2)`. Available: `--accent-rgb`, `-
 | Swallowing events from disconnected DOM nodes | `if (!target.isConnected) return false` — let events fall through to the next handler |
 | Forgetting to update `hotkeysRef.current` eagerly after `setHotkeys` | `useStateRef` ref only updates on render; sync it manually: `d.hotkeysRef.current = nextHotkeys` |
 | Using Tab as implicit field navigation | Root-layer `Tab` cycles top-level views; any editor-specific Tab behavior must be implemented explicitly |
+| Branching on event.shiftKey inside a view to invoke an alternate action | Declare it as `onSecondaryActivate` (or `actions[1]`) on the surface. The router synthesizes the modifier-aware click; views stay declarative. |
+| Reaching into the keyboard router to add a new modifier path | Add it to the modifier→slot table or to the `surface-actions.js` registry. Don't fork `useAppKeyboardRouting`. |
+| Adding a `data-dive-target` row but expecting clicks to dive without using `Surface` | Click→dive is wired in `Surface.handleSurfaceClick`. Raw `<div data-dive-target>` doesn't dive on click. Always use a Surface descendant. |
+| Calling `window.confirm()` for a destructive action | Use `<${ConfirmButton} confirmWith="...">`. Native dialogs are blocking and don't match our visual language. |
+| Rendering an ad-hoc Shift-overlay div on a new surface | Set `data-secondary-label` and pass `onSecondaryActivate` (or `actions[1]`). Global CSS draws the overlay. |
+| Using a `<pre>` with `tabIndex=0` for a scrollable JSON/log dump | Use `CodeBlock` (or follow its `data-scroll-surface-active` pattern). Plain `tabIndex=0` won't be reachable via arrow nav. |
+| Letting modifier-Enter dive a row that has a secondary action | Already handled by `Surface`: Shift/Ctrl/Meta + Enter runs the secondary action and suppresses dive. Don't reimplement. |
+| Forgetting to call `restoreDiveSourceFocus` when adding a new ascend path | The existing camera-layer ascend path already does this. Don't add a parallel ascend mechanism — extend the existing one. |
 
 ## Surface Trait Architecture
 
@@ -211,6 +219,120 @@ html`<${LogRow} time="14:32" level="error" src="plugin" msg="failed" onActivate=
 - `useScrollFollow(containerRef, active, index, selector)` — scroll item into view
 
 **Adding behaviors:** Each behavior is a hook. A component declares what it IS by calling the hooks it needs — no wrapper nesting, no middleware chains.
+
+## Surface Action Contract (modifier-table actions)
+
+Every Surface accepts a single primary action plus optional modifier-keyed alternates. The contract lives entirely in `Surface` and one helper module — no per-view keyboard branching, no per-row click handlers.
+
+### Two equivalent shapes
+
+```js
+// Lightweight: primary + optional secondary
+<${Surface} as="button"
+    onActivate=${primary}
+    onSecondaryActivate=${secondary}
+    data-secondary-label="Open in editor"
+>Edit<//>
+
+// Composable: a list of named action descriptors (preferred for 3+ slots)
+<${Surface} as="button" actions=${[
+    diveAction('profile-backup-detail', dive),       // slot 0 — Enter / Click
+    openExternalAction(() => openBackup(name)),      // slot 1 — Shift+Enter / Shift+Click
+    revealInFolderAction(() => openBackupsDir()),    // slot 2 — Ctrl+Enter / Ctrl+Click
+    copyPathAction(name),                            // slot 3 — Ctrl+Shift+Enter
+]}>Edit<//>
+```
+
+The router's modifier→slot table:
+
+| Modifier | Slot |
+|---|---|
+| (none) | 0 — primary |
+| Shift | 1 — secondary |
+| Ctrl / Meta | 2 — tertiary |
+| Ctrl+Shift | 3 — quaternary |
+
+### Strategy registry — `ui/lib/surface-actions.js`
+
+Action factories return `{ kind, label, run }`:
+- `diveAction(target, dive)` — primary slot for divable rows.
+- `openExternalAction(invoke, { label })` — opens via OS handler (xdg-open / open / explorer).
+- `revealInFolderAction(invoke, { label })` — same but for the parent dir.
+- `copyTextAction(text, { label, message })`, `copyPathAction(path)` — clipboard helpers with toast.
+- `customAction(run, { label, kind })` — escape hatch.
+- `pickAction(actions, event)`, `modifierIndex(event)` — used internally by Surface; rarely needed at call sites.
+
+Add new action kinds here, not in surfaces. Each surface stays declarative.
+
+### Mouse parity
+
+Surface `onClick` now also dives when `data-dive-target` is set on the element AND the primary slot ran (no modifier held). This is centralized via the `diveFromSurface` singleton in `ui/lib/world-navigation-singleton.js`, wired by `App.js`.
+
+**Consequence:** the keyboard router no longer dives. `routeToView` had a "data-dive-target priority" shortcut that has been removed; `activateAndMaybeDescend` only fires `dispatchModifierClick(el, keyEvent)` plus optional descend. The single source of truth for click→dive is `Surface.handleSurfaceClick`. Mouse and keyboard go through the same path.
+
+**Modifier semantics on dives:** Plain Enter/Click on a divable surface → primary + dive. Shift+Enter/Click → secondary, dive suppressed. Ctrl+/Meta+ → tertiary, dive suppressed. The "no dive when modifier" rule is in Surface, not router.
+
+### Shift-held overlay (global, CSS-only)
+
+`useShiftHeld()` (mounted once at AppShell root) toggles `body[data-shift-held]` while Shift is held. The CSS rule in `common-controls.css`:
+
+```css
+body[data-shift-held] [data-selected-surface][data-secondary-label][data-selected="true"]::after,
+body[data-shift-held] [data-selected-surface][data-secondary-label]:focus::after {
+    content: attr(data-secondary-label);
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(2px);
+    border-radius: inherit;
+    color: var(--accent); font-size: var(--fs-lg); font-weight: var(--fw-semibold);
+    text-transform: uppercase; letter-spacing: 0.08em;
+    z-index: var(--z-control); pointer-events: none;
+}
+```
+
+Any surface with `data-secondary-label` gets the overlay automatically — no per-component div. The dual `[data-selected="true"], :focus` selector covers both controller-managed surfaces (Profile, Hotkeys, Shortcuts) and standalone focus-driven ones (CodeBlock).
+
+The legacy `<div class="plugin-shift-overlay">Menu</div>` on the Plugins page is now redundant — its CSS still matches but new surfaces don't render their own overlay element.
+
+### Ascend focus restoration (`data-dive-source`)
+
+When `Surface.maybeDive` fires, it sets `data-dive-source=""` on the originating element. On Esc-ascend:
+- The non-camera ascend path (parent-container) finds the source and refocuses it.
+- The camera ascend path (escaping a dive subpage) was missing this — fixed via `restoreDiveSourceFocus()` after `_ascendRef.current()` in `useAppKeyboardRouting::ascendLayer`.
+
+Result: Esc-from-dive on any divable surface returns focus to the originating row. No per-view wiring.
+
+## Scroll-Mode Opt-Out (`data-scroll-surface-active`)
+
+Surfaces that need native arrow-key / PgUp / PgDn scrolling within their bounds set `data-scroll-surface-active=""` while in scroll mode. `globalSurfaceNav` early-returns when the focused element has this attribute, letting the browser scroll the focused element natively.
+
+Pattern in `CodeBlock.js`:
+1. Initial state: surface registered, focused via arrow nav.
+2. Enter (or click) → set `scrollMode=true` → emit `data-scroll-surface-active`.
+3. Browser handles arrows / PgUp / PgDn / Home / End natively (scrolls the `<pre>`).
+4. Esc → globalSurfaceNav dispatches `exit-scroll-mode` CustomEvent → CodeBlock clears state → returns to arrow-nav.
+
+Reusable for any future scrollable surface (logs viewer, JSON dumps, large config previews).
+
+## ConfirmButton trait (`ui/lib/components/ConfirmButton.js`)
+
+For destructive actions. Drop-in replacement for `Button`. Morphs into an inline input that requires the user to type a contextual keyword. Replaces ad-hoc `window.confirm()`.
+
+```js
+<${ConfirmButton} confirmWith="restore" onActivate=${restore}>
+    Restore this backup
+<//>
+```
+
+- Click / Enter on the button → morphs to `<input>` placeholder `Type "<word>" + Enter`, auto-focused.
+- Type the word + Enter → `onActivate` fires.
+- Wrong word + Enter → red shake animation, danger ring; stays open for retry.
+- Esc / blur → reverts to button, `onCancel` if provided.
+- Case-insensitive, whitespace-trimmed.
+
+`confirmWith` defaults to `"confirm"`. Use a contextual word (`"restore"`, `"delete"`, `"reset"`, `"disconnect"`) when it adds clarity.
+
+**Use this for any destructive action** instead of native confirm dialogs or single-click destructive buttons.
 
 ## Plugin Config Field Integration
 
