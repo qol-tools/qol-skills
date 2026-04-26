@@ -1,0 +1,19 @@
+# One case-insensitive extended grep pattern per line.
+# Blank lines and # comments are ignored.
+co[[:space:]_-]*author(ed)?[[:space:]_-]*by
+noreply@anthropic
+noreply@openai
+codex@openai
+noreply@google
+generated[[:space:]]+(with|by)[[:space:]]+\[?(claude|codex|gemini|openai|google|cursor|copilot|aider|devin)
+🤖[[:space:]]*generated
+claude[[:space:]]+(opus|sonnet|haiku|code)[[:space:]]+[0-9]
+<[^>]*@anthropic\.com>
+<[^>]*@openai\.com>
+<[^>]*@google\.ai>
+gemini[[:space:]_-]*code[[:space:]_-]*assist
+gemini[[:space:]_-]*cli
+gemini-code-assist\[bot\]
+176961590\+gemini-code-assist\[bot\]@users\.noreply\.github\.com
+google-labs-jules\[bot\]
+cursoragent@cursor\.com
