@@ -34,6 +34,19 @@ Enabling logs at runtime:
 - From the browser DevTools console: `localStorage.setItem('qol-debug', '1')` then reload
 - Disable: `localStorage.removeItem('qol-debug')`
 
+## Verbose tier
+
+`createDebug` exposes a second method `log.verbose(...)` gated by an additional `qol-debug-verbose` localStorage key. It only fires when **both** `qol-debug` and `qol-debug-verbose` are set, and renders at reduced opacity to visually deprioritise the spam.
+
+Use `log.verbose(...)` for hot-path diagnostics that would flood the console at normal volume — per-frame minimap render state, per-tick camera deltas, per-mousemove spatial-nav scoring. Anything that fires at ~60Hz during normal interaction belongs here.
+
+Toggling:
+- Enable: `localStorage.setItem('qol-debug-verbose', '1')` then reload (the regular `qol-debug` key must also be set)
+- Disable: `localStorage.removeItem('qol-debug-verbose')`
+- Programmatic helpers: `setVerboseDebugEnabled(on)` and `isVerboseDebugEnabled()` from `ui/lib/debug.js`
+
+Default is OFF — keep hot-path logs off the regular tier so a casual `qol-debug=1` session doesn't drown the console. Promote to `log(...)` only if a single event per pan/zoom is genuinely useful.
+
 ## Namespace Convention
 
 Format: `qol:<area>` — short lowercase word describing the subsystem. One file = one namespace typically. Never invent ad-hoc namespaces; prefer extending an existing one.

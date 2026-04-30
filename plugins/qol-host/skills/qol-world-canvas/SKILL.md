@@ -134,28 +134,26 @@ The `fade` term is what eliminates the pop: as `activePosF` slides past an integ
 - Active stays at the strip centre even at world edges — neighbours fan out only on the side that has them.
 - Camera rect is honest: walk visible slots, project camera world-x intersection through each entry's slot pixel range, union the pieces. Reflects the camera's true world span — no cosmetic adjustment.
 
-### Readability floor (`MINIMAP_MIN_SLOT_PX`, `MINIMAP_MIN_SLOT_FRAC`)
-
-Per-slot pixel floor passed into the layout. Each slot's natural geometric size is clamped to `max(MINIMAP_MIN_SLOT_PX, MINIMAP_MIN_SLOT_FRAC × minimapWidth)`. The redistributor compensates: floored slots take the floor, the rest split the remaining budget weighted by their original decay-relative size. If the budget is tight enough to overrun, the entire row is rescaled to fit.
-
-Floor disabled when the slider is at MAX ("all"): user explicitly asked for everything; tiny slots are accepted.
-
 ### What lives where
 
-- **`Minimap.js`** owns slicing (`sliceFocalNeighbours`), the floor decision, and the cog-wheel `WorldSettingsPanel`.
-- **`minimap-geometry.js`** is pure pixel math: `computeMinimapFocalLayout`, `computeMinimapFocalRect`, `computeSlotCoverage`, `FOCAL_DECAY`, `FOCAL_GAP_PX`. No setting reads, no DOM.
+- **`Minimap.js`** owns the cog-wheel `WorldSettingsPanel` and the `computeMinimapView` helper that gathers camera/registry/settings state for both render and click. Render and hit-test share that one path — never recompute the layout twice.
+- **`minimap-geometry.js`** is pure pixel math: `computeMinimapFocalLayout`, `computeMinimapFocalRect`, `computeSlotCoverage`, `FOCAL_GAP_PX`, `FOCAL_SLOT_ASPECT`. No setting reads, no DOM.
 - **`minimap-draw.js`** renders to canvas. `clampRectForDraw` widens narrow rects so they stay visible at high zoom.
 
 ### Constants
 
 - `MINIMAP_NEIGHBOURS_MIN = 1` (Minimap.js) — slider floor.
-- `MINIMAP_NEIGHBOURS_MAX = 12` (Minimap.js) — slider ceiling; sentinel for "all" (focusRadius set to layer length).
-- `MINIMAP_MIN_SLOT_PX = 28` (Minimap.js) — absolute pixel floor.
-- `MINIMAP_MIN_SLOT_FRAC = 0.08` (Minimap.js) — minimum slot as fraction of minimap width; effective floor = max of these two.
+- `MINIMAP_NEIGHBOURS_MAX = 12` (Minimap.js) — slider ceiling; sentinel for "all" (focusRadius set to layer length × 100).
 - `FOCAL_GAP_PX = 5` (minimap-geometry.js) — inter-slot pixel gap, suppressed when one neighbour has w = 0.
 - `FOCAL_SLOT_ASPECT = 0.62` (minimap-geometry.js) — fixed slot height/width ratio. Per-entry `entry.height` is intentionally ignored; otherwise navigating between pages with different content heights would reshape the active slot, which the user reads as the minimap "redrawing differently per page".
 
-`computeMinimapFocalLayout` derives decay from `focusRadius` as `0.3^(1/R)` so the slot at distance R is at ~30% of active. Lower R = sharper falloff.
+The decay is derived inline from `focusRadius` as `0.3^(1/R)` so the slot at distance R is at ~30% of active. Lower R = sharper falloff.
+
+The reference denominator is the **max** weight sum across all integer positions, not the midpoint. Using midpoint left edge/middle positions with different denominators, so the active slot reshaped per page even with constant zoom — that is the navigation-invariance bug the property test in `minimap-geometry.test.js` now guards.
+
+### No floor
+
+There is no per-slot pixel floor. An earlier `MINIMAP_MIN_SLOT_PX` / `MINIMAP_MIN_SLOT_FRAC` redistribution caused per-position divergence — at edge positions only one neighbour got floored, at middle positions both did, so the floored count differed and so did the active width. Removed entirely. If far-neighbour readability becomes a concern again, fix it in the draw layer (e.g. minimum dot/label size) rather than reintroducing layout floors.
 
 ### Settings (`world-settings.js`)
 
