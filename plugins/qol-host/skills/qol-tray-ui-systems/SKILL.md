@@ -350,3 +350,100 @@ function ObjectArrayField({ field }) {
     return html`...native Preact rendering with Surface integration...`;
 }
 ```
+
+### HA-style status gating
+
+`PluginConfigContext` (`ui/views/plugin-config/context.js`) tracks `statusTones` reported by `StatusField` (driven by polled queries). `isRuntimeDisabled = some tone === 'danger'` gates runtime-dependent fields (`action`, `color+stream`, `list`). Recovery actions (reload, pair) are exempt — they're how the user fixes the broken state.
+
+Fields read `ctx.isRuntimeDisabled`. `StatusField` reports tone via `ctx.reportStatusTone(fieldId, tone)`.
+
+## View keyboard fallback (`ui/lib/view-keyboard-fallback.js`)
+
+During a dive into an editor sub-page (`hotkeys-editor`, `shortcuts-editor`, `task-runner-editor`), `activeViewId` stays on the parent view because dive doesn't switch top-level views — only the navigation anchor moves.
+
+`resolveViewKeyboard(viewId, getViewKeyboard, anchorPageId)` resolution order:
+1. Anchor pageId direct lookup (if anchor differs from viewId).
+2. Anchor's editor parent (strip `-editor` suffix).
+3. viewId direct lookup.
+4. viewId's editor parent.
+
+**Intentionally narrow:** only `*-editor` sub-pages get the fallback. The seven other dive sub-pages (`logs-detail`, `profile-backup-detail`, `dev-log-filters`, `dev-plugin-actions`, `plugins-uninstall-confirm`, `plugins-actions`, `task-runner-test-runner`) do NOT register their own keyboard handler — they rely on `activeViewId` staying at the parent during dive, so the direct lookup of `activeViewId` already resolves to the parent's handler.
+
+If a non-editor sub-page ever needs its own keyboard handler with parent fallback, register it directly under its own viewId (don't widen `editorParentViewId`).
+
+## Modal key dispatch (`ui/lib/hooks/modal-key-action.js`)
+
+`resolveModalKeyAction({ key, ctrlKey, isEditing, hasOnClose })` returns one of:
+- `noop` — don't preventDefault.
+- `blur-edit` — return focus from input to its surface (Esc/Enter while editing).
+- `blur-edit-and-save` — Ctrl+Enter while editing.
+- `save` — Ctrl+Enter on a surface.
+- `close` — Escape on a surface (only when `hasOnClose`).
+
+**Esc-on-surface MUST resolve to `close` when `onClose` is provided.** If it resolves to `noop`, `globalSurfaceNav.ascendLayer()` runs the dive ascend without ever clearing the parent view's `editModal`, the parent's `isBlocking()` stays true, and root-layer Tab cycling silently breaks. Locked by `modal-key-action.test.js::regression: esc on dive-editor form-group surface closes (not noop)`.
+
+## Focus retention (`ui/lib/focus-retention.js`)
+
+`createFocusRetention(doc)` watches for `focusout` + DOM mutations that leave `document.activeElement === document.body`. Attempts recovery via `pickFallbackSurface({ lostContainer, lostSlot, viewport })` in this order:
+
+1. Selected surface in lost container, then first surface in container.
+2. Selected surface in lost slot, then first surface in slot.
+3. **Anchored** slot surface in viewport — slot whose rect actually intersects the viewport (selected first, then first).
+4. First surface in viewport whose rect intersects the viewport.
+
+**Off-screen world-slot rule:** world slots live at distant world coordinates inside `#viewport` (CSS-transformed). After ascend, the lost editor slot is empty; we must NOT fall back to a surface in another world slot that happens to be off-screen, or the camera will chase it. `pickAnchoredSlotSurface` only considers slots whose rect intersects the viewport rect — i.e. the slot the camera is currently showing.
+
+Locked by regression test in `focus-retention.test.js`: `pickFallbackSurface ignores off-screen world-slots in viewport fallback`.
+
+## Viewport DOM resolution (`ui/lib/viewport-resolve.js`)
+
+`resolveViewport(viewportRef, doc)` recovers when the cached `#viewport` ref is stale. During dive transitions the `#viewport` element can be replaced; the shared ref in App.js then points at a detached node (`clientWidth === 0`, `isConnected === false`), which collapses every viewport-derived calculation (minimap rect, camera follow, focus tracking) to zero until the next ref write.
+
+Two-step:
+1. Trust cache when connected and `clientWidth > 0`.
+2. Otherwise re-query DOM by id and **overwrite the cache** so other consumers (`camera.getViewportSize`, `navigation.domHelpers`) recover too.
+
+Pure helper — callers pass any object with a mutable `current` property and the doc. Use this anywhere viewport dimensions are read after a transition.
+
+## Plugin context menu (`ui/lib/plugin-context-menu-items.js`)
+
+Single `ITEMS` array drives both visibility and dispatch. Order is the on-screen order: `update`, `config`, `delete`. Visibility:
+- `update`: requires `plugin.update_available`.
+- `config`: requires `plugin.has_config`.
+- `delete`: always shown.
+
+Each item carries `handler(ctx, pluginId)`. `dispatchPluginContextAction(actionId, pluginId, ctx)` looks the item up by id and runs its handler. Adding a new item = one row in the array. No new dispatcher branches.
+
+`bindPluginContextMenuItems(plugin, ctx)` returns the visible items with bound `run` closures — for the `plugin-actions` subpage that doesn't know action ids.
+
+## Selection cursor pointermove gate
+
+`SelectionCursorOverlay` (`ui/lib/components/SelectionCursorOverlay.js`) ignores `pointermove` while `camera.animating` is true. Camera-driven layout shifts retarget the cursor's hit-test under a stationary pointer; the browser fires a synthetic `pointermove` that flips mode to `mouse`, then `syncFromCamera` reverts to `keyboard` on the next tick — hundreds of flip-flops per pan animation peg CPU and trigger Firefox's slow-script warning. Real user input doesn't happen mid-animation in any meaningful way.
+
+CTRL-held preview: wedge centres in viewport, highlights the nearest surface via `nearestSurfaceToCenter` and `data-selection-cursor-active="true"`. Wedge hue/depth: `--wedge-hue: 50 + (depth-1)*45`, capped at 275. Badge text colour switches to black when the HSL luminance > 0.18.
+
+## DiveEditorSubPage shell (`ui/lib/components/DiveEditorSubPage.js`)
+
+Shared shell for editor sub-pages reached by dive (`hotkeys-editor`, `shortcuts-editor`, `task-runner-editor`). Subscribes to a `createSharedSlot`, registers a view-keyboard binding under the sub-page id, and wraps the form body in the canonical five-deep page chrome.
+
+Props:
+- `slot` — `createSharedSlot` whose value is `{ modal, handleKey, isBlocking, ... }`.
+- `viewId` — keyboard registration id (e.g. `hotkeys-editor`).
+- `fallbackTitle`, `fallbackSubtitle` — shown when `slot.modal` is null.
+- `renderHeader(value)` — returns the PageHeader for the active editor.
+- `children(value)` — form body (typically wrapping `.edit-modal-content`).
+
+Sets `activeModalContainer` for `useModalKeyboard` while the modal is open. The parent view's `useDiveEditor` hook (`ui/lib/hooks/useDiveEditor.js`) pushes its `{ modal, handleKey, isBlocking, ... }` payload into the slot whenever the editor state changes.
+
+## Hotkey recorder (`ui/views/hotkeys/recorder.js`)
+
+`applyRecordingKey(modal, event)` is pure — node:test friendly. Canonical shortcut format matches `profile/core/hotkeys.json`: modifier order `Ctrl → Alt → Shift → Super → key`, joined with `+`.
+
+- Escape cancels recording without overwriting the previously captured key.
+- Lone modifier press shows the partial chord (`Alt`, `Ctrl+Shift`) but stays in recording mode and does not advance.
+- Pressing a recordable key + any modifier mask commits and advances to the next field.
+- Special keys browsers steal (Tab, F-keys, arrows, Backspace) are recordable.
+
+**macOS dead-keys:** Option+letter on a US layout produces a composed character in `event.key` (Alt+Q → Œ, Alt+E → é). `getKeyName(event.code)` derives the terminal key from the physical code (`KeyQ`, `KeyE`), so the saved shortcut is `Alt+Shift+Q`, not `Alt+Shift+Œ`. Tests in `recorder.test.js` lock this contract.
+
+`useRecorder` hook (`ui/views/hotkeys/useRecorder.js`) wraps the pure helper as the single source of truth for `isRecording`/`key` state — the modal in `use-hotkeys.js` no longer needs a `recording` field.

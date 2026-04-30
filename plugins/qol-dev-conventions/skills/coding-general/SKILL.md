@@ -20,7 +20,12 @@ If uncertain about any answer, ASK the user before implementing. Do not guess.
 
 ## Code Style
 
-- No comments — code must be self-explanatory
+- No comments — code must be self-explanatory. This is a hard rule, not a default.
+  - No banner comments, no section dividers (`// --- xxx ---`), no docstrings, no "what this does" narration, no rationale paragraphs above functions, no inline "why we picked this constant" notes.
+  - When an explanation is genuinely needed (non-obvious WHY, hidden invariant, theme-token sync risk, etc.), write it in the relevant qol-skills SKILL.md, not in code. The skill is the authoritative reference; code stays terse.
+  - If a comment already exists and the surrounding code changes, treat the comment as suspect. Either delete it or move its content into the matching skill.
+  - The fix for "this code is unclear" is renaming, splitting, or simplifying — never adding a comment.
+- Library / framework / API docs: always consult context7 for the latest reference (resolve-library-id then query-docs) instead of relying on training data, which drifts.
 - No emojis unless explicitly requested
 - Early-return, flatten if statements — max depth is one scope
 - **Control flow**: never use `else` — use early returns and guard clauses

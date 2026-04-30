@@ -201,3 +201,23 @@ When pasting logs for debugging, the user will include the `qol:*` namespace pre
 - Do not leave `debugger;` statements, `TODO` logs, or commented-out console calls in committed code.
 - Do not cram unrelated facts into one log line. One event per line.
 - Do not log on every animation frame or every keystroke unless you're specifically debugging a perf issue.
+
+## Frontend-only log sections (Dev Log UI)
+
+`ui/views/dev/frontend-log-sections.js` declares synthetic entries that surface in the dev `core-log-controls` UI but live entirely client-side. The backend doesn't track these; the backend will reject the section name on a PUT.
+
+Add a new entry to surface another frontend-only knob:
+
+```js
+{
+    id: 'frontend-debug',
+    name: 'Frontend Debug',
+    description: 'Console logging for UI navigation, focus, surface',
+    isMuted: () => !isDebugEnabled(),
+    setMuted: muted => setDebugEnabled(!muted),
+}
+```
+
+`loadCoreLogControls` in `discovery-controller.js` merges synthetic entries on top of the backend payload. `toggleCoreLogs` in `core-log-actions.js` short-circuits the PUT round-trip when the section is frontend-only — calls `setMuted` directly and updates local state.
+
+**Don't** add a frontend-only section without a corresponding `findFrontendLogSection` short-circuit or the backend will 4xx the toggle.

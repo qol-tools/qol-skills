@@ -7,6 +7,14 @@ description: Use when the user asks to push a repo or branch. Verifies local bra
 
 Use this skill when the user asks to push a branch or update a remote.
 
+## Never push without an explicit ask
+
+Never run `git push` (or any remote-affecting git command) on the user's behalf unless they explicitly asked for a push in the current turn. After `git commit`, stop and report. Do not chain a push into the same step.
+
+The user wants a chance to review the commit and amend before code leaves their machine. Pushing prematurely removes that safety window — even an immediate amend turns into a force-push later. "Commit" is not a license to push.
+
+This applies to every repo in the qol-tools workspace: qol-tray, qol-cicd, qol-skills, qol-host, plugin repos, etc.
+
 ## Mandatory Rule
 
 The `qol-cicd` repo continuously automates all `qol-*` repos and related workspace repos.
