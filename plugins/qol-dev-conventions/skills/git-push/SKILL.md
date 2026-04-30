@@ -50,3 +50,22 @@ Do not assume `origin/<branch>` is unchanged, even if the local repo looked curr
 - Never discard local changes to make a push succeed.
 - If the checkout has unrelated dirty changes, call that out before pulling or pushing.
 - If the target is `main`, be especially strict about rebasing first.
+
+## Troubleshooting auth failures
+
+If `git push` fails with `Permission to qol-tools/<repo>.git denied to <other-account>` and HTTP 403, the remote is HTTPS and the macOS credential helper is serving a credential bound to the wrong account (typically a work GitHub login).
+
+Every qol-tools repo on this workstation is expected to use the SSH alias:
+
+```
+git@github-priv:qol-tools/<repo>.git
+```
+
+Fix by switching the remote, then retry the push:
+
+```
+git remote set-url origin git@github-priv:qol-tools/<repo>.git
+git push
+```
+
+Before doing this, peek at a sibling qol-tools repo (`qol-tray`, `qol-cicd`, etc.) to confirm the SSH alias is the canonical pattern — do not invent a host alias.

@@ -76,6 +76,25 @@ Existing `#[cfg]` in `main.rs` (macOS lifecycle) is pragmatic legacy — leave i
 - Cancellation: explicit via `CancellationToken` or dropped senders, never ad-hoc `AtomicBool` flags.
 - Track every `tokio::spawn` `JoinHandle`. Detached unbounded tasks are how leaks and zombie daemons happen.
 
+## Boot path: never block on networked I/O
+
+The tray daemon, plugin loading, and `TrayManager::new` must never `await`
+on anything that can hang on a remote service. Specifically forbidden on the
+boot path:
+
+- Cloud profile pulls (GitHub Gist roundtrips, etc.)
+- Update checks beyond the existing 2s timeout
+- Plugin marketplace metadata fetches
+- Any HTTP/socket call without a hard short timeout
+
+Wrap remote work in `tokio::spawn` so the daemon comes up immediately and
+the network call completes in the background. Reference: `pull_on_launch`
+in `src/main.rs` is dispatched via `tokio::spawn` for exactly this reason.
+
+A 15s blocked launch behind a single failing remote call is unacceptable.
+If a feature truly cannot proceed without a network result, surface that
+as a non-blocking status the user sees, not as a startup stall.
+
 ## IPC / runtime endpoints
 
 UI ↔ backend communication lives in `src/runtime/`. When adding an endpoint:

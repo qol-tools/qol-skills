@@ -80,6 +80,39 @@ Use dense case tables, not one-off examples. Each row should cover a distinct br
 - a single happy-path example when a table or property would cover the real risk
 - large integration tests when the logic can be extracted into a pure helper
 
+## Never weaken tests to make them pass
+
+When a previously-green test starts failing after a code change, the default
+assumption is that the implementation is wrong, not the test. Do not loosen
+assertions, change expected values, or remove cases just to get green again.
+
+Steps:
+1. Re-read the test. What invariant did the original author encode?
+2. Decide whether that invariant is still desired. If yes, fix the code. If
+   no, change the test only after stating in plain words why the contract
+   itself moved.
+3. Never silently flip an expected value to match observed output.
+
+This is a repeat-offender rule. The user has called it out explicitly.
+
+## Property tests must exercise production parameters
+
+A property test that uses default / zeroed parameters will not catch bugs
+that only trigger at production values. Examples:
+
+- A floor-redistribution bug only triggers when `minSlotPx > 0`. A property
+  test with `minSlotPx: 0` will pass while the real bug ships.
+- A scaling bug only triggers when zoom ≠ 1. A property test pinned to
+  `zoom: 1` will pass while wide ranges break.
+
+When writing a property test:
+- Generate over the full realistic range of every parameter that affects the
+  invariant being tested, not just the easy ones.
+- If a parameter has a meaningful production default (e.g. `MINIMAP_MIN_SLOT_PX`),
+  include that exact value in the case set.
+- A property test that holds a key parameter constant is really an example
+  test in disguise — say so or expand the generation.
+
 ## UI and app guidance
 
 - For GPUI or Preact flows, extract decision logic into pure functions and test those.
