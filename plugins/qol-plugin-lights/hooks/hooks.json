@@ -6,7 +6,7 @@
                 "hooks": [
                     {
                         "type": "command",
-                        "command": "${CLAUDE_PLUGIN_ROOT}/bin/route-to-agent.sh"
+                        "command": "node ${CLAUDE_PLUGIN_ROOT}/bin/route-to-agent.cjs"
                     }
                 ]
             }
@@ -17,7 +17,7 @@
                 "hooks": [
                     {
                         "type": "command",
-                        "command": "${CLAUDE_PLUGIN_ROOT}/bin/reflect-agent.sh"
+                        "command": "node ${CLAUDE_PLUGIN_ROOT}/bin/reflect-agent.cjs"
                     }
                 ]
             }
