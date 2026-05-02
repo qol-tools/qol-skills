@@ -74,7 +74,7 @@ test('passes files outside the qol-tools workspace', () => {
     assert.equal(r.exitCode, 0);
 });
 
-test('passes files literally named linux.rs / macos.rs / windows.rs', () => {
+test('passes OS-named files when nested in a platform/ directory', () => {
     for (const name of ['linux.rs', 'macos.rs', 'windows.rs']) {
         const r = run({
             tool_name: 'Write',
@@ -85,6 +85,29 @@ test('passes files literally named linux.rs / macos.rs / windows.rs', () => {
         });
         assert.equal(r.exitCode, 0, `expected pass for ${name}`);
     }
+});
+
+test('passes per-feature platform/ directory', () => {
+    const r = run({
+        tool_name: 'Write',
+        tool_input: {
+            file_path: '/x/qol-tools/foo/src/hotkeys/capture/platform/linux.rs',
+            content: 'pub(crate) fn install() {}\n',
+        },
+    });
+    assert.equal(r.exitCode, 0);
+});
+
+test('blocks OS-named files placed outside a platform/ directory', () => {
+    const r = run({
+        tool_name: 'Write',
+        tool_input: {
+            file_path: '/x/qol-tools/foo/src/hotkeys/capture/linux.rs',
+            content: 'pub(crate) fn install() {}\n',
+        },
+    });
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /must live inside[\s\S]*`platform\/`/);
 });
 
 test('blocks cfg(target_os) gating a pub fn in business code', () => {

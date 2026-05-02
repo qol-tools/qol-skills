@@ -16,17 +16,33 @@ This makes the codebase:
 
 ## Required structure
 
-For any module with platform differences:
+OS-specific code lives in a `platform/` subfolder. Two valid placements:
+
+**Per-feature** (most common — when the platform surface is specific to one feature):
 
 ```
 src/<feature>/
-  mod.rs           # Trait definition + cfg-aliased re-export of active impl
-  linux.rs         # impl Trait for LinuxImpl
-  macos.rs         # impl Trait for MacosImpl  (stub if unsupported)
-  windows.rs       # impl Trait for WindowsImpl (stub if unsupported)
+  mod.rs                 # feature API; calls platform::Platform
+  platform/
+    mod.rs               # cfg-aliased re-export of active impl
+    linux.rs             # impl Trait for Platform
+    macos.rs             # stub if unsupported
+    windows.rs           # stub if unsupported
 ```
 
-`mod.rs`:
+**Top-level** (when one platform surface is shared across the crate):
+
+```
+src/platform/
+  mod.rs                 # cfg-aliased re-export of active impl
+  linux.rs               # impl Trait for Platform
+  macos.rs               # stub if unsupported
+  windows.rs             # stub if unsupported
+```
+
+In both cases the OS-named files (`linux.rs`, `macos.rs`, `windows.rs`) sit inside a directory named `platform`. **Don't put OS files directly under a feature dir** — that's how cfg sprawl creeps back in over time.
+
+`platform/mod.rs`:
 
 ```rust
 pub trait WindowOps {
@@ -49,7 +65,7 @@ pub use macos::Platform;
 pub use windows::Platform;
 ```
 
-Each `<os>.rs` exports a `pub struct Platform;` and `impl WindowOps for Platform`.
+Each `<os>.rs` exports a `pub struct Platform;` and `impl WindowOps for Platform`. (For trivial single-fn surfaces it's also fine to skip the trait + struct and just `pub(crate) use linux::install;` — see the simpler section below.)
 
 Business code:
 
@@ -61,6 +77,38 @@ p.focus(window_id)?;
 ```
 
 **Zero cfg in business code.**
+
+### Simpler shape: free functions + re-export
+
+When the platform surface is a single static method, the trait + Platform struct is overhead. Free functions are an acceptable substitute:
+
+```
+src/<feature>/platform/
+  mod.rs                 # cfg-aliased re-export of `install` (or whatever)
+  linux.rs               # pub(crate) fn install(...) -> Result<()>
+  macos.rs               # pub(crate) fn install(...) -> Result<()>  (stub)
+  windows.rs             # pub(crate) fn install(...) -> Result<()>  (stub)
+```
+
+`mod.rs`:
+
+```rust
+#[cfg(target_os = "linux")]
+mod linux;
+#[cfg(target_os = "macos")]
+mod macos;
+#[cfg(target_os = "windows")]
+mod windows;
+
+#[cfg(target_os = "linux")]
+pub(crate) use linux::install;
+#[cfg(target_os = "macos")]
+pub(crate) use macos::install;
+#[cfg(target_os = "windows")]
+pub(crate) use windows::install;
+```
+
+Same `platform/` subfolder rule applies. Use this shape when there's no shared mutable state to hang on a Platform struct.
 
 ## Stubs for unsupported OSes
 
@@ -203,13 +251,14 @@ All three should be replaced with the trait+impls pattern above.
 
 ## Enforcement: PreToolUse hook
 
-This skill ships with a Claude Code PreToolUse hook (`bin/check-qol-architecture.sh`) that blocks Edit/Write/MultiEdit/NotebookEdit operations introducing the violations listed above. Active on any `*.rs` file under `*/qol-tools/*`. Specifically blocks:
+This skill ships with a Claude Code PreToolUse hook (`bin/check-qol-architecture.cjs`) that blocks Edit/Write/MultiEdit/NotebookEdit operations introducing the violations listed above. Active on any `*.rs` file under `*/qol-tools/*`. Specifically blocks:
 
 - `compile_error!(...)` — anywhere.
 - `#[cfg(target_os = ...)]` (including `all/any/not(target_os = ...)`) outside the canonical mod.rs re-export pattern (`#[cfg(target_os = "X")] mod X;` or `#[cfg(target_os = "X")] pub use X::Platform;`).
+- OS-named files (`linux.rs`, `macos.rs`, `windows.rs`) placed outside a `platform/` directory — these must always live under `platform/` (per-feature or top-level).
 
 Allowed without challenge:
-- Files literally named `linux.rs`, `macos.rs`, `windows.rs` — those *are* the OS impl, cfg inside is redundant but harmless.
+- OS-named files inside any `platform/` directory — those *are* the OS impl, cfg inside is redundant but harmless.
 - Files under `tests/` and `examples/`, or named `*_test.rs` / `*_tests.rs` — cross-platform tests legitimately need cfg gates.
 - Subagent-driven edits (the agent owns its scope).
 

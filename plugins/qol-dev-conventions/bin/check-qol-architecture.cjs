@@ -124,6 +124,26 @@ Bypass for this single edit:
 `);
 }
 
+function blockOsFileOutsidePlatform(filePath) {
+    process.stderr.write(`qol-architecture violation in ${filePath}.
+
+OS-named files (linux.rs, macos.rs, windows.rs) must live inside a
+\`platform/\` directory. Found this one as a direct child of its feature
+directory instead.
+
+Fix the layout to one of:
+
+  src/<feature>/platform/{linux,macos,windows}.rs   (per-feature)
+  src/platform/{linux,macos,windows}.rs             (top-level shared)
+
+The \`platform/\` directory keeps cross-platform code visibly compartmentalized
+and prevents OS-specific files from drifting into business-code paths.
+
+Bypass for this edit only:
+  touch .claude/bypass-qol-architecture
+`);
+}
+
 function blockCfgViolations(filePath, violations) {
     const detail = violations
         .flatMap(v => [
@@ -191,7 +211,7 @@ function main() {
     if (!filePath.includes('/qol-tools/')) return 0;
 
     const basename = path.basename(filePath);
-    if (OS_BASENAMES.has(basename)) return 0;
+    const parentDir = path.basename(path.dirname(filePath));
 
     if (
         filePath.includes('/tests/') ||
@@ -199,6 +219,14 @@ function main() {
         basename.endsWith('_test.rs') ||
         basename.endsWith('_tests.rs')
     ) {
+        return 0;
+    }
+
+    if (OS_BASENAMES.has(basename)) {
+        if (parentDir !== 'platform') {
+            blockOsFileOutsidePlatform(filePath);
+            return 2;
+        }
         return 0;
     }
 
