@@ -99,6 +99,38 @@ git push
 
 Installed plugins pick up changes via `/plugin marketplace update qol-skills`.
 
+## Hooks and bundled scripts
+
+Plugins that ship hooks put scripts under `plugins/<plugin>/bin/` and tests under `plugins/<plugin>/test/`. Layout:
+
+```
+plugins/<plugin>/
+├── hooks/hooks.json            # registers the hook with Claude Code
+├── bin/<name>.cjs              # the script
+└── test/<name>.test.cjs        # tests for the script
+```
+
+**Write scripts in Node** (`.cjs`). Claude Code already requires Node, so it runs on every machine that runs Claude Code — Linux, macOS, Windows. Bash + `jq` looks portable but silently no-ops anywhere `jq` isn't installed (which is most macOS and Windows boxes by default).
+
+Reference the script in `hooks.json` with an explicit `node` prefix so Windows doesn't need to know about shebangs:
+
+```json
+{
+    "type": "command",
+    "command": "node ${CLAUDE_PLUGIN_ROOT}/bin/<name>.cjs"
+}
+```
+
+**Always ship a test next to the script.** Use Node's built-in test runner — no dependencies. Run them with:
+
+```bash
+node --test plugins/<plugin>/test/*.test.cjs
+# or all plugins at once:
+node --test plugins/*/test/*.test.cjs
+```
+
+A hook script without tests is a hook script no one will dare change. Tests make it safe to iterate.
+
 ## Frontmatter
 
 Every skill is a Markdown file with YAML frontmatter at the top:
