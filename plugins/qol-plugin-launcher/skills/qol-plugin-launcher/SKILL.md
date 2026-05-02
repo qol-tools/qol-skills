@@ -169,3 +169,81 @@ toml = "0.9"
 - Do **not** leave a `launcher` binary in the plugin root — it will shadow `target/debug/launcher`.
 - `qol-tray` resolves binaries in order: plugin root → `target/debug/` → `target/release/`.
 - Run `cargo test` to validate the contract before linking or shipping.
+
+## Activation Path (qol-tray → daemon)
+
+End-to-end on a hotkey press:
+
+1. qol-tray's `HotkeyListenerLoop` (`src/hotkeys/listener.rs`, polls `GlobalHotKeyEvent::receiver()` every 10ms) wakes.
+2. Looks up `(plugin_id, action)` from the in-memory binding map populated by `HotkeyManager::register_hotkeys`.
+3. Calls `crate::plugins::action_executor::execute_action(plugin_manager, "plugin-launcher", "open")`.
+4. `action_executor::resolve_plugin_daemon_socket` resolves to `/tmp/qol-launcher.sock` from the manifest.
+5. `action_transport::dispatch_daemon_action` writes the action name over the socket.
+6. Launcher's `daemon::parse_command` matches `"show" | "open"` → emits `Command::Show` to its UI thread → `window_ops` reuses the keepalive popup window and shows it.
+
+Implication: the action_executor / socket / GPUI half are independent of how the keystroke was captured. Any new capture mechanism just needs to invoke `execute_action(..., "plugin-launcher", "open")`.
+
+Direct socket smoke-test (no qol-tray involvement):
+
+```bash
+echo '{"action":"open","args":["--show"]}' | nc -U /tmp/qol-launcher.sock
+# → {"status":"handled"}
+```
+
+## Hotkey Capture Limitation (X11)
+
+qol-tray uses the `global_hotkey = "0.7"` crate, which calls `XGrabKey` on Linux. X11 passive grabs are first-come-first-served — when two clients grab the same combo on root (e.g. `csd-keyboard`'s `<Super>space` for `switch-input-source`), the X server delivers events to whichever client grabbed first. There is no preempt or priority.
+
+Symptoms when this bites:
+- `/api/hotkeys/errors` returns `[]` (registration succeeded — `XGrabKey` returned Ok).
+- Other hotkeys (e.g. Alt+Tab, owned by Muffin WM via a different mechanism) fire normally.
+- Pressing the conflicting combo silently triggers the WM's binding instead of qol-tray.
+
+Diagnostic checklist:
+- `gsettings get org.cinnamon.desktop.keybindings.wm <name>` and `org.gnome.*` equivalents
+- `gsettings get org.freedesktop.ibus.general.hotkey triggers`
+- `kreadconfig5 --file kglobalshortcutsrc` (KDE)
+- Compare `ps -o lstart= -p` for `csd-keyboard` / `gsd-media-keys` / `ibus-daemon` / `kglobalaccel` against qol-tray's start time. If a known shortcut daemon outranks qol-tray and its config has the same combo, qol-tray lost the race silently.
+
+Why this surfaces in dev: `make dev` kills the autostarted qol-tray (which originally grabbed at session start, alongside csd-keyboard) and starts a new instance hours later. By then csd-keyboard has been camping on the combo uncontested, so the dev tray loses the next grab race. The doctor's `autostart_target` warning points at this: dev sessions don't benefit from the boot-time co-grab.
+
+### Fix Direction: evdev + uinput Capture
+
+Architectural fix — replace `XGrabKey` on Linux with a kernel-level capture so no other X11 client can interfere:
+
+1. `evdev::raw_stream::enumerate()` to walk `/dev/input/event*`; keep devices advertising `EV_KEY` with codes ≥ `KEY_ESC` (kanata's keyboard heuristic).
+2. `Device::grab()` (EVIOCGRAB) each chosen device exclusively.
+3. One `uinput::VirtualDevice` exposing the union of grabbed devices' KEY caps.
+4. Per-device read thread + tiny modifier-state machine. On match → fire `action_executor::execute_action(...)` (same callsite as today, no downstream changes). On non-match → `VirtualDevice::emit(&[event])`.
+5. `inotify` on `/dev/input/` for hotplug.
+6. SIGTERM + panic hook MUST `ungrab()` every device, otherwise the keyboard is bricked until fd close. Test with deliberate SEGV in dev.
+
+Install footprint (matches kanata, keyd):
+```
+/etc/udev/rules.d/99-qol-input.rules:
+KERNEL=="uinput", MODE="0660", GROUP="input", OPTIONS+="static_node=uinput"
+```
+Plus user in `input` group; `uinput` kernel module loaded.
+
+Reference impls: kanata, keyd, xremap, interception-tools — all use this exact pattern because it's the only Linux mechanism with deterministic capture semantics. Bonus: works identically on X11 and Wayland, so no Wayland rewrite later.
+
+Sharp edges:
+- Multi-keyboard laptops expose 2–3 keyboard-class devices (built-in, dock, headset mic buttons reporting `KEY_*`). Default to grab-all with explicit exclude list.
+- Modifier-only / tap-vs-hold bindings are out of scope for V1 — they need a state machine.
+- In-process thread inside qol-tray is the right starting point. Sidecar (`qol-input-router`) only buys robustness against `kill -9`; defer it.
+
+Keep `global_hotkey` available as a fallback compile path for users who can't install the udev rule.
+
+## Plugin Staleness & Dev-Link Diagnostics
+
+When the launcher daemon "doesn't work" but the daemon socket responds to direct `nc -U` calls, the issue is upstream of the daemon. Common chain:
+
+1. Check `~/.config/qol-tray/plugin-registry.json` — is the slot `release-asset` (stale installed binary) or `dev-link` (live source)? Compare `plugin-launcher` and `plugin-lights` for the two shapes.
+2. If `release-asset`: the binary at `~/.config/qol-tray/plugins/plugin-launcher/launcher` may be weeks behind upstream. `make dev` rebuilds qol-tray only — never plugin daemons.
+3. Convert to dev-link: `POST http://127.0.0.1:42700/api/dev/links` with `{"path": "/path/to/plugin-launcher"}` (Origin header required for CSRF). On success, qol-tray respawns from `<source>/target/debug/launcher` and the build planner detects fingerprint mismatch (`needs_rebuild: true, rebuild_reason: "Source changed"`) on next reload.
+4. Trigger build + respawn: `POST /api/dev/reload/plugin-launcher`. Build progress visible at `GET /api/dev/build-state`. Note: building gpui from cold can OOM at ~98% on memory-constrained machines.
+
+Doctor warnings worth wiring (currently absent):
+- `release-asset` slot has a sibling source repo at `../<plugin-id>` next to qol-tray → "source exists but is not dev-linked".
+- `dev-link` slot's `needs_rebuild` is true → "rebuild required: <reason>".
+- Same hotkey combo present in DE shortcut daemon AND that daemon outranks qol-tray in uptime → "hotkey shadowed by <daemon>".
