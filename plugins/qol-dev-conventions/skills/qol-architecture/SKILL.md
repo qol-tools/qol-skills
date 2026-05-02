@@ -200,3 +200,28 @@ pub fn do_thing() { /* macos body */ }
 ```
 
 All three should be replaced with the trait+impls pattern above.
+
+## Enforcement: PreToolUse hook
+
+This skill ships with a Claude Code PreToolUse hook (`bin/check-qol-architecture.sh`) that blocks Edit/Write/MultiEdit/NotebookEdit operations introducing the violations listed above. Active on any `*.rs` file under `*/qol-tools/*`. Specifically blocks:
+
+- `compile_error!(...)` — anywhere.
+- `#[cfg(target_os = ...)]` (including `all/any/not(target_os = ...)`) outside the canonical mod.rs re-export pattern (`#[cfg(target_os = "X")] mod X;` or `#[cfg(target_os = "X")] pub use X::Platform;`).
+
+Allowed without challenge:
+- Files literally named `linux.rs`, `macos.rs`, `windows.rs` — those *are* the OS impl, cfg inside is redundant but harmless.
+- Files under `tests/` and `examples/`, or named `*_test.rs` / `*_tests.rs` — cross-platform tests legitimately need cfg gates.
+- Subagent-driven edits (the agent owns its scope).
+
+Bypass for one-off legitimate exceptions (and you should be very sure it's legitimate — usually it isn't):
+
+```bash
+# next 1 edit passes
+touch .claude/bypass-qol-architecture
+# next N edits pass
+echo 5 > .claude/bypass-qol-architecture
+```
+
+The marker is auto-consumed per edit; no cleanup needed.
+
+Implementation: Node.js (`bin/check-qol-architecture.cjs`) — Claude Code requires Node, so the dependency is free across Linux, macOS, and Windows. Wired via `hooks/hooks.json` as `node ${CLAUDE_PLUGIN_ROOT}/bin/check-qol-architecture.cjs` so Windows doesn't need a shebang interpreter.
