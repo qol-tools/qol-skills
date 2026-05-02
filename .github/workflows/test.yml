@@ -1,0 +1,31 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  hook-tests:
+    name: hook tests (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Run all hook tests
+        shell: bash
+        run: |
+          shopt -s nullglob globstar
+          tests=(plugins/*/test/*.test.cjs)
+          if [ ${#tests[@]} -eq 0 ]; then
+            echo "No hook tests found — nothing to run."
+            exit 0
+          fi
+          node --test "${tests[@]}"
