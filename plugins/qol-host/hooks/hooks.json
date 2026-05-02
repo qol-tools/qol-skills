@@ -6,7 +6,7 @@
                 "hooks": [
                     {
                         "type": "command",
-                        "command": "${CLAUDE_PLUGIN_ROOT}/bin/inject-dev-recompile-context.sh"
+                        "command": "node ${CLAUDE_PLUGIN_ROOT}/bin/inject-dev-recompile-context.cjs"
                     }
                 ]
             }
@@ -17,7 +17,7 @@
                 "hooks": [
                     {
                         "type": "command",
-                        "command": "${CLAUDE_PLUGIN_ROOT}/bin/route-to-agent.sh"
+                        "command": "node ${CLAUDE_PLUGIN_ROOT}/bin/route-to-agent.cjs"
                     }
                 ]
             },
@@ -26,11 +26,11 @@
                 "hooks": [
                     {
                         "type": "command",
-                        "command": "${CLAUDE_PLUGIN_ROOT}/bin/commit-skill-context.sh"
+                        "command": "node ${CLAUDE_PLUGIN_ROOT}/bin/commit-skill-context.cjs"
                     },
                     {
                         "type": "command",
-                        "command": "${CLAUDE_PLUGIN_ROOT}/bin/commit-deny-coauthor.sh"
+                        "command": "node ${CLAUDE_PLUGIN_ROOT}/bin/commit-deny-coauthor.cjs"
                     }
                 ]
             }
@@ -41,7 +41,7 @@
                 "hooks": [
                     {
                         "type": "command",
-                        "command": "${CLAUDE_PLUGIN_ROOT}/bin/reflect-agent.sh"
+                        "command": "node ${CLAUDE_PLUGIN_ROOT}/bin/reflect-agent.cjs"
                     }
                 ]
             }
