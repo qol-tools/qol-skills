@@ -66,6 +66,9 @@ function findSmellTable(content) {
 
 function validateGanttTasks(block, label, violations) {
     if (!/^\s*gantt\b/m.test(block)) return;
+    if (/^\s*dateFormat\s+X\s*$/m.test(block)) {
+        violations.push(`${label}: gantt block uses "dateFormat X" (Unix epoch). GitHub Mermaid renders this incorrectly — bars stack at the same x-position regardless of start. Use "dateFormat ss" with zero-padded "NN" start times (e.g. "00", "05") and "Ns" duration suffix.`);
+    }
     const lines = block.split('\n');
     let inSection = false;
     for (const line of lines) {

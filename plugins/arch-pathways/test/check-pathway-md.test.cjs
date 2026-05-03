@@ -135,6 +135,24 @@ test('Write with bare < in sequenceDiagram message fails (GitHub Mermaid HTML-pa
     assert.ok(v.some(s => /bare `<`/.test(s)), `expected bare-< violation, got: ${v.join(' / ')}`);
 });
 
+test('Write with "dateFormat X" gantt fails (GitHub Mermaid stacks bars)', () => {
+    const bad = VALID_ADR.replace(
+        '```mermaid\ngraph LR\n    A --> B\n    classDef bad fill:#f5c2c7\n    class B bad\n```',
+        '```mermaid\ngantt\n    title Boot\n    dateFormat X\n    axisFormat %S s\n    section Sync\n    bootstrap :a1, 0, 1s\n```',
+    );
+    const v = checkMd.validate('Write', { file_path: FILEPATH, content: bad });
+    assert.ok(v.some(s => /dateFormat X/.test(s)), `expected dateFormat X violation, got: ${v.join(' / ')}`);
+});
+
+test('Write with "dateFormat ss" gantt passes', () => {
+    const good = VALID_ADR.replace(
+        '```mermaid\ngraph LR\n    A --> B\n    classDef bad fill:#f5c2c7\n    class B bad\n```',
+        '```mermaid\ngantt\n    title Boot\n    dateFormat ss\n    axisFormat %S\n    section Sync\n    bootstrap :a1, 00, 1s\n    doctor :a4, 03, 2s\n```',
+    );
+    const v = checkMd.validate('Write', { file_path: FILEPATH, content: good });
+    assert.ok(!v.some(s => /gantt|dateFormat/.test(s)), `should not flag well-formed gantt, got: ${v.join(' / ')}`);
+});
+
 test('Write with bare-integer gantt task third positional fails (Mermaid treats as duration not end-date)', () => {
     const ganttBlock = '```mermaid\ngantt\n    title Boot\n    dateFormat X\n    axisFormat %S s\n    section Sync\n    bootstrap :a1, 0, 1\n    doctor :a4, 3, 5\n```';
     const bad = VALID_ADR.replace('```mermaid\ngraph LR\n    A --> B', '```mermaid\ngantt\n    title Boot\n    dateFormat X\n    axisFormat %S s\n    section Sync\n    bootstrap :a1, 0, 1');
