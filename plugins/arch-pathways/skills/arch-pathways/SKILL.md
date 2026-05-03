@@ -63,6 +63,7 @@ The HTML uses these CSS classes — the hook checks for them:
 | `.badge.cheap` / `.badge.medium` / `.badge.heavy` | cost indicator |
 | `.tradeoffs` | grid wrapper for `<h5>pros</h5>` / `<h5>cons</h5>` |
 | `.callout` | optional yellow note |
+| `.problem` / `.proposals` | wrapper sections that visually separate diagnostic content from solution content (red-tinted vs green-tinted) |
 | `.swatch.bad` / `.swatch.warn` / `.swatch.good` | colored chip linking a smell row to its diagram node |
 | `tr.bad` / `tr.warn` / `tr.good` | smell-table row class matching its swatch |
 | `.legend` | one per doc; explains the swatch colors |
