@@ -6,6 +6,99 @@ when_to_use: Trigger on intents like "promote boot to PR", "open a PR for the pa
 
 # Architecture pathways skill
 
+## Glossary (canonical vocabulary — refer to this when in doubt)
+
+### The thing we track
+
+| Term | Definition | Example |
+|---|---|---|
+| **Problem** | A real-world thing that needs work — bug, feature, refactor target. | "Daemon supervisor crashes on cold boot" |
+| **PID** | Problem ID. Format: `<REPO_PREFIX>-<N>` where `N` is the GitHub Issue number. The address every artifact shares. | `TRAY-42` |
+| **Sub-ID** | Address for one *smell row* within an ADR. Format: `<PID>.<M>`. | `TRAY-42.1` |
+
+### The artifacts (one per problem, except survey)
+
+| Artifact | Lives at | Role | Carries diagrams? |
+|---|---|---|---|
+| **Issue** | github.com/.../issues/N | The story. Where humans first land. Body has the problem statement + first diagram. | ✅ |
+| **ADR** | `<feature_dir>/docs/adr/<PID>-<slug>.md` (default) or `<repo>/docs/adr/<PID>-<slug>.md` (cross-cutting) | Decision record (problem + proposals + tradeoffs). Lives forever, never deleted. | ✅ |
+| **PR** | github.com/.../pull/M | Implementation. Body is short, links to Issue + ADR. PR diff includes the seeded ADR file. | ❌ (in body) ✅ (in committed ADR file) |
+| **Survey** | `/tmp/<proj>-pathways.html` (or `<repo>/docs/pathways.html` if tracked) | Workspace-level cross-area overview. Workshop artifact. | ✅ |
+| **Branch** | git ref `<prefix-lowercase>-<N>-<slug>` | The dev line. | n/a |
+| **Worktree** | `<workspace>/worktrees/<repo>/<branch>` | Isolated checkout for the branch. | n/a |
+
+### Naming rules (deterministic, parseable via `lib/pid.cjs`)
+
+| Field | Format | Example |
+|---|---|---|
+| Repo | as listed in `lib/prefixes.json` keys | `qol-tray` |
+| Repo prefix | uppercase, no separators, in `lib/prefixes.json` values | `TRAY` |
+| Title | Title Case, spaces, no punctuation other than `-` | `Fix Auth Race In Startup` |
+| Slug | lowercase kebab, ASCII-only, no leading/trailing/double dashes | `fix-auth-race-in-startup` |
+| Branch | `<prefix-lowercase>-<N>-<slug>` | `tray-42-fix-auth-race-in-startup` |
+| PR title | `<PID> <Title>` | `TRAY-42 Fix Auth Race In Startup` |
+| ADR filename | `<PID>-<slug>.md` | `TRAY-42-fix-auth-race-in-startup.md` |
+| Worktree path | `<workspace>/worktrees/<repo>/<branch>` | `qol-tools/worktrees/qol-tray/tray-42-fix-auth-race-in-startup` |
+
+All transformations are 1:1 and round-trip via `lib/pid.cjs`.
+
+### ADR placement rule
+
+| Scope | Path | When to use |
+|---|---|---|
+| Feature-scoped (default) | `<feature_dir>/docs/adr/<PID>-<slug>.md` | Problem belongs to one identifiable feature folder |
+| Cross-cutting | `<repo>/docs/adr/<PID>-<slug>.md` | Problem touches many features (e.g. dependency swap, repo-wide convention change) |
+
+A "feature folder" is any direct subdirectory of `<repo>/src/` that owns cohesive responsibility (e.g. `src/sync/`, `src/features/profile/`, `src/daemon/supervisor/`). When in doubt: feature-scoped is the default; only fall back to repo-root for genuinely repo-wide decisions.
+
+### Survey-only terms
+
+| Term | Definition | Example |
+|---|---|---|
+| **Area** | A `<section id="X">` in the survey HTML — one problem area before promotion. | `boot`, `paths`, `sync` |
+| **Smell** | A row in an area's smell table. Becomes a sub-ID once promoted. | "blocks main thread" |
+| **Proposal** | A `.proposal` card in an area or ADR — one option for fixing the problem. | "Move to background tokio task" |
+
+### The relationship graph
+
+```
+        Survey                              (workspace level — many problems)
+          │  promote area
+          ▼
+        Problem ────►  PID = TRAY-42        (the address)
+          │
+   ┌──────┼──────┐
+   ▼      ▼      ▼
+ Issue   ADR    PR
+ #42     file   #77
+   │      │      │
+   └──────┼──────┘
+       Branch
+       Worktree
+```
+
+Issue body has the problem + diagram. ADR has the problem + proposals + tradeoffs (with the same diagram, plus more for proposed shapes). PR body links to both. ADR is committed in the PR's diff and lives in `<feature>/docs/adr/` forever.
+
+## Audit on demand (find features missing ADRs)
+
+When the user asks "what's undocumented?" / "show me unknown features" / "audit ADR coverage", run:
+
+```bash
+# List feature folders (depth 1-2 under src/) that have no docs/adr/ directory
+find <repo>/src -mindepth 1 -maxdepth 2 -type d \
+  -not -name target -not -name node_modules \
+  | while read d; do
+      [ -d "$d/docs/adr" ] && continue
+      loc=$(find "$d" -type f \( -name '*.rs' -o -name '*.ts' -o -name '*.js' -o -name '*.py' \) -exec cat {} + 2>/dev/null | wc -l)
+      last=$(git -C <repo> log -1 --format='%cr' -- "$d" 2>/dev/null)
+      echo "$d | 0 ADRs | ${loc} LOC | last edited ${last}"
+    done | sort -t'|' -k3 -n -r
+```
+
+Output: a list of feature folders ranked by LOC (a rough proxy for "how much undocumented surface area"). Re-sort by churn if useful: replace the sort with `git log --since='30 days ago' --pretty=format: --name-only` aggregation.
+
+The user picks a high-priority entry and says *"backfill `<feature>`"* — the kickoff agent then runs in retrofit mode.
+
 ## When to use
 
 Whenever a problem touches three or more subsystems and the user asks for understanding before action. Typical triggers:
