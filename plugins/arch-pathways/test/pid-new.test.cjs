@@ -120,6 +120,18 @@ test('buildIssueBody and buildPrBody are wired to PID + slug', () => {
     assert.match(body, /docs\/adr\/TRAY-42-fold-installs\.md/);
 });
 
+test('buildPrBody emits an absolute branch-pinned URL when ownerRepo+branch are provided', () => {
+    const body = pidNew.buildPrBody('TRAY-42', 'boot', 42, 'qol-tools/qol-tray', 'tray-42-boot');
+    assert.match(body, /Closes #42/);
+    assert.match(body, /https:\/\/github\.com\/qol-tools\/qol-tray\/blob\/tray-42-boot\/docs\/adr\/TRAY-42-boot\.md/);
+    assert.doesNotMatch(body, /\(docs\/adr\/TRAY-42-boot\.md\)/);
+});
+
+test('buildPrBody falls back to relative path when ownerRepo or branch is missing', () => {
+    const body = pidNew.buildPrBody('TRAY-42', 'boot', 42);
+    assert.match(body, /\(docs\/adr\/TRAY-42-boot\.md\)/);
+});
+
 test('formatDryRunPlan and formatSummary include all key fields', () => {
     const plan = pidNew.formatDryRunPlan({
         repo: 'qol-tray',
@@ -214,6 +226,7 @@ test('run executes full pipeline in correct order with mocked runner', () => {
         'git add',
         'git commit',
         'git push',
+        'git remote',
         'gh pr create',
     ], 'pipeline must run in fixed order');
 

@@ -217,10 +217,23 @@ function buildIssueBody(pidStr, slug, problemStatement) {
     return `${problemStatement.trim()}\n\n---\n\n${link}`;
 }
 
-function buildPrBody(pidStr, slug, issueNumber) {
+function buildPrBody(pidStr, slug, issueNumber, ownerRepo, branch) {
+    const filePath = `docs/adr/${pidStr}-${slug}.md`;
+    const link = (ownerRepo && branch)
+        ? `https://github.com/${ownerRepo}/blob/${branch}/${filePath}`
+        : filePath;
     return `Closes #${issueNumber}
 
-See [\`docs/adr/${pidStr}-${slug}.md\`](docs/adr/${pidStr}-${slug}.md) for the full problem analysis, proposals, and tradeoffs.`;
+ADR (rendered on this branch): [\`${filePath}\`](${link})`;
+}
+
+function detectOwnerRepo(runner, repoRoot) {
+    const r = runner({ cmd: 'git', args: ['remote', 'get-url', 'origin'], cwd: repoRoot });
+    if (r.code !== 0) return null;
+    const url = r.stdout.trim();
+    const m = url.match(/[:/]([^/:]+)\/([^/]+?)(?:\.git)?\s*$/);
+    if (!m) return null;
+    return `${m[1]}/${m[2]}`;
 }
 
 function today() {
@@ -305,7 +318,8 @@ function run({ argv, env, cwd, runner, fs: fsLike, log }) {
     mintAdr(fsLike, worktreePath, pidStr, issueNumber, slug, titleCase, today(), contentOverride);
     const adrRelPath = path.relative(worktreePath, adrFilePath);
     gitAddCommitPush(runner, worktreePath, branch, pidStr, titleCase, adrRelPath);
-    const prUrl = ghPrCreate(runner, worktreePath, prTitle, buildPrBody(pidStr, slug, issueNumber), baseBranch);
+    const ownerRepo = detectOwnerRepo(runner, repoRoot);
+    const prUrl = ghPrCreate(runner, worktreePath, prTitle, buildPrBody(pidStr, slug, issueNumber, ownerRepo, branch), baseBranch);
 
     log(formatSummary({ pidStr, worktreePath, prUrl }));
     return 0;
@@ -339,6 +353,7 @@ module.exports = {
     renderAdr,
     buildIssueBody,
     buildPrBody,
+    detectOwnerRepo,
     formatDryRunPlan,
     formatSummary,
     today,

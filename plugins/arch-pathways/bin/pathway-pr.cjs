@@ -83,12 +83,15 @@ function run({ argv, env, cwd, runner, fs: fsLike, log, error }) {
     const tmpDir = fsLike.mkdtempSync(path.join(os.tmpdir(), 'pathway-pr-'));
     const adrFile = path.join(tmpDir, `${minted.pid}.md`);
     fsLike.writeFileSync(adrFile, adrText);
+    const issueBodyFile = path.join(tmpDir, `${minted.pid}-issue.md`);
+    fsLike.writeFileSync(issueBodyFile, adrText);
 
     const pidNewArgv = [
         repo, minted.title,
         '--issue', String(minted.issue),
         '--slug', areaId,
         '--adr-content-file', adrFile,
+        '--issue-body-file', issueBodyFile,
     ];
     if (opts.workspace) pidNewArgv.push('--workspace', opts.workspace);
     if (opts.base) pidNewArgv.push('--base', opts.base);
