@@ -1,7 +1,7 @@
 {
   "name": "qol-ecosystem",
-  "description": "Org- and workspace-level conventions: qol-tools repo layout and dependency model, plus qol-cicd reusable workflows.",
-  "version": "0.1.0",
+  "description": "Org- and workspace-level conventions: the qol-tools mission/non-negotiables, repo layout and dependency model, plus qol-cicd reusable workflows.",
+  "version": "0.2.0",
   "author": {
     "name": "KMRH47"
   }
