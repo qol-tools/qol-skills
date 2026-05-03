@@ -63,6 +63,15 @@ function resolveWorkspace(explicit, env, cwd, fsLike) {
     }
 }
 
+function cleanAreaTitle(raw) {
+    const stripped = String(raw).replace(/^\s*\d+(?:[.)])?\s+/, '').trim();
+    if (!stripped) return raw.trim();
+    return stripped
+        .split(/\s+/)
+        .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+        .join(' ');
+}
+
 function ghCreateIssue(runner, repoRoot, title, body) {
     const r = runner({
         cmd: 'gh',
@@ -91,8 +100,9 @@ function run({ argv, env, cwd, runner, fs: fsLike, log, error }) {
         throw new Error(`area "${areaId}" not found in ${inputPath}. Known: ${known}`);
     }
     const sec = survey.parseSection(areas.get(areaId));
-    const issueTitle = opts.title || sec.title;
-    if (!issueTitle) throw new Error(`area "${areaId}" has no <h2> title and no --title given`);
+    const rawTitle = opts.title || sec.title;
+    if (!rawTitle) throw new Error(`area "${areaId}" has no <h2> title and no --title given`);
+    const issueTitle = cleanAreaTitle(rawTitle);
 
     const prefix = pid.prefixForRepo(repo);
 
@@ -145,4 +155,4 @@ function main() {
 
 if (require.main === module) main();
 
-module.exports = { run, parseArgs, resolveWorkspace };
+module.exports = { run, parseArgs, resolveWorkspace, cleanAreaTitle };

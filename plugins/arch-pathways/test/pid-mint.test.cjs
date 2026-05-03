@@ -47,6 +47,20 @@ function makeRunner(responses) {
     return runner;
 }
 
+test('cleanAreaTitle strips numeric prefix and Title-Cases', () => {
+    const cases = [
+        ['1. Boot pathway', 'Boot Pathway'],
+        ['2. Path resolution', 'Path Resolution'],
+        ['3) Sync conflicts', 'Sync Conflicts'],
+        ['Plugin lifecycle', 'Plugin Lifecycle'],
+        ['  4.  Dev/Prod separation  ', 'Dev/prod Separation'],
+        ['boot', 'Boot'],
+    ];
+    for (const [input, expected] of cases) {
+        assert.strictEqual(pidMint.cleanAreaTitle(input), expected, `input: ${JSON.stringify(input)}`);
+    }
+});
+
 test('run --dry-run prints PID without invoking gh', () => {
     const root = makeWorkspace();
     const file = withFakeInput(SAMPLE);
