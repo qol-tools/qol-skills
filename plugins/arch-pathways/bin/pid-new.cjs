@@ -111,6 +111,15 @@ function ghIssueCreate(runner, repoRoot, title, body) {
     return Number(m[1]);
 }
 
+function ghIssuePatchBody(runner, repoRoot, ownerRepo, issueNumber, body) {
+    runOrThrow(runner, {
+        cmd: 'gh',
+        args: ['api', '-X', 'PATCH', `repos/${ownerRepo}/issues/${issueNumber}`, '-f', `body=${body}`],
+        cwd: repoRoot,
+        label: 'gh api PATCH issue body',
+    });
+}
+
 function detectDefaultBranch(runner, repoRoot) {
     const r = runner({
         cmd: 'git',
@@ -319,6 +328,9 @@ function run({ argv, env, cwd, runner, fs: fsLike, log }) {
     const adrRelPath = path.relative(worktreePath, adrFilePath);
     gitAddCommitPush(runner, worktreePath, branch, pidStr, titleCase, adrRelPath);
     const ownerRepo = detectOwnerRepo(runner, repoRoot);
+    if (opts.issueBodyFile && Number.isInteger(opts.issue) && opts.issue > 0) {
+        ghIssuePatchBody(runner, repoRoot, ownerRepo, issueNumber, buildIssueBody(pidStr, slug, problemStatement));
+    }
     const prUrl = ghPrCreate(runner, worktreePath, prTitle, buildPrBody(pidStr, slug, issueNumber, ownerRepo, branch), baseBranch);
 
     log(formatSummary({ pidStr, worktreePath, prUrl }));

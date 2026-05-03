@@ -274,6 +274,56 @@ test('run with --issue skips gh issue create', () => {
     assert.strictEqual(prCreate.args[titleIdx + 1], 'TRAY-42 Foo Bar');
 });
 
+test('run with --issue + --issue-body-file patches the existing issue body', () => {
+    const root = makeWorkspace();
+    const bodyFile = path.join(root, 'issue-body.md');
+    const richBody = '## Problem\n\n```mermaid\ngraph TD\n  A-->B\n```\n';
+    fs.writeFileSync(bodyFile, richBody);
+    const { log } = captureLog();
+    const runner = makeRunner([
+        {
+            match: o => o.cmd === 'git' && o.args[0] === 'symbolic-ref',
+            result: { stdout: 'origin/main\n', stderr: '', code: 0 },
+        },
+        {
+            match: o => o.cmd === 'git' && o.args[0] === 'remote' && o.args[1] === 'get-url',
+            result: { stdout: 'git@github.com:qol-tools/qol-tray.git\n', stderr: '', code: 0 },
+        },
+        {
+            match: o => o.cmd === 'gh' && o.args[0] === 'pr' && o.args[1] === 'create',
+            result: { stdout: 'https://github.com/qol-tools/qol-tray/pull/99\n', stderr: '', code: 0 },
+        },
+    ]);
+    pidNew.run({
+        argv: ['--issue', '42', '--issue-body-file', bodyFile, '--slug', 'paths', 'qol-tray', 'Path Resolution'],
+        env: {}, cwd: root, runner, fs, log,
+    });
+    const patchCall = runner.calls.find(c =>
+        c.cmd === 'gh' && c.args[0] === 'api' && c.args.includes('PATCH') &&
+        c.args.some(a => /repos\/qol-tools\/qol-tray\/issues\/42$/.test(a))
+    );
+    assert.ok(patchCall, 'expected gh api PATCH on the existing issue when --issue-body-file is supplied');
+    const bodyArg = patchCall.args[patchCall.args.indexOf('-f') + 1];
+    assert.match(bodyArg, /^body=/, 'body must be passed as -f body=...');
+    assert.match(bodyArg, /```mermaid/, 'patched body must contain the rich mermaid problem statement');
+    assert.match(bodyArg, /docs\/adr\/TRAY-42-paths\.md/, 'patched body must include the ADR link');
+});
+
+test('run with --issue but no --issue-body-file does NOT patch the issue', () => {
+    const root = makeWorkspace();
+    const { log } = captureLog();
+    const runner = makeRunner([
+        { match: o => o.cmd === 'git' && o.args[0] === 'symbolic-ref', result: { stdout: 'origin/main\n', stderr: '', code: 0 } },
+        { match: o => o.cmd === 'gh' && o.args[0] === 'pr' && o.args[1] === 'create', result: { stdout: 'https://github.com/x/y/pull/1\n', stderr: '', code: 0 } },
+    ]);
+    pidNew.run({
+        argv: ['--issue', '42', 'qol-tray', 'Foo'],
+        env: {}, cwd: root, runner, fs, log,
+    });
+    const patchCalls = runner.calls.filter(c => c.cmd === 'gh' && c.args[0] === 'api' && c.args.includes('PATCH'));
+    assert.strictEqual(patchCalls.length, 0, 'no patch when no body file supplied');
+});
+
 test('run errors on non-git repo dir', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pid-new-empty-'));
     fs.mkdirSync(path.join(root, 'qol-skills'), { recursive: true });
