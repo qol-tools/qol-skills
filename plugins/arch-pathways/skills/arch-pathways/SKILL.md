@@ -1,6 +1,7 @@
 ---
 name: arch-pathways
-description: Use when analyzing multi-area codebase problems before any code change, when the user wants to compare proposals visually, or when dispatching agents needs an agreed problem-and-proposal map. Produces a single sidebar-SPA HTML doc with one page per problem area, each carrying a Problem section (current state diagrams + smell tables) and one or more Proposal cards (each with its own diagram + pros/cons grid + cheap/medium/heavy effort badge). Triggers on requests to "visualize architecture", "compare fix proposals", "map current state vs target", or any deep-dive that spans 3+ subsystems.
+description: Architecture-analysis pipeline. Use for two distinct workflows. (1) SURVEY: produce a single-file HTML pathways doc (sidebar SPA, one Problem-and-Proposals page per area) when the user asks to "visualize architecture", "compare fix proposals", "map current state vs target", "draw pathways", or any deep-dive spanning 3+ subsystems. (2) PROMOTE-TO-PR: when the user references a survey area (boot, paths, sync, plugins, devprod, etc.) and asks to "promote", "open a PR for", "extract", "mint an issue for", or "turn this area into a PR/ADR/branch/worktree", run the bin/ scripts to mint a GitHub issue, create a worktree on a kebab branch, seed docs/adr/<PID>-<slug>.md, and open a draft PR linking to the ADR.
+when_to_use: Trigger on intents like "promote boot to PR", "open a PR for the paths area", "extract sync as markdown", "mint an issue for devprod", "turn this area into an ADR", "make a PR for this problem", "give me a worktree for TRAY-42", and any request that names a survey area or PID alongside a verb like promote/extract/mint/open/draft.
 ---
 
 # Architecture pathways skill
@@ -156,16 +157,39 @@ For markdown ADRs (`docs/adr/*.md`) — see `bin/check-pathway-md.cjs`:
 
 ### Promote-to-PR phase (Markdown ADR + GitHub)
 
-7. For each problem the user wants to act on, run `bin/pid-new <repo> "<Title>"` (or invoke the wider promote pipeline). This:
-   - Creates a GitHub issue → captures the issue number `N`.
-   - Computes `PID = <REPO_PREFIX>-N` (via `lib/pid.cjs`).
-   - Mints `<repo>/docs/adr/<PID>-<slug>.md` from `template.adr.md`, pre-populated with the survey row text.
-   - Creates branch `<prefix>-<N>-<slug>` linked to the issue (`gh issue develop`).
-   - Adds a worktree at `<workspace>/worktrees/<repo>/<prefix>-<N>-<slug>`.
-   - Opens a draft PR titled `<PID> <Title>` whose body is short and links to the ADR.
+7. For each problem the user wants to act on, run the appropriate bin/ script (see "Operations" below).
 8. Edit the ADR inside the worktree until proposals + tradeoffs are settled.
 9. Implement the chosen proposal in commits on the branch.
 10. Merge the PR — a PostToolUse hook removes the worktree. The ADR stays in `docs/adr/` as the permanent decision record.
+
+## Operations — what to run for which intent
+
+The user does NOT type bash. When you (the agent) recognize one of these intents, run the matching script via the Bash tool. Never narrate the script invocation as a question; just execute it. The scripts are self-contained Node CLIs at `${CLAUDE_PLUGIN_ROOT}/bin/`.
+
+| User intent (paraphrased) | Run | Resolves |
+|---|---|---|
+| "promote `<area>` to a PR" / "open PR for `<area>` in `<repo>`" / "turn `<area>` into a PR" | `node ${CLAUDE_PLUGIN_ROOT}/bin/pathway-pr.cjs <area> <repo>` | mint issue + worktree + ADR + draft PR seeded from the survey area |
+| Same intent but the user wants to preview first / says "dry run" / "what would this do" | append `--dry-run` to the command above | prints planned PID, branch, worktree, PR title; no GitHub side effects |
+| "extract `<area>` as markdown" / "show me `<area>` as an ADR" / "give me the markdown for `<area>`" | `node ${CLAUDE_PLUGIN_ROOT}/bin/pathway-extract.cjs <area> [--pid <PID>]` | prints the markdown ADR for that area; read-only, no GitHub calls |
+| "mint an issue for `<area>` in `<repo>`" / "create the GitHub issue for this area" | `node ${CLAUDE_PLUGIN_ROOT}/bin/pid-mint.cjs <area> <repo>` | creates one GitHub issue, prints the resulting PID |
+| "open a PR for this problem: <Title>" (NOT tied to a survey area, e.g. ad-hoc bug) | `node ${CLAUDE_PLUGIN_ROOT}/bin/pid-new.cjs <repo> "<Title>"` | mint issue + worktree + ADR (from blank template) + draft PR |
+| "set up the GitHub branch-name ruleset for `<owner/repo>`" | `bash ${CLAUDE_PLUGIN_ROOT}/bin/setup-rulesets.sh <owner/repo>` | creates the server-side ruleset (asks the user before running — this mutates GitHub) |
+
+### Resolving the area name
+
+Areas are the `id` attributes on `<section class="page" id="...">` in the HTML survey. Default survey path is `/tmp/qol-tray-pathways.html`. To list areas without picking, just `grep -oE 'id="[a-z-]+"' /tmp/qol-tray-pathways.html | sort -u`. Skip `overview` and `cross` — they aren't promotable.
+
+If the user names a problem ambiguously ("the boot stuff", "the path mess"), match against the survey's `<h2>` titles to find the area id, then proceed.
+
+### Resolving the repo name
+
+Repos must be in `${CLAUDE_PLUGIN_ROOT}/lib/prefixes.json`. If the user says a colloquial name ("tray", "lights"), map to the canonical repo: `qol-tray`, `plugin-lights`, etc. If unsure, read `lib/prefixes.json` and ask only when there are multiple plausible matches.
+
+### Confirmation policy
+
+`pathway-pr` and `pid-new` mint real GitHub issues and open real PRs. Default to **`--dry-run` first**, show the user what will happen, and only run for real after confirmation — UNLESS the user already said something explicitly committal like "do it", "open it for real", or "no dry run".
+
+`pathway-extract` and `--dry-run` invocations are side-effect-free and can be run without asking.
 
 ## Determinism guard
 
