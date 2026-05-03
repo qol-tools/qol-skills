@@ -98,6 +98,21 @@ test('renderAdr substitutes placeholders globally', () => {
     assert.doesNotMatch(out, /\{issue_number\}/);
 });
 
+test('buildIssueBody falls back to a placeholder when no problem statement is given', () => {
+    const body = pidNew.buildIssueBody('TRAY-42', 'fold-installs');
+    assert.match(body, /docs\/adr\/TRAY-42-fold-installs\.md/);
+    assert.doesNotMatch(body, /---/);
+});
+
+test('buildIssueBody includes the problem statement above the ADR link', () => {
+    const problem = '## Problem\n\nSupervisor crashes on cold boot.\n\n```mermaid\ngraph LR\n    A --> B\n```';
+    const body = pidNew.buildIssueBody('TRAY-42', 'fold-installs', problem);
+    assert.ok(body.startsWith('## Problem'), 'problem statement must lead the body');
+    assert.match(body, /```mermaid/);
+    assert.match(body, /---/);
+    assert.match(body, /docs\/adr\/TRAY-42-fold-installs\.md/);
+});
+
 test('buildIssueBody and buildPrBody are wired to PID + slug', () => {
     assert.match(pidNew.buildIssueBody('TRAY-42', 'fold-installs'), /docs\/adr\/TRAY-42-fold-installs\.md/);
     const body = pidNew.buildPrBody('TRAY-42', 'fold-installs', 42);

@@ -26,6 +26,11 @@ Options:
   --base <branch>   Base branch for the new branch + PR. Defaults to the
                     repo's default branch (origin/HEAD).
   --issue <N>       Skip issue creation and use existing issue number.
+  --issue-body-file <path>
+                    Read the GitHub Issue body (problem statement, including
+                    Mermaid blocks) from <path>. The same content seeds the
+                    ADR's "## Problem" section so reviewers see the diagram
+                    on either surface.
   --adr-content-file <path>
                     Use the contents of <path> as the ADR body instead of
                     rendering from template.adr.md. Used by pathway-pr to seed
@@ -46,6 +51,7 @@ function parseArgs(argv) {
         else if (a === '--workspace') opts.workspace = argv[++i];
         else if (a === '--base') opts.base = argv[++i];
         else if (a === '--issue') opts.issue = Number(argv[++i]);
+        else if (a === '--issue-body-file') opts.issueBodyFile = argv[++i];
         else if (a === '--adr-content-file') opts.adrContentFile = argv[++i];
         else if (a.startsWith('--')) throw new Error(`unknown flag: ${a}`);
         else opts.positional.push(a);
@@ -202,8 +208,12 @@ function ghPrCreate(runner, worktreePath, prTitle, prBody, baseBranch) {
     return r.stdout.trim();
 }
 
-function buildIssueBody(pidStr, slug) {
-    return `Tracked in \`docs/adr/${pidStr}-${slug}.md\` once the PR opens.`;
+function buildIssueBody(pidStr, slug, problemStatement) {
+    const link = `Decision record: \`docs/adr/${pidStr}-${slug}.md\` (seeded by the linked PR).`;
+    if (!problemStatement || !problemStatement.trim()) {
+        return link;
+    }
+    return `${problemStatement.trim()}\n\n---\n\n${link}`;
 }
 
 function buildPrBody(pidStr, slug, issueNumber) {
@@ -261,11 +271,15 @@ function run({ argv, env, cwd, runner, fs: fsLike, log }) {
 
     const baseBranch = opts.base || detectDefaultBranch(runner, repoRoot);
 
+    const problemStatement = opts.issueBodyFile
+        ? fsLike.readFileSync(opts.issueBodyFile, 'utf8')
+        : '';
+
     const issueNumber = opts.dryRun
         ? 999
         : (Number.isInteger(opts.issue) && opts.issue > 0
             ? opts.issue
-            : ghIssueCreate(runner, repoRoot, titleCase, buildIssueBody('PLACEHOLDER', slug)));
+            : ghIssueCreate(runner, repoRoot, titleCase, buildIssueBody('PLACEHOLDER', slug, problemStatement)));
 
     const pidStr = pid.formatPid(prefix, issueNumber);
     const branch = pid.formatBranchName(prefix, issueNumber, slug);
