@@ -25,18 +25,28 @@ const VALID_PROPOSAL = `
   </div>
 </div>`;
 
+const VALID_SMELL_TABLE = `
+<table>
+  <tr><th>State</th><th>Smell</th></tr>
+  <tr class="bad"><td><span class="swatch bad"></span>Broken</td><td>data loss</td></tr>
+  <tr class="warn"><td><span class="swatch warn"></span>Leaky</td><td>race window</td></tr>
+</table>`;
+
 const VALID_PAGE = `
 <section class="page" id="area-1">
   <h2>Area</h2>
   <h3>Problem</h3>
   <pre class="mermaid">graph TD; A --> B</pre>
+  ${VALID_SMELL_TABLE}
   <h3>Proposals</h3>
   ${VALID_PROPOSAL}
 </section>`;
 
+const VALID_LEGEND = `<div class="legend"><span><span class="swatch bad"></span>bad</span></div>`;
+
 const VALID_DOC = `<!doctype html><html><body>
 <nav class="sidebar"><a href="#overview">x</a></nav>
-<section class="page" id="overview"><h2>Overview</h2></section>
+<section class="page" id="overview"><h2>Overview</h2>${VALID_LEGEND}</section>
 ${VALID_PAGE}
 <section class="page" id="cross"><h2>Cross</h2></section>
 </body></html>`;
@@ -226,4 +236,62 @@ test('malformed payload does not crash hook (silent fail returns 0)', () => {
 test('empty stdin returns 0', () => {
     const result = spawnSync('node', [HOOK], { input: '', encoding: 'utf8' });
     assert.equal(result.status, 0);
+});
+
+test('smell table row missing tr class is rejected', () => {
+    const broken = VALID_SMELL_TABLE.replace('<tr class="bad">', '<tr>');
+    const doc = VALID_DOC.replace(VALID_SMELL_TABLE, broken);
+    const r = call({ content: doc });
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /missing class="bad\|warn\|good"/);
+});
+
+test('smell table row missing swatch is rejected', () => {
+    const broken = VALID_SMELL_TABLE.replace('<span class="swatch bad"></span>', '');
+    const doc = VALID_DOC.replace(VALID_SMELL_TABLE, broken);
+    const r = call({ content: doc });
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /missing <span class="swatch/);
+});
+
+test('smell table mismatched row class vs swatch is rejected', () => {
+    const broken = VALID_SMELL_TABLE.replace('<tr class="bad"><td><span class="swatch bad">', '<tr class="bad"><td><span class="swatch warn">');
+    const doc = VALID_DOC.replace(VALID_SMELL_TABLE, broken);
+    const r = call({ content: doc });
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /does not match swatch class/);
+});
+
+test('doc with smell table but no legend is rejected', () => {
+    const doc = VALID_DOC.replace(VALID_LEGEND, '');
+    const r = call({ content: doc });
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /missing <div class="legend">/);
+});
+
+test('non-smell tables are not subject to swatch rules', () => {
+    const nonSmell = `<table><tr><th>Foo</th><th>Bar</th></tr><tr><td>x</td><td>y</td></tr></table>`;
+    const doc = VALID_DOC.replace(VALID_SMELL_TABLE, nonSmell);
+    const r = call({ content: doc });
+    assert.equal(r.exitCode, 0, r.stderr);
+});
+
+test('doc with no smell tables does not require legend', () => {
+    const noTable = VALID_PAGE.replace(VALID_SMELL_TABLE, '');
+    const doc = VALID_DOC.replace(VALID_PAGE, noTable).replace(VALID_LEGEND, '');
+    const r = call({ content: doc });
+    assert.equal(r.exitCode, 0, r.stderr);
+});
+
+test('all three swatch severities accepted in same table', () => {
+    const allThree = `
+<table>
+  <tr><th>State</th><th>Smell</th></tr>
+  <tr class="bad"><td><span class="swatch bad"></span>X</td><td>broken</td></tr>
+  <tr class="warn"><td><span class="swatch warn"></span>Y</td><td>leaky</td></tr>
+  <tr class="good"><td><span class="swatch good"></span>Z</td><td>fine</td></tr>
+</table>`;
+    const doc = VALID_DOC.replace(VALID_SMELL_TABLE, allThree);
+    const r = call({ content: doc });
+    assert.equal(r.exitCode, 0, r.stderr);
 });

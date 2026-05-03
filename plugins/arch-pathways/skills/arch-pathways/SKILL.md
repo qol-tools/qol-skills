@@ -63,8 +63,33 @@ The HTML uses these CSS classes — the hook checks for them:
 | `.badge.cheap` / `.badge.medium` / `.badge.heavy` | cost indicator |
 | `.tradeoffs` | grid wrapper for `<h5>pros</h5>` / `<h5>cons</h5>` |
 | `.callout` | optional yellow note |
+| `.swatch.bad` / `.swatch.warn` / `.swatch.good` | colored chip linking a smell row to its diagram node |
+| `tr.bad` / `tr.warn` / `tr.good` | smell-table row class matching its swatch |
+| `.legend` | one per doc; explains the swatch colors |
 
 Use the canonical template at `template.html` in this skill's folder as the starting point. Don't invent new class names — the hook will reject the doc.
+
+## Visual linking rule (smell tables)
+
+A "smell table" is any `<table>` whose header row contains a column named `Smell`. Whenever a Problem section pairs a Mermaid diagram with a smell table, the diagram and the table MUST be color-linked:
+
+1. Each smell-table body row carries `class="bad|warn|good"` matching the severity.
+2. The first cell of that row contains `<span class="swatch bad|warn|good">` of the same severity, so the reader sees a colored chip next to the row identifier.
+3. The Mermaid diagram colors the matching node(s) with `classDef` and `class`:
+   ```
+   classDef bad fill:#f5c2c7,stroke:#842029,color:#000
+   classDef warn fill:#ffeeba,stroke:#856404,color:#000
+   classDef good fill:#cfe8d6,stroke:#0f5132,color:#000
+   class NodeA,NodeB bad
+   ```
+4. The doc contains exactly ONE `<div class="legend">` (place it on the Overview page) explaining the three swatch colors. Without the legend the colors are mystery semaphore.
+
+The hook enforces 1, 2, and 4. Step 3 (mermaid `classDef`) is not text-grep enforceable — manually verify when iterating.
+
+Severity guide:
+- `bad` (red) — broken, silent failure, data loss, user can't recover.
+- `warn` (amber) — leaky, race window, brittle, masked.
+- `good` (green) — used in Proposal diagrams to highlight what's now safe.
 
 ## Workflow
 
@@ -82,6 +107,8 @@ A PreToolUse hook in this plugin (`bin/check-pathway-doc.cjs`) blocks Writes/Edi
 - Lacks `<nav class="sidebar">`.
 - Has a non-overview/non-cross `<section class="page">` missing `<h3>Problem</h3>` or `<h3>Proposals</h3>`.
 - Contains a `<div class="proposal">` without all of: a `<pre class="mermaid">`, a `<div class="tradeoffs">` with both `pros` and `cons`, and a `.badge` of class `cheap`/`medium`/`heavy`.
+- Contains a smell table (any `<table>` with a `<th>Smell</th>` column) where any body row is missing `class="bad|warn|good"` or a `<span class="swatch bad|warn|good">` matching the row class.
+- Contains any smell table but lacks a `<div class="legend">` somewhere in the doc.
 
 Bypass for one-off exceptions (e.g. partial drafts):
 

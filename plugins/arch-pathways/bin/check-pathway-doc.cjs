@@ -27,6 +27,13 @@ const MERMAID_RE = /<pre\s+class="mermaid"/i;
 const TRADEOFFS_PROS_FIRST_RE = /<div\s+class="tradeoffs"[\s\S]*?<h5>\s*pros\s*<\/h5>[\s\S]*?<h5>\s*cons\s*<\/h5>/i;
 const TRADEOFFS_CONS_FIRST_RE = /<div\s+class="tradeoffs"[\s\S]*?<h5>\s*cons\s*<\/h5>[\s\S]*?<h5>\s*pros\s*<\/h5>/i;
 const BADGE_RE = /<span\s+class="badge\s+(cheap|medium|heavy)"/i;
+const SMELL_TABLE_RE = /<table[\s\S]*?<\/table>/gi;
+const SMELL_HEADER_RE = /<th[^>]*>\s*Smell\s*<\/th>/i;
+const ROW_RE = /<tr\b[^>]*>[\s\S]*?<\/tr>/gi;
+const ROW_CLASS_RE = /<tr\s+class="(bad|warn|good)"/i;
+const ROW_HAS_TH_RE = /<th\b/i;
+const ROW_SWATCH_RE = /<span\s+class="swatch\s+(bad|warn|good)"/i;
+const LEGEND_RE = /<div\s+class="legend"/i;
 
 function readStdin() {
     try {
@@ -74,6 +81,21 @@ function findPageSections(content) {
     return matches;
 }
 
+function findSmellTables(content) {
+    const tables = [];
+    const all = content.match(SMELL_TABLE_RE);
+    if (!all) return tables;
+    for (const table of all) {
+        if (SMELL_HEADER_RE.test(table)) tables.push(table);
+    }
+    return tables;
+}
+
+function bodyRowsOf(table) {
+    const rows = table.match(ROW_RE) || [];
+    return rows.filter(r => !ROW_HAS_TH_RE.test(r));
+}
+
 function validateContent(content) {
     const violations = [];
     if (!SIDEBAR_RE.test(content)) {
@@ -101,6 +123,29 @@ function validateContent(content) {
             violations.push(`${label}: missing <span class="badge cheap|medium|heavy">`);
         }
     });
+    const smellTables = findSmellTables(content);
+    if (smellTables.length > 0 && !LEGEND_RE.test(content)) {
+        violations.push('smell tables present but missing <div class="legend"> on overview page');
+    }
+    smellTables.forEach((table, idx) => {
+        const tableLabel = `smell table #${idx + 1}`;
+        bodyRowsOf(table).forEach((row, rowIdx) => {
+            const rowLabel = `${tableLabel} row ${rowIdx + 1}`;
+            const rowClassMatch = row.match(ROW_CLASS_RE);
+            if (!rowClassMatch) {
+                violations.push(`${rowLabel}: missing class="bad|warn|good" on <tr>`);
+                return;
+            }
+            const swatchMatch = row.match(ROW_SWATCH_RE);
+            if (!swatchMatch) {
+                violations.push(`${rowLabel}: missing <span class="swatch bad|warn|good"> in first cell`);
+                return;
+            }
+            if (rowClassMatch[1] !== swatchMatch[1]) {
+                violations.push(`${rowLabel}: tr class "${rowClassMatch[1]}" does not match swatch class "${swatchMatch[1]}"`);
+            }
+        });
+    });
     return violations;
 }
 
@@ -117,6 +162,10 @@ The arch-pathways skill requires:
         <pre class="mermaid">         (visualize the proposal)
         <div class="tradeoffs"> with <h5>pros</h5> AND <h5>cons</h5>
         <span class="badge cheap|medium|heavy">
+  - Any <table> with a <th>Smell</th> column is a smell table; every body row must have
+        <tr class="bad|warn|good">
+        <span class="swatch bad|warn|good">  (matching the row class)
+    AND the doc must have one <div class="legend"> on the overview page.
 
 See the skill SKILL.md and template.html for the canonical shape.
 

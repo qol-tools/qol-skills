@@ -20,6 +20,13 @@ th{background:#eee}
 code{background:#eee;padding:1px 5px;border-radius:3px;font-size:90%}
 pre.mermaid{background:#fff;border:1px solid #ddd;border-radius:6px;padding:14px;margin:1em 0;overflow-x:auto;text-align:center}
 .callout{background:#fff3cd;border-left:4px solid #856404;padding:10px 14px;margin:1em 0;font-size:13px}
+.swatch{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:middle;border:1px solid rgba(0,0,0,.15)}
+.swatch.bad{background:#f5c2c7}
+.swatch.warn{background:#ffeeba}
+.swatch.good{background:#cfe8d6}
+tr.bad td:first-child,tr.warn td:first-child,tr.good td:first-child{font-weight:600}
+.legend{display:flex;gap:1.4em;background:#fff;border:1px solid #d9e2ec;border-radius:6px;padding:10px 14px;margin:1em 0;font-size:13px;flex-wrap:wrap}
+.legend > span{display:inline-flex;align-items:center;gap:.4em}
 .proposal{background:#fff;border:1px solid #d9e2ec;border-radius:6px;padding:1.2em 1.5em;margin:1.2em 0}
 .proposal h4{margin-top:0}
 .proposal .badge{display:inline-block;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600;margin-left:.5em;vertical-align:middle}
@@ -61,6 +68,11 @@ window.addEventListener('DOMContentLoaded',()=>show(location.hash.slice(1)||'ove
 <section class="page" id="overview">
   <h2>Overview</h2>
   <p>One page per problem area. Each has a <b>Problem</b> section and one or more <b>Proposals</b>. Cross-area page shows dependencies and recommended fix order.</p>
+  <div class="legend">
+    <span><span class="swatch bad"></span>bad &mdash; broken / silent failure / data loss</span>
+    <span><span class="swatch warn"></span>warn &mdash; leaky / race / brittle</span>
+    <span><span class="swatch good"></span>good &mdash; working as intended</span>
+  </div>
 </section>
 
 <section class="page" id="area-1">
@@ -69,14 +81,18 @@ window.addEventListener('DOMContentLoaded',()=>show(location.hash.slice(1)||'ove
   <h3>Problem</h3>
   <p>{1-2 sentence framing.}</p>
   <pre class="mermaid">
-sequenceDiagram
-    participant A
-    participant B
-    A->>B: example
+stateDiagram-v2
+    direction LR
+    [*] --> Healthy
+    Healthy --> Broken: example failure
+    classDef bad fill:#f5c2c7,stroke:#842029,color:#000
+    classDef warn fill:#ffeeba,stroke:#856404,color:#000
+    class Broken bad
   </pre>
   <table>
-    <tr><th>#</th><th>Smell</th></tr>
-    <tr><td>1</td><td>{...}</td></tr>
+    <tr><th>State</th><th>Smell</th></tr>
+    <tr class="bad"><td><span class="swatch bad"></span>Broken</td><td>{one sentence}</td></tr>
+    <tr class="warn"><td><span class="swatch warn"></span>Healthy &rarr; Broken</td><td>{one sentence}</td></tr>
   </table>
 
   <h3>Proposals</h3>
