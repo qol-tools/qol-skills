@@ -76,7 +76,7 @@ test('dry-run prints plan with sub-IDs without invoking gh', () => {
     });
     const out = lines.join('\n');
     assert.match(out, /TRAY-999/);
-    assert.match(out, /tray-999-1-boot-pathway/);
+    assert.match(out, /tray-999-boot/);
     const ghCalls = runner.calls.filter(c => c.cmd === 'gh');
     assert.deepStrictEqual(ghCalls, []);
 });
@@ -108,8 +108,8 @@ test('full run pipes mint -> extract -> new, ADR seeded with extracted markdown'
     assert.match(out, /TRAY-77/);
     assert.match(out, /pull\/88/);
 
-    const expectedAdr = path.join(root, 'worktrees', 'qol-tray', 'tray-77-1-boot-pathway',
-        'docs', 'adr', 'TRAY-77-1-boot-pathway.md');
+    const expectedAdr = path.join(root, 'worktrees', 'qol-tray', 'tray-77-boot',
+        'docs', 'adr', 'TRAY-77-boot.md');
     assert.ok(fs.existsSync(expectedAdr), `ADR missing at ${expectedAdr}`);
     const adrBody = fs.readFileSync(expectedAdr, 'utf8');
     assert.match(adrBody, /^# TRAY-77 1\. Boot pathway/m);

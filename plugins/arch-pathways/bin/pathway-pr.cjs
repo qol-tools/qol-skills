@@ -87,6 +87,7 @@ function run({ argv, env, cwd, runner, fs: fsLike, log, error }) {
     const pidNewArgv = [
         repo, minted.title,
         '--issue', String(minted.issue),
+        '--slug', areaId,
         '--adr-content-file', adrFile,
     ];
     if (opts.workspace) pidNewArgv.push('--workspace', opts.workspace);

@@ -52,6 +52,7 @@ function parseArgs(argv) {
         else if (a === '--base') opts.base = argv[++i];
         else if (a === '--issue') opts.issue = Number(argv[++i]);
         else if (a === '--issue-body-file') opts.issueBodyFile = argv[++i];
+        else if (a === '--slug') opts.slug = argv[++i];
         else if (a === '--adr-content-file') opts.adrContentFile = argv[++i];
         else if (a.startsWith('--')) throw new Error(`unknown flag: ${a}`);
         else opts.positional.push(a);
@@ -261,8 +262,9 @@ function run({ argv, env, cwd, runner, fs: fsLike, log }) {
 
     const workspace = resolveWorkspace(opts.workspace, env, cwd, fsLike);
     const prefix = pid.prefixForRepo(repo);
-    const slug = pid.slugify(title);
-    const titleCase = pid.titleCaseFromSlug(slug);
+    const slug = opts.slug ? opts.slug : pid.slugify(title);
+    if (!pid.isValidSlug(slug)) throw new Error(`invalid --slug "${opts.slug}" (must be lowercase kebab)`);
+    const titleCase = opts.slug ? title.trim() : pid.titleCaseFromSlug(slug);
 
     const repoRoot = path.join(workspace, repo);
     if (!fsLike.existsSync(path.join(repoRoot, '.git'))) {
