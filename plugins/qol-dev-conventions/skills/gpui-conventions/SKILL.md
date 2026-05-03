@@ -1,6 +1,6 @@
 ---
-name: gpui
-description: Use when writing gpui UI code, creating views, handling input, lists, focus, window management, or testing gpui components. Provides verified patterns and gotchas for gpui 0.2 + gpui-component.
+name: gpui-conventions
+description: Use when writing gpui UI code in this workspace. Verified patterns and gotchas for gpui 0.2 + gpui-component, built through hands-on exploration — NOT a generic gpui reference. For canonical gpui docs, use context7 (though coverage is limited; this skill is the better source for real-world patterns). Covers views, input, lists, focus, window management, testing.
 ---
 
 # GPUI Knowledge Base

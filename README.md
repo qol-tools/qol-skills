@@ -48,8 +48,8 @@ $qol-tray explain the daemon lifecycle and check this repo for mismatches
 | `qol-plugin-screen-recorder` | `qol-plugin-screen-recorder` |
 | `qol-plugin-window-actions` | `qol-plugin-window-actions` |
 | `qol-host` | `qol-tray`, `qol-tray-dev-logging`, `qol-tray-feature-profile`, `qol-tray-release-flow`, `qol-tray-ui-systems`, `qol-world-canvas`, `qol-apps-testing` |
-| `qol-dev-conventions` | `rust`, `gpui`, `preact`, `commit`, `git-push`, `git-trees`, `coding-general`, `qol-architecture`, `qol-shared-libs`, `qol-plugin-template` |
-| `qol-ecosystem` | `qol-tools`, `qol-cicd` |
+| `qol-dev-conventions` | `rust-conventions`, `gpui-conventions`, `preact-conventions`, `commit`, `git-push`, `git-trees`, `coding-general`, `qol-architecture`, `qol-shared-libs`, `qol-plugin-template` |
+| `qol-ecosystem` | `qol-tools`, `qol-cicd`, `qol-mission` |
 | `arch-pathways` | `arch-pathways` |
 
 Each plugin has its own `.claude-plugin/plugin.json` and `.codex-plugin/plugin.json`; every skill lives at `plugins/<plugin-name>/skills/<skill-name>/SKILL.md`.

@@ -69,7 +69,7 @@ Plugins, in contrast, are **not** Cargo-linked into qol-tray. They are separate 
 | qol-tray core (plugin loader, resolver, platform, features) | `qol-tray` |
 | qol-tray UI (`ui/`) | `qol-tray-ui-systems` |
 | qol-tray frontend diagnostic logging | `qol-tray-dev-logging` |
-| Preact htm + hooks patterns | `preact` |
+| Preact htm + hooks patterns | `preact-conventions` |
 | World canvas / dive traits / spatial nav | `qol-world-canvas` |
 | qol-tray profile sync feature | `qol-tray-feature-profile` |
 | Task runner + IDE checkout | `qol-tray-task-runner-ide-checkout` |
@@ -78,8 +78,8 @@ Plugins, in contrast, are **not** Cargo-linked into qol-tray. They are separate 
 | CI / release workflows | `qol-cicd` |
 | Plugin release tagging | `plugin-<id>-release-flow` |
 | qol-tray release tagging | `qol-tray-release-flow` |
-| Rust plugin patterns | `rust` |
-| GPUI plugins (launcher, alt-tab internals) | `gpui` |
+| Rust plugin patterns | `rust-conventions` |
+| GPUI plugins (launcher, alt-tab internals) | `gpui-conventions` |
 | Tests for apps and plugins | `qol-apps-testing` |
 | Any code, universal | `coding-general` |
 | Coordinated multi-repo worktrees | `git-trees` |

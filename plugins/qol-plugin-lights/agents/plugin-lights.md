@@ -62,7 +62,7 @@ If you touched `plugin.toml`, the daemon protocol, the action dispatcher, or the
 ## Work sequence
 
 1. **Read MEMORY.md first.** Apply durable lessons (especially around daemon hangs, serial port leaks, dev-linked config paths).
-2. Read the relevant skill(s) (`qol-plugin-lights`, `qol-architecture`, `rust`) before touching architecture. Don't infer structure from general Rust priors.
+2. Read the relevant skill(s) (`qol-plugin-lights`, `qol-architecture`, `rust-conventions`) before touching architecture. Don't infer structure from general Rust priors.
 3. Trace the path for the change: user action → `runtime::entrypoint(args)` → daemon socket → `daemon::handle` → `service::dispatch` → `Backend::<method>` → ZNP request → ZCL frame → device. Identify which layer owns the contract you're changing.
 4. Prefer editing existing files. `src/service/light_service.rs`, `src/daemon/state.rs`, `src/backend/zigbee/mod.rs`, and `src/znp/controller.rs` already do most of the heavy lifting — extend them before extracting new modules.
 5. Daemon reload loop: if the running daemon is pre-fix, your change is invisible. Kill it (`pkill -f plugin-lights` or via qol-tray) and let qol-tray respawn it, OR run the binary manually for fast iteration.

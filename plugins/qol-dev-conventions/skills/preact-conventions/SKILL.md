@@ -1,6 +1,6 @@
 ---
-name: preact
-description: Use when writing Preact + htm code in this workspace. Covers generic htm tagged template gotchas, hook patterns, icon components, toast/dissolve helpers, keyboard focus trapping, custom input patterns, router guards, and provider gotchas. qol-tray-specific component hierarchy (Surface trait, plugin-config fields) lives in the `qol-tray-ui-systems` skill.
+name: preact-conventions
+description: Use when writing Preact + htm code in this workspace. Workspace-specific patterns and gotchas (no JSX, no build step, htm tagged templates from `lib/html.js`, keyboard-first hard rule, icon component extraction, toast/dissolve helpers, focus trapping, custom inputs, router guards, provider unmount/remount) — NOT a generic Preact reference. For canonical Preact docs, use context7. qol-tray-specific component hierarchy (Surface trait, plugin-config fields) lives in `qol-tray-ui-systems`.
 ---
 
 # Preact Patterns

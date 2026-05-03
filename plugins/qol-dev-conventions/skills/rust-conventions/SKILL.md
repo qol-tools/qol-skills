@@ -1,6 +1,6 @@
 ---
-name: rust
-description: Use when writing Rust in this workspace — error handling, filesystem, process management, cross-platform code layout, and style. Plugin-specific and qol-tray-specific Rust gotchas live in their own skills (`qol-plugin-*`, `qol-tray`, `qol-architecture`).
+name: rust-conventions
+description: Use when writing Rust in this workspace. Workspace-specific style and gotchas (error handling, filesystem, process management, cross-platform code layout) — NOT a generic Rust reference. For canonical Rust/library docs, use context7 instead. Plugin-specific and qol-tray-specific Rust gotchas live in their own skills (`qol-plugin-*`, `qol-tray`, `qol-architecture`).
 ---
 
 # Rust Guidelines

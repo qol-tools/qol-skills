@@ -58,7 +58,7 @@ If you touched `plugin.toml`, `src/main.rs` arg parsing, or the daemon protocol:
 ## Work sequence
 
 1. **Read MEMORY.md first.** Apply durable lessons.
-2. Read the skill files (`qol-plugin-alt-tab`, `qol-architecture`, `gpui`, `rust`) before touching architecture. Don't infer structure from general Rust/GPUI priors.
+2. Read the skill files (`qol-plugin-alt-tab`, `qol-architecture`, `gpui-conventions`, `rust-conventions`) before touching architecture. Don't infer structure from general Rust/GPUI priors.
 3. Trace the path for the change: user hits Alt+Tab → qol-tray hotkey → daemon socket → `dispatch_show` → `Platform.visible_windows` → preview/icon refresh → `cx.update` → `open_picker` (reuse vs cycle vs create) → render. Identify which layer owns the contract.
 4. Prefer editing existing files. `src/discovery/macos/window_enum.rs` and `src/picker/run.rs` already do most of the heavy lifting — extend them before extracting new modules.
 5. Daemon reload loop: if the running daemon is pre-fix, your change is invisible. `pgrep -fl alt-tab`, inspect its binary mtime vs your build, and kill if stale.
