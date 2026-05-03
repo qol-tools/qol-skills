@@ -120,6 +120,21 @@ test('Write with fa:fa- icons in mermaid fails (GitHub incompat)', () => {
     assert.ok(v.some(s => /fa:fa-/.test(s)));
 });
 
+test('Write with &lt; entity in mermaid fails (GitHub Mermaid HTML-parses it)', () => {
+    const bad = VALID_ADR.replace('A --> B', 'Tray-->>Main: visible &lt;100ms');
+    const v = checkMd.validate('Write', { file_path: FILEPATH, content: bad });
+    assert.ok(v.some(s => /&lt;/.test(s)), `expected &lt; violation, got: ${v.join(' / ')}`);
+});
+
+test('Write with bare < in sequenceDiagram message fails (GitHub Mermaid HTML-parses it)', () => {
+    const bad = VALID_ADR.replace(
+        '```mermaid\ngraph LR\n    A --> B',
+        '```mermaid\nsequenceDiagram\n    Tray-->>Main: visible <100ms',
+    );
+    const v = checkMd.validate('Write', { file_path: FILEPATH, content: bad });
+    assert.ok(v.some(s => /bare `<`/.test(s)), `expected bare-< violation, got: ${v.join(' / ')}`);
+});
+
 test('Write with click directive in mermaid fails (GitHub incompat)', () => {
     const bad = VALID_ADR.replace('A --> C\n```', 'A --> C\n    click A href "https://x.com"\n```');
     const v = checkMd.validate('Write', { file_path: FILEPATH, content: bad });

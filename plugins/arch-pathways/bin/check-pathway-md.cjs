@@ -79,6 +79,13 @@ function validateMermaidCompat(content) {
         if (labelMatches) {
             violations.push(`${label}: HTML tags other than \`<br/>\` inside node labels may not render on GitHub (found: ${labelMatches[0]}).`);
         }
+        if (/&lt;|&gt;/.test(block)) {
+            violations.push(`${label}: HTML entities \`&lt;\`/\`&gt;\` get decoded to \`<\`/\`>\` and break GitHub Mermaid (it parses them as HTML). Spell out as words or use \`\\<\` / \`\\>\`.`);
+        }
+        const sequenceMessageBareLt = block.match(/^[ \t]*\w[\w ]*\s*-+>+\s*\w[\w ]*\s*:[^\n]*[^\\:]<(?!-|\|)/m);
+        if (sequenceMessageBareLt) {
+            violations.push(`${label}: bare \`<\` inside a sequenceDiagram message body breaks GitHub Mermaid. Spell out (\`under\`, \`less than\`) or escape as \`\\<\`.`);
+        }
     });
     return violations;
 }
