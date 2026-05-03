@@ -64,11 +64,36 @@ function findSmellTable(content) {
     return { rows, present: true };
 }
 
+function validateGanttTasks(block, label, violations) {
+    if (!/^\s*gantt\b/m.test(block)) return;
+    const lines = block.split('\n');
+    let inSection = false;
+    for (const line of lines) {
+        const trimmed = line.trim();
+        if (/^section\b/i.test(trimmed)) { inSection = true; continue; }
+        if (!inSection) continue;
+        if (!trimmed.includes(':')) continue;
+        const meta = trimmed.split(':').slice(1).join(':').trim();
+        if (!meta) continue;
+        const parts = meta.split(',').map(s => s.trim()).filter(Boolean);
+        if (parts.length < 2) continue;
+        const last = parts[parts.length - 1];
+        if (/^after\s+\w+/i.test(last)) continue;
+        if (/^(active|done|crit|milestone)$/i.test(last)) continue;
+        if (/^\d+(\.\d+)?(ms|s|m|h|d|w|M|y)$/.test(last)) continue;
+        if (/^\d{4}-\d{2}-\d{2}/.test(last)) continue;
+        if (/^\d+$/.test(last)) {
+            violations.push(`${label}: gantt task "${trimmed}" — third positional "${last}" is a bare integer; GitHub Mermaid interprets this as a duration, not an end-date. Use an explicit unit suffix like "${last}s".`);
+        }
+    }
+}
+
 function validateMermaidCompat(content) {
     const violations = [];
     const blocks = content.match(MERMAID_BLOCK_RE) || [];
     blocks.forEach((block, idx) => {
         const label = `mermaid block #${idx + 1}`;
+        validateGanttTasks(block, label, violations);
         if (/\bfa:fa-[\w-]+/.test(block)) {
             violations.push(`${label}: \`fa:fa-*\` icon syntax is not rendered by GitHub. Use unicode symbols or remove.`);
         }

@@ -135,6 +135,22 @@ test('Write with bare < in sequenceDiagram message fails (GitHub Mermaid HTML-pa
     assert.ok(v.some(s => /bare `<`/.test(s)), `expected bare-< violation, got: ${v.join(' / ')}`);
 });
 
+test('Write with bare-integer gantt task third positional fails (Mermaid treats as duration not end-date)', () => {
+    const ganttBlock = '```mermaid\ngantt\n    title Boot\n    dateFormat X\n    axisFormat %S s\n    section Sync\n    bootstrap :a1, 0, 1\n    doctor :a4, 3, 5\n```';
+    const bad = VALID_ADR.replace('```mermaid\ngraph LR\n    A --> B', '```mermaid\ngantt\n    title Boot\n    dateFormat X\n    axisFormat %S s\n    section Sync\n    bootstrap :a1, 0, 1');
+    const v = checkMd.validate('Write', { file_path: FILEPATH, content: bad });
+    assert.ok(v.some(s => /bare integer/.test(s)), `expected bare-integer gantt violation, got: ${v.join(' / ')}`);
+});
+
+test('Write with gantt task using "Ns" duration suffix passes', () => {
+    const good = VALID_ADR.replace(
+        '```mermaid\ngraph LR\n    A --> B\n```',
+        '```mermaid\ngantt\n    title Boot\n    dateFormat X\n    axisFormat %S s\n    section Sync\n    bootstrap :a1, 0, 1s\n    doctor :a4, 3, 2s\n```',
+    );
+    const v = checkMd.validate('Write', { file_path: FILEPATH, content: good });
+    assert.ok(!v.some(s => /gantt/.test(s)), `should not flag well-formed gantt, got: ${v.join(' / ')}`);
+});
+
 test('Write with click directive in mermaid fails (GitHub incompat)', () => {
     const bad = VALID_ADR.replace('A --> C\n```', 'A --> C\n    click A href "https://x.com"\n```');
     const v = checkMd.validate('Write', { file_path: FILEPATH, content: bad });
