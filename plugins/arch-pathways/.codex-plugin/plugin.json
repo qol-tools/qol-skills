@@ -1,0 +1,9 @@
+{
+  "name": "arch-pathways",
+  "version": "0.1.0",
+  "description": "Generate single-file HTML architecture-analysis docs (sidebar SPA) with one Problem-and-Proposals page per area, Mermaid diagrams, and pros/cons tradeoff cards. Includes a PreToolUse hook that enforces the structural contract on any *pathways*.html file.",
+  "author": {
+    "name": "KMRH47"
+  },
+  "skills": "./skills/"
+}

@@ -67,7 +67,7 @@ test('non-html files are not inspected', () => {
 });
 
 test('template.html is exempt', () => {
-    const r = call({ file: '/p/skills/architecture-pathways/template.html', content: '<html>incomplete</html>' });
+    const r = call({ file: '/p/skills/arch-pathways/template.html', content: '<html>incomplete</html>' });
     assert.equal(r.exitCode, 0);
 });
 
@@ -198,7 +198,7 @@ test('bypass marker passes one edit and is consumed', () => {
     const tmp = require('node:os').tmpdir();
     const dir = require('node:fs').mkdtempSync(path.join(tmp, 'pathway-bypass-'));
     require('node:fs').mkdirSync(path.join(dir, '.claude'), { recursive: true });
-    const marker = path.join(dir, '.claude', 'bypass-architecture-pathways');
+    const marker = path.join(dir, '.claude', 'bypass-arch-pathways');
     require('node:fs').writeFileSync(marker, '');
 
     const r = call({ cwd: dir, content: '<html>no sidebar</html>' });
@@ -210,7 +210,7 @@ test('bypass marker with N decrements', () => {
     const tmp = require('node:os').tmpdir();
     const dir = require('node:fs').mkdtempSync(path.join(tmp, 'pathway-bypassN-'));
     require('node:fs').mkdirSync(path.join(dir, '.claude'), { recursive: true });
-    const marker = path.join(dir, '.claude', 'bypass-architecture-pathways');
+    const marker = path.join(dir, '.claude', 'bypass-arch-pathways');
     require('node:fs').writeFileSync(marker, '3');
 
     call({ cwd: dir, content: '<html>no sidebar</html>' });

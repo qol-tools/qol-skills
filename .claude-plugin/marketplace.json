@@ -112,6 +112,15 @@
       "author": {
         "name": "KMRH47"
       }
+    },
+    {
+      "name": "arch-pathways",
+      "description": "Generate single-file HTML architecture-analysis docs (sidebar SPA) with one Problem-and-Proposals page per area, Mermaid diagrams, and pros/cons tradeoff cards. Includes a PreToolUse hook that enforces the structural contract on any *pathways*.html file.",
+      "source": "./plugins/arch-pathways",
+      "version": "0.1.0",
+      "author": {
+        "name": "KMRH47"
+      }
     }
   ]
 }

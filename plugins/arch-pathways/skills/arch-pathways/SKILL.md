@@ -1,5 +1,5 @@
 ---
-name: architecture-pathways
+name: arch-pathways
 description: Use when analyzing multi-area codebase problems before any code change, when the user wants to compare proposals visually, or when dispatching agents needs an agreed problem-and-proposal map. Produces a single sidebar-SPA HTML doc with one page per problem area, each carrying a Problem section (current state diagrams + smell tables) and one or more Proposal cards (each with its own diagram + pros/cons grid + cheap/medium/heavy effort badge). Triggers on requests to "visualize architecture", "compare fix proposals", "map current state vs target", or any deep-dive that spans 3+ subsystems.
 ---
 
@@ -86,8 +86,8 @@ A PreToolUse hook in this plugin (`bin/check-pathway-doc.cjs`) blocks Writes/Edi
 Bypass for one-off exceptions (e.g. partial drafts):
 
 ```
-touch .claude/bypass-architecture-pathways          # next 1 edit passes
-echo N > .claude/bypass-architecture-pathways       # next N edits pass
+touch .claude/bypass-arch-pathways          # next 1 edit passes
+echo N > .claude/bypass-arch-pathways       # next N edits pass
 ```
 
 ## Anti-patterns

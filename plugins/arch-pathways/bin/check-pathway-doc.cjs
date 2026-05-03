@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 /*
- * architecture-pathways PreToolUse hook.
+ * arch-pathways PreToolUse hook.
  *
  * Blocks Writes/Edits to *pathways*.html files that violate the
- * architecture-pathways skill's structural contract.
+ * arch-pathways skill's structural contract.
  *
- * See SKILL.md for the contract. Bypass with .claude/bypass-architecture-pathways.
+ * See SKILL.md for the contract. Bypass with .claude/bypass-arch-pathways.
  */
 
 'use strict';
@@ -105,11 +105,11 @@ function validateContent(content) {
 }
 
 function block(filePath, violations) {
-    process.stderr.write(`architecture-pathways violation in ${filePath}:
+    process.stderr.write(`arch-pathways violation in ${filePath}:
 
 ${violations.map(v => `  - ${v}`).join('\n')}
 
-The architecture-pathways skill requires:
+The arch-pathways skill requires:
   - <nav class="sidebar"> for navigation.
   - Every problem page (not "overview" or "cross") must have BOTH
         <h3>Problem</h3>  AND  <h3>Proposals</h3>
@@ -121,12 +121,12 @@ The architecture-pathways skill requires:
 See the skill SKILL.md and template.html for the canonical shape.
 
 Bypass for this single edit:
-  touch .claude/bypass-architecture-pathways
+  touch .claude/bypass-arch-pathways
 `);
 }
 
 function consumeBypass(cwd) {
-    const marker = path.join(cwd, '.claude', 'bypass-architecture-pathways');
+    const marker = path.join(cwd, '.claude', 'bypass-arch-pathways');
     if (!fs.existsSync(marker) || !fs.statSync(marker).isFile()) return false;
     try {
         const raw = fs.readFileSync(marker, 'utf8').trim();
