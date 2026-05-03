@@ -16,11 +16,20 @@ Whenever a problem touches three or more subsystems and the user asks for unders
 
 Do NOT use for single-file bugs or "just fix it" requests. The artifact is heavy by design — it's for shared decision-making, not solo iteration.
 
-## Output shape
+## Two output modes
 
-ONE self-contained HTML file at `/tmp/<project>-pathways.html` (or repo `docs/` if the user wants it tracked). It is a sidebar-SPA: left nav links, right content pane swaps via `display:none/block` on hash change. No build step. Mermaid loaded from CDN.
+This skill produces two distinct artifacts, each with its own template and its own audience:
 
-The user MUST be able to open it in any browser without an extension, and refresh-iterate without rebuilding anything.
+| Mode | File | When | Audience |
+|---|---|---|---|
+| **HTML survey** | `/tmp/<project>-pathways.html` (or `docs/pathways.html`) | Initial multi-area brainstorming, before any PR exists. Compare 5+ problems side by side. | You + reviewing agents during planning. Throwaway. |
+| **Markdown ADR** | `<repo>/docs/adr/<PID>-<slug>.md` | One per minted PR. Permanent decision record. | Anyone reading the repo six months later asking "why?" |
+
+The HTML is the **workshop**. The Markdown ADR is the **artifact**. Each PR description LINKS to its ADR — it never embeds the analysis. This follows the industry split between PRs ("what changed") and ADRs ("why we decided").
+
+The HTML survey is a single self-contained file: sidebar-SPA, left nav links, right content pane swaps via `display:none/block` on hash change. No build step. Mermaid loaded from CDN. Refresh-iterate without rebuilding.
+
+The Markdown ADR is a single GitHub-renderable markdown file: native Mermaid blocks, native tables for smell rows and tradeoffs. Works without any tool — just open the file on github.com.
 
 ## Required structure
 
@@ -96,31 +105,67 @@ Severity guide:
 
 ## Problem IDs and `Closes:` references
 
-Every smell-table row gets a stable identifier in the first column: `<td class="pid">AREA-N</td>` where `AREA` is an uppercase short prefix per page (e.g. `BOOT`, `PATH`, `SYNC`, `DEV`, `PLUGIN`) and `N` is a monotonic integer scoped to that page. IDs never get renumbered on reorder — append, don't shift.
+PID conventions differ between the HTML survey and the Markdown ADR:
 
-This follows the per-area-prefix-plus-number convention used by AWS Well-Architected (`PERF-01`), NIST 800-53 (`AC-2`), OWASP Top 10 (`A01`), IETF (`REQ-1`), JIRA/Linear (`BOOT-12`), and ATT&CK techniques (`T1078.001`). Letters cap at 26 and renumber on insert; numbers are unbounded and stable.
+### Markdown ADR — `<REPO_PREFIX>-<issue>` is the PID
 
-Every proposal carries a `Closes:` line:
+Each ADR corresponds to one GitHub issue. The PID is the YouTrack-style alias `<REPO_PREFIX>-<issue_number>` (e.g. `TRAY-42`, `LIGHTS-7`), where the repo→prefix mapping is in `lib/prefixes.json`. Because each ADR is exactly one problem, smell rows within an ADR get sub-IDs of the form `<PID>.N`:
 
-```html
-<p class="closes"><b>Closes:</b> <code>BOOT-1</code>, <code>BOOT-3</code></p>
+```markdown
+| ID | State | Smell |
+|----|-------|-------|
+| TRAY-42.1 | 🔴 Broken | data loss when X |
+| TRAY-42.2 | 🟡 Leaky  | race window when Y |
 ```
 
-The hook enforces:
+Proposal `Closes:` lines reference the same sub-IDs:
+
+```markdown
+**Closes:** TRAY-42.1, TRAY-42.2
+```
+
+### HTML survey — `<AREA>-N` is the PID (legacy / per-page)
+
+The HTML survey predates the ADR convention. Each area page uses `AREA-N` (`BOOT-1`, `PATH-3`) where `AREA` is an uppercase short prefix per page and `N` is monotonic within that page. IDs never renumber on reorder — append only. When a survey row is promoted to its own GitHub issue, the survey row gets annotated with the resulting PID (e.g. `BOOT-1 → TRAY-42`) and the ADR for `TRAY-42` becomes the canonical document.
+
+This dual convention follows the per-prefix-plus-number address space used by AWS Well-Architected (`PERF-01`), NIST 800-53 (`AC-2`), OWASP Top 10 (`A01`), IETF (`REQ-1`), JIRA/Linear (`BOOT-12`), and ATT&CK techniques (`T1078.001`).
+
+### What the hook enforces
+
+For HTML survey docs (`*pathways*.html`):
 - Every smell-table body row has `<td class="pid">[A-Z][A-Z0-9_]*-\d+</td>` as its first cell.
 - Every proposal has a `<p class="closes">` element.
-- Every PID referenced in `Closes:` exists as a smell-table row PID **in the same section** (cross-area references aren't enforced by the hook; if you legitimately need them, restructure or add a comment explaining).
+- Every PID referenced in `Closes:` exists as a smell-table row PID **in the same section**.
 
-This gives the reader a stable address space: when a proposal claims to close `BOOT-2`, you can grep the doc and find the exact row it references.
+For markdown ADRs (`docs/adr/*.md`) — see `bin/check-pathway-md.cjs`:
+- Filename matches `<PID>-<slug>.md` where `<PID>` is `<REPO_PREFIX>-<N>`.
+- Body has `## Problem` and `## Proposals` sections.
+- Smell-table rows use `<PID>.N` sub-IDs.
+- Each proposal has a `**Closes:**` line referencing only sub-IDs declared in the same ADR.
 
 ## Workflow
 
+### Survey phase (HTML)
+
 1. Gather facts (Explore agent) — current code state per area.
 2. Add industry-standard patterns from your own knowledge per area.
-3. Draft the HTML using the template.
+3. Draft the HTML using `template.html`.
 4. Render in a browser (`xdg-open /tmp/<project>-pathways.html`).
 5. Iterate per page. The user reads ONE page at a time; never dump all of them in chat.
-6. After each page is agreed, the proposals on that page become the brief for downstream agents.
+6. Once the survey is agreed, each problem becomes a candidate PR.
+
+### Promote-to-PR phase (Markdown ADR + GitHub)
+
+7. For each problem the user wants to act on, run `bin/pid-new <repo> "<Title>"` (or invoke the wider promote pipeline). This:
+   - Creates a GitHub issue → captures the issue number `N`.
+   - Computes `PID = <REPO_PREFIX>-N` (via `lib/pid.cjs`).
+   - Mints `<repo>/docs/adr/<PID>-<slug>.md` from `template.adr.md`, pre-populated with the survey row text.
+   - Creates branch `<prefix>-<N>-<slug>` linked to the issue (`gh issue develop`).
+   - Adds a worktree at `<workspace>/worktrees/<repo>/<prefix>-<N>-<slug>`.
+   - Opens a draft PR titled `<PID> <Title>` whose body is short and links to the ADR.
+8. Edit the ADR inside the worktree until proposals + tradeoffs are settled.
+9. Implement the chosen proposal in commits on the branch.
+10. Merge the PR — a PostToolUse hook removes the worktree. The ADR stays in `docs/adr/` as the permanent decision record.
 
 ## Determinism guard
 
@@ -142,8 +187,11 @@ echo N > .claude/bypass-arch-pathways       # next N edits pass
 
 ## Anti-patterns
 
-- Multiple HTML files per project — one canonical doc per project.
+- Multiple HTML files per project — one canonical survey per project.
+- Embedding the design analysis in the PR body instead of an ADR file. The PR body links to `docs/adr/<PID>-<slug>.md`; the analysis lives in the repo so it survives merge and stays greppable.
 - Diagrams in the Proposal that don't share visual vocabulary with the Problem (e.g. Problem is a sequence diagram, Proposal is a table). Mismatched mediums break comparison.
 - Proposals without tradeoffs — every option must declare what it gives up.
 - "Just do it" proposals without a cost badge.
 - Long prose in tradeoffs cells — keep each cell to one sentence.
+- Inventing a new repo prefix without adding it to `lib/prefixes.json`. Every PID must round-trip through the central parser.
+- Renaming `lib/prefixes.json` mappings after PIDs already exist — old branches/PRs/ADRs would silently mis-resolve. Append new repos; never rename.
