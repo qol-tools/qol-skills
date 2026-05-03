@@ -14,7 +14,7 @@ const FILEPATH = `/repo/docs/adr/${FILENAME}`;
 const VALID_ADR = `# TRAY-42 Fold Installs Into Config Dir
 
 - **Status:** Proposed
-- **Closes:** #42
+- **Issue:** #42
 - **Date:** 2026-05-03
 
 ## Problem

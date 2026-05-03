@@ -108,7 +108,7 @@ function buildAdr({ area, title, opts, today: dateStr }) {
     const adrTitle = opts.title || title;
     const headerPid = opts.pid ? `${opts.pid} ` : '';
     const issueLine = (opts.issue || (opts.pid && Number(opts.pid.split('-')[1])))
-        ? `- **Closes:** #${opts.issue || Number(opts.pid.split('-')[1])}\n`
+        ? `- **Issue:** #${opts.issue || Number(opts.pid.split('-')[1])}\n`
         : '';
     const rows = survey.parseSmellTable(area.problem);
     const pidMap = opts.pid ? survey.buildPidMap(rows, opts.pid) : null;

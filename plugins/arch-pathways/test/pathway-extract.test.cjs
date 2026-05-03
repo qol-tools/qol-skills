@@ -114,7 +114,7 @@ test('run extracts area as markdown ADR', () => {
     const out = lines.join('\n');
     assert.match(out, /^# TRAY-42 1\. Boot/m);
     assert.match(out, /\*\*Status:\*\* Proposed/);
-    assert.match(out, /\*\*Closes:\*\* #42/);
+    assert.match(out, /\*\*Issue:\*\* #42/);
     assert.match(out, /^## Problem/m);
     assert.match(out, /^## Proposals/m);
     assert.match(out, /TRAY-42\.1/);

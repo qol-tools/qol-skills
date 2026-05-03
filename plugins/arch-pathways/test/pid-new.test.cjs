@@ -74,7 +74,7 @@ test('resolveWorkspace prefers explicit, then env, then walk-up', { skip: proces
 test('renderAdr substitutes placeholders globally', () => {
     const template = `# {PID} {Title Case Slug}
 
-- **Closes:** #{issue_number}
+- **Issue:** #{issue_number}
 - **Date:** {YYYY-MM-DD}
 
 | ID | smell |
@@ -90,7 +90,7 @@ test('renderAdr substitutes placeholders globally', () => {
         today: '2026-05-03',
     });
     assert.match(out, /^# TRAY-42 Fold Installs/);
-    assert.match(out, /\*\*Closes:\*\* #42/);
+    assert.match(out, /\*\*Issue:\*\* #42/);
     assert.match(out, /\*\*Date:\*\* 2026-05-03/);
     assert.match(out, /\| TRAY-42\.1 \|/);
     assert.match(out, /\| TRAY-42\.2 \|/);
@@ -237,7 +237,7 @@ test('run executes full pipeline in correct order with mocked runner', () => {
     assert.ok(fs.existsSync(expectedAdr), `ADR not written at ${expectedAdr}`);
     const adrBody = fs.readFileSync(expectedAdr, 'utf8');
     assert.match(adrBody, /^# TRAY-42 Fold Installs Into Config Dir/);
-    assert.match(adrBody, /\*\*Closes:\*\* #42/);
+    assert.match(adrBody, /\*\*Issue:\*\* #42/);
     assert.match(adrBody, /TRAY-42\.1/);
 
     const summary = lines.join('\n');

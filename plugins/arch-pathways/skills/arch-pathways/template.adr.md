@@ -1,7 +1,7 @@
 # {PID} {Title Case Slug}
 
 - **Status:** Proposed
-- **Closes:** #{issue_number}
+- **Issue:** #{issue_number}
 - **Date:** {YYYY-MM-DD}
 - **Related:** {OTHER-PID}, {OTHER-PID-2}
 
