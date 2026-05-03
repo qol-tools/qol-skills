@@ -34,6 +34,9 @@ const ROW_CLASS_RE = /<tr\s+class="(bad|warn|good)"/i;
 const ROW_HAS_TH_RE = /<th\b/i;
 const ROW_SWATCH_RE = /<span\s+class="swatch\s+(bad|warn|good)"/i;
 const LEGEND_RE = /<div\s+class="legend"/i;
+const PID_TOKEN_RE = /[A-Z][A-Z0-9_]*-\d+/g;
+const PID_CELL_RE = /<td\s+class="pid"[^>]*>\s*([A-Z][A-Z0-9_]*-\d+)\s*<\/td>/;
+const CLOSES_BLOCK_RE = /<p\s+class="closes"[^>]*>([\s\S]*?)<\/p>/i;
 
 function readStdin() {
     try {
@@ -96,6 +99,35 @@ function bodyRowsOf(table) {
     return rows.filter(r => !ROW_HAS_TH_RE.test(r));
 }
 
+function findProposalBlocksIn(sectionBody) {
+    const blocks = [];
+    const exhaustive = sectionBody.match(PROPOSAL_FALLBACK_RE);
+    if (!exhaustive) return blocks;
+    for (const block of exhaustive) {
+        const segments = block.split(/(?=<div\s+class="proposal")/i);
+        for (const seg of segments) {
+            if (/<div\s+class="proposal"/i.test(seg)) blocks.push(seg);
+        }
+    }
+    return blocks;
+}
+
+function collectSectionPids(sectionBody) {
+    const pids = new Set();
+    for (const table of findSmellTables(sectionBody)) {
+        for (const row of bodyRowsOf(table)) {
+            const m = row.match(PID_CELL_RE);
+            if (m) pids.add(m[1]);
+        }
+    }
+    return pids;
+}
+
+function extractClosesIds(closesText) {
+    const matches = closesText.match(PID_TOKEN_RE);
+    return matches ? Array.from(new Set(matches)) : [];
+}
+
 function validateContent(content) {
     const violations = [];
     if (!SIDEBAR_RE.test(content)) {
@@ -109,6 +141,29 @@ function validateContent(content) {
         if (!PROPOSALS_HEADER_RE.test(section.body)) {
             violations.push(`section #${section.id}: missing <h3>Proposals</h3>`);
         }
+    }
+    for (const section of findPageSections(content)) {
+        if (STRUCTURAL_PAGE_IDS.has(section.id)) continue;
+        const sectionPids = collectSectionPids(section.body);
+        const proposals = findProposalBlocksIn(section.body);
+        proposals.forEach((proposal, idx) => {
+            const label = `section #${section.id} proposal #${idx + 1}`;
+            const closesMatch = proposal.match(CLOSES_BLOCK_RE);
+            if (!closesMatch) {
+                violations.push(`${label}: missing <p class="closes">Closes: PID-1, PID-2</p>`);
+                return;
+            }
+            const ids = extractClosesIds(closesMatch[1]);
+            if (ids.length === 0) {
+                violations.push(`${label}: <p class="closes"> contains no problem IDs (expected like BOOT-1)`);
+                return;
+            }
+            for (const id of ids) {
+                if (!sectionPids.has(id)) {
+                    violations.push(`${label}: closes "${id}" but section #${section.id} has no smell row with that ID`);
+                }
+            }
+        });
     }
     const proposals = findProposalBlocks(content);
     proposals.forEach((proposal, idx) => {
@@ -138,11 +193,14 @@ function validateContent(content) {
             }
             const swatchMatch = row.match(ROW_SWATCH_RE);
             if (!swatchMatch) {
-                violations.push(`${rowLabel}: missing <span class="swatch bad|warn|good"> in first cell`);
+                violations.push(`${rowLabel}: missing <span class="swatch bad|warn|good">`);
                 return;
             }
             if (rowClassMatch[1] !== swatchMatch[1]) {
                 violations.push(`${rowLabel}: tr class "${rowClassMatch[1]}" does not match swatch class "${swatchMatch[1]}"`);
+            }
+            if (!PID_CELL_RE.test(row)) {
+                violations.push(`${rowLabel}: missing <td class="pid">AREA-N</td> first cell`);
             }
         });
     });
@@ -164,8 +222,11 @@ The arch-pathways skill requires:
         <span class="badge cheap|medium|heavy">
   - Any <table> with a <th>Smell</th> column is a smell table; every body row must have
         <tr class="bad|warn|good">
+        <td class="pid">AREA-N</td>          (e.g. BOOT-1, PATH-3)
         <span class="swatch bad|warn|good">  (matching the row class)
     AND the doc must have one <div class="legend"> on the overview page.
+  - Every <div class="proposal"> must have a <p class="closes">Closes: BOOT-1, BOOT-3</p>
+    line, and every referenced ID must exist as a smell-table pid in the SAME section.
 
 See the skill SKILL.md and template.html for the canonical shape.
 

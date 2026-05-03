@@ -23,13 +23,14 @@ const VALID_PROPOSAL = `
     <div><h5>pros</h5>fast</div>
     <div><h5>cons</h5>brittle</div>
   </div>
+  <p class="closes"><b>Closes:</b> <code>AREA-1</code>, <code>AREA-2</code></p>
 </div>`;
 
 const VALID_SMELL_TABLE = `
 <table>
-  <tr><th>State</th><th>Smell</th></tr>
-  <tr class="bad"><td><span class="swatch bad"></span>Broken</td><td>data loss</td></tr>
-  <tr class="warn"><td><span class="swatch warn"></span>Leaky</td><td>race window</td></tr>
+  <tr><th>ID</th><th>State</th><th>Smell</th></tr>
+  <tr class="bad"><td class="pid">AREA-1</td><td><span class="swatch bad"></span>Broken</td><td>data loss</td></tr>
+  <tr class="warn"><td class="pid">AREA-2</td><td><span class="swatch warn"></span>Leaky</td><td>race window</td></tr>
 </table>`;
 
 const VALID_PAGE = `
@@ -255,7 +256,7 @@ test('smell table row missing swatch is rejected', () => {
 });
 
 test('smell table mismatched row class vs swatch is rejected', () => {
-    const broken = VALID_SMELL_TABLE.replace('<tr class="bad"><td><span class="swatch bad">', '<tr class="bad"><td><span class="swatch warn">');
+    const broken = VALID_SMELL_TABLE.replace('<span class="swatch bad">', '<span class="swatch warn">');
     const doc = VALID_DOC.replace(VALID_SMELL_TABLE, broken);
     const r = call({ content: doc });
     assert.equal(r.exitCode, 2);
@@ -271,27 +272,106 @@ test('doc with smell table but no legend is rejected', () => {
 
 test('non-smell tables are not subject to swatch rules', () => {
     const nonSmell = `<table><tr><th>Foo</th><th>Bar</th></tr><tr><td>x</td><td>y</td></tr></table>`;
-    const doc = VALID_DOC.replace(VALID_SMELL_TABLE, nonSmell);
+    const proposalNoCloses = `
+<div class="proposal">
+  <h4>Proposal A &mdash; example <span class="badge cheap">cheap</span></h4>
+  <pre class="mermaid">graph LR; A --> B</pre>
+  <div class="tradeoffs">
+    <div><h5>pros</h5>fast</div>
+    <div><h5>cons</h5>brittle</div>
+  </div>
+  <p class="closes"><b>Closes:</b> N/A</p>
+</div>`;
+    const doc = VALID_DOC
+        .replace(VALID_SMELL_TABLE, nonSmell)
+        .replace(VALID_PROPOSAL, proposalNoCloses);
     const r = call({ content: doc });
-    assert.equal(r.exitCode, 0, r.stderr);
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /contains no problem IDs/);
 });
 
-test('doc with no smell tables does not require legend', () => {
-    const noTable = VALID_PAGE.replace(VALID_SMELL_TABLE, '');
-    const doc = VALID_DOC.replace(VALID_PAGE, noTable).replace(VALID_LEGEND, '');
+test('doc with no smell tables does not require legend (proposal with no closes refs)', () => {
+    const proposalEmptyCloses = `
+<div class="proposal">
+  <h4>Proposal A &mdash; example <span class="badge cheap">cheap</span></h4>
+  <pre class="mermaid">graph LR; A --> B</pre>
+  <div class="tradeoffs">
+    <div><h5>pros</h5>fast</div>
+    <div><h5>cons</h5>brittle</div>
+  </div>
+  <p class="closes">N/A</p>
+</div>`;
+    const noTablePage = VALID_PAGE.replace(VALID_SMELL_TABLE, '').replace(VALID_PROPOSAL, proposalEmptyCloses);
+    const doc = VALID_DOC.replace(VALID_PAGE, noTablePage).replace(VALID_LEGEND, '');
     const r = call({ content: doc });
-    assert.equal(r.exitCode, 0, r.stderr);
+    assert.equal(r.exitCode, 2, 'should fail because closes has no PIDs');
+    assert.match(r.stderr, /contains no problem IDs/);
 });
 
 test('all three swatch severities accepted in same table', () => {
     const allThree = `
 <table>
-  <tr><th>State</th><th>Smell</th></tr>
-  <tr class="bad"><td><span class="swatch bad"></span>X</td><td>broken</td></tr>
-  <tr class="warn"><td><span class="swatch warn"></span>Y</td><td>leaky</td></tr>
-  <tr class="good"><td><span class="swatch good"></span>Z</td><td>fine</td></tr>
+  <tr><th>ID</th><th>State</th><th>Smell</th></tr>
+  <tr class="bad"><td class="pid">AREA-1</td><td><span class="swatch bad"></span>X</td><td>broken</td></tr>
+  <tr class="warn"><td class="pid">AREA-2</td><td><span class="swatch warn"></span>Y</td><td>leaky</td></tr>
+  <tr class="good"><td class="pid">AREA-3</td><td><span class="swatch good"></span>Z</td><td>fine</td></tr>
 </table>`;
-    const doc = VALID_DOC.replace(VALID_SMELL_TABLE, allThree);
+    const closesAll = VALID_PROPOSAL.replace(
+        '<p class="closes"><b>Closes:</b> <code>AREA-1</code>, <code>AREA-2</code></p>',
+        '<p class="closes"><b>Closes:</b> <code>AREA-1</code>, <code>AREA-2</code>, <code>AREA-3</code></p>'
+    );
+    const doc = VALID_DOC.replace(VALID_SMELL_TABLE, allThree).replace(VALID_PROPOSAL, closesAll);
     const r = call({ content: doc });
     assert.equal(r.exitCode, 0, r.stderr);
+});
+
+test('smell table row missing pid cell is rejected', () => {
+    const broken = VALID_SMELL_TABLE.replace('<td class="pid">AREA-1</td>', '');
+    const doc = VALID_DOC.replace(VALID_SMELL_TABLE, broken);
+    const r = call({ content: doc });
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /missing <td class="pid">AREA-N<\/td>/);
+});
+
+test('proposal missing closes paragraph is rejected', () => {
+    const broken = VALID_PROPOSAL.replace(/<p class="closes">[\s\S]*?<\/p>/, '');
+    const doc = VALID_DOC.replace(VALID_PROPOSAL, broken);
+    const r = call({ content: doc });
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /missing <p class="closes">/);
+});
+
+test('closes empty of PIDs is rejected', () => {
+    const broken = VALID_PROPOSAL.replace(
+        /<p class="closes">[\s\S]*?<\/p>/,
+        '<p class="closes"><b>Closes:</b> nothing yet</p>'
+    );
+    const doc = VALID_DOC.replace(VALID_PROPOSAL, broken);
+    const r = call({ content: doc });
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /contains no problem IDs/);
+});
+
+test('closes referencing unknown PID in same section is rejected', () => {
+    const broken = VALID_PROPOSAL.replace(
+        '<code>AREA-1</code>, <code>AREA-2</code>',
+        '<code>AREA-1</code>, <code>AREA-99</code>'
+    );
+    const doc = VALID_DOC.replace(VALID_PROPOSAL, broken);
+    const r = call({ content: doc });
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /closes "AREA-99" but section #area-1 has no smell row/);
+});
+
+test('closes referencing only valid PIDs from same section passes', () => {
+    const r = call();
+    assert.equal(r.exitCode, 0, r.stderr);
+});
+
+test('pid format must be uppercase prefix dash digits', () => {
+    const broken = VALID_SMELL_TABLE.replace('<td class="pid">AREA-1</td>', '<td class="pid">area-1</td>');
+    const doc = VALID_DOC.replace(VALID_SMELL_TABLE, broken);
+    const r = call({ content: doc });
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /missing <td class="pid">/);
 });

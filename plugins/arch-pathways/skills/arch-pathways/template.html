@@ -27,6 +27,9 @@ pre.mermaid{background:#fff;border:1px solid #ddd;border-radius:6px;padding:14px
 tr.bad td:first-child,tr.warn td:first-child,tr.good td:first-child{font-weight:600}
 .legend{display:flex;gap:1.4em;background:#fff;border:1px solid #d9e2ec;border-radius:6px;padding:10px 14px;margin:1em 0;font-size:13px;flex-wrap:wrap}
 .legend > span{display:inline-flex;align-items:center;gap:.4em}
+td.pid{font-family:ui-monospace,Menlo,monospace;font-weight:600;color:#52606d;white-space:nowrap}
+.proposal .closes{margin-top:.8em;font-size:13px;color:#52606d}
+.proposal .closes code{background:#eef3f8;color:#1f2933;padding:1px 6px;border-radius:3px}
 .proposal{background:#fff;border:1px solid #d9e2ec;border-radius:6px;padding:1.2em 1.5em;margin:1.2em 0}
 .proposal h4{margin-top:0}
 .proposal .badge{display:inline-block;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600;margin-left:.5em;vertical-align:middle}
@@ -90,9 +93,9 @@ stateDiagram-v2
     class Broken bad
   </pre>
   <table>
-    <tr><th>State</th><th>Smell</th></tr>
-    <tr class="bad"><td><span class="swatch bad"></span>Broken</td><td>{one sentence}</td></tr>
-    <tr class="warn"><td><span class="swatch warn"></span>Healthy &rarr; Broken</td><td>{one sentence}</td></tr>
+    <tr><th>ID</th><th>State</th><th>Smell</th></tr>
+    <tr class="bad"><td class="pid">AREA-1</td><td><span class="swatch bad"></span>Broken</td><td>{one sentence}</td></tr>
+    <tr class="warn"><td class="pid">AREA-2</td><td><span class="swatch warn"></span>Healthy &rarr; Broken</td><td>{one sentence}</td></tr>
   </table>
 
   <h3>Proposals</h3>
@@ -108,7 +111,7 @@ graph LR
       <div><h5>pros</h5>{...}</div>
       <div><h5>cons</h5>{...}</div>
     </div>
-    <p><b>Closes:</b> {...}</p>
+    <p class="closes"><b>Closes:</b> <code>AREA-1</code>, <code>AREA-2</code></p>
   </div>
 
   <p><b>Recommended:</b> {A or A+B together, etc.}</p>

@@ -66,6 +66,8 @@ The HTML uses these CSS classes — the hook checks for them:
 | `.swatch.bad` / `.swatch.warn` / `.swatch.good` | colored chip linking a smell row to its diagram node |
 | `tr.bad` / `tr.warn` / `tr.good` | smell-table row class matching its swatch |
 | `.legend` | one per doc; explains the swatch colors |
+| `td.pid` | first cell of each smell-table row; carries the stable problem ID |
+| `.closes` | paragraph in each proposal listing the problem IDs it closes |
 
 Use the canonical template at `template.html` in this skill's folder as the starting point. Don't invent new class names — the hook will reject the doc.
 
@@ -91,6 +93,25 @@ Severity guide:
 - `warn` (amber) — leaky, race window, brittle, masked.
 - `good` (green) — used in Proposal diagrams to highlight what's now safe.
 
+## Problem IDs and `Closes:` references
+
+Every smell-table row gets a stable identifier in the first column: `<td class="pid">AREA-N</td>` where `AREA` is an uppercase short prefix per page (e.g. `BOOT`, `PATH`, `SYNC`, `DEV`, `PLUGIN`) and `N` is a monotonic integer scoped to that page. IDs never get renumbered on reorder — append, don't shift.
+
+This follows the per-area-prefix-plus-number convention used by AWS Well-Architected (`PERF-01`), NIST 800-53 (`AC-2`), OWASP Top 10 (`A01`), IETF (`REQ-1`), JIRA/Linear (`BOOT-12`), and ATT&CK techniques (`T1078.001`). Letters cap at 26 and renumber on insert; numbers are unbounded and stable.
+
+Every proposal carries a `Closes:` line:
+
+```html
+<p class="closes"><b>Closes:</b> <code>BOOT-1</code>, <code>BOOT-3</code></p>
+```
+
+The hook enforces:
+- Every smell-table body row has `<td class="pid">[A-Z][A-Z0-9_]*-\d+</td>` as its first cell.
+- Every proposal has a `<p class="closes">` element.
+- Every PID referenced in `Closes:` exists as a smell-table row PID **in the same section** (cross-area references aren't enforced by the hook; if you legitimately need them, restructure or add a comment explaining).
+
+This gives the reader a stable address space: when a proposal claims to close `BOOT-2`, you can grep the doc and find the exact row it references.
+
 ## Workflow
 
 1. Gather facts (Explore agent) — current code state per area.
@@ -107,8 +128,9 @@ A PreToolUse hook in this plugin (`bin/check-pathway-doc.cjs`) blocks Writes/Edi
 - Lacks `<nav class="sidebar">`.
 - Has a non-overview/non-cross `<section class="page">` missing `<h3>Problem</h3>` or `<h3>Proposals</h3>`.
 - Contains a `<div class="proposal">` without all of: a `<pre class="mermaid">`, a `<div class="tradeoffs">` with both `pros` and `cons`, and a `.badge` of class `cheap`/`medium`/`heavy`.
-- Contains a smell table (any `<table>` with a `<th>Smell</th>` column) where any body row is missing `class="bad|warn|good"` or a `<span class="swatch bad|warn|good">` matching the row class.
+- Contains a smell table (any `<table>` with a `<th>Smell</th>` column) where any body row is missing `class="bad|warn|good"`, a `<span class="swatch bad|warn|good">` matching the row class, or a `<td class="pid">AREA-N</td>` first cell.
 - Contains any smell table but lacks a `<div class="legend">` somewhere in the doc.
+- Contains a proposal without a `<p class="closes">` line, or whose `Closes:` references a PID not present in the same section's smell tables.
 
 Bypass for one-off exceptions (e.g. partial drafts):
 
