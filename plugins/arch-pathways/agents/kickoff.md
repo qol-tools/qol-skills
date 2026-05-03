@@ -32,9 +32,23 @@ If the body is empty, ask the caller to provide one before proceeding. A title-o
 | `<EXISTING-PID> <title>\n\n<body>` (e.g. `TRAY-42 Fix auth race\n\n...`) | Issue already exists; just create the implementation artifacts. | Run `node ${CLAUDE_PLUGIN_ROOT}/bin/pid-new.cjs <repo> "<title>" --issue <N>`. Pass body as `--adr-content-file` after rendering it through the ADR template skeleton. |
 | `<survey-area> <repo>\n\n<body>` (e.g. `boot qol-tray\n\n...`) | Promote a survey area from the HTML pathways doc. | Run `node ${CLAUDE_PLUGIN_ROOT}/bin/pathway-pr.cjs <area> <repo>`. The body is informational; the script seeds the ADR from the survey HTML. |
 | `<repo> "<title>"\n\n<body>` (e.g. `qol-tray "Fix auth race"\n\n...`) | Ad-hoc problem in a known repo. | Run `node ${CLAUDE_PLUGIN_ROOT}/bin/pid-new.cjs <repo> "<title>"`. Pass body as the ADR Problem section. |
-| Free-form English with a recognizable repo name | Same as above but you must infer the repo and Title-Case the title. | Confirm the inferred repo + Title with the caller before executing (one-line ask, not a long discussion). |
+| Free-form English describing a NEW problem | Infer repo + Title-Case the title; same as ad-hoc above. | Confirm the inferred repo + Title with the caller (one-line ask). |
+| Free-form English describing an EXISTING feature ("document `<path>`", "backfill `<feature>`", "what does `src/sync` do") | **Retrofit mode** — see below. | Switch to retrofit shape, do not propose a change. |
 
 If the input doesn't match any of these and the repo / scope is genuinely unclear, ask exactly one clarifying question. Don't guess.
+
+## Retrofit mode (documenting an existing feature)
+
+When the input is about documenting / backfilling / mapping an existing feature rather than fixing a new problem:
+
+1. **Issue title** is `Document <feature_path>` (e.g. `Document src/sync`).
+2. **Issue body** says: "Backfill ADR for an existing feature. No code change planned in this PR — body of work is the ADR itself."
+3. **ADR `Status:` field** is `Documented (retroactive)` instead of `Proposed`.
+4. **ADR `## Problem` section** describes WHAT THE FEATURE DOES today: responsibilities, invariants, brittle parts, known unknowns, code surface area. Diagrams of *current* shape, not proposed shape.
+5. **ADR `## Proposals` section** has exactly one entry titled `Current implementation` with `[medium]` cost (placeholder); body describes what's there now. No alternatives unless we're also rethinking. Closes line references the smell sub-IDs you minted while documenting.
+6. **PR body** follows the same template (links to Issue + ADR) — and stays empty of code. The PR closes by adding the ADR file only.
+
+Use the audit one-liner in the SKILL.md to find candidate features. Suggest the top entries to the caller before retrofitting; let them pick.
 
 ## Confirmation policy
 
