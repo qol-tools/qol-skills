@@ -1,7 +1,7 @@
 {
   "name": "arch-pathways",
   "description": "Architecture-analysis pipeline: HTML survey docs (sidebar SPA) for brainstorming, markdown ADRs (docs/adr/<PID>-<slug>.md) per minted PR, plus pid-new / pid-mint / pathway-extract / pathway-pr scripts that go from a survey area to GitHub issue + branch + worktree + draft PR in one step. Hooks enforce: HTML survey structure, markdown ADR structure + GitHub-compat Mermaid lint, PR title / branch name / worktree path conventions, and auto-cleanup of worktrees on PR merge.",
-  "version": "0.3.5",
+  "version": "0.3.6",
   "author": {
     "name": "KMRH47"
   }
