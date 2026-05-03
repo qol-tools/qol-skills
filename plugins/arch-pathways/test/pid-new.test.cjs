@@ -277,7 +277,7 @@ test('run with --issue skips gh issue create', () => {
 test('run with --issue + --issue-body-file patches the existing issue body', () => {
     const root = makeWorkspace();
     const bodyFile = path.join(root, 'issue-body.md');
-    const richBody = '## Problem\n\n```mermaid\ngraph TD\n  A-->B\n```\n';
+    const richBody = '- **Issue:** #42\n- **Date:** 2026-05-03\n\n## Problem\n\n```mermaid\ngraph TD\n  A-->B\n```\n';
     fs.writeFileSync(bodyFile, richBody);
     const { log } = captureLog();
     const runner = makeRunner([
@@ -307,6 +307,8 @@ test('run with --issue + --issue-body-file patches the existing issue body', () 
     assert.match(bodyArg, /^body=/, 'body must be passed as -f body=...');
     assert.match(bodyArg, /```mermaid/, 'patched body must contain the rich mermaid problem statement');
     assert.match(bodyArg, /docs\/adr\/TRAY-42-paths\.md/, 'patched body must include the ADR link');
+    assert.doesNotMatch(bodyArg, /\*\*Issue:\*\* #42/, 'self-referential Issue backlink must be stripped from issue body');
+    assert.match(bodyArg, /\*\*Date:\*\* 2026-05-03/, 'unrelated header fields must remain');
 });
 
 test('run with --issue but no --issue-body-file does NOT patch the issue', () => {

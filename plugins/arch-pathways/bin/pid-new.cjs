@@ -111,10 +111,15 @@ function ghIssueCreate(runner, repoRoot, title, body) {
     return Number(m[1]);
 }
 
+function stripSelfBacklink(body, issueNumber) {
+    const re = new RegExp(`^- \\*\\*Issue:\\*\\* #${issueNumber}\\s*\\n?`, 'm');
+    return body.replace(re, '');
+}
+
 function ghIssuePatchBody(runner, repoRoot, ownerRepo, issueNumber, body) {
     runOrThrow(runner, {
         cmd: 'gh',
-        args: ['api', '-X', 'PATCH', `repos/${ownerRepo}/issues/${issueNumber}`, '-f', `body=${body}`],
+        args: ['api', '-X', 'PATCH', `repos/${ownerRepo}/issues/${issueNumber}`, '-f', `body=${stripSelfBacklink(body, issueNumber)}`],
         cwd: repoRoot,
         label: 'gh api PATCH issue body',
     });
