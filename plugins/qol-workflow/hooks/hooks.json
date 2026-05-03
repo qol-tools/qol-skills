@@ -1,0 +1,19 @@
+{
+    "hooks": {
+        "PreToolUse": [
+            {
+                "matcher": "Bash",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "node ${CLAUDE_PLUGIN_ROOT}/bin/commit-skill-context.cjs"
+                    },
+                    {
+                        "type": "command",
+                        "command": "node ${CLAUDE_PLUGIN_ROOT}/bin/commit-deny-coauthor.cjs"
+                    }
+                ]
+            }
+        ]
+    }
+}

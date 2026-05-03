@@ -47,9 +47,10 @@ $qol-tray explain the daemon lifecycle and check this repo for mismatches
 | `qol-plugin-os-themes` | `qol-plugin-os-themes` |
 | `qol-plugin-screen-recorder` | `qol-plugin-screen-recorder` |
 | `qol-plugin-window-actions` | `qol-plugin-window-actions` |
-| `qol-host` | `qol-tray`, `qol-tray-dev-logging`, `qol-tray-feature-profile`, `qol-tray-release-flow`, `qol-tray-ui-systems`, `qol-world-canvas`, `qol-apps-testing` |
-| `qol-dev-conventions` | `rust-conventions`, `gpui-conventions`, `preact-conventions`, `commit`, `git-push`, `git-trees`, `coding-general`, `qol-architecture`, `qol-shared-libs`, `qol-plugin-template` |
-| `qol-ecosystem` | `qol-tools`, `qol-cicd`, `qol-mission` |
+| `qol-tray` | `qol-tray-core`, `qol-tray-rust`, `qol-tray-ui-systems`, `qol-tray-dev-logging`, `qol-tray-dev-recompile`, `qol-tray-feature-profile`, `qol-tray-release-flow`, `qol-world-canvas`, `qol-apps-testing` |
+| `qol-workflow` | `commit`, `git-push`, `git-trees`, `coding-general` |
+| `qol-langs` | `rust-conventions`, `gpui-conventions`, `preact-conventions` |
+| `qol-project` | `qol-mission`, `qol-tools`, `qol-cicd`, `qol-architecture`, `qol-shared-libs`, `qol-plugin-template` |
 | `arch-pathways` | `arch-pathways` |
 
 Each plugin has its own `.claude-plugin/plugin.json` and `.codex-plugin/plugin.json`; every skill lives at `plugins/<plugin-name>/skills/<skill-name>/SKILL.md`.
@@ -92,9 +93,9 @@ Skills are plain markdown. Edit, commit, push:
 
 ```bash
 cd qol-skills
-# edit plugins/qol-host/skills/qol-tray/SKILL.md
-git add plugins/qol-host/skills/qol-tray/SKILL.md
-git commit -m "docs(qol-tray): clarify daemon lifecycle"
+# edit plugins/qol-tray/skills/qol-tray-core/SKILL.md
+git add plugins/qol-tray/skills/qol-tray-core/SKILL.md
+git commit -m "docs(qol-tray-core): clarify daemon lifecycle"
 git push
 ```
 

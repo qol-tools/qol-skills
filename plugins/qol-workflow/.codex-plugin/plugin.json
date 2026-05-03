@@ -1,0 +1,9 @@
+{
+  "name": "qol-workflow",
+  "version": "0.1.0",
+  "description": "Cross-cutting workflow conventions for any qol-tools repo: commit message conventions (with the no-attribution hard rule), git push and worktree workflows, and universal coding guidelines.",
+  "author": {
+    "name": "KMRH47"
+  },
+  "skills": "./skills/"
+}

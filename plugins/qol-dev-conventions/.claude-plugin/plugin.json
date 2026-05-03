@@ -1,8 +1,0 @@
-{
-  "name": "qol-dev-conventions",
-  "description": "Cross-repo development conventions: rust-conventions, gpui-conventions, preact-conventions, qol-architecture, qol-shared-libs, qol-plugin-template, commit, git-push, git-trees, coding-general. Language skills are personal-experience wells (workspace-specific gotchas) — for canonical library docs use context7.",
-  "version": "0.2.0",
-  "author": {
-    "name": "KMRH47"
-  }
-}

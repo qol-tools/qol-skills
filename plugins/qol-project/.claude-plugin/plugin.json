@@ -1,0 +1,8 @@
+{
+  "name": "qol-project",
+  "description": "Project-level conventions for the qol-tools ecosystem: the qol-mission (non-negotiable user-facing promises), qol-tools (org layout, dependency model), qol-cicd (shared workflows), qol-architecture (cross-platform strategy pattern), qol-shared-libs, qol-plugin-template. Includes a PreToolUse hook enforcing qol-architecture rules.",
+  "version": "0.1.0",
+  "author": {
+    "name": "KMRH47"
+  }
+}
