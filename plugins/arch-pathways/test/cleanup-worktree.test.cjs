@@ -117,7 +117,7 @@ test('run does nothing if tool response indicates failure', () => {
     assert.deepStrictEqual(runner.calls, []);
 });
 
-test('run removes worktree on successful merge in central pool', () => {
+test('run removes worktree on successful merge in central pool', { skip: process.platform === 'win32' && 'uses POSIX paths' }, () => {
     const worktreePath = '/ws/worktrees/qol-tray/tray-42-fold-installs';
     const mainRepo = '/ws/qol-tray';
     const runner = makeRunner([

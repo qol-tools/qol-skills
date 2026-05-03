@@ -58,7 +58,7 @@ test('parseArgs throws on unknown flag', () => {
     assert.throws(() => pidNew.parseArgs(['--bogus']), /unknown flag/);
 });
 
-test('resolveWorkspace prefers explicit, then env, then walk-up', () => {
+test('resolveWorkspace prefers explicit, then env, then walk-up', { skip: process.platform === 'win32' && 'uses POSIX paths' }, () => {
     const root = makeWorkspace();
     const sub = path.join(root, 'qol-tray', 'src', 'deep');
     fs.mkdirSync(sub, { recursive: true });

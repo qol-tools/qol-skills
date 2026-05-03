@@ -88,7 +88,9 @@ test('git checkout/switch without -b/-c is ignored', () => {
     }
 });
 
-test('git worktree add with valid branch + central pool path passes', () => {
+const SKIP_WIN = process.platform === 'win32' && 'uses POSIX paths';
+
+test('git worktree add with valid branch + central pool path passes', { skip: SKIP_WIN }, () => {
     const cmd = 'git worktree add -b tray-42-fold-installs /ws/worktrees/qol-tray/tray-42-fold-installs origin/main';
     assert.deepStrictEqual(checkPr.inspectCommand(cmd, WORKSPACE), []);
 });
@@ -99,7 +101,7 @@ test('git worktree add with bad branch fails', () => {
     assert.strictEqual(v.some(s => /branch/.test(s)), true);
 });
 
-test('git worktree add outside central pool fails', () => {
+test('git worktree add outside central pool fails', { skip: SKIP_WIN }, () => {
     const cmd = 'git worktree add -b tray-42-foo /tmp/somewhere/tray-42-foo';
     const v = checkPr.inspectCommand(cmd, WORKSPACE);
     assert.strictEqual(v.some(s => /central pool/.test(s)), true);
