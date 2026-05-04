@@ -242,10 +242,14 @@ Three paths. Pick by problem shape.
 
 ### 1. Single-issue ping-pong (default for ad-hoc problems)
 
-The Issue IS the workshop. Mint first, iterate with charts, then kickoff to add implementation artifacts.
+The Issue IS the workshop. Create first, iterate with charts, then kickoff to add implementation artifacts. Two sub-modes; pick by user's review bandwidth.
 
-1. **Mint the Issue.** `gh issue create -R qol-tools/<repo> --title "<Title Case>" --body-file <path>`. Body must include: short problem statement, repro steps, affected files (`<path>:<line>`), at least one Mermaid diagram of the current shape (renders natively in GitHub Issue bodies and comments). PID is `<REPO_PREFIX>-<N>` per `lib/prefixes.json` — note it down.
-2. **Ping-pong loop.** The Issue is now the canonical workspace. Each round = one comment via `gh issue comment <N> -R qol-tools/<repo> --body-file <path>`. Three role tags rotate freely until the problem statement is stable:
+#### 1a. Manual ping-pong (interactive)
+
+Use when the user wants to drive the iteration personally — they read each comment as it lands and reply.
+
+1. **Create the Issue.** `gh issue create -R qol-tools/<repo> --title "<Title Case>" --body-file <path>`. Body must include: short problem statement, repro steps, affected files (`<path>:<line>`), at least one Mermaid diagram of the current shape (renders natively in GitHub Issue bodies and comments). PID is `<REPO_PREFIX>-<N>` per `lib/prefixes.json` — note it down.
+2. **Ping-pong loop.** The Issue is the canonical workspace. Each round = one comment via `gh issue comment <N> -R qol-tools/<repo> --body-file <path>`. Three role tags rotate freely until the problem statement is stable:
    - `### Research <N>` — agent posts code traces, additional hypotheses, alternate Mermaid diagrams, file:line references.
    - `### User test <N>` — user reports a real-world repro / verification on their machine; confirms, refutes, or extends the hypothesis.
    - `### Agent test <N>` — agent posts log search, code grep, theory-check (counter-example, dep-version comparison, etc.) without leaving Claude Code.
@@ -253,6 +257,48 @@ The Issue IS the workshop. Mint first, iterate with charts, then kickoff to add 
 3. **Settle signal.** The user explicitly says one of: `kickoff <PID>`, `ship <PID>`, `promote <PID>`. That is the ONLY green-light to dispatch the kickoff agent. Do NOT dispatch kickoff while iteration is still active — even if you think the analysis is done.
 4. **Kickoff.** Dispatch `arch-pathways:kickoff` with `<EXISTING-PID> <Title>\n\n<body>` (body = the final agreed problem statement + recommended proposal copied from the Issue). Kickoff runs `pid-new.cjs <repo> "<Title>" --issue <N>` → branch + worktree + seeded ADR + draft PR linked to the existing Issue.
 5. **Implement.** Inside the worktree, finalize the ADR (proposals + tradeoffs + Closes:), commit the implementation against the branch, mark the PR ready, merge. PostToolUse hook removes the worktree. The ADR stays in `docs/adr/` permanently.
+
+#### 1b. Auto-iterate (agents converge, user reviews only the result)
+
+Use when the user signals review-bandwidth limits: "automated flow", "auto-iterate", "I can't keep up with this volume", "just dig and surface the result", "agents talk among themselves and tell me when ready". The dispatched agents iterate INTERNALLY (multiple research/test rounds within their own scope) and post **exactly one comment per issue** in the Ship-readiness format below — instead of N visible Research/Agent-test comments. The user reads only the TL;DR + [DECIDE] + Verified summary; the full body is collapsed inside `<details>` for audit.
+
+Replaces step 2 of manual mode. Steps 1, 3, 4, 5 are unchanged.
+
+**Ship-readiness comment format (mandatory; the hook checks for it):**
+
+```markdown
+### Ship-readiness assessment
+
+**TL;DR.** <one or two sentences max — what's the situation, what's the recommendation>
+
+**Confidence:** root cause <H|M|L> · proposed fix <H|M|L> · verification <H|M|L>
+
+**Recommend:** ship | dig deeper | block
+
+#### [DECIDE] questions for the user
+
+- <decision the user must make>
+
+#### Verified
+
+- ✅ <claim> — <one-line evidence with file:line>
+
+#### Unverified / risks
+
+- ⚠️ <risk> — <one-line reason>
+
+<details><summary>Full research notes (click to expand)</summary>
+
+<deep technical body — Mermaid where it clarifies, code snippets, alternate hypotheses>
+
+</details>
+```
+
+Hard rules for auto-iterate:
+- Verified / Unverified / [DECIDE] sections must be **one-line each**. Body goes inside `<details>`.
+- Each ship-readiness comment supersedes prior Research/Agent-test comments; no need to read those.
+- Audio brief: after the comment lands, suggest `node ${CLAUDE_PLUGIN_ROOT}/bin/say-issue.cjs <repo> <N>` so the user can listen instead of read (operations table below).
+- Settle signal is identical to manual mode (`kickoff <PID>` / `ship <PID>` / `promote <PID>`). Recommendation does NOT auto-trigger kickoff — the user is still the final decision-maker.
 
 ### 2. Cross-area survey → bulk promotion (workshop for 3+ problems)
 
@@ -276,6 +322,8 @@ The user does NOT type bash. When you (the agent) recognize one of these intents
 | User intent (paraphrased) | Run | Resolves |
 |---|---|---|
 | "open an issue for this bug so we can iterate" / "track this as an issue" / "let's investigate this on GitHub" (ad-hoc, not tied to a survey area) | `gh issue create -R qol-tools/<repo> --title "<Title Case>" --body-file <path>` (body = problem + repro + ≥1 Mermaid diagram) | creates one GitHub Issue for the ping-pong loop; no worktree/ADR/PR yet |
+| "auto-iterate on `<PID>`" / "dig and tell me when ready" / "I can't review every comment, just give me the result" | dispatch a research subagent with the Ship-readiness comment format (manual mode 1b above); agent self-iterates 2-3 internal rounds and posts ONE converged comment | one ship-readiness comment per issue; user reads TL;DR + [DECIDE] + Verified only |
+| "say `<PID>`" / "read me the issue" / "audio brief for `<PID>`" | `node ${CLAUDE_PLUGIN_ROOT}/bin/say-issue.cjs <repo> <N>` | extracts TL;DR from the latest ship-readiness comment + issue title and pipes through macOS `say` (or `--out <path>.aiff` for a saved file) |
 | "post a research / user-test / agent-test note on `<PID>`" / "comment on the issue" | `gh issue comment <N> -R qol-tools/<repo> --body-file <path>` | adds one ping-pong round to the Issue thread; tag the body with `### Research N`, `### User test N`, or `### Agent test N` |
 | "update the issue body for `<PID>`" (canonical problem-of-record changed) | `gh issue edit <N> -R qol-tools/<repo> --body-file <path>` | replaces the Issue body — use only when the root cause / scope shifts, not for working notes |
 | "kickoff `<PID>`" / "ship `<PID>`" / "promote `<PID>` to a PR" (Issue already exists) | dispatch `arch-pathways:kickoff` with `<PID> <Title>\n\n<body>` | runs `pid-new.cjs <repo> "<Title>" --issue <N>` → branch + worktree + seeded ADR + draft PR linked to the existing Issue |
