@@ -1,11 +1,20 @@
 ---
 name: coding-general
-description: Universal coding guidelines for all projects in this workspace. Use when writing or reviewing any code regardless of language.
+description: Universal coding and response-style guidelines for all projects in this workspace. Use when writing or reviewing any code regardless of language, and as the default response-brevity contract for every agent in qol-skills.
 ---
 
 # General Coding Guidelines
 
 Consolidated from: CLAUDE.md (shared), AGENTS.md (workspace), per-project skills.
+
+## Response Style (applies to all agents)
+
+- **Concise by default.** Rephrase and reframe to compress. No preamble ("I'll go ahead and…", "Now let me…"), no trailing summary that recaps the response itself, no narration of what's already visible in tool output.
+- **State action, then act.** One short sentence before a tool call when intent isn't obvious from context — never two.
+- **Don't restate the user's question** before answering, and don't restate diff/output content the user can already see.
+- **Lists only when structure adds clarity.** Otherwise flat prose.
+- **No filler hedges** ("just", "really", "basically"). No "Done." after a result already shown by tool output.
+- **End-of-turn summaries**: at most one or two sentences — what changed and what's next. Skip entirely if obvious.
 
 ## Implementation Questionnaire (Mandatory)
 
