@@ -1,7 +1,7 @@
 ---
 name: arch-pathways
-description: Architecture-analysis pipeline. Use for two distinct workflows. (1) SURVEY: produce a single-file HTML pathways doc (sidebar SPA, one Problem-and-Proposals page per area) when the user asks to "visualize architecture", "compare fix proposals", "map current state vs target", "draw pathways", or any deep-dive spanning 3+ subsystems. (2) PROMOTE-TO-PR: when the user references a survey area (boot, paths, sync, plugins, devprod, etc.) and asks to "promote", "open a PR for", "extract", "mint an issue for", or "turn this area into a PR/ADR/branch/worktree", run the bin/ scripts to mint a GitHub issue, create a worktree on a kebab branch, seed docs/adr/<PID>-<slug>.md, and open a draft PR linking to the ADR.
-when_to_use: Trigger on intents like "promote boot to PR", "open a PR for the paths area", "extract sync as markdown", "mint an issue for devprod", "turn this area into an ADR", "make a PR for this problem", "give me a worktree for TRAY-42", and any request that names a survey area or PID alongside a verb like promote/extract/mint/open/draft.
+description: Architecture-analysis pipeline with three flows. (1) SINGLE-ISSUE PING-PONG (default for ad-hoc problems): mint a GitHub Issue first, iterate on it via comments through a research / user-test / agent-test loop with Mermaid charts, then dispatch the kickoff agent to add branch + worktree + seeded ADR + draft PR. (2) CROSS-AREA SURVEY: produce a single-file HTML pathways doc (sidebar SPA, one Problem-and-Proposals page per area) when the user asks to "visualize architecture", "compare fix proposals", "map current state vs target", "draw pathways", or any deep-dive spanning 3+ subsystems; promote with bin/ scripts. (3) DIRECT KICKOFF: rare one-shot path for tightly-scoped mechanical fixes — skips both iteration phases.
+when_to_use: Trigger on intents like "let's investigate", "track this as an issue", "open a draft issue for this bug", "iterate on this", "promote boot to PR", "open a PR for the paths area", "extract sync as markdown", "mint an issue for devprod", "turn this area into an ADR", "make a PR for this problem", "give me a worktree for TRAY-42", "kickoff TRAY-42", and any request that names a survey area or PID alongside a verb like promote/extract/mint/open/draft/kickoff/ship.
 ---
 
 # Architecture pathways skill
@@ -101,14 +101,13 @@ The user picks a high-priority entry and says *"backfill `<feature>`"* — the k
 
 ## When to use
 
-Whenever a problem touches three or more subsystems and the user asks for understanding before action. Typical triggers:
+Two flows; pick by problem shape.
 
-- "Why is X broken across all these places?"
-- "Map what we have vs industry standard"
-- "I want to see all the conflicts before we fix anything"
-- "Compare the proposals"
+**Single-issue ping-pong** — the default for most reported bugs and feature requests worth tracking. Use whenever the user wants iterative analysis with a paper trail before any implementation starts. Triggers: "let's investigate", "open an issue and iterate", "we should track this", "dig into this bug", any non-trivial reported problem.
 
-Do NOT use for single-file bugs or "just fix it" requests. The artifact is heavy by design — it's for shared decision-making, not solo iteration.
+**Cross-area survey** — workshop mode for problems touching 3+ subsystems where side-by-side comparison is the point. Use before any GitHub object exists. Triggers: "map architecture", "compare fix proposals across areas", "draw pathways", "I want to see all conflicts before we pick".
+
+Do NOT use either for trivial single-file bugs or "just fix it" requests. The artifacts are heavy by design — for shared decision-making with a paper trail, not solo iteration.
 
 ## Two output modes
 
@@ -239,21 +238,36 @@ For markdown ADRs (`docs/adr/*.md`) — see `bin/check-pathway-md.cjs`:
 
 ## Workflow
 
-### Survey phase (HTML)
+Three paths. Pick by problem shape.
+
+### 1. Single-issue ping-pong (default for ad-hoc problems)
+
+The Issue IS the workshop. Mint first, iterate with charts, then kickoff to add implementation artifacts.
+
+1. **Mint the Issue.** `gh issue create -R qol-tools/<repo> --title "<Title Case>" --body-file <path>`. Body must include: short problem statement, repro steps, affected files (`<path>:<line>`), at least one Mermaid diagram of the current shape (renders natively in GitHub Issue bodies and comments). PID is `<REPO_PREFIX>-<N>` per `lib/prefixes.json` — note it down.
+2. **Ping-pong loop.** The Issue is now the canonical workspace. Each round = one comment via `gh issue comment <N> -R qol-tools/<repo> --body-file <path>`. Three role tags rotate freely until the problem statement is stable:
+   - `### Research <N>` — agent posts code traces, additional hypotheses, alternate Mermaid diagrams, file:line references.
+   - `### User test <N>` — user reports a real-world repro / verification on their machine; confirms, refutes, or extends the hypothesis.
+   - `### Agent test <N>` — agent posts log search, code grep, theory-check (counter-example, dep-version comparison, etc.) without leaving Claude Code.
+   Update the Issue *body* (not just comments) only when the canonical problem-of-record changes (clearer root cause, narrowed scope, added invariant). Charts in the body are the source of truth; charts in comments are working notes.
+3. **Settle signal.** The user explicitly says one of: `kickoff <PID>`, `ship <PID>`, `promote <PID>`. That is the ONLY green-light to dispatch the kickoff agent. Do NOT dispatch kickoff while iteration is still active — even if you think the analysis is done.
+4. **Kickoff.** Dispatch `arch-pathways:kickoff` with `<EXISTING-PID> <Title>\n\n<body>` (body = the final agreed problem statement + recommended proposal copied from the Issue). Kickoff runs `pid-new.cjs <repo> "<Title>" --issue <N>` → branch + worktree + seeded ADR + draft PR linked to the existing Issue.
+5. **Implement.** Inside the worktree, finalize the ADR (proposals + tradeoffs + Closes:), commit the implementation against the branch, mark the PR ready, merge. PostToolUse hook removes the worktree. The ADR stays in `docs/adr/` permanently.
+
+### 2. Cross-area survey → bulk promotion (workshop for 3+ problems)
+
+Use when the problem set spans many subsystems and side-by-side comparison is the point.
 
 1. Gather facts (Explore agent) — current code state per area.
 2. Add industry-standard patterns from your own knowledge per area.
-3. Draft the HTML using `template.html`.
+3. Draft `/tmp/<project>-pathways.html` from `template.html`.
 4. Render in a browser (`xdg-open /tmp/<project>-pathways.html`).
 5. Iterate per page. The user reads ONE page at a time; never dump all of them in chat.
-6. Once the survey is agreed, each problem becomes a candidate PR.
+6. Promote: `pathway-pr.cjs <area> <repo>` (full bundle: issue + worktree + ADR + draft PR seeded from the area) or `pid-mint.cjs <area> <repo>` (issue only) → continue with the ping-pong loop above before kickoff.
 
-### Promote-to-PR phase (Markdown ADR + GitHub)
+### 3. Direct kickoff (one-shot, no iteration)
 
-7. For each problem the user wants to act on, run the appropriate bin/ script (see "Operations" below).
-8. Edit the ADR inside the worktree until proposals + tradeoffs are settled.
-9. Implement the chosen proposal in commits on the branch.
-10. Merge the PR — a PostToolUse hook removes the worktree. The ADR stays in `docs/adr/` as the permanent decision record.
+Rare. Use only for tightly-scoped mechanical fixes with no research depth. Dispatch `arch-pathways:kickoff` with `<repo> "<Title>"\n\n<body>`; the agent runs `pid-new.cjs <repo> "<Title>"` and mints all five artifacts in one shot, no Issue iteration. If you find yourself wanting to iterate after kickoff, you should have used flow 1 instead.
 
 ## Operations — what to run for which intent
 
@@ -261,11 +275,15 @@ The user does NOT type bash. When you (the agent) recognize one of these intents
 
 | User intent (paraphrased) | Run | Resolves |
 |---|---|---|
-| "promote `<area>` to a PR" / "open PR for `<area>` in `<repo>`" / "turn `<area>` into a PR" | `node ${CLAUDE_PLUGIN_ROOT}/bin/pathway-pr.cjs <area> <repo>` | mint issue + worktree + ADR + draft PR seeded from the survey area |
+| "open an issue for this bug so we can iterate" / "track this as an issue" / "let's investigate this on GitHub" (ad-hoc, not tied to a survey area) | `gh issue create -R qol-tools/<repo> --title "<Title Case>" --body-file <path>` (body = problem + repro + ≥1 Mermaid diagram) | creates one GitHub Issue for the ping-pong loop; no worktree/ADR/PR yet |
+| "post a research / user-test / agent-test note on `<PID>`" / "comment on the issue" | `gh issue comment <N> -R qol-tools/<repo> --body-file <path>` | adds one ping-pong round to the Issue thread; tag the body with `### Research N`, `### User test N`, or `### Agent test N` |
+| "update the issue body for `<PID>`" (canonical problem-of-record changed) | `gh issue edit <N> -R qol-tools/<repo> --body-file <path>` | replaces the Issue body — use only when the root cause / scope shifts, not for working notes |
+| "kickoff `<PID>`" / "ship `<PID>`" / "promote `<PID>` to a PR" (Issue already exists) | dispatch `arch-pathways:kickoff` with `<PID> <Title>\n\n<body>` | runs `pid-new.cjs <repo> "<Title>" --issue <N>` → branch + worktree + seeded ADR + draft PR linked to the existing Issue |
+| "promote `<area>` to a PR" / "open PR for `<area>` in `<repo>`" / "turn `<area>` into a PR" (survey-area path) | `node ${CLAUDE_PLUGIN_ROOT}/bin/pathway-pr.cjs <area> <repo>` | mint issue + worktree + ADR + draft PR seeded from the survey area |
 | Same intent but the user wants to preview first / says "dry run" / "what would this do" | append `--dry-run` to the command above | prints planned PID, branch, worktree, PR title; no GitHub side effects |
 | "extract `<area>` as markdown" / "show me `<area>` as an ADR" / "give me the markdown for `<area>`" | `node ${CLAUDE_PLUGIN_ROOT}/bin/pathway-extract.cjs <area> [--pid <PID>]` | prints the markdown ADR for that area; read-only, no GitHub calls |
-| "mint an issue for `<area>` in `<repo>`" / "create the GitHub issue for this area" | `node ${CLAUDE_PLUGIN_ROOT}/bin/pid-mint.cjs <area> <repo>` | creates one GitHub issue, prints the resulting PID |
-| "open a PR for this problem: <Title>" (NOT tied to a survey area, e.g. ad-hoc bug) | `node ${CLAUDE_PLUGIN_ROOT}/bin/pid-new.cjs <repo> "<Title>"` | mint issue + worktree + ADR (from blank template) + draft PR |
+| "mint an issue for `<area>` in `<repo>`" / "create the GitHub issue for this area" (survey-area path) | `node ${CLAUDE_PLUGIN_ROOT}/bin/pid-mint.cjs <area> <repo>` | creates one GitHub issue, prints the resulting PID — then continue with the ping-pong loop |
+| "open a PR for this problem: <Title>" (NOT tied to a survey area, mechanical fix only — direct kickoff path) | `node ${CLAUDE_PLUGIN_ROOT}/bin/pid-new.cjs <repo> "<Title>"` | mint issue + worktree + ADR (from blank template) + draft PR; skips the ping-pong loop — use only for trivial mechanical fixes |
 | "set up the GitHub branch-name ruleset for `<owner/repo>`" | `bash ${CLAUDE_PLUGIN_ROOT}/bin/setup-rulesets.sh <owner/repo>` | creates the server-side ruleset (asks the user before running — this mutates GitHub) |
 
 ### Resolving the area name
@@ -280,9 +298,11 @@ Repos must be in `${CLAUDE_PLUGIN_ROOT}/lib/prefixes.json`. If the user says a c
 
 ### Confirmation policy
 
-`pathway-pr` and `pid-new` mint real GitHub issues and open real PRs. Default to **`--dry-run` first**, show the user what will happen, and only run for real after confirmation — UNLESS the user already said something explicitly committal like "do it", "open it for real", or "no dry run".
+`pathway-pr`, `pid-new`, `pid-mint`, and direct `gh issue create` / `gh issue edit` / `gh issue comment` all mutate GitHub. Default to **show the body first** (cat the body file you'd send) and confirm before invoking, UNLESS the user already said something explicitly committal like "do it", "post it", "open it for real", or "no dry run".
 
-`pathway-extract` and `--dry-run` invocations are side-effect-free and can be run without asking.
+For `pathway-pr` and `pid-new`, also default to **`--dry-run` first** to surface the planned PID/branch/worktree/PR title.
+
+`pathway-extract`, `--dry-run` invocations, and `gh issue view` are side-effect-free and can be run without asking.
 
 ## Determinism guard
 
