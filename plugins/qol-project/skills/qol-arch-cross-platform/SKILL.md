@@ -1,6 +1,7 @@
 ---
 name: qol-arch-cross-platform
-description: Use when adding or refactoring symbols (functions, types, constants, use statements) that *might* be consumed by only one platform's backend, even when the symbol itself looks platform-neutral. Prevents the most common qol-tools cross-platform regression: code that compiles green on Linux but emits dead_code / unused_imports / unused_mut errors on macOS or Windows under `-D warnings`. Triggers on edits to shared modules that border `platform/` directories, on `#[allow(dead_code)]` / `#[allow(unused_mut)]` reaches, on `#[cfg(target_os)]` attributes attached to `use` statements, and any time you find yourself "quieting a lint" on one OS. For the strategy-pattern code layout that this skill builds on, see `qol-arch-code`. For CI-side enforcement that catches the failures across all three OSes, see `qol-arch-cicd`.
+description: >
+  Use when adding or refactoring symbols (functions, types, constants, use statements) that *might* be consumed by only one platform's backend, even when the symbol itself looks platform-neutral. Prevents the most common qol-tools cross-platform regression: code that compiles green on Linux but emits dead_code / unused_imports / unused_mut errors on macOS or Windows under `-D warnings`. Triggers on edits to shared modules that border `platform/` directories, on `#[allow(dead_code)]` / `#[allow(unused_mut)]` reaches, on `#[cfg(target_os)]` attributes attached to `use` statements, and any time you find yourself "quieting a lint" on one OS. For the strategy-pattern code layout that this skill builds on, see `qol-arch-code`. For CI-side enforcement that catches the failures across all three OSes, see `qol-arch-cicd`.
 ---
 
 # qol-arch-cross-platform: Cross-Platform Symbol Hygiene
