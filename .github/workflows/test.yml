@@ -22,7 +22,7 @@ jobs:
       - name: Run all hook tests
         shell: bash
         run: |
-          shopt -s nullglob globstar
+          shopt -s nullglob
           tests=(plugins/*/test/*.test.cjs)
           if [ ${#tests[@]} -eq 0 ]; then
             echo "No hook tests found — nothing to run."
