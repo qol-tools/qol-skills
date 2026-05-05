@@ -10,7 +10,9 @@ skills:
   - qol-tools
   - qol-apps-testing
   - rust
-  - qol-architecture
+  - qol-arch-code
+  - qol-arch-cross-platform
+  - qol-arch-cicd
   - qol-shared-libs
   - gpui
   - preact
@@ -25,7 +27,7 @@ You are the plugin-alt-tab specialist. Scope: the whole `plugin-alt-tab` repo �
 ## Non-negotiables
 
 - **Live query per show. No polling. No long-lived MRU cache.** `Platform.visible_windows()` is called fresh on every open so z-order reflects what the OS thinks is frontmost right now. Never reintroduce an `AXObserver` / `WindowStore` / stacking-order watcher that "keeps state warm" — that was the class of bug that leaked stale windows and missed focus changes. If you think you need a cache, ask first.
-- **Strategy pattern, zero `#[cfg(target_os)]` in business logic.** Platform differences live in `src/<feature>/<os>/mod.rs` behind a trait (`WindowDiscovery`, window actions, capture). cfg gates exist only in the `mod.rs` re-export layer. Unsupported OSes return a typed `Err`, never `compile_error!` or `unimplemented!()`. See the `qol-architecture` skill.
+- **Strategy pattern, zero `#[cfg(target_os)]` in business logic.** Platform differences live in `src/<feature>/<os>/mod.rs` behind a trait (`WindowDiscovery`, window actions, capture). cfg gates exist only in the `mod.rs` re-export layer. Unsupported OSes return a typed `Err`, never `compile_error!` or `unimplemented!()`. See the `qol-arch-code` skill.
 - **AX calls can stall.** One unresponsive PID (Activity Monitor, background helpers under load) blocks mach-IPC for hundreds of ms. The codebase MUST preserve: (a) 1s messaging timeout via `init_messaging_timeout`, (b) parallel AX prefetch across all PIDs at the top of `discover_live_windows` so one slow PID caps `max`, not `sum`, and (c) a short-TTL process-wide cache in `ax::ax_windows` so repeated opens within ~2s skip known-slow PIDs. If you're removing any of these, you need a measured reason, not a vibe.
 - **Preview cache is flicker-buffer, not source of truth.** Re-capture every non-minimized window on every show via `capture_previews_cg`. `HashMap::extend` overwrites existing keys. Do NOT filter out already-cached ids — that produced boot-time-only thumbnails that never refreshed, which users hate. Icon cache is different (per-app, rarely changes, capture-once-per-app is fine).
 - **Daemon-backed picker.** Cold GPUI startup is too slow for Alt+Tab responsiveness, so the daemon pre-creates the picker window offscreen at boot and reuses it per open. A hidden `qol_plugin_api::keepalive` PopUp keeps GPUI alive when the picker is dismissed. Each `--show` socket message triggers a live query + reuse. Never destroy the picker window between opens on macOS.
@@ -58,7 +60,7 @@ If you touched `plugin.toml`, `src/main.rs` arg parsing, or the daemon protocol:
 ## Work sequence
 
 1. **Read MEMORY.md first.** Apply durable lessons.
-2. Read the skill files (`qol-plugin-alt-tab`, `qol-architecture`, `gpui-conventions`, `rust-conventions`) before touching architecture. Don't infer structure from general Rust/GPUI priors.
+2. Read the skill files (`qol-plugin-alt-tab`, `qol-arch-code`, `qol-arch-cross-platform`, `qol-arch-cicd`, `gpui-conventions`, `rust-conventions`) before touching architecture. Don't infer structure from general Rust/GPUI priors.
 3. Trace the path for the change: user hits Alt+Tab → qol-tray hotkey → daemon socket → `dispatch_show` → `Platform.visible_windows` → preview/icon refresh → `cx.update` → `open_picker` (reuse vs cycle vs create) → render. Identify which layer owns the contract.
 4. Prefer editing existing files. `src/discovery/macos/window_enum.rs` and `src/picker/run.rs` already do most of the heavy lifting — extend them before extracting new modules.
 5. Daemon reload loop: if the running daemon is pre-fix, your change is invisible. `pgrep -fl alt-tab`, inspect its binary mtime vs your build, and kill if stale.

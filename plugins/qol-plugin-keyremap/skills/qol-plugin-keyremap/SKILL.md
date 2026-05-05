@@ -15,7 +15,7 @@ macOS-only key, mouse, and scroll remapping plugin for qol-tray. Runs as a long-
 - `runtime.actions = { reload = ["--reload"] }`
 - `[daemon] enabled = true`, `socket = "/tmp/qol-keyremap.sock"`
 - Menu: `Reload Config` (action `run`)
-- Platforms: `macos` only — the binary `compile_error!`s on other OSes. This predates the `qol-architecture` strategy-pattern guidance; see that skill for the preferred approach when migrating cross-platform.
+- Platforms: `macos` only — the binary `compile_error!`s on other OSes. This predates the `qol-arch-code` strategy-pattern guidance; see that skill (and the sibling `qol-arch-cross-platform` for symbol hygiene, `qol-arch-cicd` for the CI matrix) for the preferred approach when migrating cross-platform.
 - Binary download repo: `qol-tools/plugin-keyremap`, pattern `keyremap-{os}-{arch}`
 
 `qol-config.toml`:
@@ -65,7 +65,7 @@ No `qol-runtime.toml` — actions/queries aren't referenced from config.
 
 **Add per-app rules** (currently global with exclusion list): would require restructuring rules so each carries a target-app filter, not the inverse. Big refactor — not done today.
 
-**Migrate off `compile_error!`**: per `qol-architecture`, the macOS-only `compile_error!` should be replaced with stub `Platform` impls on Linux/Windows that return `Err("not supported on this OS")`. This unblocks cross-compilation in CI matrices.
+**Migrate off `compile_error!`**: per `qol-arch-code`, the macOS-only `compile_error!` should be replaced with stub `Platform` impls on Linux/Windows that return `Err("not supported on this OS")`. This unblocks cross-compilation in CI matrices, which `qol-arch-cicd` codifies into the reusable plugin workflow.
 
 ## Gotchas
 

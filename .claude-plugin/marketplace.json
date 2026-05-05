@@ -115,9 +115,9 @@
     },
     {
       "name": "qol-project",
-      "description": "Project-level conventions for the qol-tools ecosystem: the qol-mission (non-negotiable user-facing promises), qol-tools (org layout, dependency model), qol-cicd (shared workflows), qol-architecture (cross-platform strategy pattern), qol-shared-libs, qol-plugin-template. Includes a PreToolUse hook enforcing qol-architecture rules.",
+      "description": "Project-level conventions for the qol-tools ecosystem: the qol-mission (non-negotiable user-facing promises), qol-tools (org layout, dependency model), qol-cicd (shared workflows), qol-arch-code (cross-platform code strategy pattern), qol-arch-cross-platform (symbol/import hygiene that prevents dead_code-on-other-platform under -D warnings), qol-arch-cicd (CI/release workflow contract that enforces matrix builds and path-dep parity), qol-shared-libs, qol-plugin-template. Ships three PreToolUse hooks (one per arch skill) that block edits violating each contract.",
       "source": "./plugins/qol-project",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "author": {
         "name": "KMRH47"
       }

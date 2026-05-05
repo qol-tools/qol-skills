@@ -50,7 +50,7 @@ When forking the template into a new plugin, change:
 1. **Names**: rename `plugin-template` in `Cargo.toml`, `plugin.toml`, `.gitignore`, `Makefile`, and workflow artifact names. Keep a single source of truth — the binary name in `Cargo.toml`'s `[package].name` and the runtime command in `plugin.toml` must match.
 2. **Manifest metadata**: update `plugin.toml`'s `name`, `description`, `author`, `platforms`, and `[[dependencies.binaries]]` block.
 3. **Plugin behavior**: replace the `run` action body in `src/main.rs` with real logic. Move logic into modules as it grows — keep `main.rs` thin.
-4. **Platform support**: trim `src/platform/` if your plugin's settings action doesn't differ by OS. Add stubs (returning typed `Err`) for any OS you don't support — see the `qol-architecture` skill.
+4. **Platform support**: trim `src/platform/` if your plugin's settings action doesn't differ by OS. Add stubs (returning typed `Err`) for any OS you don't support — see the `qol-arch-code` skill.
 5. **Versioning**: keep `Cargo.toml` and `plugin.toml` versions in sync. `qol-cicd`'s plugin-version workflow validates this.
 6. **Daemon**: not in the template. Add `[daemon]` to `plugin.toml` and a daemon socket loop only if the plugin needs a long-running process.
 7. **Settings**: add `qol-config.toml` when you need editable settings. Auto-config in qol-tray will render them. If your contract references actions/queries by name, also add `qol-runtime.toml`.
@@ -60,7 +60,7 @@ When forking the template into a new plugin, change:
 - Commands stay binary basenames only — no `.sh`, no absolute paths, no traversal.
 - If `runtime.actions` is present, every executable menu action must have a mapping. Strict coverage is enforced by qol-tray on load.
 - Add `[daemon]` only when the plugin actually needs a long-running process (eats memory + delays startup otherwise).
-- Keep platform-specific behavior behind `src/platform/` or feature-owned platform modules — never sprinkle `#[cfg(target_os)]` through business logic. See `qol-architecture`.
+- Keep platform-specific behavior behind `src/platform/` or feature-owned platform modules — never sprinkle `#[cfg(target_os)]` through business logic. See `qol-arch-code`. For symbol/import hygiene that prevents dead_code-on-other-platform errors under `-D warnings`, see `qol-arch-cross-platform`. For CI matrix and `RUSTFLAGS=-D warnings` enforcement, see `qol-arch-cicd`.
 
 ## CI/CD
 
@@ -100,7 +100,9 @@ None at template baseline. Add `qol-plugin-api`, `qol-config`, etc. as the custo
 
 ## Related skills
 
-- `qol-architecture` — strategy-pattern compartmentalization for platform code (mandatory once you add multi-OS behavior).
+- `qol-arch-code` — strategy-pattern compartmentalization for platform code (mandatory once you add multi-OS behavior).
+- `qol-arch-cross-platform` — symbol/import hygiene preventing dead_code-on-other-platform under `-D warnings`.
+- `qol-arch-cicd` — CI/release workflow contract: matrix builds derived from `plugin.toml` `platforms`, `RUSTFLAGS=-D warnings` everywhere, sibling-checkout parity for path-deps.
 - `qol-cicd` — the reusable workflows the template's `version.yml` and `release.yml` call into.
 - `plugin-<name>-release-flow` — once your forked plugin has a release process, write a per-plugin release-flow skill. See `plugin-launcher-release-flow` and `plugin-alt-tab-release-flow` as templates.
 - `qol-shared-libs` — what belongs in shared libs vs the plugin itself.

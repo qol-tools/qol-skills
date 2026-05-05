@@ -50,7 +50,7 @@ $qol-tray explain the daemon lifecycle and check this repo for mismatches
 | `qol-tray` | `qol-tray-core`, `qol-tray-rust`, `qol-tray-ui-systems`, `qol-tray-dev-logging`, `qol-tray-dev-recompile`, `qol-tray-feature-profile`, `qol-tray-release-flow`, `qol-world-canvas`, `qol-apps-testing` |
 | `qol-workflow` | `commit`, `git-push`, `git-trees`, `coding-general` |
 | `qol-langs` | `rust-conventions`, `gpui-conventions`, `preact-conventions` |
-| `qol-project` | `qol-mission`, `qol-tools`, `qol-cicd`, `qol-architecture`, `qol-shared-libs`, `qol-plugin-template` |
+| `qol-project` | `qol-mission`, `qol-tools`, `qol-cicd`, `qol-arch-code`, `qol-arch-cross-platform`, `qol-arch-cicd`, `qol-shared-libs`, `qol-plugin-template` |
 | `arch-pathways` | `arch-pathways` |
 
 Each plugin has its own `.claude-plugin/plugin.json` and `.codex-plugin/plugin.json`; every skill lives at `plugins/<plugin-name>/skills/<skill-name>/SKILL.md`.
@@ -82,7 +82,7 @@ qol-skills/
 |---|---|
 | `qol-plugin-*` | individual plugins under the qol-tools/plugin-* repos |
 | `qol-host` | qol-tray host app internals (core, UI systems, Profile, world canvas, release flow) |
-| `qol-dev-conventions` | language and cross-repo engineering skills (rust, gpui, preact, commit, git-*, qol-architecture, qol-shared-libs, qol-plugin-template, coding-general) |
+| `qol-dev-conventions` | language and cross-repo engineering skills (rust, gpui, preact, commit, git-*, qol-arch-code, qol-arch-cross-platform, qol-arch-cicd, qol-shared-libs, qol-plugin-template, coding-general) |
 | `qol-ecosystem` | workspace- and org-level conventions (qol-tools, qol-cicd) |
 
 When adding a new plugin skill, the skill name follows: `qol-plugin-<plugin-id-without-the-plugin-prefix>` — e.g. `plugin-alt-tab` becomes `qol-plugin-alt-tab`.

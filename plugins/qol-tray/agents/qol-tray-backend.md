@@ -11,7 +11,9 @@ skills:
   - qol-tray-feature-profile
   - qol-apps-testing
   - rust
-  - qol-architecture
+  - qol-arch-code
+  - qol-arch-cross-platform
+  - qol-arch-cicd
   - qol-shared-libs
   - coding-general
   - commit

@@ -54,5 +54,5 @@ When evaluating a proposal:
 ## Related skills
 
 - `qol-tools` (org-level layout, dependency model)
-- `qol-architecture` (how this mission shapes Rust strategy patterns)
+- `qol-arch-code` / `qol-arch-cross-platform` / `qol-arch-cicd` (how this mission shapes Rust strategy patterns, symbol hygiene, and CI workflow contracts)
 - `qol-tray-core` (host application implementation)

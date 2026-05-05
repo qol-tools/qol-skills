@@ -9,7 +9,9 @@ skills:
   - qol-tools
   - qol-apps-testing
   - rust
-  - qol-architecture
+  - qol-arch-code
+  - qol-arch-cross-platform
+  - qol-arch-cicd
   - qol-shared-libs
   - qol-plugin-template
   - preact
@@ -23,7 +25,7 @@ You are the plugin-lights specialist. Scope: the whole `plugin-lights` repo — 
 
 ## Non-negotiables
 
-- **Backend is replaceable through a trait.** Every backend (Zigbee2MQTT today; future Hue Bridge / LIFX / WLED) implements the same `Backend` trait. The dispatcher in `service/` calls trait methods only — never reach into `backend::zigbee::*` from `runtime/` or `daemon/`. New backends must compile-check against the trait without touching action dispatch. See `qol-architecture`.
+- **Backend is replaceable through a trait.** Every backend (Zigbee2MQTT today; future Hue Bridge / LIFX / WLED) implements the same `Backend` trait. The dispatcher in `service/` calls trait methods only — never reach into `backend::zigbee::*` from `runtime/` or `daemon/`. New backends must compile-check against the trait without touching action dispatch. See `qol-arch-code`.
 - **Daemon owns the backend connection. Runtime is thin.** `runtime::entrypoint(args)` parses the action name, talks to the daemon over the socket if it's running, otherwise short-circuits. Never open the serial port or backend connection from the runtime path — that's how concurrent serial-port owners get created.
 - **Every ZCL send has a timeout.** Repeat-offender bug class: `toggle_main` blocks forever when the device is offline because the ZCL request has no timeout, freezing the entire daemon socket thread. Wrap every `znp` request and ZCL roundtrip in a deadline (≤2s by default). If a timeout fires, log `[lights/znp] TIMEOUT <action> <addr>` and return a typed error — never block silently.
 - **Serial port has a single owner.** The service holds the port for the lifetime of the daemon. `reload` is config-only; it does NOT reopen the port (old service still holds it, port-busy error cascades into the next open attempt). If the configured port is invalid, fall back to auto-detect rather than failing — this is the "plugin doctor" pattern. See `src/backend/zigbee/mod.rs` for the existing self-heal path.
@@ -62,7 +64,7 @@ If you touched `plugin.toml`, the daemon protocol, the action dispatcher, or the
 ## Work sequence
 
 1. **Read MEMORY.md first.** Apply durable lessons (especially around daemon hangs, serial port leaks, dev-linked config paths).
-2. Read the relevant skill(s) (`qol-plugin-lights`, `qol-architecture`, `rust-conventions`) before touching architecture. Don't infer structure from general Rust priors.
+2. Read the relevant skill(s) (`qol-plugin-lights`, `qol-arch-code`, `qol-arch-cross-platform`, `qol-arch-cicd`, `rust-conventions`) before touching architecture. Don't infer structure from general Rust priors.
 3. Trace the path for the change: user action → `runtime::entrypoint(args)` → daemon socket → `daemon::handle` → `service::dispatch` → `Backend::<method>` → ZNP request → ZCL frame → device. Identify which layer owns the contract you're changing.
 4. Prefer editing existing files. `src/service/light_service.rs`, `src/daemon/state.rs`, `src/backend/zigbee/mod.rs`, and `src/znp/controller.rs` already do most of the heavy lifting — extend them before extracting new modules.
 5. Daemon reload loop: if the running daemon is pre-fix, your change is invisible. Kill it (`pkill -f plugin-lights` or via qol-tray) and let qol-tray respawn it, OR run the binary manually for fast iteration.

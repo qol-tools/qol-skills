@@ -65,7 +65,7 @@ The thresholds above describe a small state machine:
 
 ## Gotchas
 
-- **Linux-only** at the manifest level. The cargo target gates ensure the binary still compiles on macOS/Windows (per the `qol-architecture` strategy pattern), but the manifest declares `platforms = ["linux"]` so qol-tray won't offer it elsewhere.
+- **Linux-only** at the manifest level. The cargo target gates ensure the binary still compiles on macOS/Windows (per the `qol-arch-code` strategy pattern), but the manifest declares `platforms = ["linux"]` so qol-tray won't offer it elsewhere.
 - **Cursor manipulation requires an X server**. Wayland sessions have no X server unless XWayland is running, and even then xfixes effects only apply to X11 windows. The daemon will start but be a no-op under pure Wayland.
 - **`scale_factor`** is an integer in the config but represents a multiplier. Default 4 means 4x. Don't accidentally treat it as a percentage.
 - **`calm_duration_ms`** uses a real-time clock via `qol-runtime`'s monitor utilities. It's not tied to frame rate, so changing it doesn't shift the regrow detection window.

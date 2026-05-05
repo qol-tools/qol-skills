@@ -1,6 +1,6 @@
 ---
 name: rust-conventions
-description: Use when writing Rust in this workspace. Workspace-specific style and gotchas (error handling, filesystem, process management, cross-platform code layout) — NOT a generic Rust reference. For canonical Rust/library docs, use context7 instead. Plugin-specific and qol-tray-specific Rust gotchas live in their own skills (`qol-plugin-*`, `qol-tray-core`, `qol-tray-rust`, `qol-architecture`).
+description: Use when writing Rust in this workspace. Workspace-specific style and gotchas (error handling, filesystem, process management, cross-platform code layout) — NOT a generic Rust reference. For canonical Rust/library docs, use context7 instead. Plugin-specific and qol-tray-specific Rust gotchas live in their own skills (`qol-plugin-*`, `qol-tray-core`, `qol-tray-rust`, `qol-arch-code`, `qol-arch-cross-platform`).
 ---
 
 # Rust Guidelines
@@ -11,7 +11,9 @@ Platform-specific code should be isolated in dedicated modules:
 - Use `platform/` subdirectories for OS-specific implementations
 - Keep main modules free of `#[cfg(target_os)]` conditionals when possible
 - All platform differences should be handled at the platform abstraction layer
-- For structured cross-platform compartmentalization, see the `qol-architecture` skill
+- For structured cross-platform compartmentalization (strategy pattern, platform/ subfolders), see the `qol-arch-code` skill
+- For symbol/import hygiene that prevents `dead_code`/`unused_imports` errors on the OSes you don't usually develop on, see `qol-arch-cross-platform`
+- For the CI/release workflow contract that catches what the static checks miss, see `qol-arch-cicd`
 
 ## Error Handling
 
