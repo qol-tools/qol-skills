@@ -41,6 +41,12 @@ If qol-tray needs a runtime, library, or daemon, it ships with qol-tray. It does
 
 If qol-tray can't do something the user expects (a plugin failed to start, a hotkey couldn't be claimed, a sync conflict happened), the user sees it immediately and clearly — in the tray, in a notification, in the UI. Silent failures are bugs.
 
+## Roadmap (deferred extractions / structural moves)
+
+Items that are conceptually right but blocked by "premature abstraction" — revisit when concrete signal accumulates.
+
+- **`qol-sdk` package** — extract dev-experience features (gh account routing UI, lock-bot triggers, worktree manager, ADR navigator, sync drift dashboard, kickoff hotkeys, etc.) out of qol-tray once 3+ dev-only surfaces have shipped behind `qol-tray`'s `--features dev` flag. Today: dev features live in qol-tray gated behind `dev`. Trigger to extract: clear pattern across surfaces (shared dev-only auth/path conventions, separate release cadence, contributors wanting "dev SDK on this machine" without running the full daemon). Cost of waiting: low. Cost of premature split: a whole new repo + release pipeline for one feature.
+
 ## How to use this in design discussions
 
 When evaluating a proposal:
