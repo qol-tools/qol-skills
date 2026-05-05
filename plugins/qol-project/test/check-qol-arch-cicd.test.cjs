@@ -370,3 +370,34 @@ test('blocks Edit on workflow when new_string adds bare cargo run', () => {
     });
     assert.equal(r.exitCode, 2);
 });
+
+test('handles Windows-style backslash paths (regression: D:\\\\... fixture on win runners)', () => {
+    const r = run({
+        tool_name: 'Write',
+        tool_input: {
+            file_path: 'D:\\a\\qol-tools\\foo\\.github\\workflows\\ci.yml',
+            content: `jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: cargo build
+`,
+        },
+    });
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /RUSTFLAGS/);
+});
+
+test('handles Windows-style backslash paths for Cargo.toml', () => {
+    const r = run({
+        tool_name: 'Write',
+        tool_input: {
+            file_path: 'C:\\dev\\qol-tools\\foo\\Cargo.toml',
+            content: `[dependencies]
+x11rb = "0.13"
+`,
+        },
+    });
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /x11rb/);
+});

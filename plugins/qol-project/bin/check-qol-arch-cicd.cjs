@@ -39,8 +39,14 @@ const path = require('node:path');
 
 const INSPECTED_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 
-const WORKFLOW_PATH_RE = /\/\.github\/workflows\/[^/]+\.ya?ml$/;
+const QOL_TOOLS_PATH_RE = /[\\/]qol-tools[\\/]/;
+const WORKFLOW_PATH_RE = /[\\/]\.github[\\/]workflows[\\/][^\\/]+\.ya?ml$/;
 const CARGO_TOML_BASENAME = 'Cargo.toml';
+
+function crossPlatformBasename(p) {
+    const parts = p.split(/[\\/]/);
+    return parts[parts.length - 1] || p;
+}
 
 const PLATFORM_CRATES = new Set([
     'x11rb', 'xkbcommon', 'wayland-client', 'wayland-protocols', 'wayland-sys', 'wayland-backend',
@@ -158,7 +164,7 @@ function findHardcodedUbuntu(content) {
 }
 
 function findMissingQolConfigCheckout(filePath, content) {
-    const repoRoot = filePath.replace(/\/\.github\/workflows\/.*$/, '');
+    const repoRoot = filePath.replace(/[\\/]\.github[\\/]workflows[\\/].*$/, '');
     const cargoPath = path.join(repoRoot, 'Cargo.toml');
     let cargoText = '';
     try {
@@ -172,7 +178,7 @@ function findMissingQolConfigCheckout(filePath, content) {
     if (!cargoSteps) return [];
     const checksOutQolConfig = /repository:\s*qol-tools\/qol-config/.test(content);
     if (checksOutQolConfig) return [];
-    return [{ workflow: path.basename(filePath), cargoTomlHasPathDep: true }];
+    return [{ workflow: crossPlatformBasename(filePath), cargoTomlHasPathDep: true }];
 }
 
 function findUnconditionalPlatformCrates(content) {
@@ -375,10 +381,10 @@ function main() {
     const input = payload.tool_input || {};
     const filePath = input.file_path || input.notebook_path || '';
     if (!filePath) return 0;
-    if (!filePath.includes('/qol-tools/')) return 0;
+    if (!QOL_TOOLS_PATH_RE.test(filePath)) return 0;
 
     const isWorkflow = WORKFLOW_PATH_RE.test(filePath);
-    const isCargo = path.basename(filePath) === CARGO_TOML_BASENAME;
+    const isCargo = crossPlatformBasename(filePath) === CARGO_TOML_BASENAME;
     if (!isWorkflow && !isCargo) return 0;
 
     const cwd = payload.cwd || process.cwd();
@@ -389,10 +395,10 @@ function main() {
             const count = /^\d+$/.test(raw) ? Number(raw) : 1;
             if (count > 1) {
                 fs.writeFileSync(marker, String(count - 1));
-                log(`bypass consumed (${count - 1} remaining) — ${path.basename(filePath)}`);
+                log(`bypass consumed (${count - 1} remaining) — ${crossPlatformBasename(filePath)}`);
             } else {
                 fs.unlinkSync(marker);
-                log(`bypass consumed (marker removed) — ${path.basename(filePath)}`);
+                log(`bypass consumed (marker removed) — ${crossPlatformBasename(filePath)}`);
             }
         } catch {
             // ignore

@@ -37,6 +37,16 @@ const path = require('node:path');
 
 const INSPECTED_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 
+const QOL_TOOLS_PATH_RE = /[\\/]qol-tools[\\/]/;
+const PLATFORM_PATH_RE = /[\\/]platform[\\/]/;
+const TESTS_PATH_RE = /[\\/]tests[\\/]/;
+const EXAMPLES_PATH_RE = /[\\/]examples[\\/]/;
+
+function crossPlatformBasename(p) {
+    const parts = p.split(/[\\/]/);
+    return parts[parts.length - 1] || p;
+}
+
 const ALLOW_DEAD_CODE = /#\[allow\([^)]*\bdead_code\b[^)]*\)\]/;
 const ALLOW_UNUSED_MUT = /#\[allow\([^)]*\bunused_mut\b[^)]*\)\]/;
 const CFG_ON_USE_SAMELINE = /#\[cfg\((?:not\(|all\(|any\()?target_os\s*=[^\]]*\]\s*(?:pub(?:\([^)]*\))?\s+)?use\s+/;
@@ -70,10 +80,10 @@ function extractNewContent(tool, input) {
 }
 
 function isExempt(filePath) {
-    const basename = path.basename(filePath);
-    if (filePath.includes('/platform/')) return true;
-    if (filePath.includes('/tests/')) return true;
-    if (filePath.includes('/examples/')) return true;
+    const basename = crossPlatformBasename(filePath);
+    if (PLATFORM_PATH_RE.test(filePath)) return true;
+    if (TESTS_PATH_RE.test(filePath)) return true;
+    if (EXAMPLES_PATH_RE.test(filePath)) return true;
     if (basename.endsWith('_test.rs')) return true;
     if (basename.endsWith('_tests.rs')) return true;
     return false;
@@ -212,7 +222,7 @@ function main() {
     const input = payload.tool_input || {};
     const filePath = input.file_path || input.notebook_path || '';
     if (!filePath || !filePath.endsWith('.rs')) return 0;
-    if (!filePath.includes('/qol-tools/')) return 0;
+    if (!QOL_TOOLS_PATH_RE.test(filePath)) return 0;
     if (isExempt(filePath)) return 0;
 
     const cwd = payload.cwd || process.cwd();
@@ -223,10 +233,10 @@ function main() {
             const count = /^\d+$/.test(raw) ? Number(raw) : 1;
             if (count > 1) {
                 fs.writeFileSync(marker, String(count - 1));
-                log(`bypass consumed (${count - 1} remaining) — ${path.basename(filePath)}`);
+                log(`bypass consumed (${count - 1} remaining) — ${crossPlatformBasename(filePath)}`);
             } else {
                 fs.unlinkSync(marker);
-                log(`bypass consumed (marker removed) — ${path.basename(filePath)}`);
+                log(`bypass consumed (marker removed) — ${crossPlatformBasename(filePath)}`);
             }
         } catch {
             // ignore — never block on bypass-marker IO failure

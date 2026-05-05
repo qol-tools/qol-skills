@@ -33,6 +33,20 @@ const path = require('node:path');
 
 const INSPECTED_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 const OS_BASENAMES = new Set(['linux.rs', 'macos.rs', 'windows.rs']);
+const QOL_TOOLS_PATH_RE = /[\\/]qol-tools[\\/]/;
+const TESTS_PATH_RE = /[\\/]tests[\\/]/;
+const EXAMPLES_PATH_RE = /[\\/]examples[\\/]/;
+
+function crossPlatformBasename(p) {
+    const parts = p.split(/[\\/]/);
+    return parts[parts.length - 1] || p;
+}
+
+function crossPlatformDirname(p) {
+    const parts = p.split(/[\\/]/);
+    parts.pop();
+    return parts.join('/');
+}
 
 const CANONICAL_TARGET = /^\s*(mod (linux|macos|windows);|pub use (linux|macos|windows)::|pub\(crate\) use (linux|macos|windows)::)/;
 const ATTRIBUTE_LINE = /^\s*#\[/;
@@ -208,14 +222,14 @@ function main() {
     const filePath = input.file_path || input.notebook_path || '';
     if (!filePath || !filePath.endsWith('.rs')) return 0;
 
-    if (!filePath.includes('/qol-tools/')) return 0;
+    if (!QOL_TOOLS_PATH_RE.test(filePath)) return 0;
 
-    const basename = path.basename(filePath);
-    const parentDir = path.basename(path.dirname(filePath));
+    const basename = crossPlatformBasename(filePath);
+    const parentDir = crossPlatformBasename(crossPlatformDirname(filePath));
 
     if (
-        filePath.includes('/tests/') ||
-        filePath.includes('/examples/') ||
+        TESTS_PATH_RE.test(filePath) ||
+        EXAMPLES_PATH_RE.test(filePath) ||
         basename.endsWith('_test.rs') ||
         basename.endsWith('_tests.rs')
     ) {

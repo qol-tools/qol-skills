@@ -219,3 +219,25 @@ test('blocks Edit tool when new_string contains allow(dead_code)', () => {
     });
     assert.equal(r.exitCode, 2);
 });
+
+test('handles Windows-style backslash paths', () => {
+    const r = run({
+        tool_name: 'Write',
+        tool_input: {
+            file_path: 'D:\\a\\qol-tools\\foo\\src\\hotkeys\\mod.rs',
+            content: '#[allow(dead_code)]\npub fn parse() {}\n',
+        },
+    });
+    assert.equal(r.exitCode, 2);
+});
+
+test('exempts platform/ on Windows-style paths', () => {
+    const r = run({
+        tool_name: 'Write',
+        tool_input: {
+            file_path: 'D:\\a\\qol-tools\\foo\\src\\hotkeys\\platform\\macos.rs',
+            content: '#[allow(dead_code)]\npub(crate) fn stub() {}\n',
+        },
+    });
+    assert.equal(r.exitCode, 0);
+});
