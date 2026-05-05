@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /*
- * qol-architecture PreToolUse hook.
+ * qol-arch-code PreToolUse hook.
  *
- * Blocks Rust file Writes/Edits that violate the qol-architecture skill's
+ * Blocks Rust file Writes/Edits that violate the qol-arch-code skill's
  * cross-platform strategy pattern:
  *
  *   1. compile_error! macros — break cross-compilation.
@@ -19,8 +19,8 @@
  *     legitimately use cfg(target_os).
  *
  * Bypass for one-off legitimate exceptions:
- *   touch .claude/bypass-qol-architecture          # next 1 edit passes
- *   echo N > .claude/bypass-qol-architecture       # next N edits pass
+ *   touch .claude/bypass-qol-arch-code          # next 1 edit passes
+ *   echo N > .claude/bypass-qol-arch-code       # next N edits pass
  *
  * Runs on Node — Claude Code requires Node, so the dependency is free.
  * Silent on errors — a failing hook must never block Claude irreversibly.
@@ -49,7 +49,7 @@ function readStdin() {
 }
 
 function log(msg) {
-    process.stderr.write(`[qol-architecture] ${msg}\n`);
+    process.stderr.write(`[qol-arch-code] ${msg}\n`);
 }
 
 function extractNewContent(tool, input) {
@@ -107,7 +107,7 @@ function findCfgViolations(content) {
 }
 
 function blockCompileError(filePath) {
-    process.stderr.write(`qol-architecture violation in ${filePath}: \`compile_error!\` macro found.
+    process.stderr.write(`qol-arch-code violation in ${filePath}: \`compile_error!\` macro found.
 
 The skill prohibits compile_error! gates for unsupported platforms. They
 break cross-compilation, block dev on other hosts, and break CI matrix
@@ -117,15 +117,15 @@ Replace with a stub Platform impl that returns Err("not implemented on
 <os>") at runtime. The host can decide UX (toast, hide menu item, etc.)
 while the plugin still compiles cross-platform.
 
-See the qol-architecture skill for the full pattern.
+See the qol-arch-code skill for the full pattern.
 
 Bypass for this single edit:
-  touch .claude/bypass-qol-architecture
+  touch .claude/bypass-qol-arch-code
 `);
 }
 
 function blockOsFileOutsidePlatform(filePath) {
-    process.stderr.write(`qol-architecture violation in ${filePath}.
+    process.stderr.write(`qol-arch-code violation in ${filePath}.
 
 OS-named files (linux.rs, macos.rs, windows.rs) must live inside a
 \`platform/\` directory. Found this one as a direct child of its feature
@@ -140,7 +140,7 @@ The \`platform/\` directory keeps cross-platform code visibly compartmentalized
 and prevents OS-specific files from drifting into business-code paths.
 
 Bypass for this edit only:
-  touch .claude/bypass-qol-architecture
+  touch .claude/bypass-qol-arch-code
 `);
 }
 
@@ -153,7 +153,7 @@ function blockCfgViolations(filePath, violations) {
         ])
         .join('\n');
 
-    process.stderr.write(`qol-architecture violation in ${filePath}.
+    process.stderr.write(`qol-arch-code violation in ${filePath}.
 
 Detected #[cfg(target_os = ...)] attributes outside the canonical mod.rs
 re-export pattern:
@@ -179,12 +179,12 @@ Refactor steps:
   3. Each <os>.rs has \`pub(crate) struct Platform; impl Trait for Platform\`.
   4. Replace business-code cfg blocks with calls to \`Platform.method(...)\`.
 
-Reference: qol-dev-conventions:qol-architecture skill.
+Reference: qol-dev-conventions:qol-arch-code skill.
 
 Bypass for this edit only:
-  touch .claude/bypass-qol-architecture
+  touch .claude/bypass-qol-arch-code
   # or for N edits in a row:
-  echo 5 > .claude/bypass-qol-architecture
+  echo 5 > .claude/bypass-qol-arch-code
 `);
 }
 
@@ -231,7 +231,7 @@ function main() {
     }
 
     const cwd = payload.cwd || process.cwd();
-    const marker = path.join(cwd, '.claude', 'bypass-qol-architecture');
+    const marker = path.join(cwd, '.claude', 'bypass-qol-arch-code');
     if (fs.existsSync(marker) && fs.statSync(marker).isFile()) {
         try {
             const raw = fs.readFileSync(marker, 'utf8').trim();

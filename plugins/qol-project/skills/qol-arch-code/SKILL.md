@@ -1,9 +1,9 @@
 ---
-name: qol-architecture
-description: Use when designing or refactoring Rust plugins/libs that need cross-platform support. Defines the strategy-pattern compartmentalization that replaces scattered #[cfg(target_os)] gates and compile_error! fallbacks. Triggers on platform-specific code, multi-OS support, plugin platform modules, or any time you see #[cfg(target_os)] sprawl.
+name: qol-arch-code
+description: Use when designing or refactoring Rust plugins/libs that need cross-platform support. Defines the strategy-pattern compartmentalization (platform/ subfolders, trait + per-OS impls) that replaces scattered #[cfg(target_os)] gates and compile_error! fallbacks. Triggers on platform-specific code, multi-OS support, plugin platform modules, OS-named files, or any time you see #[cfg(target_os)] sprawl. For symbol/import hygiene that prevents dead_code warnings under `-D warnings`, see `qol-arch-cross-platform`. For CI/release workflow contracts that enforce cross-platform builds, see `qol-arch-cicd`.
 ---
 
-# qol-architecture: Cross-Platform Strategy Pattern
+# qol-arch-code: Cross-Platform Strategy Pattern (Code Layout)
 
 ## Principle
 
@@ -251,7 +251,7 @@ All three should be replaced with the trait+impls pattern above.
 
 ## Enforcement: PreToolUse hook
 
-This skill ships with a Claude Code PreToolUse hook (`bin/check-qol-architecture.cjs`) that blocks Edit/Write/MultiEdit/NotebookEdit operations introducing the violations listed above. Active on any `*.rs` file under `*/qol-tools/*`. Specifically blocks:
+This skill ships with a Claude Code PreToolUse hook (`bin/check-qol-arch-code.cjs`) that blocks Edit/Write/MultiEdit/NotebookEdit operations introducing the violations listed above. Active on any `*.rs` file under `*/qol-tools/*`. Specifically blocks:
 
 - `compile_error!(...)` — anywhere.
 - `#[cfg(target_os = ...)]` (including `all/any/not(target_os = ...)`) outside the canonical mod.rs re-export pattern (`#[cfg(target_os = "X")] mod X;` or `#[cfg(target_os = "X")] pub use X::Platform;`).
@@ -266,11 +266,20 @@ Bypass for one-off legitimate exceptions (and you should be very sure it's legit
 
 ```bash
 # next 1 edit passes
-touch .claude/bypass-qol-architecture
+touch .claude/bypass-qol-arch-code
 # next N edits pass
-echo 5 > .claude/bypass-qol-architecture
+echo 5 > .claude/bypass-qol-arch-code
 ```
 
 The marker is auto-consumed per edit; no cleanup needed.
 
-Implementation: Node.js (`bin/check-qol-architecture.cjs`) — Claude Code requires Node, so the dependency is free across Linux, macOS, and Windows. Wired via `hooks/hooks.json` as `node ${CLAUDE_PLUGIN_ROOT}/bin/check-qol-architecture.cjs` so Windows doesn't need a shebang interpreter.
+Implementation: Node.js (`bin/check-qol-arch-code.cjs`) — Claude Code requires Node, so the dependency is free across Linux, macOS, and Windows. Wired via `hooks/hooks.json` as `node ${CLAUDE_PLUGIN_ROOT}/bin/check-qol-arch-code.cjs` so Windows doesn't need a shebang interpreter.
+
+## Sibling skills
+
+This skill covers code *layout*. Two sibling skills ship in the same plugin and cover orthogonal aspects of the same overall infrastructure-health story:
+
+- **`qol-arch-cross-platform`** — symbol/import hygiene that catches dead_code-on-other-platform errors under `-D warnings`. The ones that compile on Linux, fail on macOS, and waste a roundtrip in CI to learn about. Hook bans `#[allow(dead_code)]`/`#[allow(unused_mut)]` outside `platform/` (forces honest cfg-gating instead of hiding the symptom) and `#[cfg(target_os)]` on `use` statements (almost always a refactor leftover that becomes `unused_imports`).
+- **`qol-arch-cicd`** — the CI/release workflow contract. `RUSTFLAGS=-D warnings` everywhere, plugin CI matrix derived from `plugin.toml` `platforms`, qol-config sibling-checkout-and-rewrite parity between ci.yml and release.yml, conditional deps belong in `[target.'cfg(target_os = ...)'.dependencies]`. Hook lints workflow YAML and Cargo.toml at edit time.
+
+The three skills together cover the loop: prevent it in code (this skill), prevent it from sneaking through symbol-hygiene cracks (`qol-arch-cross-platform`), catch it in CI on every platform when it does (`qol-arch-cicd`).

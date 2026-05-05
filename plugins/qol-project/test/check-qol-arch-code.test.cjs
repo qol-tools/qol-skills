@@ -5,7 +5,7 @@ const assert = require('node:assert');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
-const HOOK = path.join(__dirname, '..', 'bin', 'check-qol-architecture.cjs');
+const HOOK = path.join(__dirname, '..', 'bin', 'check-qol-arch-code.cjs');
 
 function run(payload) {
     const result = spawnSync('node', [HOOK], {
@@ -24,7 +24,7 @@ test('blocks cfg(all(target_os, feature)) gating non-OS module', () => {
         },
     });
     assert.equal(r.exitCode, 2);
-    assert.match(r.stderr, /qol-architecture violation/);
+    assert.match(r.stderr, /qol-arch-code violation/);
 });
 
 test('passes canonical multi-line cfg + mod re-export pattern', () => {
