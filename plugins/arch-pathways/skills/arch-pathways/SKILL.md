@@ -299,6 +299,76 @@ Hard rules for auto-iterate:
 - Each ship-readiness comment supersedes prior Research/Agent-test comments; no need to read those.
 - Audio brief: after the comment lands, suggest `node ${CLAUDE_PLUGIN_ROOT}/bin/say-issue.cjs <repo> <N>` so the user can listen instead of read (operations table below).
 - Settle signal is identical to manual mode (`kickoff <PID>` / `ship <PID>` / `promote <PID>`). Recommendation does NOT auto-trigger kickoff — the user is still the final decision-maker.
+- **Compaction is mandatory** (see next subsection). Every Ship-readiness comment is followed by an Issue-body edit that folds verified findings INTO the body, so the next round reads the body instead of re-ingesting every prior comment.
+
+#### Compaction (mandatory after every Ship-readiness comment)
+
+**Why.** Without compaction, every research round adds 5–10 KB of dense findings as comments. Round N's agent has to re-read N-1 prior comments to reach the same understanding. Token cost grows linearly per round and stays expensive forever — even after questions are settled. Compaction makes the issue body the canonical "what we know now" so agents read body + latest comment only.
+
+**The discipline.** The Issue body is the **current state**. Comments are the **history**. After every Ship-readiness comment lands, the agent runs:
+
+```sh
+gh issue view <N> -R <repo> --json body --jq .body > /tmp/old-body.md
+# Edit /tmp/new-body.md by folding the latest comment's verified findings
+# into the body, following the canonical body shape below.
+gh issue edit <N> -R <repo> --body-file /tmp/new-body.md
+```
+
+**Canonical body shape after compaction.** Every issue body that has been through ≥1 round looks like this:
+
+```markdown
+## Problem
+<unchanged unless root cause was clarified by research; rewrite if so>
+
+## Constraints
+<unchanged unless research surfaced a new constraint that's now load-bearing>
+
+## Proposed solution
+<the LATEST converged proposal — replace earlier versions, do not append>
+
+## Verified facts
+<every ✅ from prior Ship-readiness comments, deduplicated, one-line each>
+- ✅ <fact> — <evidence: file:line or doc URL>
+
+## Open questions
+<every [DECIDE] not yet resolved by the user, plus every ⚠️ that's still unverified>
+- [ ] <question or risk>
+
+## Research log
+<one line per Ship-readiness comment, in chronological order, linking to the comment URL>
+- [Ship-readiness 1](#issuecomment-...) — <one-line summary>
+- [Ship-readiness 2](#issuecomment-...) — <one-line summary>
+```
+
+**What goes WHERE during compaction:**
+
+| In the latest Ship-readiness comment | Where it lands during compaction |
+|---|---|
+| New `✅ Verified` line | Append to body's `## Verified facts` (dedupe with prior facts) |
+| New `[DECIDE]` question | Append to body's `## Open questions` (drop when user resolves it in a later round) |
+| New `⚠️ Unverified / risk` | Append to `## Open questions` if still unverified; promote to `## Verified facts` once a later round verifies it |
+| Refined proposal in the comment's body | REPLACE `## Proposed solution` (do not stack proposals) |
+| New constraint surfaced | Append to `## Constraints` if load-bearing for the design |
+| Everything else (raw research notes, alternate hypotheses, dead ends) | Stays in the comment under `<details>` — never folded into body |
+
+**What NEVER goes into the body:**
+- Raw research narrative — that's what the comment's `<details>` block is for.
+- Refuted hypotheses — they live in their original comment as a record of "why we ruled this out", but don't pollute the canonical statement.
+- TL;DR / Recommend / Confidence — those are per-round status, only in the comment.
+
+**Compaction order of operations (every round):**
+
+1. Agent posts the new Ship-readiness comment.
+2. Agent fetches the current Issue body.
+3. Agent merges in the new findings per the table above.
+4. Agent edits the Issue body via `gh issue edit`.
+5. Agent appends the new Ship-readiness comment URL to the body's `## Research log` section.
+
+The merge MUST be additive for verified facts (don't lose history), replacement for the proposed solution (one canonical answer), and subtractive for open questions (drop ones that are now resolved).
+
+**For the next round's agent reading the issue:**
+
+> Read the Issue **body** for current state. Read **only the latest Ship-readiness comment** for the most-recent round's full reasoning. Do NOT walk the entire comment history unless explicitly asked to dig into how a specific decision was reached.
 
 ### 2. Cross-area survey → bulk promotion (workshop for 3+ problems)
 
@@ -322,7 +392,8 @@ The user does NOT type bash. When you (the agent) recognize one of these intents
 | User intent (paraphrased) | Run | Resolves |
 |---|---|---|
 | "open an issue for this bug so we can iterate" / "track this as an issue" / "let's investigate this on GitHub" (ad-hoc, not tied to a survey area) | `gh issue create -R qol-tools/<repo> --title "<Title Case>" --body-file <path>` (body = problem + repro + ≥1 Mermaid diagram) | creates one GitHub Issue for the ping-pong loop; no worktree/ADR/PR yet |
-| "auto-iterate on `<PID>`" / "dig and tell me when ready" / "I can't review every comment, just give me the result" | dispatch a research subagent with the Ship-readiness comment format (manual mode 1b above); agent self-iterates 2-3 internal rounds and posts ONE converged comment | one ship-readiness comment per issue; user reads TL;DR + [DECIDE] + Verified only |
+| "auto-iterate on `<PID>`" / "dig and tell me when ready" / "I can't review every comment, just give me the result" | dispatch a research subagent with the Ship-readiness comment format (manual mode 1b above); agent self-iterates 2-3 internal rounds and posts ONE converged comment **AND compacts the issue body per the Compaction subsection** | one ship-readiness comment per issue; body always reflects current state; user reads TL;DR + [DECIDE] + Verified only |
+| "compact `<PID>`" / "fold the comments into the issue body" / "update the issue with what we know" | run the Compaction order of operations (auto-iterate sub-mode 1b > Compaction subsection): fetch body, merge in latest Ship-readiness findings, `gh issue edit <N> --body-file <path>` | issue body is now the canonical current state; comments stay as history; future research rounds read body + latest comment only |
 | "say `<PID>`" / "read me the issue" / "audio brief for `<PID>`" | `node ${CLAUDE_PLUGIN_ROOT}/bin/say-issue.cjs <repo> <N>` | extracts TL;DR from the latest ship-readiness comment + issue title and pipes through macOS `say` (or `--out <path>.aiff` for a saved file) |
 | "post a research / user-test / agent-test note on `<PID>`" / "comment on the issue" | `gh issue comment <N> -R qol-tools/<repo> --body-file <path>` | adds one ping-pong round to the Issue thread; tag the body with `### Research N`, `### User test N`, or `### Agent test N` |
 | "update the issue body for `<PID>`" (canonical problem-of-record changed) | `gh issue edit <N> -R qol-tools/<repo> --body-file <path>` | replaces the Issue body — use only when the root cause / scope shifts, not for working notes |

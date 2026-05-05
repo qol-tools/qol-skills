@@ -1,6 +1,6 @@
 {
   "name": "arch-pathways",
-  "version": "0.3.8",
+  "version": "0.3.9",
   "description": "Architecture-analysis pipeline with three flows: (1) single-issue ping-pong — mint a GitHub Issue first, iterate via research / user-test / agent-test comments with Mermaid charts, then dispatch the kickoff agent for branch + worktree + ADR + draft PR; (2) cross-area HTML survey for 3+ subsystem comparison; (3) direct kickoff for tightly-scoped mechanical fixes. Includes pid-new / pid-mint / pathway-extract / pathway-pr scripts, the kickoff agent, and hooks that enforce HTML survey structure, markdown ADR structure + GitHub-compat Mermaid lint, PR title / branch name / worktree path conventions, and auto-cleanup of worktrees on PR merge.",
   "author": {
     "name": "KMRH47"
