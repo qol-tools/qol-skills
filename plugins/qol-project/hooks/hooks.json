@@ -6,7 +6,15 @@
                 "hooks": [
                     {
                         "type": "command",
-                        "command": "node ${CLAUDE_PLUGIN_ROOT}/bin/check-qol-architecture.cjs"
+                        "command": "node ${CLAUDE_PLUGIN_ROOT}/bin/check-qol-arch-code.cjs"
+                    },
+                    {
+                        "type": "command",
+                        "command": "node ${CLAUDE_PLUGIN_ROOT}/bin/check-qol-arch-cross-platform.cjs"
+                    },
+                    {
+                        "type": "command",
+                        "command": "node ${CLAUDE_PLUGIN_ROOT}/bin/check-qol-arch-cicd.cjs"
                     }
                 ]
             }
