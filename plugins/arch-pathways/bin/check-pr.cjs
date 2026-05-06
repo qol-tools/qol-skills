@@ -52,41 +52,14 @@ function inspectGhPr(tokens) {
     return violations;
 }
 
-function inspectGitBranchCreate(tokens) {
-    const violations = [];
-    const verb = tokens[1];
-    let branch = null;
-    if (verb === 'checkout') {
-        const idx = tokens.indexOf('-b');
-        if (idx === -1) return violations;
-        branch = tokens[idx + 1];
-    } else if (verb === 'switch') {
-        const idx = tokens.indexOf('-c');
-        if (idx === -1) return violations;
-        branch = tokens[idx + 1];
-    } else {
-        return violations;
-    }
-    if (!branch) return violations;
-    if (!pid.parseBranchName(branch)) {
-        violations.push(
-            `branch "${branch}" does not match "<prefix>-<n>-<slug>" (e.g. "tray-42-fold-installs"). ` +
-            `Use bin/pid-new instead of raw git so the branch is linked to a real GitHub issue.`,
-        );
-    }
-    return violations;
-}
-
 function inspectGitWorktreeAdd(tokens, workspace) {
     const violations = [];
     if (tokens[2] !== 'add') return violations;
 
     const valueFlags = new Set(['-b', '-B', '--reason']);
     const skip = new Set();
-    let branch = null;
     for (let i = 3; i < tokens.length; i++) {
         if (valueFlags.has(tokens[i])) {
-            if (tokens[i] === '-b' || tokens[i] === '-B') branch = tokens[i + 1];
             skip.add(i); skip.add(i + 1);
         }
     }
@@ -97,18 +70,13 @@ function inspectGitWorktreeAdd(tokens, workspace) {
         pathArg = tokens[i];
         break;
     }
-    if (branch && !pid.parseBranchName(branch)) {
-        violations.push(
-            `worktree branch "${branch}" does not match "<prefix>-<n>-<slug>". Use bin/pid-new.`,
-        );
-    }
     if (pathArg && workspace) {
         const expected = path.join(workspace, 'worktrees') + path.sep;
         const resolved = path.resolve(pathArg);
         if (!resolved.startsWith(expected)) {
             violations.push(
                 `worktree path "${pathArg}" is not under "${expected}". ` +
-                `Worktrees live in the central pool. Use bin/pid-new.`,
+                `Worktrees live in the central pool — see qol-workflow:git-trees.`,
             );
         }
     }
@@ -122,9 +90,7 @@ function inspectCommand(cmd, workspace) {
         const tokens = shell.tokenize(sub);
         if (tokens.length === 0) continue;
         if (tokens[0] === 'gh' && tokens[1] === 'pr') violations.push(...inspectGhPr(tokens));
-        else if (tokens[0] === 'git' && (tokens[1] === 'checkout' || tokens[1] === 'switch')) {
-            violations.push(...inspectGitBranchCreate(tokens));
-        } else if (tokens[0] === 'git' && tokens[1] === 'worktree') {
+        else if (tokens[0] === 'git' && tokens[1] === 'worktree') {
             violations.push(...inspectGitWorktreeAdd(tokens, workspace));
         }
     }
@@ -137,10 +103,9 @@ function block(violations) {
 ${violations.map(v => `  - ${v}`).join('\n')}
 
 Quick fixes:
-  - PR title format:    "<PREFIX>-<N> Title Case Slug"  (e.g. "TRAY-42 Fold Installs Into Config Dir")
-  - Branch name format: "<prefix>-<n>-<kebab-slug>"     (e.g. "tray-42-fold-installs-into-config-dir")
-  - Worktree path:      "\${workspace}/worktrees/<repo>/<branch>"
-  - Or just run:        node \${CLAUDE_PLUGIN_ROOT}/bin/pid-new.cjs <repo> "<Title>"
+  - PR title format:  "<PREFIX>-<N> Title Case Slug"  (e.g. "TRAY-42 Fold Installs Into Config Dir")
+  - Worktree path:    "\${workspace}/worktrees/<repo>/<branch>"
+  - Or run:           node \${CLAUDE_PLUGIN_ROOT}/bin/pid-new.cjs <repo> "<Title>"
 
 Bypass for one edit:
   touch .claude/bypass-arch-pathways
@@ -174,7 +139,6 @@ if (require.main === module) {
 module.exports = {
     inspectCommand,
     inspectGhPr,
-    inspectGitBranchCreate,
     inspectGitWorktreeAdd,
     resolveWorkspace,
 };

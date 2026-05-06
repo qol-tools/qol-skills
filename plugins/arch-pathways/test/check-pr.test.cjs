@@ -54,26 +54,17 @@ test('gh pr non-create/edit subcommands ignored', () => {
     }
 });
 
-test('git checkout/switch -b/-c with valid branch passes', () => {
+test('any branch name passes on git checkout -b / git switch -c (PR title is the only PID gate)', () => {
     const cases = [
         'git checkout -b tray-42-fold-installs',
         'git switch -c lights-7-add-zigbee-adapter',
+        'git checkout -b feature/foo',
+        'git switch -c TRAY-42-foo',
+        'git checkout -b docs-clarify-daemon-lifecycle',
+        'git switch -c hotfix-typo',
     ];
     for (const cmd of cases) {
         assert.deepStrictEqual(checkPr.inspectCommand(cmd, WORKSPACE), [], `should pass: ${cmd}`);
-    }
-});
-
-test('git checkout/switch -b/-c with invalid branch fails', () => {
-    const cases = [
-        'git checkout -b feature/foo',
-        'git switch -c TRAY-42-foo',
-        'git checkout -b tray-foo',
-        'git switch -c main',
-    ];
-    for (const cmd of cases) {
-        const v = checkPr.inspectCommand(cmd, WORKSPACE);
-        assert.strictEqual(v.length > 0, true, `expected violation for: ${cmd}`);
     }
 });
 
@@ -95,16 +86,26 @@ test('git worktree add with valid branch + central pool path passes', { skip: SK
     assert.deepStrictEqual(checkPr.inspectCommand(cmd, WORKSPACE), []);
 });
 
-test('git worktree add with bad branch fails', () => {
-    const cmd = 'git worktree add -b feature/x /ws/worktrees/qol-tray/feature-x';
-    const v = checkPr.inspectCommand(cmd, WORKSPACE);
-    assert.strictEqual(v.some(s => /branch/.test(s)), true);
+test('git worktree add with any branch name passes when path is in central pool', { skip: SKIP_WIN }, () => {
+    const cases = [
+        'git worktree add -b feature/x /ws/worktrees/qol-tray/feature-x',
+        'git worktree add -b docs-clarify-daemon-lifecycle /ws/worktrees/qol-skills/docs-clarify-daemon-lifecycle',
+        'git worktree add -b loosen-archpath-hook /ws/worktrees/qol-skills/loosen-archpath-hook',
+    ];
+    for (const cmd of cases) {
+        assert.deepStrictEqual(checkPr.inspectCommand(cmd, WORKSPACE), [], `should pass: ${cmd}`);
+    }
 });
 
-test('git worktree add outside central pool fails', { skip: SKIP_WIN }, () => {
-    const cmd = 'git worktree add -b tray-42-foo /tmp/somewhere/tray-42-foo';
-    const v = checkPr.inspectCommand(cmd, WORKSPACE);
-    assert.strictEqual(v.some(s => /central pool/.test(s)), true);
+test('git worktree add outside central pool fails regardless of branch name', { skip: SKIP_WIN }, () => {
+    const cases = [
+        'git worktree add -b tray-42-foo /tmp/somewhere/tray-42-foo',
+        'git worktree add -b docs-foo /tmp/elsewhere/docs-foo',
+    ];
+    for (const cmd of cases) {
+        const v = checkPr.inspectCommand(cmd, WORKSPACE);
+        assert.strictEqual(v.some(s => /central pool/.test(s)), true, `expected central-pool violation for: ${cmd}`);
+    }
 });
 
 test('git worktree non-add subcommands ignored', () => {
@@ -119,7 +120,7 @@ test('git worktree non-add subcommands ignored', () => {
 });
 
 test('chained commands inspect each subcommand', () => {
-    const cmd = 'cd /tmp && git checkout -b feature/x && echo done';
+    const cmd = 'cd /tmp && gh pr create --title "fix bug" --body x && echo done';
     const v = checkPr.inspectCommand(cmd, WORKSPACE);
     assert.strictEqual(v.length > 0, true);
 });
