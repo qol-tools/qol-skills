@@ -135,9 +135,49 @@ Example:
 - repo worktree: `/Users/kaho/repos/private/qol-tools/worktrees/feat-config-contract-v1/qol-tray`
 - branch: `feat/config-contract-v1`
 
+## Push direct vs open an issue + PR
+
+Worktrees are mandatory; ceremony around them is not. After the work is done, two routes exist.
+
+| Route | When | Flow |
+|---|---|---|
+| **Push direct to main** | Skill edits, hook fixes/tweaks, README/doc updates, test additions, schema-stable refactors — anything where a wrong push can be reverted in under a minute and doesn't affect anyone else. | `git commit` → `git push origin <branch>:main` → delete branch → `git worktree remove`. No issue, no PR. |
+| **Issue + PR (arch-pathways)** | New plugin, new hook, schema change, anything cross-cutting in real product code (qol-tray src, plugin daemons, cargo/build infra). | See `arch-pathways` skill — mint an issue with `bin/pid-new`, open a draft PR, mark ready, squash-merge. |
+
+Decision rule, asked literally: **"If this push is wrong, can it be reverted in under a minute without affecting anyone else?"** Yes → direct push. No → issue + PR.
+
+The `qol-skills` marketplace and similar low-blast-radius repos are the canonical home of the direct-push route — `qol-skills/README.md`'s Contributing section has the worked example. The arch-pathways skill explicitly excludes skill, hook, and doc edits.
+
+### Direct push, concretely
+
+```bash
+FEAT=docs-clarify-daemon-lifecycle
+git -C <main-clone> worktree add ../worktrees/$FEAT/<repo> -b $FEAT
+cd ../worktrees/$FEAT/<repo>
+# … edit, commit …
+git push origin $FEAT:main
+git push origin --delete $FEAT
+cd - && git -C <main-clone> worktree remove ../worktrees/$FEAT/<repo>
+```
+
+The branch existed only as a delivery vehicle; nothing references it after the merge.
+
+### When the arch-pathways branch-name hook blocks a direct-push branch
+
+The arch-pathways check-pr hook enforces `<prefix>-<n>-<slug>` branch names tied to a real issue. Direct-push branches don't have an issue. Bypass for one operation:
+
+```bash
+mkdir -p $WORKSPACE/.claude
+touch $WORKSPACE/.claude/bypass-arch-pathways
+# then run the git worktree add / git checkout -b
+```
+
+The marker is consumed (deleted) on first hook invocation. Use it sparingly — the carve-out is for skill/hook/doc edits, not as a general escape hatch.
+
 ## Do Not
 
 - Do not pretend multiple repos share one Git worktree.
 - Do not mix unrelated feature branches in the same feature lane.
 - Do not default back to repo-first worktree placement for coordinated QoL feature work unless there is a clear reason.
 - Do not branch from a main clone to "save time". The hook will block you, and the recovery cost is higher than the worktree-add you avoided.
+- Do not run skill / hook / doc edits through the arch-pathways issue + PR flow. The ceremony is for product code; the direct-push route exists for everything else.
