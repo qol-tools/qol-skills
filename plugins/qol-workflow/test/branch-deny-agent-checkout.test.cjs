@@ -12,10 +12,16 @@ function run(cmd) {
         input: JSON.stringify({ tool_name: 'Bash', tool_input: { command: cmd } }),
         encoding: 'utf8',
     });
-    return { exitCode: r.status, stderr: r.stderr };
+    return { exitCode: r.status, stdout: r.stdout, stderr: r.stderr };
 }
 
-const blocked = [
+function parseDecision(stdout) {
+    if (!stdout.trim()) return null;
+    const obj = JSON.parse(stdout);
+    return obj.hookSpecificOutput && obj.hookSpecificOutput.permissionDecision;
+}
+
+const askedFor = [
     'git checkout main',
     'git checkout master',
     'git checkout feature-branch',
@@ -32,7 +38,7 @@ const blocked = [
     'git checkout main # intentional',
 ];
 
-const allowed = [
+const allowedSilently = [
     'git checkout -- file.txt',
     'git checkout -- src/foo.rs',
     'git checkout HEAD -- file.txt',
@@ -46,35 +52,40 @@ const allowed = [
     'echo hello',
 ];
 
-test('blocks branch switches and detached-HEAD checkouts', () => {
-    for (const cmd of blocked) {
+test('asks for approval on branch switches and detached-HEAD checkouts', () => {
+    for (const cmd of askedFor) {
         const r = run(cmd);
-        assert.strictEqual(r.exitCode, 2, `expected block for: ${cmd}\nstderr: ${r.stderr}`);
-        assert.match(r.stderr, /BLOCKED/, `stderr should contain BLOCKED for: ${cmd}`);
+        assert.strictEqual(r.exitCode, 0, `expected exit 0 (ask) for: ${cmd}\nstderr: ${r.stderr}`);
+        const decision = parseDecision(r.stdout);
+        assert.strictEqual(decision, 'ask', `expected permissionDecision=ask for: ${cmd}\nstdout: ${r.stdout}`);
     }
 });
 
-test('allows file reverts, worktree add, and unrelated commands', () => {
-    for (const cmd of allowed) {
+test('allows silently for file reverts, worktree add, and unrelated commands', () => {
+    for (const cmd of allowedSilently) {
         const r = run(cmd);
-        assert.strictEqual(r.exitCode, 0, `expected allow for: ${cmd}\nstderr: ${r.stderr}`);
+        assert.strictEqual(r.exitCode, 0, `expected exit 0 for: ${cmd}\nstderr: ${r.stderr}`);
+        assert.strictEqual(r.stdout.trim(), '', `expected empty stdout for: ${cmd}\nstdout: ${r.stdout}`);
     }
 });
 
-test('handles empty payload (returns 0)', () => {
+test('handles empty payload (returns 0, no output)', () => {
     const r = spawnSync('node', [HOOK], { input: '', encoding: 'utf8' });
     assert.strictEqual(r.status, 0);
+    assert.strictEqual(r.stdout.trim(), '');
 });
 
-test('handles non-Bash tool payload (returns 0)', () => {
+test('handles non-Bash tool payload (returns 0, no output)', () => {
     const r = spawnSync('node', [HOOK], {
         input: JSON.stringify({ tool_name: 'Read', tool_input: { file_path: '/tmp/x' } }),
         encoding: 'utf8',
     });
     assert.strictEqual(r.status, 0);
+    assert.strictEqual(r.stdout.trim(), '');
 });
 
-test('handles malformed JSON payload (returns 0)', () => {
+test('handles malformed JSON payload (returns 0, no output)', () => {
     const r = spawnSync('node', [HOOK], { input: 'not json', encoding: 'utf8' });
     assert.strictEqual(r.status, 0);
+    assert.strictEqual(r.stdout.trim(), '');
 });

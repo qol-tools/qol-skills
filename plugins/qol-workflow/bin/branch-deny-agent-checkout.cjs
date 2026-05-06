@@ -1,21 +1,22 @@
 #!/usr/bin/env node
 /*
- * PreToolUse hook (Bash matcher): block ANY agent-initiated `git checkout <ref>`
- * or `git switch <branch>`. Absolute — no main-clone scope check, no bypass
- * marker. Complements `branch-deny-checkout-in-main-clone` (which is scoped
- * to qol-* main clones and has a bypass) by enforcing the harder rule that
- * the agent is never allowed to switch branches, anywhere.
+ * PreToolUse hook (Bash matcher): when the agent runs `git checkout <ref>` or
+ * `git switch <branch>`, force a user-approval prompt instead of letting the
+ * tool call run automatically. Complements `branch-deny-checkout-in-main-clone`
+ * (which blocks outright in qol-* main clones with a bypass marker) by
+ * adding a milder, always-on confirmation everywhere else.
  *
- * Allowed:
+ * Allowed silently:
  *   - file reverts: `git checkout -- <file>`, `git checkout HEAD -- <file>`,
  *     `git checkout <ref> -- <file>` (anything with `--` separator)
  *   - `git worktree add -b <branch> <path>` (the regex matches only the
  *     `checkout`/`switch` verbs, not `worktree`)
  *   - bare `git checkout` with no args
  *
- * Blocked: every other `git checkout` / `git switch` form, including
- * `git checkout main`. The user may run any of these themselves with the
- * `!` prefix in the Claude Code prompt (which bypasses PreToolUse(Bash)).
+ * Asks (permissionDecision = "ask"): every other `git checkout` / `git switch`
+ * form, including `git checkout main`. The user sees a permission prompt and
+ * can approve or deny. Approving runs the command; denying lets the agent
+ * decide what to do next.
  */
 
 'use strict';
@@ -31,19 +32,20 @@ function readStdin() {
     }
 }
 
-function emitBlock(verb, target, command) {
-    process.stderr.write(`git branch switch BLOCKED by qol-workflow:branch-deny-agent-checkout hook.
-
-The agent is not allowed to switch branches, period. Only the user may.
+function emitAsk(verb, target, command) {
+    const reason = `The agent is asking to switch branches. Approve only if this is what you want.
 
 Command: ${command.trim()}
 
-If the user actually wants this, they should run it themselves with the \`!\` prefix in the prompt:
+If you (the user) want this, approve. The agent should not switch branches autonomously — only the user should.`;
 
-  ! git ${verb} ${target || '<...>'}
-
-If the agent thinks it needs to switch branches, it should ask the user instead.
-`);
+    process.stdout.write(JSON.stringify({
+        hookSpecificOutput: {
+            hookEventName: 'PreToolUse',
+            permissionDecision: 'ask',
+            permissionDecisionReason: reason,
+        },
+    }));
 }
 
 function main() {
@@ -68,8 +70,8 @@ function main() {
 
     if (cls.kind === 'noop' || cls.kind === 'path') return 0;
 
-    emitBlock(verb, cls.target || '', cmd);
-    return 2;
+    emitAsk(verb, cls.target || '', cmd);
+    return 0;
 }
 
 module.exports = {};
