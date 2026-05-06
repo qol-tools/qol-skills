@@ -170,6 +170,47 @@ cargo test -- --nocapture
 - If frontend files change inside a Rust-backed app, frontend syntax checks are additive, not a substitute for the Rust verification stack.
 - If the user says the repo still fails to build, rerun the exact repo-native build command immediately and debug that concrete failure before doing anything else.
 
+## No band-aids in hot paths
+
+When something runs in a frequent path (shell `chpwd` hook, render frame, keystroke handler, supervisor tick, daemon poll) and it stalls, the right fix is to **remove the slow work from the hot path** — not to add a timeout, retry, fallback, or abort.
+
+A timeout that "bounds" a stall is hiding an architectural mistake. The slow call doesn't belong in the hot path at all.
+
+### Concrete pattern (qol-cicd activate.sh, 2026-05-06)
+
+The zsh `chpwd` hook called `gh auth token --user <name>` to scope `GH_TOKEN` per directory. On macOS, `gh`'s Keychain lookup can stall behind a Touch ID prompt, freezing every terminal. An 800 ms hard timeout was added (`_qol_gh_fetch_token` with background+sleep+kill). It "papered over short stalls; long ones still surfaced as missing GH_TOKEN with no signal."
+
+The structural fix (commit `1c22f5f`) ripped `gh` out of the hook entirely:
+
+- `qol-gh-account set <user>` resolves the token via `gh` once, at configure time.
+- The token is written to `~/.config/qol-tools/gh-token` (mode 0600).
+- The `chpwd` hook becomes `IFS= read -r tok < $cfg` — a pure file read.
+- `qol-gh-account refresh` regenerates the token file when the gh token rotates.
+
+Tests were rewritten to assert the new contract: *"the hook never invokes `gh`, regardless of pwd state, config presence, or symlink resolution."* Pin down the new invariant; don't retest the old path.
+
+### Before adding a timeout, ask
+
+- Why is this call here at all? Can the work move to a one-shot configure step that writes a file the hot path reads?
+- Is the input genuinely dynamic, or could it be cached at startup / registration time?
+- If the call must stay, can the result of a previous successful call be re-used while the next one is in flight (lazy refresh)?
+
+### Shell-specific trap: zsh `chpwd` recurses through subshells
+
+`chpwd` fires in subshells too. `qol_root=$(cd "$x" && pwd -P)` inside the hook recurses exponentially — 200 cd events took >18 s in one repro (commit `b6619d2`). After fix: 35 ms.
+
+In a zsh `chpwd` hook:
+
+- **No** `$(...)` command substitutions.
+- **No** `(...)` subshells.
+- **No** `cd ...` chains.
+- Use parameter expansion (`${PWD:A}`, `${var:A}`) and builtins.
+- Resolve once at sourcing where you can subshell freely (the hook isn't registered yet); cache.
+
+### Measure before you "fix"
+
+Both fixes above included a concrete metric (`200 cd events: 18 s → 35 ms`). Without the measurement the bug looked like a flap. Whenever you suspect a hot path is the problem, get a number first, then change the code.
+
 ## Do NOT
 
 - Push unless explicitly asked
