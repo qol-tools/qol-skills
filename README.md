@@ -48,7 +48,7 @@ $qol-tray explain the daemon lifecycle and check this repo for mismatches
 | `qol-plugin-screen-recorder` | `qol-plugin-screen-recorder` |
 | `qol-plugin-window-actions` | `qol-plugin-window-actions` |
 | `qol-tray` | `qol-tray-core`, `qol-tray-rust`, `qol-tray-ui-systems`, `qol-tray-dev-logging`, `qol-tray-dev-recompile`, `qol-tray-feature-profile`, `qol-tray-release-flow`, `qol-world-canvas`, `qol-apps-testing` |
-| `qol-workflow` | `commit`, `git-push`, `git-trees`, `coding-general`, `readme` |
+| `qol-workflow` | `commit`, `git-push`, `git-trees`, `coding-general` |
 | `qol-langs` | `rust-conventions`, `gpui-conventions`, `preact-conventions` |
 | `qol-project` | `qol-mission`, `qol-tools`, `qol-cicd`, `qol-arch-code`, `qol-arch-cross-platform`, `qol-arch-cicd`, `qol-shared-libs`, `qol-plugin-template` |
 | `arch-pathways` | `arch-pathways` |
