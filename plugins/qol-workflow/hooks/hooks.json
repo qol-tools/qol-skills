@@ -15,6 +15,10 @@
                     {
                         "type": "command",
                         "command": "node ${CLAUDE_PLUGIN_ROOT}/bin/branch-deny-checkout-in-main-clone.cjs"
+                    },
+                    {
+                        "type": "command",
+                        "command": "node ${CLAUDE_PLUGIN_ROOT}/bin/branch-deny-agent-checkout.cjs"
                     }
                 ]
             }
