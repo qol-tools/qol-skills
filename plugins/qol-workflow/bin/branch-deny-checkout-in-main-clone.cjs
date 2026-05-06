@@ -24,7 +24,7 @@ const PATH_SEP = /(^|\s)--\s/;
 const SHA_LIKE = /^[0-9a-f]{4,40}$/i;
 const REVISION_LIKE = /[~^@]/;
 const ALLOWED_BRANCHES = new Set(['main', 'master']);
-const QOL_REPO_RE = /\/qol-tools\/(?!worktrees\/)([^/]+)\/?$/;
+const QOL_REPO_RE = /[\\/]qol-tools[\\/](?!worktrees[\\/])([^\\/]+)[\\/]?$/;
 
 // Match an opening `cd <path> [&&|;]` group anchored at the start of the
 // command (after any whitespace or opening paren). Captures the path.

@@ -162,14 +162,16 @@ test('resolveEffectiveCwd parses leading cd && prefix', () => {
     );
 });
 
-test('resolveEffectiveCwd handles relative cd target', () => {
+const SKIP_WIN = process.platform === 'win32' && 'asserts POSIX-style absolute paths';
+
+test('resolveEffectiveCwd handles relative cd target', { skip: SKIP_WIN }, () => {
     assert.strictEqual(
         resolveEffectiveCwd('cd qol-tray && git checkout -b x', '/Users/kaho/repos/private/qol-tools'),
         '/Users/kaho/repos/private/qol-tools/qol-tray',
     );
 });
 
-test('resolveEffectiveCwd chains multiple cd', () => {
+test('resolveEffectiveCwd chains multiple cd', { skip: SKIP_WIN }, () => {
     assert.strictEqual(
         resolveEffectiveCwd('cd /a && cd b && git checkout -b x', '/base'),
         '/a/b',
