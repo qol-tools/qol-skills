@@ -162,17 +162,7 @@ cd - && git -C <main-clone> worktree remove ../worktrees/$FEAT/<repo>
 
 The branch existed only as a delivery vehicle; nothing references it after the merge.
 
-### When the arch-pathways branch-name hook blocks a direct-push branch
-
-The arch-pathways check-pr hook enforces `<prefix>-<n>-<slug>` branch names tied to a real issue. Direct-push branches don't have an issue. Bypass for one operation:
-
-```bash
-mkdir -p $WORKSPACE/.claude
-touch $WORKSPACE/.claude/bypass-arch-pathways
-# then run the git worktree add / git checkout -b
-```
-
-The marker is consumed (deleted) on first hook invocation. Use it sparingly — the carve-out is for skill/hook/doc edits, not as a general escape hatch.
+The `arch-pathways:check-pr` hook does not enforce branch names — pick whatever name fits. The PID format (`<PREFIX>-<N> Title Case Slug`) is enforced **only** at `gh pr create/edit --title` time, which is the moment a PID actually matters. Direct-push branches never trigger that gate.
 
 ## Do Not
 
