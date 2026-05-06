@@ -18,13 +18,19 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const CHECKOUT_OR_SWITCH = /(^|[\s;&|`(])git\s+(?:[a-z-]+\s+)*(checkout|switch)\b([^\n;&|`)]*)/;
+const CHECKOUT_OR_SWITCH = /(^|[\s;&|`(])git\s+(?:\S+\s+)*?(checkout|switch)\b([^\n;&|`)]*)/;
 const CREATE_FLAGS = /(^|\s)(-b|-B|--branch|-c|-C|--create)\s+/;
 const PATH_SEP = /(^|\s)--\s/;
 const SHA_LIKE = /^[0-9a-f]{4,40}$/i;
 const REVISION_LIKE = /[~^@]/;
 const ALLOWED_BRANCHES = new Set(['main', 'master']);
 const QOL_REPO_RE = /\/qol-tools\/(?!worktrees\/)([^/]+)\/?$/;
+
+// Match an opening `cd <path> [&&|;]` group anchored at the start of the
+// command (after any whitespace or opening paren). Captures the path.
+const CD_PREFIX = /^[\s(]*cd\s+(?:--\s+)?(?:"([^"]+)"|'([^']+)'|(\S+))\s*(?:&&|;)/;
+// Match `git -C <path>` form anywhere before checkout/switch.
+const GIT_DASH_C = /git\s+(?:[a-z-]+\s+)*-C(?:=|\s+)(?:"([^"]+)"|'([^']+)'|(\S+))/;
 
 function readStdin() {
     try {
@@ -52,6 +58,29 @@ function isQolToolsMainClone(cwd) {
     const info = isMainClone(cwd);
     if (!info.repoRoot || !info.mainClone) return false;
     return QOL_REPO_RE.test(info.repoRoot);
+}
+
+function resolveEffectiveCwd(cmd, baseCwd) {
+    // `git -C <path>` overrides cd because git resolves it inside its own
+    // process regardless of the shell's cwd.
+    const dashC = cmd.match(GIT_DASH_C);
+    if (dashC) {
+        const target = dashC[1] || dashC[2] || dashC[3];
+        return path.isAbsolute(target) ? target : path.resolve(baseCwd, target);
+    }
+    // Walk through leading `cd <path> &&|;` chains.
+    let remaining = cmd;
+    let cwd = baseCwd;
+    let depth = 0;
+    while (depth < 10) {
+        const cd = remaining.match(CD_PREFIX);
+        if (!cd) break;
+        const target = cd[1] || cd[2] || cd[3];
+        cwd = path.isAbsolute(target) ? target : path.resolve(cwd, target);
+        remaining = remaining.slice(cd[0].length);
+        depth += 1;
+    }
+    return cwd;
 }
 
 function classify(matchedArgs) {
@@ -118,17 +147,18 @@ function main() {
     if (cls.kind === 'noop' || cls.kind === 'path' || cls.kind === 'flag-only' || cls.kind === 'revision') return 0;
     if (cls.kind === 'allowed-branch') return 0;
 
-    const cwd = (payload.tool_input && payload.tool_input.cwd) || process.cwd();
+    const baseCwd = (payload.tool_input && payload.tool_input.cwd) || process.cwd();
+    const cwd = resolveEffectiveCwd(cmd, baseCwd);
     if (!isQolToolsMainClone(cwd)) return 0;
 
     if (cls.kind === 'create') {
         emitBlock(
-            `\`git ${verb}\` is creating a new branch inside the main clone (cwd: ${cwd}).`,
+            `\`git ${verb}\` is creating a new branch inside the main clone (effective cwd: ${cwd}).`,
             cmd,
         );
     } else {
         emitBlock(
-            `\`git ${verb} ${cls.target}\` is switching the main clone away from main (cwd: ${cwd}).`,
+            `\`git ${verb} ${cls.target}\` is switching the main clone away from main (effective cwd: ${cwd}).`,
             cmd,
         );
     }
@@ -140,6 +170,7 @@ module.exports = {
     classify,
     isQolToolsMainClone,
     isMainClone,
+    resolveEffectiveCwd,
 };
 
 if (require.main === module) {

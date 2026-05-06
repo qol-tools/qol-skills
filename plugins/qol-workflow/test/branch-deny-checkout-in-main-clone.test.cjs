@@ -8,7 +8,7 @@ const fs = require('node:fs');
 const { spawnSync } = require('node:child_process');
 
 const HOOK = path.join(__dirname, '..', 'bin', 'branch-deny-checkout-in-main-clone.cjs');
-const { CHECKOUT_OR_SWITCH, classify, isMainClone } = require('../bin/branch-deny-checkout-in-main-clone.cjs');
+const { CHECKOUT_OR_SWITCH, classify, isMainClone, resolveEffectiveCwd } = require('../bin/branch-deny-checkout-in-main-clone.cjs');
 
 function withRepo(kind, fn) {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'qol-tools-'));
@@ -145,4 +145,95 @@ test('hook ignores commands outside qol-tools tree', () => {
     const r = run('git checkout -b feat-x', root);
     assert.strictEqual(r.exitCode, 0);
     fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('resolveEffectiveCwd parses leading cd && prefix', () => {
+    assert.strictEqual(
+        resolveEffectiveCwd('cd /foo && git checkout -b x', '/base'),
+        '/foo',
+    );
+    assert.strictEqual(
+        resolveEffectiveCwd('cd /a; git checkout -b x', '/base'),
+        '/a',
+    );
+    assert.strictEqual(
+        resolveEffectiveCwd('cd "/path with spaces" && git checkout -b x', '/base'),
+        '/path with spaces',
+    );
+});
+
+test('resolveEffectiveCwd handles relative cd target', () => {
+    assert.strictEqual(
+        resolveEffectiveCwd('cd qol-tray && git checkout -b x', '/Users/kaho/repos/private/qol-tools'),
+        '/Users/kaho/repos/private/qol-tools/qol-tray',
+    );
+});
+
+test('resolveEffectiveCwd chains multiple cd', () => {
+    assert.strictEqual(
+        resolveEffectiveCwd('cd /a && cd b && git checkout -b x', '/base'),
+        '/a/b',
+    );
+});
+
+test('resolveEffectiveCwd recognises git -C override', () => {
+    assert.strictEqual(
+        resolveEffectiveCwd('git -C /elsewhere checkout -b x', '/base'),
+        '/elsewhere',
+    );
+    // git -C beats cd
+    assert.strictEqual(
+        resolveEffectiveCwd('cd /a && git -C /b checkout -b x', '/base'),
+        '/b',
+    );
+});
+
+test('resolveEffectiveCwd returns base when no prefix matches', () => {
+    assert.strictEqual(
+        resolveEffectiveCwd('git checkout -b x', '/base'),
+        '/base',
+    );
+    assert.strictEqual(
+        resolveEffectiveCwd('git status && git checkout -b x', '/base'),
+        '/base',
+    );
+});
+
+test('hook blocks `cd <main-clone> && git checkout -b ...` from elsewhere', () => {
+    withRepo('main', (mainClone) => {
+        // Simulate launching from /tmp (any non-repo cwd) but cd-ing into the qol-* clone.
+        const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'home-'));
+        const r = run(`cd ${mainClone} && git checkout -b feat-x`, tmpHome);
+        assert.strictEqual(r.exitCode, 2);
+        assert.match(r.stderr, /effective cwd/);
+        fs.rmSync(tmpHome, { recursive: true, force: true });
+    });
+});
+
+test('hook blocks `git -C <main-clone> checkout -b ...` from elsewhere', () => {
+    withRepo('main', (mainClone) => {
+        const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'home-'));
+        const r = run(`git -C ${mainClone} checkout -b feat-x`, tmpHome);
+        assert.strictEqual(r.exitCode, 2);
+        fs.rmSync(tmpHome, { recursive: true, force: true });
+    });
+});
+
+test('hook allows `cd <worktree> && git checkout -b ...`', () => {
+    withRepo('worktree', (worktree) => {
+        const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'home-'));
+        const r = run(`cd ${worktree} && git checkout -b feat-x`, tmpHome);
+        assert.strictEqual(r.exitCode, 0);
+        fs.rmSync(tmpHome, { recursive: true, force: true });
+    });
+});
+
+test('hook allows `cd <non-qol-repo> && git checkout -b ...`', () => {
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'other-'));
+    fs.mkdirSync(path.join(repo, '.git'));
+    const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'home-'));
+    const r = run(`cd ${repo} && git checkout -b feat-x`, tmpHome);
+    assert.strictEqual(r.exitCode, 0);
+    fs.rmSync(tmpHome, { recursive: true, force: true });
+    fs.rmSync(repo, { recursive: true, force: true });
 });

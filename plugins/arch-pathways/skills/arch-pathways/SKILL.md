@@ -110,6 +110,8 @@ Two flows; pick by problem shape.
 
 Do NOT use either for trivial single-file bugs or "just fix it" requests. The artifacts are heavy by design — for shared decision-making with a paper trail, not solo iteration.
 
+**Specifically NOT for**: skill edits, hook tweaks, doc/typo fixes, README updates, or any change in the `qol-skills` marketplace where a wrong push can be reverted in under a minute. Those follow the simple-path workflow in `qol-skills/README.md`'s "Contributing" section: worktree, commit, `git push origin <branch>:main`. No issue, no PR.
+
 ## Two output modes
 
 This skill produces two distinct artifacts, each with its own template and its own audience:
