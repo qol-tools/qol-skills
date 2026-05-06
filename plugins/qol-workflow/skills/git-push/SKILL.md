@@ -23,9 +23,13 @@ Because of that, always run `git pull --rebase` before `git push`.
 
 Do not assume `origin/<branch>` is unchanged, even if the local repo looked current a moment ago.
 
+## Branch lives in a worktree, not the main clone
+
+Before pushing, confirm you are inside a worktree path (`<workspace>/worktrees/<feature>/<repo>/`), not the main clone (`/Users/kaho/repos/private/qol-tools/<repo>/`). Branching inside the main clone is blocked by the `branch-deny-checkout-in-main-clone` hook in this plugin — see the `git-trees` skill for the worktree creation flow. If you somehow arrived on a feature branch in a main clone, push it first to remote, then move work into a fresh worktree before continuing.
+
 ## Workflow
 
-1. Check the current branch and worktree state.
+1. Check the current branch and worktree state. If `pwd` is the main clone, stop and create a worktree first (see `git-trees`).
 2. Confirm which repo and branch should be pushed.
 3. **Run the repo-native verification workflow first.** If the repo defines `make build`, `make test`, or an equivalent project script, run that exact workflow before raw tool commands.
 4. **Run the FULL CI-equivalent lint+test suite locally.** For Rust repos, this means:

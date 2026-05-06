@@ -11,6 +11,10 @@
                     {
                         "type": "command",
                         "command": "node ${CLAUDE_PLUGIN_ROOT}/bin/commit-deny-coauthor.cjs"
+                    },
+                    {
+                        "type": "command",
+                        "command": "node ${CLAUDE_PLUGIN_ROOT}/bin/branch-deny-checkout-in-main-clone.cjs"
                     }
                 ]
             }

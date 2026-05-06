@@ -1,11 +1,31 @@
 ---
 name: git-trees
-description: Use when creating or organizing coordinated multi-repo git worktrees for QoL features, experiments, or A/B testing across qol-tray, plugins, and shared repos.
+description: Use this when creating, switching, or branching in any qol-* repo. Defines the mandatory worktree-only workflow — branching from a main clone is blocked by a hook.
 ---
 
 # git-trees
 
-Use this skill when a change spans multiple QoL repos and should be developed as one coordinated feature lane.
+Use this skill any time a change is made on a branch other than `main` in a qol-* repo. The qol-tools workflow is **worktrees-only**: the main clone of every repo MUST stay on `main` forever. Feature branches live in dedicated worktree directories.
+
+## The hard rule
+
+**NEVER `git checkout -b`, `git checkout <other-branch>`, `git switch -c`, or `git switch <other-branch>` inside a qol-* main clone.**
+
+This is enforced by the `branch-deny-checkout-in-main-clone` PreToolUse hook in this plugin. If you try it, the command is blocked.
+
+### Why
+
+- The main clone is what `qol-sync` and `make dev` operate on. If it sits on a stale feature branch, `qol-sync` silently reports `ok: <feature-branch> -> origin/<feature-branch>` while `main` quietly drifts behind. The next `make dev` runs against out-of-date code.
+- After a PR merges with `--delete-branch`, the local feature branch in the main clone becomes orphaned — its remote tracking branch is gone, but the working tree is still checked out on it. Re-running `qol-sync` won't recover; you have to manually `git checkout main && git pull`.
+- Worktrees are cheap and isolate this entirely. The main clone stays pristine.
+
+### What the hook allows
+
+- `git checkout main` / `git checkout master` / `git switch main` (returning to main is always fine)
+- `git checkout -- <files>` (path checkout, not branch switch)
+- `git checkout HEAD~1` / `git checkout <SHA>` (revision checkout)
+- Anything inside `<workspace>/worktrees/<feature>/<repo>/` (you're already in a worktree — branch ops are expected)
+- Any command suffixed with ` # intentional` (rare recovery path; document why in the same turn)
 
 ## Goal
 
@@ -54,6 +74,42 @@ Then place one worktree per repo inside it:
 4. Keep all edits for that feature inside those colocated worktrees.
 5. When communicating paths, identify both the feature lane and the repo.
 
+### Concrete commands
+
+```bash
+FEAT=tray-19-switch-qol-config-cargo-dep-from-path-to-git
+mkdir -p /Users/kaho/repos/private/qol-tools/worktrees/$FEAT
+git -C /Users/kaho/repos/private/qol-tools/qol-tray worktree add \
+  /Users/kaho/repos/private/qol-tools/worktrees/$FEAT/qol-tray \
+  -b $FEAT
+cd /Users/kaho/repos/private/qol-tools/worktrees/$FEAT/qol-tray
+# … edit, commit, push, open PR from here …
+```
+
+After the PR merges:
+
+```bash
+git -C /Users/kaho/repos/private/qol-tools/qol-tray worktree remove \
+  /Users/kaho/repos/private/qol-tools/worktrees/$FEAT/qol-tray
+git -C /Users/kaho/repos/private/qol-tools/qol-tray branch -D $FEAT  # if local branch lingers
+```
+
+The main clone never changed branches — `qol-sync` will pick up the merge cleanly on its next run.
+
+## Recovery: the main clone is already on a feature branch
+
+If you discover the main clone is on a non-main branch (typically because the hook didn't exist yet):
+
+```bash
+git -C <repo> stash --include-untracked   # only if dirty
+git -C <repo> checkout main               # always allowed by the hook
+git -C <repo> pull --ff-only
+git -C <repo> stash pop                   # if you stashed
+git -C <repo> branch -D <orphan-branch>   # if the merged branch lingers
+```
+
+If the work on the feature branch was unmerged and worth saving, push it first to a remote, then create a worktree at the same branch and continue work there.
+
 ## Recommended Repo Set
 
 For config and plugin-platform work, the common set is:
@@ -84,3 +140,4 @@ Example:
 - Do not pretend multiple repos share one Git worktree.
 - Do not mix unrelated feature branches in the same feature lane.
 - Do not default back to repo-first worktree placement for coordinated QoL feature work unless there is a clear reason.
+- Do not branch from a main clone to "save time". The hook will block you, and the recovery cost is higher than the worktree-add you avoided.
