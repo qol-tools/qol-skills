@@ -13,6 +13,12 @@ qol-tools is a **portable quality-of-life layer for any computer you sit down at
 
 People who use multiple machines (work laptop, home desktop, friend's PC, fresh install, throwaway VM) and want a consistent personal computing layer that doesn't depend on the host OS, distro, or desktop environment.
 
+## Vision (where we're going, not where we are)
+
+The full dream: walk up to **any** computer - Windows, macOS, any Linux distro - and inject qol-tray however is convenient. USB stick. Phone over USB or AirDrop-style wireless. Network share. SSH push. Fresh install. The host OS does not matter, the injection method does not matter. Within seconds the machine carries your bespoke flavor: your plugins, your keybindings, your sync, your colors, your habits. Pull the medium, walk away, the host is exactly as you found it.
+
+This is aspirational. We are not there yet. But every architectural choice should be checked against it: does this make the multi-OS / multi-injection future easier or harder? If harder, redesign.
+
 ## Non-negotiables
 
 These are invariants. If a proposed change violates one, the change is wrong — not the mission.
