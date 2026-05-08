@@ -43,6 +43,16 @@ When stopping child processes:
 - Profile before optimizing
 - Batch operations when possible (e.g., 16ms intervals for 60fps)
 
+### Idle cost is a feature
+
+Background threads, supervisors, watchers, listeners (anything always-on) MUST be free-when-idle, not just cheap. Wakeups themselves cost the user.
+
+- **Event-driven by default.** Block on the source: `crossbeam_channel::select!`, `tokio::select!`, `Receiver::recv()`, `inotify`, `signalfd`. Never `try_recv` + `thread::sleep`.
+- **No `try_recv + sleep_ms` loops.** That is not polling, that is busy-waiting with rest periods. Replace with a blocking `select!` over every channel the loop cares about.
+- **No `tokio::time::interval` in always-on paths** unless you need genuinely periodic side effects (heartbeat, render tick) AND the work is gated to "needed right now". An interval that fires while the UI is closed is a bug.
+- **Sub-50ms `Duration::from_millis(...)` in always-on background code is a code smell.** Justify it or remove it. Render-rate intervals (16ms / 60fps) are fine *only* while the surface is visible.
+- **One blocking primitive per loop.** If you have N event sources, use `select!` over all N. Do not poll one and block on another.
+
 ## Code Layout & Style
 
 - **Early Returns:** Prioritize early-return and flatten `if` statements as much as possible to avoid nested conditionals.

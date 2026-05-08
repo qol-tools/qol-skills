@@ -76,6 +76,21 @@ Existing `#[cfg]` in `main.rs` (macOS lifecycle) is pragmatic legacy — leave i
 - Cancellation: explicit via `CancellationToken` or dropped senders, never ad-hoc `AtomicBool` flags.
 - Track every `tokio::spawn` `JoinHandle`. Detached unbounded tasks are how leaks and zombie daemons happen.
 
+## Background loops: event-driven, not polled
+
+qol-tray runs as an always-on tray daemon. Its background loops (hotkey listener, daemon supervisors, watchdogs, file watchers, sync pollers) share the user's machine with whatever they are actually doing right now: a game, a build, a render, a meeting.
+
+The contract:
+
+- **Idle cost must be zero.** No CPU, no syscalls, no X / DBus / IPC round-trips while nothing is happening.
+- **Block on events, do not poll for them.** Use `crossbeam_channel::select!`, `tokio::select!`, `Receiver::recv()`, `inotify`, `signalfd`, OS-native event APIs.
+- **Forbidden pattern:** `loop { try_recv(); try_recv(); thread::sleep(Duration::from_millis(N)); }`. That is busy-waiting at `1000/N` Hz. The fact that it looks lightweight on `top` for an idle desktop does not mean it is free; on a fullscreen 3D game with input exclusivity those wakeups serialize against the game's input loop and produce visible lag.
+- **If polling is genuinely required** (no event API exists, or the cost of plumbing one is unjustified) then sleep at least 1 second AND gate the polled work behind "is this needed right now" (e.g. only while a relevant UI surface is open, or only while a daemon socket is known-down).
+- **Render-rate intervals (16ms / 60fps) are acceptable only inside an active UI surface.** A 60fps tick that runs while the surface is closed is a bug.
+- **Doctor / heal loops** wake on event triggers (`mark_needed`), not on a clock. If you find yourself reaching for `tokio::time::interval` in a doctor path, ask whether the trigger should fire on demand instead.
+
+When reviewing background code, the question is not "is this fast?" but "does this run *at all* when the user is not doing anything?". If yes, redesign.
+
 ## Boot path: never block on networked I/O
 
 The tray daemon, plugin loading, and `TrayManager::new` must never `await`

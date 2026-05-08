@@ -170,6 +170,17 @@ cargo test -- --nocapture
 - If frontend files change inside a Rust-backed app, frontend syntax checks are additive, not a substitute for the Rust verification stack.
 - If the user says the repo still fails to build, rerun the exact repo-native build command immediately and debug that concrete failure before doing anything else.
 
+## Performance: idle cost is a feature
+
+Background work (daemons, supervisors, watchers, listeners, event loops) MUST cost zero CPU and zero syscalls when nothing is happening. The user's foreground app (game, video call, render, build) is the priority; your code is a guest on their machine.
+
+- **Event-driven by default.** Block on the event source: `recv()`, channel `select!`, `tokio::select!`, `inotify`, `signalfd`, OS event APIs. Never `try_recv` + `sleep`.
+- **Wake on demand, not on a clock.** If you reach for an interval or tick, justify why event-driven is impossible.
+- **Cheap-when-idle is not enough; must be free-when-idle.** Wakeups themselves cost the user (cache trash, scheduler pressure, X / IPC round-trips). A loop that "just checks" at 100 Hz is invisible on an idle desktop and ruinous when the user is in a fullscreen 3D game.
+- **Hot paths do no I/O.** Render frames, keystroke handlers, hooks, supervisor ticks: no syscalls beyond the strict minimum, no work the user did not ask for right now.
+- **Sub-second polling intervals in always-on background paths are a code smell.** If you must poll, sleep at least 1 second and gate the work behind "is this needed right now" (UI open, daemon down, user explicitly asked).
+- **Measure before you ship.** If you cannot prove idle cost is zero, it is not. `top`, `perf`, `strace -c` on the idle process. No excuses.
+
 ## No band-aids in hot paths
 
 When something runs in a frequent path (shell `chpwd` hook, render frame, keystroke handler, supervisor tick, daemon poll) and it stalls, the right fix is to **remove the slow work from the hot path** — not to add a timeout, retry, fallback, or abort.
