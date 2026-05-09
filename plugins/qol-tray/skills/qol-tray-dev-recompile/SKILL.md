@@ -5,6 +5,8 @@ description: Use when debugging "did my change actually load" / "is the running 
 
 # qol-tray-dev-recompile
 
+> Brief always-loaded summary: `qol-tray/CLAUDE.md` ("Did my change actually load?"). The full where-it-lives + how-it-tears-down details stay here.
+
 ## The TL;DR you need to remember
 
 **qol-tray has a built-in Recompile button. It is the canonical "fresh slate" action.** When the user is iterating on qol-tray or any plugin in dev mode, do NOT manually `pkill -f plugin-...` or speculate about which daemon is stale. The Recompile button performs a full, ordered teardown + rebuild + exec. If they say "I just rebuilt qol-tray," they almost certainly hit this button.

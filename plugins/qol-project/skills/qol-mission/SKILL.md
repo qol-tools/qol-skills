@@ -21,7 +21,9 @@ This is aspirational. We are not there yet. But every architectural choice shoul
 
 ## Non-negotiables
 
-These are invariants. If a proposed change violates one, the change is wrong — not the mission.
+These are invariants. If a proposed change violates one, the change is wrong, not the mission.
+
+> Brief always-loaded summary: `qol-tray/CLAUDE.md`. The full context (vision, who it's for, why each invariant matters) stays here.
 
 ### 1. The user never configures the host OS
 

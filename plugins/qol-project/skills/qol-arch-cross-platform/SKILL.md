@@ -6,6 +6,8 @@ description: >
 
 # qol-arch-cross-platform: Cross-Platform Symbol Hygiene
 
+> Brief always-loaded summary: `qol-tray/CLAUDE.md` ("Cross-platform: warnings are errors"). Full symbol-hygiene patterns and triggers stay here.
+
 ## Why this skill exists
 
 The `qol-arch-code` skill compartmentalizes platform-specific *bodies* into `platform/{linux,macos,windows}.rs`. That solves the easy half of the problem.
