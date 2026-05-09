@@ -237,3 +237,69 @@ Reach for `rstest` when an inline `let cases = [...]; for ...` table grows past 
 | Large external corpus (RFC suite, recorded payloads) | `tests/fixtures/*` + `include_str!` |
 
 When upgrading older example-tests, follow the picker above. Do not migrate working tests just to use a newer crate - upgrade when the existing test is brittle, opaque, or insufficient.
+
+## Recipes (concrete patterns from the workspace)
+
+### Recipe: testing command-execution wrappers (tokio::process)
+
+Use real shell commands instead of mocking the process layer. POSIX coreutils give you a stable, fast vocabulary for every behaviour you need to assert:
+
+- `true` - exit 0, no output
+- `false` - exit 1
+- `exit N` - exact non-zero exit code
+- `echo X` / `echo X 1>&2` - stdout vs stderr
+- `sleep N` - timeout firing
+- `pwd` - current working directory
+
+Gate the integration block with `#[cfg(unix)]` and put it in a `mod unix_integration` inside `mod tests`. Pure-helper tests (spec construction, error formatters) sit at the top level and run cross-platform. Pattern:
+
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+    // pure-helper tests here, run everywhere
+
+    #[cfg(unix)]
+    mod unix_integration {
+        use super::*;
+        #[tokio::test]
+        async fn execute_succeeds_for_trivial_command() { ... }
+        #[tokio::test]
+        async fn execute_times_out_when_command_outlasts_timeout() { ... }
+    }
+}
+```
+
+When a wrapper interpolates user params into a shell line, write at least one **shell-injection guard test**: feed a param value containing `; rm -rf /tmp/canary-name` and assert it arrives at `echo` as one literal arg. This pins the escaping contract; otherwise a regression reintroducing unquoted interpolation passes silently.
+
+If you call `.unwrap()` on a result type in tests, the type must `#[derive(Debug)]`. Add the derive on the production type rather than working around it in tests.
+
+### Recipe: pinning HTTP / IPC contract shape
+
+When a Rust struct serializes to JSON consumed by an external client (browser extension, UI, mobile app, CLI), test the exact serialized shape with `serde_json::to_value` against `serde_json::json!({...})`. The test catches accidental contract drift (renames, default-vs-omitted fields, casing changes) before the external client breaks.
+
+```rust
+let value = serde_json::to_value(&response).unwrap();
+assert_eq!(
+    value,
+    serde_json::json!({
+        "success": false,
+        "exitCode": 42,  // camelCase rename pinned
+    }),
+    "exitCode is the contract the browser extension reads",
+);
+```
+
+For request bodies, the symmetric test: feed canonical JSON via `serde_json::from_str` and assert each field, including default-on-omitted ones (`#[serde(default)]`).
+
+### Recipe: testing axum handler error helpers
+
+axum's `Json<T>` is a `pub struct Json<T>(pub T)`, so handler tests can destructure with `let (status, Json(body)) = bad_request(...);`. Don't spin up a Router for what is just a tuple constructor under test.
+
+### Recipe: testing decision/dispatcher logic without mocking I/O
+
+Extract the gating decision into a pure function that takes state by reference and returns an enum (`Skip(&'static str) | Proceed`, etc.). The orchestrator stays one-line. Table-test the pure function across all enum variants. Same shape worked for `launch_pull_decision` in qol-tray's sync service.
+
+### Recipe: integration tests that need real config dirs
+
+For services that resolve paths via `crate::paths::*`, look for an existing test-path-root override (`paths::push_test_path_root` in qol-tray) before reaching for a mock. The override pushes a `TempDir` into a thread_local, so every `paths::*` call inside the test resolves under the temp root. Pair with a fake provider (Folder provider for sync, real FS for installers) and you get end-to-end behaviour tests without networking.
