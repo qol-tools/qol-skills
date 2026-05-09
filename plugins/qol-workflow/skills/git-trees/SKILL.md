@@ -27,6 +27,27 @@ This is enforced by the `branch-deny-checkout-in-main-clone` PreToolUse hook in 
 - Anything inside `<workspace>/worktrees/<feature>/<repo>/` (you're already in a worktree — branch ops are expected)
 - Any command suffixed with ` # intentional` (rare recovery path; document why in the same turn)
 
+## Trivial changes skip the worktree+PR ceremony
+
+Not every change needs a feature branch + worktree + PR. Trivial changes commit straight to `main` on the main clone (no `git checkout`, just `git add && git commit && git push`).
+
+**What counts as trivial:**
+
+- `.claude/rules/`, `.claude/CLAUDE.md`, `.claude/settings*.json` edits
+- `hooks.json` tweaks, hook script touch-ups
+- Doc typos, README polish, comment fixes
+- Skill prose tweaks (when the user has already approved direction)
+- `.gitignore`, lockfile-only updates from `cargo`/`npm` lockbots
+
+**What is NOT trivial (still needs worktree+PR):**
+
+- Any source code change (`src/`, `ui/`, lib code)
+- New features, refactors, behavior changes
+- Anything that needs CI to vet it
+- Anything the user is likely to want to review as a diff
+
+**If unsure, ASK.** Default to asking, not to ceremony. A 30-second question beats a 5-minute PID-mint, worktree, draft-PR, mark-ready, squash-merge dance for a 2-line config tweak.
+
 ## Goal
 
 Keep related worktrees grouped by feature, not by repo, while still respecting that each Git worktree belongs to exactly one repository.
