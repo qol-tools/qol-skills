@@ -1,14 +1,8 @@
 #!/usr/bin/env node
 /*
- * PreToolUse hook: force edits to qol-tray frontend/backend scope through
- * the specialized qol-tray-frontend / qol-tray-backend subagents.
- * Main-Claude edits are blocked with exit 2; the error message tells Claude
- * which agent to route through and how to bypass explicitly if the edit is
- * genuinely trivial.
- *
- * Bypass (Claude-side, deliberate):
- *   touch .claude/bypass-agent-routing          # single Edit pass
- *   echo N > .claude/bypass-agent-routing       # N Edits pass, auto-cleaned
+ * PreToolUse hook: when editing qol-tray frontend/backend files, inject the
+ * relevant skill context so the model has domain knowledge without needing a
+ * subagent. Edits are never blocked; the hook only enriches context.
  */
 
 'use strict';
@@ -19,104 +13,76 @@ const path = require('node:path');
 const INSPECTED_TOOLS = new Set(['Edit', 'Write', 'NotebookEdit']);
 const HOOK_OWNED_SUFFIXES = ['/MEMORY.md', '/.reflect-last.log'];
 
-function readStdin() {
-    try {
-        return fs.readFileSync(0, 'utf8');
-    } catch {
-        return '';
-    }
+// From CLAUDE_PLUGIN_ROOT (.../cache/qol-skills/qol-tray/<ver>), go up 4
+// levels to reach the plugins root.
+function marketplacePluginsDir(pluginRoot) {
+    return path.resolve(pluginRoot, '../../../../marketplaces/qol-skills/plugins');
 }
 
-function log(msg) {
-    process.stderr.write(`[route-to-agent] ${msg}\n`);
+function readSkillFile(pluginsDir, pluginName, skillName) {
+    const p = path.join(pluginsDir, pluginName, 'skills', skillName, 'SKILL.md');
+    try { return fs.readFileSync(p, 'utf8'); } catch { return null; }
 }
 
-function classifyAgent(filePath) {
-    if (
-        filePath.includes('/qol-tray/ui/views/') ||
-        filePath.includes('/qol-tray/ui/components/') ||
-        filePath.includes('/qol-tray/ui/lib/') ||
-        filePath.includes('/qol-tray/ui/app/') ||
-        filePath.includes('/qol-tray/ui/palette/') ||
-        filePath.includes('/qol-tray/ui/hooks/') ||
-        filePath.includes('/qol-tray/ui/styles/')
-    ) {
-        return 'qol-tray:qol-tray-frontend';
+function buildContext(pluginsDir, scope) {
+    const sections = [];
+
+    if (scope === 'backend') {
+        const rust = readSkillFile(pluginsDir, 'qol-tray', 'qol-tray-rust');
+        const conv = readSkillFile(pluginsDir, 'qol-langs', 'rust-conventions');
+        if (rust) sections.push(`# qol-tray-rust skill\n\n${rust}`);
+        if (conv) sections.push(`# rust-conventions skill\n\n${conv}`);
+    } else {
+        const ui = readSkillFile(pluginsDir, 'qol-tray', 'qol-tray-ui-systems');
+        const conv = readSkillFile(pluginsDir, 'qol-langs', 'preact-conventions');
+        if (ui) sections.push(`# qol-tray-ui-systems skill\n\n${ui}`);
+        if (conv) sections.push(`# preact-conventions skill\n\n${conv}`);
     }
-    if (filePath.includes('/qol-tray/src/')) {
-        return 'qol-tray:qol-tray-backend';
-    }
+
+    return sections.join('\n\n---\n\n');
+}
+
+function classifyScope(filePath) {
+    if (filePath.includes('/qol-tray/ui/')) return 'frontend';
+    if (filePath.includes('/qol-tray/src/')) return 'backend';
     return null;
 }
 
-function consumeBypass(marker) {
-    if (!fs.existsSync(marker) || !fs.statSync(marker).isFile()) return false;
-    try {
-        const raw = fs.readFileSync(marker, 'utf8').trim();
-        const count = /^\d+$/.test(raw) ? Number(raw) : 1;
-        if (count > 1) {
-            fs.writeFileSync(marker, String(count - 1));
-            log(`bypass consumed (${count - 1} remaining)`);
-        } else {
-            fs.unlinkSync(marker);
-            log('bypass consumed (marker removed)');
-        }
-    } catch {
-        // ignore
-    }
-    return true;
-}
-
-function emitBlockMessage(filePath, agent, marker, cwd) {
-    const rel = marker.startsWith(cwd + '/') ? marker.slice(cwd.length + 1) : marker;
-    process.stderr.write(`Edit to ${filePath} is blocked: qol-tray frontend/backend scope must route through the specialized agent.
-
-Invoke the agent via:
-  Agent(subagent_type="${agent}", prompt="...")
-
-To bypass for this change (Claude-side, deliberate):
-  Bash("touch ${rel}")                    # single Edit pass
-  Bash("echo 3 > ${rel}")                 # N Edits pass
-
-The marker is auto-consumed per Edit; no cleanup needed.
-`);
-}
-
 function main() {
-    const raw = readStdin().trim();
+    const raw = (() => { try { return fs.readFileSync(0, 'utf8'); } catch { return ''; } })().trim();
     if (!raw) return 0;
 
     let payload;
-    try {
-        payload = JSON.parse(raw);
-    } catch {
-        return 0;
-    }
+    try { payload = JSON.parse(raw); } catch { return 0; }
 
     const tool = payload.tool_name || payload.tool || '';
     if (!INSPECTED_TOOLS.has(tool)) return 0;
-
-    if (payload.agent_type) return 0;
 
     const input = payload.tool_input || {};
     const filePath = input.file_path || input.notebook_path || '';
     if (!filePath) return 0;
 
-    const agent = classifyAgent(filePath);
-    if (!agent) return 0;
-
     if (HOOK_OWNED_SUFFIXES.some(s => filePath.endsWith(s))) return 0;
 
-    const cwd = payload.cwd || process.cwd();
-    const marker = path.join(cwd, '.claude', 'bypass-agent-routing');
+    const scope = classifyScope(filePath);
+    if (!scope) return 0;
 
-    if (consumeBypass(marker)) return 0;
+    const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT || path.resolve(__dirname, '..');
+    const pluginsDir = marketplacePluginsDir(pluginRoot);
+    const context = buildContext(pluginsDir, scope);
+    if (!context) return 0;
 
-    emitBlockMessage(filePath, agent, marker, cwd);
-    return 2;
+    const label = scope === 'backend' ? 'qol-tray-rust + rust-conventions' : 'qol-tray-ui-systems + preact-conventions';
+    process.stdout.write(JSON.stringify({
+        hookSpecificOutput: {
+            hookEventName: 'PreToolUse',
+            additionalContext: `[scope: qol-tray ${scope} - skills loaded: ${label}]\n\n${context}`,
+        },
+    }));
+    return 0;
 }
 
-module.exports = { classifyAgent, consumeBypass };
+module.exports = { classifyScope };
 
 if (require.main === module) {
     process.exit(main());

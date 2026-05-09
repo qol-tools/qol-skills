@@ -3,116 +3,87 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const path = require('node:path');
-const fs = require('node:fs');
-const os = require('node:os');
 const { spawnSync } = require('node:child_process');
 
 const HOOK = path.join(__dirname, '..', 'bin', 'route-to-agent.cjs');
-const { classifyAgent } = require('../bin/route-to-agent.cjs');
+const { classifyScope } = require('../bin/route-to-agent.cjs');
 
 function run(payload) {
     const r = spawnSync('node', [HOOK], {
         input: JSON.stringify(payload),
         encoding: 'utf8',
     });
-    return { exitCode: r.status, stderr: r.stderr };
+    return { exitCode: r.status, stdout: r.stdout, stderr: r.stderr };
 }
 
-test('classifyAgent recognizes ui/ as frontend', () => {
-    assert.equal(classifyAgent('/x/qol-tray/ui/components/App.js'), 'qol-tray:qol-tray-frontend');
-    assert.equal(classifyAgent('/x/qol-tray/ui/lib/foo.js'), 'qol-tray:qol-tray-frontend');
-    assert.equal(classifyAgent('/x/qol-tray/ui/styles/bar.css'), 'qol-tray:qol-tray-frontend');
+test('classifyScope recognizes ui/ as frontend', () => {
+    assert.equal(classifyScope('/x/qol-tray/ui/components/App.js'), 'frontend');
+    assert.equal(classifyScope('/x/qol-tray/ui/lib/foo.js'), 'frontend');
+    assert.equal(classifyScope('/x/qol-tray/ui/styles/bar.css'), 'frontend');
 });
 
-test('classifyAgent recognizes src/ as backend', () => {
-    assert.equal(classifyAgent('/x/qol-tray/src/main.rs'), 'qol-tray:qol-tray-backend');
-    assert.equal(classifyAgent('/x/qol-tray/src/plugins/manager.rs'), 'qol-tray:qol-tray-backend');
+test('classifyScope recognizes src/ as backend', () => {
+    assert.equal(classifyScope('/x/qol-tray/src/main.rs'), 'backend');
+    assert.equal(classifyScope('/x/qol-tray/src/plugins/manager.rs'), 'backend');
 });
 
-test('classifyAgent ignores files outside qol-tray', () => {
-    assert.equal(classifyAgent('/x/some-other/src/foo.rs'), null);
-    assert.equal(classifyAgent('/x/qol-tray/Cargo.toml'), null);
+test('classifyScope ignores files outside qol-tray scope', () => {
+    assert.equal(classifyScope('/x/some-other/src/foo.rs'), null);
+    assert.equal(classifyScope('/x/qol-tray/Cargo.toml'), null);
 });
 
-test('blocks main-Claude Edit on qol-tray/src', () => {
+test('exits 0 and emits additionalContext JSON for backend edit', () => {
     const r = run({
         tool_name: 'Edit',
         tool_input: { file_path: '/x/qol-tools/qol-tray/src/main.rs', new_string: 'foo' },
     });
-    assert.equal(r.exitCode, 2);
-    assert.match(r.stderr, /qol-tray-backend/);
+    assert.equal(r.exitCode, 0, `unexpected exit ${r.exitCode}: ${r.stderr}`);
+    const out = JSON.parse(r.stdout);
+    assert.ok(out.hookSpecificOutput?.additionalContext, 'expected additionalContext');
+    assert.match(out.hookSpecificOutput.additionalContext, /backend/);
 });
 
-test('passes when agent_type is set (subagent run)', () => {
+test('exits 0 and emits additionalContext JSON for frontend edit', () => {
     const r = run({
         tool_name: 'Edit',
-        agent_type: 'qol-tray:qol-tray-backend',
-        tool_input: { file_path: '/x/qol-tools/qol-tray/src/main.rs', new_string: 'foo' },
+        tool_input: { file_path: '/x/qol-tools/qol-tray/ui/components/App.js', new_string: 'foo' },
     });
-    assert.equal(r.exitCode, 0);
+    assert.equal(r.exitCode, 0, `unexpected exit ${r.exitCode}: ${r.stderr}`);
+    const out = JSON.parse(r.stdout);
+    assert.ok(out.hookSpecificOutput?.additionalContext, 'expected additionalContext');
+    assert.match(out.hookSpecificOutput.additionalContext, /frontend/);
 });
 
-test('passes hook-owned files (MEMORY.md, .reflect-last.log)', () => {
+test('exits 0 silently for hook-owned files (MEMORY.md, .reflect-last.log)', () => {
     const r1 = run({
         tool_name: 'Edit',
         tool_input: { file_path: '/x/qol-tools/qol-tray/src/MEMORY.md', new_string: 'foo' },
     });
     assert.equal(r1.exitCode, 0);
+    assert.equal(r1.stdout.trim(), '');
+
     const r2 = run({
         tool_name: 'Edit',
         tool_input: { file_path: '/x/qol-tools/qol-tray/ui/lib/.reflect-last.log', new_string: 'foo' },
     });
     assert.equal(r2.exitCode, 0);
+    assert.equal(r2.stdout.trim(), '');
 });
 
-test('passes files outside the routing scope', () => {
+test('exits 0 silently for files outside routing scope', () => {
     const r = run({
         tool_name: 'Edit',
         tool_input: { file_path: '/x/some/random/file.rs', new_string: 'foo' },
     });
     assert.equal(r.exitCode, 0);
+    assert.equal(r.stdout.trim(), '');
 });
 
-test('passes non-Edit tools', () => {
+test('exits 0 silently for non-Edit tools', () => {
     const r = run({
         tool_name: 'Bash',
         tool_input: { command: 'ls' },
     });
     assert.equal(r.exitCode, 0);
-});
-
-test('bypass marker (count=1) consumes and removes', () => {
-    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'route-bypass-'));
-    fs.mkdirSync(path.join(cwd, '.claude'), { recursive: true });
-    const marker = path.join(cwd, '.claude', 'bypass-agent-routing');
-    fs.writeFileSync(marker, '');
-    try {
-        const r = run({
-            tool_name: 'Edit',
-            cwd,
-            tool_input: { file_path: '/x/qol-tools/qol-tray/src/main.rs', new_string: 'foo' },
-        });
-        assert.equal(r.exitCode, 0);
-        assert.equal(fs.existsSync(marker), false, 'marker should be removed after single use');
-    } finally {
-        fs.rmSync(cwd, { recursive: true, force: true });
-    }
-});
-
-test('bypass marker (count=N) decrements without removal', () => {
-    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'route-bypass-n-'));
-    fs.mkdirSync(path.join(cwd, '.claude'), { recursive: true });
-    const marker = path.join(cwd, '.claude', 'bypass-agent-routing');
-    fs.writeFileSync(marker, '3');
-    try {
-        const r = run({
-            tool_name: 'Edit',
-            cwd,
-            tool_input: { file_path: '/x/qol-tools/qol-tray/src/main.rs', new_string: 'foo' },
-        });
-        assert.equal(r.exitCode, 0);
-        assert.equal(fs.readFileSync(marker, 'utf8'), '2');
-    } finally {
-        fs.rmSync(cwd, { recursive: true, force: true });
-    }
+    assert.equal(r.stdout.trim(), '');
 });
