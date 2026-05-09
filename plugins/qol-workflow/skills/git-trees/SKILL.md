@@ -7,11 +7,17 @@ description: Use this when creating, switching, or branching in any qol-* repo. 
 
 Use this skill any time a change is made on a branch other than `main` in a qol-* repo. The qol-tools workflow is **worktrees-only**: the main clone of every repo MUST stay on `main` forever. Feature branches live in dedicated worktree directories.
 
-## The hard rule
+## The hard rule (read this first, every time)
 
-**NEVER `git checkout -b`, `git checkout <other-branch>`, `git switch -c`, or `git switch <other-branch>` inside a qol-* main clone.**
+**Trivial changes do NOT get a PR.** This is the rule that gets forgotten. Tests, configs, rules, hooks, skill edits, doc fixes, lockfile bumps - commit them STRAIGHT TO MAIN on the main clone. No PID. No worktree. No draft PR. No mark-ready. No squash-merge dance. See "Trivial changes skip the worktree+PR ceremony" below for the full list.
 
-This is enforced by the `branch-deny-checkout-in-main-clone` PreToolUse hook in this plugin. If you try it, the command is blocked.
+**Substantive source changes use worktrees.** A worktree+PR is for behaviour changes that need a diff-review and CI gate, not for unit tests, not for refactors that ship alongside trivial work, and not for "while I was here" adjacent commits.
+
+**If unsure, ASK first.** Don't default to ceremony. Don't mint a PID without checking. Asking takes 30 seconds; an unwanted PR wastes 5+ minutes on both sides and creates noise.
+
+**NEVER `git checkout -b`, `git checkout <other-branch>`, `git switch -c`, or `git switch <other-branch>` inside a qol-* main clone for substantive work.**
+
+The branch-switch ban is enforced by the `branch-deny-checkout-in-main-clone` PreToolUse hook. It exists to keep the main clone on `main` so `qol-sync` and `make dev` see fresh code. The trivial-change carve-out below is how you commit on `main` from the main clone WITHOUT switching branches.
 
 ### Why
 
@@ -29,24 +35,27 @@ This is enforced by the `branch-deny-checkout-in-main-clone` PreToolUse hook in 
 
 ## Trivial changes skip the worktree+PR ceremony
 
-Not every change needs a feature branch + worktree + PR. Trivial changes commit straight to `main` on the main clone (no `git checkout`, just `git add && git commit && git push`).
+Trivial changes commit straight to `main` on the main clone. No worktree, no PID, no PR. Just `git add && git commit && git push`.
 
-**What counts as trivial:**
+**What counts as trivial (commit direct to `main`):**
 
+- **Unit tests in isolation** - new tests, expanded test cases, table-driven test data, fixtures. Even when they live under `src/` or `ui/`, *test-only* edits are trivial. The compiler and the test runner are the review.
 - `.claude/rules/`, `.claude/CLAUDE.md`, `.claude/settings*.json` edits
 - `hooks.json` tweaks, hook script touch-ups
 - Doc typos, README polish, comment fixes
 - Skill prose tweaks (when the user has already approved direction)
 - `.gitignore`, lockfile-only updates from `cargo`/`npm` lockbots
 
-**What is NOT trivial (still needs worktree+PR):**
+**What is NOT trivial (worktree+PR required):**
 
-- Any source code change (`src/`, `ui/`, lib code)
-- New features, refactors, behavior changes
-- Anything that needs CI to vet it
-- Anything the user is likely to want to review as a diff
+- Behaviour changes in `src/` or `ui/` (new features, fixes, refactors)
+- A test commit bundled with a behaviour change in the same patch - now the whole bundle is non-trivial
+- Anything CI must vet (touches Cargo.toml deps, workflow YAML, signing/release flow)
+- Anything the user explicitly wants to review as a diff
 
-**If unsure, ASK.** Default to asking, not to ceremony. A 30-second question beats a 5-minute PID-mint, worktree, draft-PR, mark-ready, squash-merge dance for a 2-line config tweak.
+**Tests-only commits stay solo.** Don't fold a refactor or a fix into a "tests" commit. If you find yourself wanting to refactor *to make code testable*, that refactor is non-trivial and the whole change needs a PR. Test commits that hold their own weight (no production code touched) commit direct to `main`.
+
+**If unsure, ASK first.** Default to asking, not to ceremony. The cost asymmetry is huge: a 30-second question vs. a 5-minute PID-mint, worktree, draft-PR, mark-ready, squash-merge dance you immediately regret.
 
 ## Goal
 
