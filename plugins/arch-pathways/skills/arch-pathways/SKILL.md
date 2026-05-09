@@ -1,11 +1,30 @@
 ---
 name: arch-pathways
 description: >
-  Architecture-analysis pipeline with three flows. (1) SINGLE-ISSUE PING-PONG (default for ad-hoc problems): mint a GitHub Issue first, iterate on it via comments through a research / user-test / agent-test loop with Mermaid charts, then dispatch the kickoff agent to add branch + worktree + seeded ADR + draft PR. (2) CROSS-AREA SURVEY: produce a single-file HTML pathways doc (sidebar SPA, one Problem-and-Proposals page per area) when the user asks to "visualize architecture", "compare fix proposals", "map current state vs target", "draw pathways", or any deep-dive spanning 3+ subsystems; promote with bin/ scripts. (3) DIRECT KICKOFF: rare one-shot path for tightly-scoped mechanical fixes — skips both iteration phases.
-when_to_use: Trigger on intents like "let's investigate", "track this as an issue", "open a draft issue for this bug", "iterate on this", "promote boot to PR", "open a PR for the paths area", "extract sync as markdown", "mint an issue for devprod", "turn this area into an ADR", "make a PR for this problem", "give me a worktree for TRAY-42", "kickoff TRAY-42", and any request that names a survey area or PID alongside a verb like promote/extract/mint/open/draft/kickoff/ship.
+  Architecture-analysis pipeline for GIGANTIC, retrospect-worthy tasks ONLY. Never the default for "we found a bug" or "this needs a small fix" - those go straight to a worktree+PR (or commit-direct if trivial), no issue. (1) SINGLE-ISSUE PING-PONG: only when the user explicitly asks to "open an issue", "track this as an issue", "investigate as an issue", "iterate on this in an issue", or names a multi-week initiative worth retrospecting on. Mints a GitHub Issue, iterates via comments through research / user-test / agent-test loop with Mermaid charts, then dispatches kickoff to add branch + worktree + seeded ADR + draft PR. (2) CROSS-AREA SURVEY: produce a single-file HTML pathways doc when the user asks to "visualize architecture", "compare fix proposals", "map current state vs target", "draw pathways", or any deep-dive spanning 3+ subsystems. (3) DIRECT KICKOFF: rare one-shot path for tightly-scoped mechanical fixes that the user asks to "kickoff" by PID.
+when_to_use: ONLY when the user explicitly asks for an issue, a survey, a kickoff by PID, an ADR, or a pathways doc. Do NOT trigger on "we found a bug", "let's fix this", "we should investigate", or any phrasing where the user has not explicitly asked for the artifact. The default for ad-hoc bugs is fix-now-direct-or-PR, not an issue.
 ---
 
 # Architecture pathways skill
+
+## When NOT to use this skill (read first)
+
+This skill is **only for gigantic, retrospect-worthy tasks** that genuinely benefit from a long-lived issue thread, an HTML survey, or an ADR. The qol-tools workspace is solo - there is no async team to coordinate via issues. An issue here is a doc the user will skim once and never reread.
+
+**Do NOT mint an issue / ADR / draft when:**
+
+- The user found a bug and is deciding whether to fix it. The choice is **fix-now vs don't-fix**, not "fix vs file an issue". Issues are not a polite "later" deferral.
+- The work fits in one PR (most fixes, refactors, features). Use `qol-workflow:git-trees` worktree+PR flow.
+- The change is trivial (config, tests-only, doc tweak). Commit direct to `main`. See workspace `CLAUDE.md` "PR ceremony".
+- You want to "capture findings for later". The right home is a skill update or `CLAUDE.md` note, not an issue. See `qol-workflow:standards-evolution`.
+
+**Mint an issue ONLY when:**
+
+- The user explicitly says "open an issue", "track this as an issue", "investigate this as an issue", or similar.
+- The task is gigantic enough that the iterative research / user-test / agent-test loop with Mermaid charts is genuinely useful AND the user will retrospect on the issue thread later.
+- Multi-week or multi-PR initiatives where the issue acts as the index across PRs.
+
+If you are about to volunteer "or open an issue / ADR" as a fallback option in a `Want me to fix or X?` prompt - **drop the X**. Default to fix-now-or-not-now.
 
 ## Glossary (canonical vocabulary — refer to this when in doubt)
 
