@@ -33,29 +33,27 @@ The branch-switch ban is enforced by the `branch-deny-checkout-in-main-clone` Pr
 - Anything inside `<workspace>/worktrees/<feature>/<repo>/` (you're already in a worktree — branch ops are expected)
 - Any command suffixed with ` # intentional` (rare recovery path; document why in the same turn)
 
-## Trivial changes skip the worktree+PR ceremony
+## PRs are opt-in. Default is commit-direct-to-main.
 
-Trivial changes commit straight to `main` on the main clone. No worktree, no PID, no PR. Just `git add && git commit && git push`.
+**The qol-tools workspace is solo.** There is no async team to coordinate with via PR. PRs add review-cycle ceremony that is pure friction when the only reviewer is the same person who wrote the code. Default behaviour: edit on `main`, `git add && git commit && git push`.
 
-**What counts as trivial (commit direct to `main`):**
+**Open a PR ONLY when the user explicitly asks for one** with phrases like "open a PR", "draft a PR", "make a PR for this", "I want to review this as a diff", "I want to test this on a branch first", or names a PID and asks to "kickoff" it. **Never offer "or open a PR" as a fallback option** in a "Want me to fix or X?" prompt - drop the X. The choice is fix-now-direct-or-not-now.
 
-- **Unit tests in isolation** - new tests, expanded test cases, table-driven test data, fixtures. Even when they live under `src/` or `ui/`, *test-only* edits are trivial. The compiler and the test runner are the review.
-- `.claude/rules/`, `.claude/CLAUDE.md`, `.claude/settings*.json` edits
-- `hooks.json` tweaks, hook script touch-ups
-- Doc typos, README polish, comment fixes
-- Skill prose tweaks (when the user has already approved direction)
-- `.gitignore`, lockfile-only updates from `cargo`/`npm` lockbots
+The branch-deny-checkout-in-main-clone hook still applies: branching off `main` inside the main clone is blocked. Editing `main` itself in the main clone is fine and is the normal flow. If the user explicitly asks for a PR, see "Worktree creation" below.
 
-**What is NOT trivial (worktree+PR required):**
+### What still gets PR'd when explicitly requested
 
-- Behaviour changes in `src/` or `ui/` (new features, fixes, refactors)
-- A test commit bundled with a behaviour change in the same patch - now the whole bundle is non-trivial
-- Anything CI must vet (touches Cargo.toml deps, workflow YAML, signing/release flow)
-- Anything the user explicitly wants to review as a diff
+- Multi-week initiatives the user wants to retrospect on (rare).
+- Anything the user calls out as "diff-review please" or "let me see this on a branch".
+- Cross-repo coordinated work where the user wants to review repos together.
 
-**Tests-only commits stay solo.** Don't fold a refactor or a fix into a "tests" commit. If you find yourself wanting to refactor *to make code testable*, that refactor is non-trivial and the whole change needs a PR. Test commits that hold their own weight (no production code touched) commit direct to `main`.
+### Tests, refactors, fixes, features
 
-**If unsure, ASK first.** Default to asking, not to ceremony. The cost asymmetry is huge: a 30-second question vs. a 5-minute PID-mint, worktree, draft-PR, mark-ready, squash-merge dance you immediately regret.
+All commit direct to `main` by default. Including substantive `src/` / `ui/` changes. The user is the reviewer; they review by reading the commit on `main`, not by clicking through PR UI. If they want to inspect first, they will say so explicitly.
+
+### Bundled commits are fine on main
+
+Tests + a small refactor that makes them testable, in the same atomic commit, is fine when committing direct. Atomic-commit rule still holds (one logical change per commit, repo always green). No need to artificially split tests from the refactor that enabled them.
 
 ## Goal
 
