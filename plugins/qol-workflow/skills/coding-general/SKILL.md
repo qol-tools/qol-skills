@@ -7,14 +7,9 @@ description: Universal coding and response-style guidelines for all projects in 
 
 Consolidated from: CLAUDE.md (shared), AGENTS.md (workspace), per-project skills.
 
-## Response Style (applies to all agents)
+## Response Style
 
-- **Concise by default.** Rephrase and reframe to compress. No preamble ("I'll go ahead and…", "Now let me…"), no trailing summary that recaps the response itself, no narration of what's already visible in tool output.
-- **State action, then act.** One short sentence before a tool call when intent isn't obvious from context — never two.
-- **Don't restate the user's question** before answering, and don't restate diff/output content the user can already see.
-- **Lists only when structure adds clarity.** Otherwise flat prose.
-- **No filler hedges** ("just", "really", "basically"). No "Done." after a result already shown by tool output.
-- **End-of-turn summaries**: at most one or two sentences — what changed and what's next. Skip entirely if obvious.
+See `writing` skill (KMRH47 personal style). It owns concision rules, banned words, em-dash ban, and the end-of-turn word cap.
 
 ## Implementation Questionnaire (Mandatory)
 
@@ -55,10 +50,10 @@ If uncertain about any answer, ASK the user before implementing. Do not guess.
 
 ## Deep Modules Philosophy (Ousterhout)
 
-- Deep modules over shallow — hide complexity behind simple, clean APIs. A function should do meaningful work, not just delegate.
-- Max 20 lines per function — if longer, split into focused functions
-- No shallow files (10–30 lines) — think about where the code belongs and colocate with related logic
-- No deep files (200+ lines) unless it's a library/utility with a cohesive purpose — split by concern otherwise
+- Deep modules over shallow - hide complexity behind simple, clean APIs. A function should do meaningful work, not just delegate.
+- Max 50 lines per function (matches workspace `CLAUDE.md`) - split beyond this only if it creates a genuinely reusable abstraction. The hard rule is "do one thing", not a line count.
+- No shallow files (10-30 lines) - think about where the code belongs and colocate with related logic
+- No deep files (200+ lines) unless it's a library/utility with a cohesive purpose - split by concern otherwise
 - Nesting is acceptable — for+if, match in loop, early returns are fine. Extract helpers only when it genuinely clarifies intent or creates reusable logic.
 - Avoid shallow extractions — don't create single-use helpers where inline is equally clear. Three similar lines is better than a premature abstraction.
 - Never over-split — a single-use function referenced once that just wraps 3-5 lines adds indirection without value. Inline it. Splitting should reduce complexity, not scatter it.
@@ -137,49 +132,15 @@ Every interactive UI component MUST:
 
 ## Git Commits
 
-- NEVER commit unless explicitly asked
-- NEVER add Co-Author lines (NEVER co-author)
-- Atomic: one logical change per commit, each must compile
-- Conventional: `feat:`, `fix:`, `refactor:`, etc.
-- One-liner messages, short and concise
-- Amend mistakes from previous unpushed commit, don't create "fix the fix" commits
-- After each change, suggest a commit message to the user
+See `qol-workflow:commit` (commit message conventions, no co-authors, atomic-commit rules), `qol-workflow:git-trees` (worktree-only flow + trivial-changes carve-out), and `qol-workflow:git-push` (pull-rebase-push contract). Don't restate those rules here.
 
 ## Testing
 
-- Property-based testing preferred over example-based
-- Table-driven tests for similar cases
-- Context in assertions for debugging
-- No tests for thin wrappers
-- Meaningful assertions — check actual values, not just is_ok()
-- Generic test data (foo, bar, /a/b/c) not real names
-- After code changes, run the appropriate validation commands by default unless the user explicitly says not to
-- Validation should match the project: use the relevant formatter, linter or static analysis, and tests for the changed scope
-- Prefer the narrowest commands that give strong local confidence, then widen to full-project validation when the change warrants it
-- Prefer repo-native validation entry points first when they exist, such as `make build`, `make test`, or project scripts that encode the real CI contract. Do not substitute ad hoc direct tool commands when the repo already defines the expected workflow.
-- Do not claim a Rust repo is green from `cargo test` alone. If the repo uses clippy in normal development, run clippy too.
-- For Rust application repos, the default full verification stack is:
-
-```bash
-cargo build --all-targets
-cargo clippy --all-targets -- -D warnings
-cargo test -- --nocapture
-```
-
-- If a stricter project-local skill or CI contract exists, follow that instead of the generic stack above.
-- If frontend files change inside a Rust-backed app, frontend syntax checks are additive, not a substitute for the Rust verification stack.
-- If the user says the repo still fails to build, rerun the exact repo-native build command immediately and debug that concrete failure before doing anything else.
+See `qol-tray:qol-apps-testing` (property tests, parameterized tables, modern toolkit: `insta` / `proptest` regressions / `cargo-mutants` / `rstest`). Don't restate test selection rules here.
 
 ## Performance: idle cost is a feature
 
-Background work (daemons, supervisors, watchers, listeners, event loops) MUST cost zero CPU and zero syscalls when nothing is happening. The user's foreground app (game, video call, render, build) is the priority; your code is a guest on their machine.
-
-- **Event-driven by default.** Block on the event source: `recv()`, channel `select!`, `tokio::select!`, `inotify`, `signalfd`, OS event APIs. Never `try_recv` + `sleep`.
-- **Wake on demand, not on a clock.** If you reach for an interval or tick, justify why event-driven is impossible.
-- **Cheap-when-idle is not enough; must be free-when-idle.** Wakeups themselves cost the user (cache trash, scheduler pressure, X / IPC round-trips). A loop that "just checks" at 100 Hz is invisible on an idle desktop and ruinous when the user is in a fullscreen 3D game.
-- **Hot paths do no I/O.** Render frames, keystroke handlers, hooks, supervisor ticks: no syscalls beyond the strict minimum, no work the user did not ask for right now.
-- **Sub-second polling intervals in always-on background paths are a code smell.** If you must poll, sleep at least 1 second and gate the work behind "is this needed right now" (UI open, daemon down, user explicitly asked).
-- **Measure before you ship.** If you cannot prove idle cost is zero, it is not. `top`, `perf`, `strace -c` on the idle process. No excuses.
+Background work must be free-when-idle, not just cheap. Event-driven by default; never `try_recv + sleep`. The Rust-specific patterns (crossbeam `select!`, tokio `select!`, signalfd, etc.) live in `qol-langs:rust-conventions` under "Idle cost is a feature". Apply the same principle in any language.
 
 ## No band-aids in hot paths
 

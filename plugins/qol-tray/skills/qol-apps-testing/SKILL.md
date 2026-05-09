@@ -140,3 +140,44 @@ Before declaring test work complete:
 - Run the narrow test slice you changed first.
 - Then run the project-required verification stack if the repo skill defines one.
 - Do not claim a Rust repo is green from `cargo test` alone when clippy or repo-native build commands are part of the normal workflow.
+
+## Modern Rust testing toolkit
+
+Use the right tool for the assertion shape, not just the old habit. The crates below are verified state-of-the-art (context7, source reputation High) and supersede ad-hoc patterns:
+
+### `insta` for snapshot tests
+
+Use when expected output is rich/structured and likely to evolve: serialized JSON / YAML, formatted strings, error messages, ASTs, generated code, multi-line debug output. Replaces brittle `assert_eq!(actual, "{ ... }")` with reviewable diffs.
+
+```rust
+insta::assert_snapshot!(rendered_diff);            // Display
+insta::assert_json_snapshot!(state);                // serde_json
+insta::assert_snapshot!(tag, value, @"inline");     // inline snapshot in source
+```
+
+Workflow: edit code, run tests (snapshots written as `.snap.new`), `cargo insta review` to interactively accept/reject diffs, commit accepted `.snap`. For inline snapshots the `@"..."` literal is updated in-place by `cargo insta accept`. Use snapshots for `SyncStateFile` round-trips, profile-bundle exports, error-message contracts.
+
+### `proptest` regression files for shrunk failures
+
+When a property test fails, `proptest` writes the minimal counterexample to `proptest-regressions/<module>.txt`. Commit that file. Future runs replay regressions before fresh inputs - so a once-found bug stays caught even if the strategy stops generating it.
+
+### `cargo-mutants` for grading the test suite
+
+Periodically (or in CI on PR diffs via `cargo mutants --in-diff git.diff`) run mutation testing. It rewrites operators / return values in your code and reports which mutations no test catches. The output names *exactly* which untested branches need a case. Cheap on PR diffs, expensive whole-repo - run incremental on every PR, full sweep on a schedule.
+
+### `rstest` for attribute-style parameterized tests
+
+Reach for `rstest` when an inline `let cases = [...]; for ...` table grows past ~10 rows or needs fixtures. Each case becomes its own named test, so a failure points to the exact row by name without a `cases` index lookup. Inline tables remain the right default for short grids - use `rstest` when the grid earns it.
+
+### When to pick which
+
+| Assertion shape | Pick |
+| --- | --- |
+| Single invariant, wide input space | `proptest` (commit regressions) |
+| 2-10 small exact-output rows | inline `let cases = [...]` table |
+| 10+ rows, need named cases or fixtures | `rstest` |
+| Rich/structured output that evolves | `insta` snapshot |
+| Grading "do my tests catch real bugs?" | `cargo-mutants --in-diff` |
+| Large external corpus (RFC suite, recorded payloads) | `tests/fixtures/*` + `include_str!` |
+
+When upgrading older example-tests, follow the picker above. Do not migrate working tests just to use a newer crate - upgrade when the existing test is brittle, opaque, or insufficient.
