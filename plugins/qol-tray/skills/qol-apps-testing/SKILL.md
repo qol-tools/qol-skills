@@ -22,6 +22,62 @@ Use this skill when the user asks to:
 - For bug fixes, write the test for the expected behavior before changing implementation when practical.
 - A test must fail on a plausible regression. If it would keep passing after the bug comes back, it is not good enough.
 
+## Test Triage Template (apply every time)
+
+Run this template at every "should I test this, and how" decision. It pairs the established workspace style with Right-BICEP and Test-Trophy framing into one repeatable flow.
+
+### Step 1 - classify the thing under test
+
+```
+WHAT IS IT?
+├─ pure function (input -> output, no I/O)
+│   -> property test for invariants + table test for the branches
+├─ stateful decision / dispatcher (state in -> outcome out)
+│   -> extract a pure decision fn, table-test all branches
+├─ I/O orchestrator (reads/writes disk, network, daemon)
+│   -> integration test with TempDir + fake provider
+└─ thin wrapper (just delegates)
+    -> no test (the inner thing is tested)
+```
+
+### Step 2 - risk check (override "no test" if any answer is yes)
+
+- Would silent failure lose user data, settings, or time?
+- Is this a published API surface or wire format?
+- Did this just break in production / for the user?
+- Does it gate cross-platform CI under `RUSTFLAGS=-D warnings`?
+
+If yes to any of the above, the change ships with a test even when Step 1 said "skip".
+
+### Step 3 - pick the test SHAPE
+
+Re-uses the picker in "Modern Rust testing toolkit" below. Quick recap:
+
+| Assertion shape | Pick |
+| --- | --- |
+| Single invariant, wide input space | `proptest` (commit regressions/) |
+| 2-10 exact-output rows | inline `let cases = [...]` table |
+| 10+ rows, need named cases / fixtures | `rstest` |
+| Rich/structured output that evolves | `insta` snapshot |
+| End-to-end behavioural contract | integration test (TempDir + fake) |
+| Large external corpus | `tests/fixtures/*` + `include_str!` |
+
+### Step 4 - grade the suite, then lift to STATIC where possible
+
+- After tests are green, run `cargo mutants --in-diff git.diff` (PR-scoped) to grade. A surviving mutation is a missing test.
+- The most powerful test is the one you delete because a type made the bad state unrepresentable. If you find yourself table-testing the edge cases of a free-string field (case-sensitivity, trailing whitespace, unknown values), the field probably wants to be an enum. Lift to static, delete the runtime test, ship.
+
+### Test-Trophy lens (Kent C. Dodds)
+
+The trophy hierarchy is, biggest to smallest investment:
+
+1. **Static** - types, exhaustive matches, lints, `-D warnings`. Cheapest, hardest to bypass.
+2. **Unit** - pure helpers, decision fns, validators.
+3. **Integration** - multiple units interacting on real disk / in-memory fakes.
+4. **E2E** - full system. Use only when nothing below the view layer can validate the behaviour.
+
+The right shape for THIS workspace is heavier on integration than the classic pyramid. Most qol-tools bugs are wiring bugs across the daemon / sync / config / UI boundary. Push tests to the integration tier where reasonable; never let "static" stay weak when a stronger type would make tests unnecessary.
+
 ## Test selection
 
 ### Prefer property tests when the behavior is defined by invariants
