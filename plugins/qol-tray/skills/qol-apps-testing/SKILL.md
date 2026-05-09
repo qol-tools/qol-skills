@@ -22,6 +22,32 @@ Use this skill when the user asks to:
 - For bug fixes, write the test for the expected behavior before changing implementation when practical.
 - A test must fail on a plausible regression. If it would keep passing after the bug comes back, it is not good enough.
 
+## Before claiming a seam is missing
+
+Verdicts like "this isn't testable without a refactor", "we'd need to inject the path", "the seam doesn't exist" must be backed by `path:line` evidence from a survey of the relevant modules. Without that, the verdict is a guess. qol-tools modules already carry test seams that are not obvious from the function signature, so the guess is wrong often enough that you cannot trust it.
+
+**Mandatory grep before declaring a seam absent:**
+
+```
+grep -rn "test_path_root\|TestPathRootGuard\|push_test_path_root\|TEST_.*ENV\|cfg(test)" src/
+grep -rn "QOL_.*TEST\|_TEST_PATH" src/
+```
+
+Also: read `paths.rs` (or whatever owns config/data path resolution) end-to-end. Functions with no path parameter often resolve through a `cfg`-gated override and look hardcoded only at first glance.
+
+**Two-tier path-override pattern in qol-tray (verify, do not trust this table blindly, code may have moved):**
+
+| Tier | Mechanism | Visible to | File / Line |
+| --- | --- | --- | --- |
+| Unit tests (`#[cfg(test)]`) | `paths::push_test_path_root(&Path) -> TestPathRootGuard` (thread_local) | tests inside `src/` | `src/paths.rs:33-38` |
+| Integration tests (`tests/*.rs`) | `QOL_TRAY_TEST_PATH_ROOT` env var | external test crate, debug builds | `src/paths.rs:10, 47-55` |
+
+Both routes redirect every `paths::*` call (`legacy_config_dir`, `base_data_dir`, etc.) under the override. So a service whose I/O goes through `crate::paths::*` is e2e-testable from `tests/<feature>_e2e.rs` today, no signature change required, even when the function appears to take "no path parameter".
+
+**Recorded miss (2026-05, profile sync survey):** Claimed `SyncService` needed a `config_root` injection refactor before it could be e2e-tested because `ensure_sync_dirs`/`save_state_file`/`load_state_file` take no path arg. Wrong. The env-var override had been wired the whole time (`paths.rs:47-50`) and the unit tests at `src/features/profile/sync/service.rs:861` already used the thread_local twin. The "wall" was a survey shortfall, not an architectural gap. Lesson: a no-arg signature is not evidence of global coupling.
+
+**Rule:** if you cannot quote `path:line` for the missing seam, you have not finished the survey. Keep grepping. Do not generalise from "this function takes no path parameter" to "this code is coupled to global paths". Architecture verdicts without `path:line` citations are inadmissible.
+
 ## Test Triage Template (apply every time)
 
 Run this template at every "should I test this, and how" decision. It pairs the established workspace style with Right-BICEP and Test-Trophy framing into one repeatable flow.
