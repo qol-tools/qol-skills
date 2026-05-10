@@ -17,6 +17,74 @@ A **dive target** binds a `sourceSelector` (DOM matcher) to a `claim` rect and a
 
 Component-depth (dropdown open, edit-mode, modal, palette) is NOT a layer change. See `qol-tray-ui-systems` for component-depth handling.
 
+## Build a page from scratch (walkthrough)
+
+Follow these steps in order. Each step links to a recipe or section below
+for the concrete code. The walkthrough is intentionally abstract: it
+describes the decisions, not the code, so it stays stable as the
+underlying primitives evolve.
+
+1. **Classify the page.** Pick the row in the *Page type matrix* below
+   that fits: top-level (a sidebar entry), single-page dive (one detail
+   per host), multi-page dive (siblings to tab between), or plugin
+   section (driven by a plugin contract). Type drives every later step.
+
+2. **Sketch the shell.** Every page renders inside the standard shell
+   (`view-container`, `PageHeader`, `SurfaceContainer`, `view-body`). See
+   *SurfaceContainer is mandatory inside a page* below. Without the
+   shell, keyboard nav silently breaks.
+
+3. **Declare it in `WORLD_PAGES`.** Add an entry to `ui/app/views.js`.
+   Set `contentSized: true` unless the page is fixed-frame. Top-level
+   pages also go in `BASE_ORDER` and `view-labels.js`. Sub-page entries
+   pull `contentSized` from their dive registration.
+
+4. **Wire the entry into the world.** Top-level pages need nothing more.
+   Anything deeper needs a `DiveTarget` registered in
+   `registerStaticDiveTargets` (or `registerPluginDiveTarget` for plugin
+   sections). Pick the recipe matching your type below.
+
+5. **Pick an activation trigger.** How does the user dive in? Whole-view
+   defaults to `[data-view-id="<parent>"]`; specific cards/rows use
+   `data-dive-source="..."` on a `Surface`. See *Triggering a dive*. If
+   the row has a one-shot detail view, set `data-dive-target` on the row
+   and write the detail slot synchronously in `onActivate`.
+
+6. **Decide if it is interactive.** A read-only page is done after
+   step 5. A list-style page (rows, add/edit/delete) needs:
+   - selection state (`useListSelection` or `usePersistedIndex`)
+   - keyboard bindings declared in `VIEW_BINDING_DEFAULTS` and surfaced
+     via `<KeyLegend>` in the `PageHeader` `aside` slot
+   - a handler that respects the dive contract (do not pair
+     `useListKeyboard` with rows that own `data-dive-target`, see the
+     *Don't pair* section).
+
+7. **Decide if it needs an editor sub-page.** If activation opens an
+   editor (form), build a sub-page using `DiveEditorSubPage` with its
+   own `viewId` prop (default to `<parent>-editor`). Drive the slot from
+   a `useDiveEditor` call in the parent view; fill in `modal`,
+   `fieldProps`, `handlers`, `handleKey`, `isBlocking`. Esc-close
+   ascending is automatic (see *Ascend on editor close*).
+
+8. **Add a gallery showcase** if the page or any new component is
+   reusable. The gallery mirrors prod 1:1 with sandbox handlers, see
+   *Gallery is a 1:1 prod test bed*. For an editor sub-page, scope its
+   `viewId` so it doesn't overwrite prod's view-keyboard registration.
+
+9. **Verify the four invariants.**
+   - Dive lands the camera on the new page and the first surface is
+     focused.
+   - Esc ascends back and restores focus on the originating row
+     (`data-dive-source`).
+   - Tab cycles top-level views at layer 0 and cycles siblings inside a
+     multi-page dive.
+   - `<KeyLegend>` reflects every key the handler actually consumes.
+
+10. **Commit atomically.** One logical change per commit. If you added
+    bindings, the legend defaults and the handler change live in the
+    same commit. If you added a gallery showcase, ship it with the
+    production page.
+
 ## Page type matrix
 
 | Type | Example | Layer | Pages per dive | Registration site |
