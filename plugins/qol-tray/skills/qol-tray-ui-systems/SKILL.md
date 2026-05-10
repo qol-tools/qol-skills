@@ -176,6 +176,7 @@ For dynamic alpha: `rgba(var(--accent-rgb), 0.2)`. Available: `--accent-rgb`, `-
 | Rendering an ad-hoc Shift-overlay div on a new surface | Set `data-secondary-label` and pass `onSecondaryActivate` (or `actions[1]`). Global CSS draws the overlay. |
 | Using a `<pre>` with `tabIndex=0` for a scrollable JSON/log dump | Use `CodeBlock` (or follow its `data-scroll-surface-active` pattern). Plain `tabIndex=0` won't be reachable via arrow nav. |
 | Letting modifier-Enter dive a row that has a secondary action | Already handled by `Surface`: Shift/Ctrl/Meta + Enter runs the secondary action and suppresses dive. Don't reimplement. |
+| Attaching a `ref` to a Preact functional component (e.g. `<${Button} ref=${r}>`) and expecting `r.current` to be the DOM node | Preact does not forward refs through functional components. `r.current` stays null and any focus restoration silently no-ops. Wrap the subtree in `<span ref=${r} style="display: contents">` and locate the inner element via `querySelector`, or use `forwardRef` from `preact/compat`. |
 | Forgetting to call `restoreDiveSourceFocus` when adding a new ascend path | The existing camera-layer ascend path already does this. Don't add a parallel ascend mechanism — extend the existing one. |
 
 ## Surface Trait Architecture

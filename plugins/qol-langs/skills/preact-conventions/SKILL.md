@@ -250,3 +250,34 @@ export function MyComponent({ mode }) {
 ```
 
 For per-key persistence (e.g., selected section per plugin), use `usePersistedIndex(storageKey, default)` which reads/writes localStorage.
+
+## Refs Don't Forward Through Functional Components
+
+Preact does not forward `ref` through functional components by default. `<MyButton ref={r} />` where `MyButton` is a function component leaves `r.current` null (or set to internal Preact state), NOT the DOM node `MyButton` rendered. Code that depends on `r.current.focus()` will silently no-op.
+
+```js
+// BAD: r.current is not the rendered button
+function Button({ children, ...rest }) {
+    return html`<button class="btn" ...${rest}>${children}<//>`;
+}
+function Caller() {
+    const r = useRef(null);
+    return html`<${Button} ref=${r}>Save<//>`;
+}
+
+// GOOD (option A): wrapper span with display:contents
+function Caller() {
+    const r = useRef(null);
+    const focusBtn = () => r.current?.querySelector('button')?.focus();
+    return html`<span ref=${r} style="display: contents">
+        <${Button}>Save<//>
+    </span>`;
+}
+
+// GOOD (option B): forwardRef from preact/compat
+import { forwardRef } from 'preact/compat';
+const Button = forwardRef(({ children, ...rest }, ref) =>
+    html`<button ref=${ref} class="btn" ...${rest}>${children}<//>`);
+```
+
+Common symptom: focus restoration after a modal/input unmounts looks correct in code but does nothing at runtime. `display: contents` keeps flex and grid layouts intact while giving you a stable DOM handle.
