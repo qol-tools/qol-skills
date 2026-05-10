@@ -11,18 +11,21 @@ Every qol-tools README has the same skeleton, and it never says anything that go
 
 1. **Timeless content only.** No "currently does X", no "planned for vNext", no roadmap, no status sections. If a sentence will need editing as the project evolves, it does not belong in the README.
 2. **No duplication of canonical content.** Folder layout (GitHub already shows it), `Cargo.toml` deps, release notes, changelog, issue tracker, blog. Link out instead.
-3. **Current-state info goes to GitHub's dynamic surfaces, not the prose.** Platform support → CI matrix + repo topics. Build health → CI badge under the H1. Open work → issue tracker. The README never says "supported on X" or "Windows is tracked"; the GitHub UI around the README handles it dynamically.
+3. **Current-state info goes to GitHub's dynamic surfaces, not the prose.** Platform support → workflow matrix + repo topics. Build health → `tests` and `lint` badges under the H1. Open work → issue tracker. The README never says "supported on X" or "Windows is tracked"; the GitHub UI around the README handles it dynamically.
 
-### One-badge rule
+### Badge rule
 
-Exactly one badge, placed under the H1: a CI status badge linked to the workflow. No version, license, downloads, or coverage badges — they're either decorative or duplicate canonical (`Cargo.toml`, `LICENSE`).
+One badge per workflow that gates merge, stacked directly under the H1. The minimum is a `tests` badge; add a `lint` badge when fmt/clippy run as a separate gate. The label on the badge image is set by the workflow's `name:` field, so the workflow file itself must be named `tests` or `lint` (never `CI` - opaque, doesn't tell the reader what failed).
+
+No version, license, downloads, or coverage badges - they're either decorative or duplicate canonical sources (`Cargo.toml`, `LICENSE`, GitHub Releases).
 
 ## Canonical structure
 
 ```markdown
 # Title
 
-[![CI](https://github.com/<org>/<repo>/actions/workflows/ci.yml/badge.svg)](https://github.com/<org>/<repo>/actions/workflows/ci.yml)
+[![tests](https://github.com/<org>/<repo>/actions/workflows/tests.yml/badge.svg)](https://github.com/<org>/<repo>/actions/workflows/tests.yml)
+[![lint](https://github.com/<org>/<repo>/actions/workflows/lint.yml/badge.svg)](https://github.com/<org>/<repo>/actions/workflows/lint.yml)
 
 Tagline (one sentence, platform-agnostic).
 
@@ -51,9 +54,9 @@ PolyForm Noncommercial 1.0.0
 
 H1, the project's marketing name. Capitalised (`QoL Tray`, `Plugin Lights`), not the bare repo name.
 
-### Badge
+### Badges
 
-CI workflow badge. One. Linked to the workflow page so a click goes to the live matrix view.
+One status badge per workflow that gates merge, stacked under the H1, each linked to its workflow page so a click goes to the live run view. The standard set in qol-tools is `tests` and `lint`; add others only when a new workflow file represents a distinct merge gate. Never use `CI` as a workflow name or alt text - it doesn't say what passed.
 
 ### Tagline
 
@@ -104,8 +107,8 @@ No tagline, no link to LICENSE, no contributing section under it.
 
 | Concern | Lives in |
 |---|---|
-| Platform support | CI matrix + repo topics (`linux`, `macos`, `rust`, …) |
-| Build health | CI badge under the H1 |
+| Platform support | workflow matrix + repo topics (`linux`, `macos`, `rust`, …) |
+| Build health | `tests` and `lint` badges under the H1 |
 | Open work / vision / roadmap | GitHub issues with labels (`platform:windows`, `vision:*`) |
 | Release notes / changelog | GitHub Releases tab |
 | Authors / contributors | `git log`, repo Insights tab |
@@ -124,7 +127,8 @@ If a section in the README is about any of these, it's almost certainly duplicat
 - `## Built with` / `## Stack` — `Cargo.toml` is canonical (rule 2).
 - "Why I built this" / motivation paragraphs — keep this in a blog post.
 - `## Acknowledgements` — git log + Insights tab.
-- Multiple badges (version, downloads, license, coverage) — one-badge rule.
+- Decorative badges (version, downloads, license, coverage) - badges only for workflows that gate merge.
+- A badge labelled `CI` - the label has to say what failed, e.g. `tests` or `lint`.
 - "Repo layout" tree — GitHub's file tree is canonical (rule 2). Will rot when files move (rule 1).
 - Footer screenshots, contributor avatars, "made with love" lines.
 
@@ -133,7 +137,7 @@ If a section in the README is about any of these, it's almost certainly duplicat
 Don't rewrite the prose. Reshape:
 
 1. **Title** — fix capitalisation.
-2. **Badge** — add exactly one CI badge under the H1, drop any others.
+2. **Badges** - add one status badge per merge-gating workflow under the H1 (minimum: `tests`; add `lint` when present). Drop everything else.
 3. **Tagline** — collapse to one sentence. Cut emojis, marketing verbs, platform names, stack names.
 4. **Reorder + rename** sections to canonical names (`## Quick start`, `## About`, `## License`).
 5. **Delete** anything in the anti-patterns list above.

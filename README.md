@@ -1,6 +1,6 @@
 # qol-skills
 
-[![test](https://github.com/qol-tools/qol-skills/actions/workflows/test.yml/badge.svg)](https://github.com/qol-tools/qol-skills/actions/workflows/test.yml)
+[![tests](https://github.com/qol-tools/qol-skills/actions/workflows/tests.yml/badge.svg)](https://github.com/qol-tools/qol-skills/actions/workflows/tests.yml)
 
 Claude Code and Codex skills marketplace for the [qol-tools](https://github.com/qol-tools) org.
 
