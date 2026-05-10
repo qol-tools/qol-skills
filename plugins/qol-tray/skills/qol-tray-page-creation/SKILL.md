@@ -141,6 +141,109 @@ import { mySlot } from '...'; import { MyDetailSubPage, prodMyDetailConfig } fro
 
 Pages without actions (e.g. `LogDetailSubPage`) take only `slot`.
 
+## Editor sub-pages: viewId must be a prop, not hardcoded
+
+Any editor sub-page that mounts `DiveEditorSubPage` internally MUST accept
+`viewId` as a prop. The default matches prod; the gallery (or any future
+embedder) passes a different one so the view-keyboard registration does NOT
+collide with prod.
+
+```js
+export function HotkeyEditorSubPage({ slot, viewId = 'hotkeys-editor' }) {
+    return html`<${DiveEditorSubPage} slot=${slot} viewId=${viewId} ... />`;
+}
+
+// gallery wrapper
+return html`<${HotkeyEditorSubPage} slot=${gallerySlot}
+    viewId="dev-gallery-hotkey-row-editor" />`;
+```
+
+Hardcoding `viewId="hotkeys-editor"` inside the editor means whichever copy
+mounts last (often the gallery) overwrites the prod view-keyboard slot under
+the shared id. Esc inside the prod editor then routes through a slot with
+`handleKey: null`, `isBlocking: false`, and the modal stays open.
+
+## Gallery editor controllers wire the full slot
+
+When a gallery showcase mounts a prod editor sub-page, the controller hook
+(`useGallery<X>EditorController`) MUST populate every field the prod view
+would, especially `handleKey` and `isBlocking`. Otherwise Ctrl+Enter and
+Escape behave inconsistently with prod.
+
+Minimum slot value:
+
+```js
+const { fieldProps, handleKey: modalHandleKey } = useModalKeyboard({ onSave, onClose });
+const handleKey = useCallback((e) => {
+    if (recorder.handleKey(e)) return;
+    modalHandleKey(e);
+}, [recorder.handleKey, modalHandleKey]);
+
+useDiveEditor({
+    slot: galleryEditorSlot,
+    deps: [modal, fieldProps, handleKey, recorder.isRecording],
+    build: () => ({
+        modal, plugins, recording: recorder.isRecording,
+        fieldProps,
+        handlers: { onPluginChange, onActionChange, onStartRecording, onClose, onSave },
+        handleKey,
+        isBlocking: () => !!modal,
+    }),
+});
+```
+
+If the editor records keystrokes (e.g., hotkey shortcut field), mount the
+real `useRecorder` from the prod hook and put `recorder.handleKey` ahead of
+`modalHandleKey` in the slot's handleKey chain. The gallery should never
+diverge from prod input behavior; if it does, the gallery is failing its
+regression-bed contract.
+
+The longer-term fix is extracting a `useHotkeyEditor` (or `useShortcutEditor`)
+driver from the prod view, so both prod and gallery call the same hook and
+duplication goes away.
+
+## Ascend on editor close is automatic via DiveEditorSubPage
+
+`DiveEditorSubPage` watches the slot's `modal` value. When it transitions
+from non-null to null (modal closed via Save, Cancel, or Esc), it calls
+`ascend()`. View-side `onClose` wrappers (e.g., hotkey's `closeAndExit`)
+that ALSO ascend are harmless: the second ascend no-ops on an empty stack.
+
+A view that closes its modal without ascending (because the inner
+`closeModal` only clears state) still returns the user to layer 0 thanks
+to this generic effect. Don't reintroduce per-view ascend wrappers unless
+you also need to fire post-close side effects (logging, focus restoration
+beyond what `data-dive-source` already does).
+
+## Key legend (contextual hotkeys per page)
+
+List views show a `<KeyLegend>` strip next to the page subtitle so users
+don't have to guess what `a`, `Enter`, `r` do. Bindings come from a single
+defaults table (`ui/lib/view-bindings.js`) keyed by `viewId`, read via
+`useViewBindings(viewId)`. The same source feeds the keyboard handler in
+the future; for now defaults are baked.
+
+```js
+// in the view
+const bindings = useViewBindings('shortcuts');
+return html`
+    <${PageHeader} subtitle="..." aside=${html`<${KeyLegend} bindings=${bindings} />`} />
+    ...
+`;
+```
+
+The legend renders via PageHeader's `aside` slot, so its vertical position
+is anchored to the header (not the bottom of `.view-body`, which varies
+with content height). Same screen y on every page.
+
+When you add a key to a list view's handler, add the corresponding entry
+to `VIEW_BINDING_DEFAULTS` in the same commit. Drift between the handler
+and the legend lies to the user.
+
+Drop ad-hoc "Press <kbd>a</kbd> to add one" empty-state hints once the
+legend exists. The legend communicates the binding; the empty state should
+state the fact ("No actions configured.") without repeating the key.
+
 ## Gallery is a 1:1 prod test bed
 
 Component Gallery showcases MUST render the same component, in the same shell,
@@ -353,6 +456,10 @@ Without `SurfaceContainer`, `globalSurfaceNav` cannot find the surfaces and keyb
 | Pairing `useListKeyboard` with rows that have `data-dive-target` | preventDefault on Enter blocks `globalSurfaceNav` and the dive never fires. Let surface activation handle it (see "Don't pair useListKeyboard with divable rows"). |
 | Defaulting `slot` or `config` props on a reusable sub-page | Hides the contract, makes drift invisible. Make them required; both prod and gallery wire explicitly. |
 | Setting the detail slot via `useState` + `useEffect` from `onActivate` | The dive resolves in the same click tick before the effect runs. Land on empty placeholder. Write the slot directly in `onActivate`. |
+| Hardcoding `viewId="<x>-editor"` inside an editor sub-page used by the gallery | Gallery's mount overwrites the prod view-keyboard registration. Prod Esc routes through gallery's slot, modal stays open. Make `viewId` a prop. |
+| Gallery editor slot with `handleKey: null` and `isBlocking: () => false` | Ctrl+Enter / Esc never reach `onSave` / `onClose`. Wire modalNav handleKey and `isBlocking: () => !!modal`. |
+| Page-specific keyboard help text in the empty state (`Press <kbd>a</kbd> to add`) | `<KeyLegend>` already shows that next to the subtitle. Duplicated source of truth, drifts. |
+| Adding a key to a list handler without updating `VIEW_BINDING_DEFAULTS` | Legend lies to the user. Handler and table change in the same commit. |
 
 ## Where things live
 
@@ -365,3 +472,8 @@ Without `SurfaceContainer`, `globalSurfaceNav` cannot find the surfaces and keyb
 | `ui/lib/world-navigation-singleton.js` | `diveViaSelector`, `ascend` shims for non-React call sites. |
 | `ui/app/useAppKeyboardRouting.js` | Tab cycling (top-level vs sub-pages), Esc routing. |
 | `ui/app/view-labels.js` | Human-readable view labels for the sidebar and breadcrumb. |
+| `ui/lib/view-bindings.js` | `VIEW_BINDING_DEFAULTS` per viewId. Add an entry when adding a list view. |
+| `ui/lib/hooks/useViewBindings.js` | Read defaults (later: merged with user config). |
+| `ui/lib/components/KeyLegend.js` | Renders the contextual hotkey strip. Lives in `PageHeader`'s `aside` slot. |
+| `ui/components/PageHeader.js` | `aside` prop carries the legend alongside the subtitle. |
+| `ui/lib/components/DiveEditorSubPage.js` | Generic editor sub-page shell. Auto-ascends on modal-close transition. |
