@@ -81,10 +81,32 @@ Then place one worktree per repo inside it:
 ## Rules
 
 - One repo, one worktree directory.
-- All repos participating in the same initiative should use the same branch name when practical.
+- All repos participating in the same initiative MUST use the **same branch name**. See "Cross-repo dev recompile loop" below: qol-tray's active-worktree picker enforces this at runtime.
 - Group by feature first, repo second.
 - Keep the repo directory name equal to the repo identity.
 - Use this layout for coordinated testing where `qol-tray` orchestrates multiple plugins or supporting repos.
+
+## Cross-repo dev recompile loop (CRITICAL)
+
+qol-tray's dev mode exposes an **Active Worktree Branch** picker (Settings, dev panel; persisted at `~/.config/qol-tray/dev/active-worktree.txt`). The selected branch name is applied to every dev-linked plugin repo: each plugin resolves to its worktree on that branch if one exists, otherwise falls back to its main clone.
+
+The implication is a hard naming rule:
+
+> **Coordinated work across qol-tray + N plugin repos shares ONE branch name.**
+
+Concretely:
+
+- The qol-tray branch and any plugin-repo branches that need to move together must all be `<name>`. Pick the name to be **short, stable, and topic-led** (`wasm`, `theming`, `sync-v2`).
+- **Do NOT use PID-prefixed branch names** (`tray-32-integration`, `tray-42-foo`) for the qol-tray side of a coordinated initiative. PIDs are per-issue; the active-worktree convention is per-topic and outlives any single PR. Use a PID branch only for single-repo work.
+- Plugin repos where `main` already carries the right code need **no worktree**: qol-tray's resolver falls back to main automatically. Don't fabricate empty `wasm` branches just for symmetry.
+- The worktree directory under `worktrees/<name>/<repo>/` matches the branch name, same as the single-repo case.
+
+### Example: the wasm migration
+- qol-tray branch: `wasm` (worktree at `worktrees/qol-tray/wasm/`).
+- plugin-window-ctl / plugin-launcher-wasm / plugin-screen-recorder-wasm: their `main` already IS the wasm version, so no separate branch needed.
+- Future plugins that need a wasm fork (e.g. plugin-alt-tab): branch named `wasm` in that repo, worktree at `worktrees/plugin-alt-tab/wasm/`.
+
+When you find yourself naming a qol-tray branch after the issue id, ask: "Will any plugin repo need to move on the same lane?" If yes, pick a topic name instead.
 
 ## Why This Layout
 
