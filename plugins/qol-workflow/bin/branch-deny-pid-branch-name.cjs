@@ -26,7 +26,6 @@
 'use strict';
 
 const fs = require('node:fs');
-const path = require('node:path');
 
 const QOL_TOOLS_ROOT = '/media/kmrh47/WD_SN850X/Git/qol-tools';
 const PID_PATTERN = /^[a-z][a-z0-9]*-\d+(-|$)/;
@@ -67,7 +66,7 @@ function detectNewBranchName(cmd) {
 function inQolToolsTree(cwd) {
     if (typeof cwd !== 'string' || !cwd) return false;
     if (cwd === QOL_TOOLS_ROOT) return true;
-    return cwd.startsWith(QOL_TOOLS_ROOT + path.sep);
+    return cwd.startsWith(QOL_TOOLS_ROOT + '/');
 }
 
 function emitDeny(name, command) {
