@@ -7,7 +7,24 @@ description: Use when a qol-tray release breaks the on-disk config layout or the
 
 ## Where things live
 
-- Crate: `/media/kmrh47/WD_SN850X/Git/qol-tools/qol-migrations/`. Sibling repo, path dep from qol-tray Cargo.toml until pushed to GitHub.
+- Crate: sibling repo of qol-tray inside the qol-tools workspace (`<workspace>/qol-migrations/` on the main clone, `<workspace>/worktrees/<feat>/qol-migrations/` inside a feature lane).
+
+## Cargo dependency form (read this before touching qol-tray's Cargo.toml)
+
+qol-tray declares qol-migrations as a **path dep**, always:
+
+```toml
+qol-migrations = { path = "../qol-migrations" }
+```
+
+NEVER as `git = "..." branch = "..."`. Rationale:
+
+- `../qol-migrations` is sibling-relative, so it resolves correctly from both the main clone (`qol-tools/qol-tray/` -> `qol-tools/qol-migrations/`) AND from any feature worktree (`worktrees/<feat>/qol-tray/` -> `worktrees/<feat>/qol-migrations/`). Worktree-aware for free.
+- A `git + branch` dep forces a push every time qol-migrations changes during local iteration, pins to a SHA in `Cargo.lock` (so `cargo update -p qol-migrations` is needed each cycle), and breaks the symmetry above.
+- "Until pushed to GitHub" is misleading shorthand from earlier docs. There is no flip to a git dep on release - the path dep stays. Each repo ships from its own `main`, independently versioned; qol-tray consumers (CI, distros, end-user installs) build from qol-tray's source tree, which checks out the matching qol-migrations sibling. No release-time substitution is needed.
+
+If you find a `git = "https://github.com/qol-tools/qol-migrations"` form in `qol-tray/Cargo.toml`, treat it as drift to revert, not as a deliberate choice.
+
 - qol-tray PreFlight call site: `qol-tray/src/main.rs`, near `run_startup_cleanup` (PreFlight runs immediately BEFORE housekeeping; housekeeping populates whatever the migration left behind).
 - qol-tray PostAuth call site: after GitHub auth loads. TBD: exact file path; the assembly agent introducing the first cloud migration picks where in the boot flow this lands. Search for `qol_migrations::run_post_auth` once the assembly agent's branch is merged.
 - Standalone binary: `qol-tray-migrate` at `qol-tray/src/migrate/main.rs`. Thin wrapper for `--dry-run` debugging or running against a custom config dir. Shares the same registries as the daemon path.
