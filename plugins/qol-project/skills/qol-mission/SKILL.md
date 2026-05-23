@@ -15,9 +15,32 @@ People who use multiple machines (work laptop, home desktop, friend's PC, fresh 
 
 ## Vision (where we're going, not where we are)
 
+Isolated slices, independently revisable. **P0** = founding (changes what qol-tools IS). **P1** = active expansion. **P2** = seeded direction. Every architectural choice should be checked against the active slices: does it make these futures easier or harder? If harder, redesign.
+
+### V1: Multi-OS, multi-injection portability
+
+**Status:** aspirational (Linux runs, macOS WIP, Windows not yet started)
+**Priority:** P0
+
 The full dream: walk up to **any** computer - Windows, macOS, any Linux distro - and inject qol-tray however is convenient. USB stick. Phone over USB or AirDrop-style wireless. Network share. SSH push. Fresh install. The host OS does not matter, the injection method does not matter. Within seconds the machine carries your bespoke flavor: your plugins, your keybindings, your sync, your colors, your habits. Pull the medium, walk away, the host is exactly as you found it.
 
-This is aspirational. We are not there yet. But every architectural choice should be checked against it: does this make the multi-OS / multi-injection future easier or harder? If harder, redesign.
+### V2: Browsers are another portability axis
+
+**Status:** aspirational (today: hand-rolled Firefox extension + `?__reuse_tab=1` query params)
+**Priority:** P1
+
+A large fraction of the user's shortcuts ultimately drive a browser: open a URL, focus an existing tab, navigate within a single-page app. The browser is a host in its own right, and qol-tray should treat it the way it treats the operating system. One mission-level concept, per-browser adapters underneath.
+
+**Asymmetry worth naming.** OS adapters in qol-tray live inside the same Rust process. Browser adapters live inside the browser sandbox, on the browser's update cadence, behind store review. The contract is one trait surface in qol-tray, plus a WebExtension shipped per browser. Structurally the same strategy-adapter pattern as `platform/macos`, `platform/linux`, `platform/windows`, but the wire crosses a process boundary.
+
+**Two-tier delivery.** The contract surface (open-or-focus URL, focus tab by URL pattern, list tabs, current selection) ships in two tiers:
+
+1. **Zero-install tier** - OS-level scripting where available: AppleScript on macOS, DBus on Linux, UIA on Windows. Covers the common "reuse tab if open, otherwise new" case with no extension to install. Brittle to browser updates; that is the trade.
+2. **Extension tier** - one WebExtension codebase (WXT framework) built per browser (Firefox, Chrome, Brave, Safari) talking to qol-tray over a loopback WebSocket with a token handshake. Not native messaging: Safari restricts native messaging to a container app, MV3 service workers die mid-conversation, and per-OS host-manifest install is the #1 source of "extension installed but nothing works" tickets. WebSocket reconnects survive service-worker death and the same wire works across browsers.
+
+**Shortcuts are authored against the concept, not the browser.** When the user switches from Firefox to Brave, their shortcuts keep working; qol-tray routes to whichever adapter is reachable, zero-install tier first, extension tier as the power upgrade.
+
+The six non-negotiables extend cleanly: user never configures the browser by hand (1); qol-tray owns its contract even when the browser has competing primitives (2); browser is left as found, adapters disabled or uninstalled on profile teardown (3); adapters bundle whatever they need (5); a missing or broken adapter surfaces immediately, not as a silently-not-firing shortcut (6).
 
 ## Non-negotiables
 
