@@ -97,9 +97,9 @@ fixtures/<future migration>/before/, after/  (recommended for big migrations)
 
 When the gate (`OLDEST_SUPPORTED` reject) needs a recovery branch for an in-flight bug - some installs already shipped with a broken version stamp and the gate now refuses to let them upgrade - the branch must match the **signature** of that bug, not the **effect**.
 
-The May 2026 incident: a bug in qol-migrations wrote `env!(CARGO_PKG_VERSION)` from the lib crate itself (`0.1.0`) instead of the host's version (e.g. `3.17.0`). On the next boot, the gate saw `0.1.0`, decided it was below `OLDEST_SUPPORTED = 3.15.0`, and refused to start.
+The motivating incident: a bug in qol-migrations wrote `env!(CARGO_PKG_VERSION)` from the lib crate itself (`0.1.0`) instead of the host's version. On the next boot, the gate saw `0.1.0`, decided it was below `OLDEST_SUPPORTED`, and refused to start.
 
-The first recovery branch was too wide: it accepted **any** install below `OLDEST_SUPPORTED` if the host version was current. That silently auto-upgraded real legacy 3.14.x installs past the gate they were meant to hit. The gate became a no-op.
+The first recovery branch was too wide: it accepted **any** install below `OLDEST_SUPPORTED` if the host version was current. That silently auto-upgraded real legacy installs (`major >= 1`, below `OLDEST_SUPPORTED`) past the gate they were meant to hit. The gate became a no-op.
 
 The narrow form matches only `parse_semver(installed).0 == 0`, the signature of the env-macro bug. Real legacy installs with `major >= 1` still hit the gate's reject branch and get the upgrade-first message.
 
@@ -122,10 +122,10 @@ fn reject_if_below_oldest_supported(config_dir: &Path, host_version: &str) -> Re
 
 Test the boundary in both directions. The same recovery condition has to round-trip through both PreFlight and PostAuth runners (both consult the same gate).
 
-- Every signature-matching stamp is auto-recovered: `["0.0.0", "0.0.1", "0.1.0", "0.2.7", "0.99.99"]` → ok.
-- Every signature-not-matching legacy install is still rejected with the right diagnostic: `["3.14.9", "3.14.0", "3.0.0", "2.99.99", "1.0.0"]` → error, message contains the installed version and `OLDEST_SUPPORTED`.
+- Every signature-matching stamp is auto-recovered: any `0.x.y` value the env-macro could have produced.
+- Every signature-not-matching legacy install (`major >= 1`, version below `OLDEST_SUPPORTED`) is still rejected with the right diagnostic. The error message must include the installed version and the `OLDEST_SUPPORTED` constant value.
 
-A reviewer who asks "why isn't this a one-line check on `installed < OLDEST_SUPPORTED`?" wants the wider form; the answer is the legacy-3.14.x rejection test, which would fail under their proposal. Point them at the test.
+A reviewer who asks "why isn't this a one-line check on `installed < OLDEST_SUPPORTED`?" wants the wider form. The answer is the major-greater-than-or-equal-to-one rejection test, which would fail under their proposal. Point them at the test.
 
 When the in-flight bug is fully aged out of the install base (no `major == 0` stamps left in the wild), delete this recovery branch in the same commit that prunes the migration that introduced it. Do not let recovery branches accumulate.
 

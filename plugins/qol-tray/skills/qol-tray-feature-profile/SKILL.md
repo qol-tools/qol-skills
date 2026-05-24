@@ -64,7 +64,7 @@ Write semantics (`save_plugin_config_split`): split via `split_by_declarations`,
 
 ## Sync clone must promote an allowlist, never wipe
 
-`SyncService::connect` never wipes the profile directory before cloning the remote. The wipe pattern deleted gitignored per-machine data (`device/`, `sync/state.json`, `sync/toggles.json`, the active marker, any unrelated local file) in one swing and triggered the May 2026 data loss.
+`SyncService::connect` never wipes the profile directory before cloning the remote. The wipe pattern deleted gitignored per-machine data (`device/`, `sync/state.json`, `sync/toggles.json`, the active marker, any unrelated local file) in one swing, which is the incident that motivated this section.
 
 The current pattern: clone the remote into a sibling staging directory, then promote allowlisted paths into the live profile. The `.git` directory is moved separately so subsequent git operations work against the fresh remote.
 
@@ -83,7 +83,7 @@ The promote contract has two halves:
 - **Default-skip for local paths**: anything in the live profile that does NOT match an allowlist pattern is left untouched. `device/`, `sync/state.json`, `sync/toggles.json`, the active marker, and any local untracked file all survive a remote pull. There is no "delete unknown locals" branch and adding one is wrong; recover-on-conflict beats truth-from-remote here.
 - **Default-skip for unknown staging files**: anything the staging clone carries that does NOT match the allowlist is silently dropped, not promoted. Defense in depth - a remote that somehow contains `malicious.sh`, `.bashrc`, a stray `device/` subtree, or a stale `sync/state.json` cannot reach the live profile.
 
-When you extend sync to new file kinds, add them to the allowlist explicitly. Treat any "all unknown files copied through" change as a regression of the May 2026 disaster.
+When you extend sync to new file kinds, add them to the allowlist explicitly. Treat any "all unknown files copied through" change as a regression of the wipe-then-clone disaster this section was added to prevent.
 
 ## Migration collision policy: same-content drop, different-content `.legacy`
 
@@ -93,7 +93,7 @@ When a file migration moves `src` to `dst` and `dst` already exists, never silen
 - **`dst` exists and is bit-identical to `src`**: remove `src` as redundant. No `.legacy` sidecar - the data is preserved at `dst` and a sidecar would be clutter.
 - **`dst` exists and differs from `src`**: rename `src` to `<src_name>.legacy`. Leave `dst` untouched. A stale `<src_name>.legacy` from an interrupted prior run is replaced (renaming over it is intentional, not a bug).
 
-Used by both `v3.16-to-v3.17-device-to-os` and `v3.17-to-v3.18-plugin-configs-by-os`. Future migrations that move existing user data MUST follow the same policy. The `MigrationReport.archived` list contains only fresh src-to-dst moves; collision archives do not appear there - downstream consumers count `archived.len()` as the number of files newly placed, not the number of files touched.
+This policy applies to every file migration that moves existing user data; see the migrations registered in `PreFlightRegistry::current()` for live examples. Future migrations of that shape MUST follow it. The `MigrationReport.archived` list contains only fresh src-to-dst moves; collision archives do not appear there - downstream consumers count `archived.len()` as the number of files newly placed, not the number of files touched.
 
 ## Sync conflict backups are cross-machine recovery, not local-only
 
@@ -105,7 +105,7 @@ Backups under `<profile>/sync/backups/*.json` are intentionally tracked by the s
 */device/
 ```
 
-Notably it does **not** include `*/sync/backups/`. That is on purpose. Conflict snapshots committed on machine A become available to machine B via the normal sync pull, which is the only mechanism that turned out to recover the May 2026 data loss. If you "tidy up" by moving backups under `device/` or by adding them to the gitignore, you remove the cross-machine recovery property.
+Notably it does **not** include `*/sync/backups/`. That is on purpose. Conflict snapshots committed on machine A become available to machine B via the normal sync pull, which is the mechanism that lets a wiped machine recover by pulling a backup another machine pushed. If you "tidy up" by moving backups under `device/` or by adding them to the gitignore, you remove the cross-machine recovery property.
 
 Two concerns that DO exist and that this design knowingly accepts:
 
