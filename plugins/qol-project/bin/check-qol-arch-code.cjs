@@ -9,6 +9,9 @@
  *   2. #[cfg(target_os = "...")] attributes outside the canonical mod.rs
  *      re-export pattern (e.g. on `pub fn`, `mod foo;` where foo isn't an
  *      OS name, on impls, on use statements inside business code).
+ *   3. Runtime platform decision signals outside an architecture boundary
+ *      (runtime OS constants, OS API imports, OS command dispatch, OS-keyed
+ *      storage/path routing, platform manifest branching).
  *
  * Allowed:
  *   - cfg(target_os) on `mod {linux,macos,windows};` or `pub use
@@ -53,6 +56,18 @@ const ATTRIBUTE_LINE = /^\s*#\[/;
 const CFG_TARGET_OS = /#\[cfg\((not\(|all\(|any\()?target_os\s*=/;
 const SAMELINE_CANONICAL = /\]\s*(mod (linux|macos|windows);|pub use (linux|macos|windows)::|pub\(crate\) use (linux|macos|windows)::)/;
 const COMPILE_ERROR = /\bcompile_error!\s*\(/;
+const ARCH_BOUNDARY_BASENAME = /^(platform|facade|strategy|resolver|scope|scope_store)\.rs$/;
+const ARCH_BOUNDARY_SUFFIX = /_(facade|strategy|resolver|scope|scope_store)\.rs$/;
+const ARCH_BOUNDARY_TYPE = /\b(struct|enum|trait)\s+\w*(Platform|Facade|Strategy|Resolver|ScopeStore)\b/;
+const CFG_MACRO = /\bcfg!\s*\([^)]*target_os\s*=/;
+const CFG_TARGET_FAMILY = /#\[cfg\((?:not\(|all\(|any\()?target_family\s*=/;
+const CFG_UNIX_WINDOWS = /#\[cfg\((?:not\(|all\(|any\()?(unix|windows)\b/;
+const RUNTIME_OS_CONST = /\bstd::env::consts::OS\b/;
+const OS_API_IMPORT = /^\s*(?:pub(?:\([^)]*\))?\s+)?use\s+(x11rb|objc2|cocoa|core_graphics|core_foundation|windows::Win32|winapi)\b/m;
+const OS_COMMAND = /\bCommand::new\s*\(\s*"(open|osascript|xdg-open|powershell|cmd(?:\.exe)?|sw_vers|uname|lsb_release)"\s*\)/;
+const PLATFORM_TOKEN = /\b(current_os|target_os|host_os|os_bucket|platforms?|supported_platforms)\b|"(linux|macos|windows|darwin|win32|x11|wayland)"/;
+const ROUTING_TOKEN = /\.join\s*\(\s*"os"\s*\)|format!\s*\(\s*"os\/|PathBuf::from\s*\(\s*"os"\s*\)|\b(os|core|device)_(dir|path|bucket)\b|"(core|device)"|"plugin-configs"/;
+const DECISION_TOKEN = /\b(if|match)\b|=>|==|!=|\.len\(\)\s*==\s*1|\.contains\s*\(/;
 
 function readStdin() {
     try {
@@ -120,6 +135,39 @@ function findCfgViolations(content) {
     return violations;
 }
 
+function isArchitectureBoundary(filePath, content) {
+    const basename = crossPlatformBasename(filePath);
+    if (filePath.split(/[\\/]/).includes('platform')) return true;
+    if (ARCH_BOUNDARY_BASENAME.test(basename)) return true;
+    if (ARCH_BOUNDARY_SUFFIX.test(basename)) return true;
+    if (ARCH_BOUNDARY_TYPE.test(content)) return true;
+    return false;
+}
+
+function findStrongPlatformSignals(content) {
+    const candidates = [
+        { label: 'cfg!(target_os)', re: CFG_MACRO },
+        { label: '#[cfg(target_family)]', re: CFG_TARGET_FAMILY },
+        { label: '#[cfg(unix/windows)]', re: CFG_UNIX_WINDOWS },
+        { label: 'std::env::consts::OS', re: RUNTIME_OS_CONST },
+        { label: 'OS-specific import', re: OS_API_IMPORT },
+        { label: 'OS command dispatch', re: OS_COMMAND },
+    ];
+    return candidates
+        .filter(candidate => candidate.re.test(content))
+        .map(candidate => candidate.label);
+}
+
+function findCompositePlatformSignals(content) {
+    const hasPlatform = PLATFORM_TOKEN.test(content);
+    const hasRouting = ROUTING_TOKEN.test(content);
+    const hasDecision = DECISION_TOKEN.test(content);
+    const labels = [];
+    if (hasPlatform && hasRouting) labels.push('platform token + storage/path routing');
+    if (hasPlatform && hasDecision) labels.push('platform token + branching');
+    return labels;
+}
+
 function blockCompileError(filePath) {
     process.stderr.write(`qol-arch-code violation in ${filePath}: \`compile_error!\` macro found.
 
@@ -134,6 +182,28 @@ while the plugin still compiles cross-platform.
 See the qol-arch-code skill for the full pattern.
 
 Bypass for this single edit:
+  touch .claude/bypass-qol-arch-code
+`);
+}
+
+function blockPlatformDecision(filePath, labels) {
+    const detail = labels.map(label => `  - ${label}`).join('\n');
+    process.stderr.write(`qol-arch-code violation in ${filePath}.
+
+Detected platform-specific decision logic outside an architecture boundary:
+
+${detail}
+
+Platform decisions must live behind a facade, strategy, resolver, scope store,
+or platform/ module. Business code should call that boundary instead of
+branching on OS names, runtime OS constants, OS-specific imports, OS commands,
+or scoped profile storage paths directly.
+
+Fix:
+  1. Move the decision into an existing facade/resolver/scope store.
+  2. Or create the facade first, then call it from this file.
+
+Bypass for this edit only:
   touch .claude/bypass-qol-arch-code
 `);
 }
@@ -216,8 +286,6 @@ function main() {
     const tool = payload.tool_name || payload.tool || '';
     if (!INSPECTED_TOOLS.has(tool)) return 0;
 
-    if (payload.agent_type) return 0;
-
     const input = payload.tool_input || {};
     const filePath = input.file_path || input.notebook_path || '';
     if (!filePath || !filePath.endsWith('.rs')) return 0;
@@ -275,6 +343,17 @@ function main() {
     if (violations.length > 0) {
         blockCfgViolations(filePath, violations);
         return 2;
+    }
+
+    if (!isArchitectureBoundary(filePath, newContent)) {
+        const signals = [
+            ...findStrongPlatformSignals(newContent),
+            ...findCompositePlatformSignals(newContent),
+        ];
+        if (signals.length > 0) {
+            blockPlatformDecision(filePath, signals);
+            return 2;
+        }
     }
 
     return 0;

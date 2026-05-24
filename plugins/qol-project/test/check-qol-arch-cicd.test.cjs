@@ -317,7 +317,7 @@ x11rb = "0.13"
     assert.equal(r.exitCode, 0);
 });
 
-test('passes when subagent is the caller', () => {
+test('blocks CI architecture violations when subagent is the caller', () => {
     const r = run({
         tool_name: 'Write',
         agent_type: 'qol-tray-backend',
@@ -328,7 +328,7 @@ x11rb = "0.13"
 `,
         },
     });
-    assert.equal(r.exitCode, 0);
+    assert.equal(r.exitCode, 2);
 });
 
 test('passes workflow files that do not run cargo', () => {

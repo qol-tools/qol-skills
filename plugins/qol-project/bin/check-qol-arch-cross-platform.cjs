@@ -217,8 +217,6 @@ function main() {
     const tool = payload.tool_name || payload.tool || '';
     if (!INSPECTED_TOOLS.has(tool)) return 0;
 
-    if (payload.agent_type) return 0;
-
     const input = payload.tool_input || {};
     const filePath = input.file_path || input.notebook_path || '';
     if (!filePath || !filePath.endsWith('.rs')) return 0;

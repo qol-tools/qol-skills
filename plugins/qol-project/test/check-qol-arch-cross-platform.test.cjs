@@ -162,7 +162,7 @@ test('passes _test.rs suffix files', () => {
     assert.equal(r.exitCode, 0);
 });
 
-test('passes when subagent is the caller', () => {
+test('blocks cross-platform violations when subagent is the caller', () => {
     const r = run({
         tool_name: 'Write',
         agent_type: 'qol-tray-backend',
@@ -171,7 +171,7 @@ test('passes when subagent is the caller', () => {
             content: '#[allow(dead_code)]\npub fn x() {}\n',
         },
     });
-    assert.equal(r.exitCode, 0);
+    assert.equal(r.exitCode, 2);
 });
 
 test('passes non-Rust files', () => {

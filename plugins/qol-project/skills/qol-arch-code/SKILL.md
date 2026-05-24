@@ -157,9 +157,27 @@ The `<os>.rs` source files use these unconditionally — the cfg gate at the man
 
 - ❌ **Never `compile_error!("only X is supported")`** at module top.
 - ❌ **Never sprinkle `#[cfg(target_os = "...")]` in business logic.** If you see more than one cfg per file outside `platform/mod.rs`, refactor.
+- ❌ **Never branch on platform identity in business logic.** Runtime OS checks, OS-specific imports, OS command choices, and OS-keyed storage/path routing belong in a facade/resolver/scope store.
 - ❌ **Never have a trait method that exists only on one OS via cfg.** Add it to the trait, stub it on others.
 - ❌ **Never return `unimplemented!()` from a stub** — it panics. Return a typed `Err` so the caller can handle it.
 - ✅ **Always provide a stub for every OS,** even if the stub just returns `Err("not supported")`. Code must compile on Linux, macOS, and Windows.
+
+## Facade decision points
+
+Platform-specific behavior is broader than `#[cfg(target_os)]`. Any code that chooses a path, backend, command, dependency, or contract branch because the machine is Linux/macOS/Windows is platform behavior.
+
+This includes:
+
+- `cfg!(target_os = "...")`
+- `std::env::consts::OS`
+- OS API imports such as `core_graphics`, `objc2`, `x11rb`, or `windows::Win32`
+- OS launcher commands such as `open`, `osascript`, `xdg-open`, `powershell`, or `cmd.exe`
+- platform manifest logic such as `platforms.len() == 1`
+- OS-keyed storage such as `profile.join("os").join(current_os)`
+
+Those decisions live in a named architecture boundary: `platform/`, `*facade.rs`, `*strategy.rs`, `*resolver.rs`, `*scope.rs`, or `*scope_store.rs`. Callers use the boundary. They do not reconstruct the branch.
+
+Concrete profile lesson: `core/`, `os/<os>/`, and `device/` are not special to the hook. They are one example of the general rule: OS-keyed storage routing is platform behavior, so it belongs in `ProfileScopeStore` or an equivalent resolver, not in sync/import/plugin-loader business code.
 
 ## When to use trait+impls vs simpler shapes
 
@@ -256,11 +274,12 @@ This skill ships with a Claude Code PreToolUse hook (`bin/check-qol-arch-code.cj
 - `compile_error!(...)` — anywhere.
 - `#[cfg(target_os = ...)]` (including `all/any/not(target_os = ...)`) outside the canonical mod.rs re-export pattern (`#[cfg(target_os = "X")] mod X;` or `#[cfg(target_os = "X")] pub use X::Platform;`).
 - OS-named files (`linux.rs`, `macos.rs`, `windows.rs`) placed outside a `platform/` directory — these must always live under `platform/` (per-feature or top-level).
+- Platform decision signals outside an architecture boundary: `cfg!(target_os)`, `std::env::consts::OS`, OS API imports, OS command dispatch, platform-token branching, or platform-token storage/path routing.
 
 Allowed without challenge:
 - OS-named files inside any `platform/` directory — those *are* the OS impl, cfg inside is redundant but harmless.
 - Files under `tests/` and `examples/`, or named `*_test.rs` / `*_tests.rs` — cross-platform tests legitimately need cfg gates.
-- Subagent-driven edits (the agent owns its scope).
+- Main-session and subagent edits are checked the same way.
 
 Bypass for one-off legitimate exceptions (and you should be very sure it's legitimate — usually it isn't):
 

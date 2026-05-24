@@ -156,7 +156,7 @@ test('passes feature-only cfg (no target_os involved)', () => {
     assert.equal(r.exitCode, 0);
 });
 
-test('passes when subagent is the caller', () => {
+test('blocks architecture violations when subagent is the caller', () => {
     const r = run({
         tool_name: 'Write',
         agent_type: 'qol-host:qol-tray-backend',
@@ -165,7 +165,7 @@ test('passes when subagent is the caller', () => {
             content: '#[cfg(target_os = "linux")] pub fn foo() {}\n',
         },
     });
-    assert.equal(r.exitCode, 0);
+    assert.equal(r.exitCode, 2);
 });
 
 test('passes test files', () => {
@@ -174,6 +174,111 @@ test('passes test files', () => {
         tool_input: {
             file_path: '/x/qol-tools/foo/tests/integration.rs',
             content: '#[cfg(target_os = "linux")] fn t() {}\n',
+        },
+    });
+    assert.equal(r.exitCode, 0);
+});
+
+test('blocks cfg macro platform branch outside facade', () => {
+    const r = run({
+        tool_name: 'Write',
+        tool_input: {
+            file_path: '/x/qol-tools/foo/src/sync/service.rs',
+            content: 'pub fn bucket() -> &' + '\'static str { if cfg!(target_os = "macos") { return "macos"; } "linux" }\n',
+        },
+    });
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /platform-specific decision logic/);
+});
+
+test('blocks runtime OS constant outside facade', () => {
+    const r = run({
+        tool_name: 'Write',
+        tool_input: {
+            file_path: '/x/qol-tools/foo/src/profile/storage.rs',
+            content: 'pub fn current() -> &' + '\'static str { std::env::consts::OS }\n',
+        },
+    });
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /std::env::consts::OS/);
+});
+
+test('blocks OS-specific import outside facade', () => {
+    const r = run({
+        tool_name: 'Write',
+        tool_input: {
+            file_path: '/x/qol-tools/foo/src/window/list.rs',
+            content: 'use core_graphics::window::CGWindowListCopyWindowInfo;\n',
+        },
+    });
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /OS-specific import/);
+});
+
+test('blocks OS command dispatch outside facade', () => {
+    const r = run({
+        tool_name: 'Write',
+        tool_input: {
+            file_path: '/x/qol-tools/foo/src/launcher/open.rs',
+            content: 'pub fn open_file(path: &Path) { let _ = Command::new("open").arg(path).status(); }\n',
+        },
+    });
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /OS command dispatch/);
+});
+
+test('blocks profile scoped path routing outside facade', () => {
+    const r = run({
+        tool_name: 'Write',
+        tool_input: {
+            file_path: '/x/qol-tools/qol-tray/src/features/profile/core/storage.rs',
+            content: 'pub fn os_path(profile: &Path, current_os: &str) -> PathBuf { profile.join("os").join(current_os).join("plugin-configs") }\n',
+        },
+    });
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /platform token \+ storage\/path routing/);
+});
+
+test('blocks manifest platform routing outside facade', () => {
+    const r = run({
+        tool_name: 'Write',
+        tool_input: {
+            file_path: '/x/qol-tools/qol-migrations/src/v3_17_to_v3_18/mod.rs',
+            content: 'if entry.platforms.len() == 1 { target = profile.join("os").join(&entry.platforms[0]); }\n',
+        },
+    });
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /platform token \+ branching/);
+});
+
+test('passes platform decision inside ProfileScopeStore facade', () => {
+    const r = run({
+        tool_name: 'Write',
+        tool_input: {
+            file_path: '/x/qol-tools/qol-tray/src/features/profile/core/scope_store.rs',
+            content: 'pub(crate) struct ProfileScopeStore { os_bucket: String }\nimpl ProfileScopeStore { pub(crate) fn os_dir(&self, profile: &Path) -> PathBuf { profile.join("os").join(&self.os_bucket) } }\n',
+        },
+    });
+    assert.equal(r.exitCode, 0);
+});
+
+test('passes platform decision inside resolver facade', () => {
+    const r = run({
+        tool_name: 'Write',
+        tool_input: {
+            file_path: '/x/qol-tools/foo/src/plugins/config/resolver.rs',
+            content: 'pub fn resolve(platforms: &[String], profile: &Path) -> PathBuf { if platforms.len() == 1 { return profile.join("os").join(&platforms[0]); } profile.join("core") }\n',
+        },
+    });
+    assert.equal(r.exitCode, 0);
+});
+
+test('passes platform decision inside named facade type', () => {
+    const r = run({
+        tool_name: 'Write',
+        tool_input: {
+            file_path: '/x/qol-tools/foo/src/profile/layout.rs',
+            content: 'pub(crate) struct ProfileLayoutFacade;\nimpl ProfileLayoutFacade { pub(crate) fn os_path(profile: &Path, current_os: &str) -> PathBuf { profile.join("os").join(current_os) } }\n',
         },
     });
     assert.equal(r.exitCode, 0);
