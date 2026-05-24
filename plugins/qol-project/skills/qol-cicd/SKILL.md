@@ -44,6 +44,62 @@ For `qol-tray`, `version.yml` currently passes `Cargo.toml` as both cargo and pl
 - Be careful with GitHub workflow evaluation rules: `workflow_call` secret requirements are validated before jobs start
 - When changing reusable release contracts, update the README in the same change
 
+## Sibling repo checkout in CI
+
+When a qol-* repo declares a sibling as a Cargo path dep (e.g. `qol-tray` consumes `qol-migrations` at `path = "../qol-migrations"`), CI has to check out the matching branch of the sibling next to the consumer, then run cargo from the consumer's subdir.
+
+Workflow shape:
+
+```yaml
+steps:
+  - name: Checkout consumer
+    uses: actions/checkout@v4
+    with:
+      path: qol-tray            # consumer goes into a subdir
+
+  - name: Checkout other sibling
+    uses: actions/checkout@v4
+    with:
+      repository: qol-tools/qol-config
+      path: qol-config
+
+  - name: Resolve sibling ref
+    env:
+      HEAD_REF: ${{ github.head_ref }}
+      REF_NAME: ${{ github.ref_name }}
+    shell: bash
+    run: |
+      if [ -n "$HEAD_REF" ]; then
+        printf 'SIBLING_REF=%s\n' "$HEAD_REF" >> "$GITHUB_ENV"
+      else
+        printf 'SIBLING_REF=%s\n' "$REF_NAME" >> "$GITHUB_ENV"
+      fi
+
+  - name: Checkout qol-migrations at matching ref
+    uses: actions/checkout@v4
+    with:
+      repository: qol-tools/qol-migrations
+      ref: ${{ env.SIBLING_REF }}
+      path: qol-migrations
+
+  - name: Build
+    working-directory: qol-tray
+    run: cargo build
+
+  - name: Test
+    working-directory: qol-tray
+    run: cargo test
+```
+
+Two things make this non-obvious:
+
+- **Env-indirection is mandatory.** Writing `ref: ${{ github.head_ref }}` (or any input on the workflow-injection deny list) directly in a `with:` block is blocked by the security-reminder hook. Pass risky inputs through `env:` first, resolve in a `bash` step, then read from `env.<NAME>` in the `with:`. The example above survives the hook.
+- **Both repos check out as siblings.** The consumer must use `path:` so it doesn't land at `$GITHUB_WORKSPACE` root; otherwise the sibling has nowhere to go that satisfies `path = "../<sibling>"`. Run cargo with `working-directory: <consumer>` after.
+
+Branch-parity is the convention: a feature branch in `qol-tray` is built against the same-named branch in `qol-migrations`. The resolver falls back to `github.ref_name` (which is `main` on push-to-main) so the default flow keeps working. If the sibling does not have a matching branch, the checkout step fails loudly - that is the correct failure mode, not a fallback to main with a warning.
+
+A `git = "...", branch = "..."` Cargo dep form looks like it would avoid this dance, but it pins to a SHA in `Cargo.lock`, breaks worktree-local iteration, and contradicts the qol-tray-data-migrations skill. Keep path deps and pay the small CI complexity.
+
 ## Local Verification
 
 Useful checks:
