@@ -40,11 +40,14 @@ Plugins, in contrast, are **not** Cargo-linked into qol-tray. They are separate 
 
 ## Branch and commit policy
 
-- **qol-tray: no PRs.** Commit directly to whatever feature branch you're on. The sole contributor rule applies — PRs would be self-review theater. This is explicit policy, not laziness.
-- **Feature branches span repos.** When a feature touches multiple repos (e.g., `world-canvas-overhaul` required qol-config 1.3.0 APIs), create a matching-named branch in every affected repo. qol-tray, qol-config have both been on `world-canvas-overhaul`; other repos stay on `main`/`master`. The sibling `path =` dependency model means you just check out the matching branch on each sibling and the host builds against it.
+- `qol-workflow:git-trees` is the canonical contribution-flow skill. It owns the worktree-only rule, direct-vs-PR decision, and final squash delivery invariant.
+- **Main clones stay on `main`.** Feature branches live in worktrees under the shared worktree layout, never in the main clone.
+- **Feature branches span repos by topic.** When a feature touches multiple repos, use the same topic branch name in every participating repo. The sibling `path = "../<crate>"` dependency model means the host builds against whichever sibling branch is checked out in that feature lane.
+- **Worktree commits are scratch history.** Before a worktree branch reaches `main`, squash that repo's branch diff to one polished conventional commit unless the user explicitly asks for multiple delivered commits.
+- **PRs are rare and explicit.** Default is direct commit/push to `main`. If the user asks for branch isolation or review, use a worktree branch and squash-push the final commit to `main`. If the user explicitly asks for a PR, land it with GitHub squash merge.
+- **Clean up after landing.** Once the squashed worktree diff reaches `main`, remove the local worktree and delete local/remote feature branches.
 - **Conventional commits.** `feat:`, `fix:`, `refactor:`, `docs:`, `chore:`, `test:`. One-liners. No fluff, no co-authors in the message.
-- **Atomic commits.** One logical change per commit. Split bug-fix from refactor from tests.
-- **Amend, don't append "fix the fix"** for unpushed work.
+- **Atomic delivered commits.** The commit that lands on `main` is one coherent delivery. WIP/fixup commits inside a worktree should be amended or squashed away.
 - **No pushing without being asked.** Commit locally, push at explicit session boundaries.
 - **Plugin repos follow release-flow skills** (e.g., `plugin-alt-tab-release-flow`, `plugin-launcher-release-flow`) when cutting a tagged release. Default is just commit + push.
 

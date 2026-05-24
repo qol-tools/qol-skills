@@ -36,8 +36,11 @@ optional body explaining WHY when non-obvious
 - Subject in imperative mood ("Add", not "Added" / "Adds")
 - No trailing period in the subject
 - Wrap body at ~72 chars
-- One logical change per commit when not WIP; squash-friendly WIP is allowed on
-  feature branches
+- Direct-to-main commits are one coherent logical delivery
+- Worktree feature branches may contain WIP/fixup commits while iterating, but
+  the branch must be squashed to one polished conventional commit per repo
+  before it lands on `main` unless the user explicitly asks for multiple
+  delivered commits
 
 ## What to write
 

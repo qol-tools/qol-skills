@@ -1,6 +1,6 @@
 ---
 name: git-trees
-description: Use this when creating, switching, or branching in any qol-* repo. Defines the mandatory worktree-only workflow — branching from a main clone is blocked by a hook.
+description: Use this when creating, switching, or branching in any qol-* repo. Defines the branch-based worktree workflow, direct-vs-PR route, and final squash delivery invariant.
 ---
 
 # git-trees
@@ -9,15 +9,15 @@ Use this skill any time a change is made on a branch other than `main` in a qol-
 
 ## The hard rule (read this first, every time)
 
-**Trivial changes do NOT get a PR.** This is the rule that gets forgotten. Tests, configs, rules, hooks, skill edits, doc fixes, lockfile bumps - commit them STRAIGHT TO MAIN on the main clone. No PID. No worktree. No draft PR. No mark-ready. No squash-merge dance. See "Trivial changes skip the worktree+PR ceremony" below for the full list.
+**Default changes do NOT get a PR.** Tests, configs, rules, hooks, skill edits, doc fixes, lockfile bumps, normal fixes, refactors, and features commit straight to `main` unless the user asks for branch isolation or a PR. No PID. No draft PR. No mark-ready. No squash-merge dance.
 
-**Substantive source changes use worktrees.** A worktree+PR is for behaviour changes that need a diff-review and CI gate, not for unit tests, not for refactors that ship alongside trivial work, and not for "while I was here" adjacent commits.
+**There are only two normal modes:** direct work on `main`, or feature-branch work in a worktree. If the user asks for a branch, PR, isolated review, coordinated multi-repo lane, or anything that should not land directly on `main` yet, create a worktree. If the change is direct-to-main, stay on `main` in the main clone.
 
 **If unsure, ASK first.** Don't default to ceremony. Don't mint a PID without checking. Asking takes 30 seconds; an unwanted PR wastes 5+ minutes on both sides and creates noise.
 
-**NEVER `git checkout -b`, `git checkout <other-branch>`, `git switch -c`, or `git switch <other-branch>` inside a qol-* main clone for substantive work.**
+**NEVER `git checkout -b`, `git checkout <other-branch>`, `git switch -c`, or `git switch <other-branch>` inside a qol-* main clone.**
 
-The branch-switch ban is enforced by the `branch-deny-checkout-in-main-clone` PreToolUse hook. It exists to keep the main clone on `main` so `qol-sync` and `make dev` see fresh code. The trivial-change carve-out below is how you commit on `main` from the main clone WITHOUT switching branches.
+The branch-switch ban is enforced by the `branch-deny-checkout-in-main-clone` PreToolUse hook. It exists to keep the main clone on `main` so `qol-sync` and `make dev` see fresh code. Direct-to-main work happens on `main` without switching branches.
 
 ### Why
 
@@ -37,14 +37,14 @@ The branch-switch ban is enforced by the `branch-deny-checkout-in-main-clone` Pr
 
 **The qol-tools workspace is solo.** There is no async team to coordinate with via PR. PRs add review-cycle ceremony that is pure friction when the only reviewer is the same person who wrote the code. Default behaviour: edit on `main`, `git add && git commit && git push`.
 
-**Open a PR ONLY when the user explicitly asks for one** with phrases like "open a PR", "draft a PR", "make a PR for this", "I want to review this as a diff", "I want to test this on a branch first", or names a PID and asks to "kickoff" it. **Never offer "or open a PR" as a fallback option** in a "Want me to fix or X?" prompt - drop the X. The choice is fix-now-direct-or-not-now.
+**Open a PR ONLY when the user explicitly asks for one** with phrases like "open a PR", "draft a PR", or "make a PR for this". A request to review/test on a branch means "use a worktree branch"; it does not imply PR. **Never offer "or open a PR" as a fallback option** in a "Want me to fix or X?" prompt - drop the X. The choice is fix-now-direct-or-not-now.
 
 The branch-deny-checkout-in-main-clone hook still applies: branching off `main` inside the main clone is blocked. Editing `main` itself in the main clone is fine and is the normal flow. If the user explicitly asks for a PR, see "Worktree creation" below.
 
-### What still gets PR'd when explicitly requested
+### What can get PR'd when explicitly requested
 
 - Multi-week initiatives the user wants to retrospect on (rare).
-- Anything the user calls out as "diff-review please" or "let me see this on a branch".
+- Anything the user calls out as "open a PR for this".
 - Cross-repo coordinated work where the user wants to review repos together.
 
 ### Tests, refactors, fixes, features
@@ -54,6 +54,19 @@ All commit direct to `main` by default. Including substantive `src/` / `ui/` cha
 ### Bundled commits are fine on main
 
 Tests + a small refactor that makes them testable, in the same atomic commit, is fine when committing direct. Atomic-commit rule still holds (one logical change per commit, repo always green). No need to artificially split tests from the refactor that enabled them.
+
+## Final delivery invariant
+
+**A worktree branch is a staging area, not the contribution unit.** It may contain many WIP, review, or fixup commits while the user and agents iterate. Before it reaches `main`, collapse that branch's repo-local diff into **one polished conventional commit** unless the user explicitly asks for multiple delivered commits.
+
+This applies to both routes:
+
+- **Direct route:** squash the worktree branch to one commit, then push that commit to `main`.
+- **PR route:** open/review from the worktree branch, then use GitHub squash merge. Do not merge-commit or rebase-merge the branch stack into `main`.
+
+For multi-repo lanes, squash each repo independently. The result is one final commit on `main` per participating repo, not one global commit across repos. If an agent thinks a worktree should land as multiple commits, it must ask first and name the independently revertible deliveries.
+
+After the squashed feature lands on `main`, clean up both sides: delete the remote feature branch if it exists, delete the local feature branch if it lingers, and remove the local worktree directory.
 
 ## Goal
 
@@ -133,10 +146,10 @@ git -C /Users/kaho/repos/private/qol-tools/qol-tray worktree add \
   /Users/kaho/repos/private/qol-tools/worktrees/$FEAT/qol-tray \
   -b $FEAT
 cd /Users/kaho/repos/private/qol-tools/worktrees/$FEAT/qol-tray
-# … edit, commit, push, open PR from here …
+# … edit, commit, then squash-push to main unless a PR was explicitly requested …
 ```
 
-After the PR merges:
+After delivery:
 
 ```bash
 git -C /Users/kaho/repos/private/qol-tools/qol-tray worktree remove \
@@ -144,7 +157,7 @@ git -C /Users/kaho/repos/private/qol-tools/qol-tray worktree remove \
 git -C /Users/kaho/repos/private/qol-tools/qol-tray branch -D $FEAT  # if local branch lingers
 ```
 
-The main clone never changed branches — `qol-sync` will pick up the merge cleanly on its next run.
+The main clone never changed branches — `qol-sync` will pick up `main` cleanly on its next run.
 
 ## Recovery: the main clone is already on a feature branch
 
@@ -187,16 +200,16 @@ Example:
 
 ## Push direct vs open an issue + PR
 
-Worktrees are mandatory; ceremony around them is not. After the work is done, two routes exist.
+When work happened on a worktree branch, PR ceremony is still optional. After the work is done, two routes exist.
 
 | Route | When | Flow |
 |---|---|---|
-| **Push direct to main** | Skill edits, hook fixes/tweaks, README/doc updates, test additions, schema-stable refactors — anything where a wrong push can be reverted in under a minute and doesn't affect anyone else. | `git commit` → `git push origin <branch>:main` → delete branch → `git worktree remove`. No issue, no PR. |
-| **Issue + PR** | New plugin, new hook, schema change, anything cross-cutting in real product code (qol-tray src, plugin daemons, cargo/build infra). | `gh issue create` → branch + worktree → `gh pr create --draft` → mark ready → squash-merge. |
+| **Push direct to main** | Default for all work, including work that happened on a branch. | Commit freely while iterating → squash to one delivery commit → `git push origin HEAD:main` → delete branch → `git worktree remove`. No issue, no PR. |
+| **Issue + PR** | Only when the user explicitly asks for a PR or issue-backed review. | Create issue only if asked or genuinely needed → branch + worktree → `gh pr create --draft` → mark ready when approved → GitHub squash-merge into `main`. |
 
-Decision rule, asked literally: **"If this push is wrong, can it be reverted in under a minute without affecting anyone else?"** Yes → direct push. No → issue + PR.
+Do not infer PR from blast radius. If unsure whether the user wants a branch or PR, ask; otherwise land directly on `main`.
 
-The `qol-skills` marketplace and similar low-blast-radius repos are the canonical home of the direct-push route — `qol-skills/README.md`'s Contributing section has the worked example.
+The `qol-skills` marketplace and similar low-blast-radius repos are the canonical home of the no-PR route. If a worktree branch already exists for that change, squash and push it as below.
 
 ### Direct push, concretely
 
@@ -204,13 +217,19 @@ The `qol-skills` marketplace and similar low-blast-radius repos are the canonica
 FEAT=docs-clarify-daemon-lifecycle
 git -C <main-clone> worktree add ../worktrees/$FEAT/<repo> -b $FEAT
 cd ../worktrees/$FEAT/<repo>
-# … edit, commit …
-git push origin $FEAT:main
-git push origin --delete $FEAT
+# … edit, commit freely while iterating …
+git fetch origin
+git rebase origin/main
+git status --short  # must be empty before squashing
+git reset --soft origin/main
+git commit -m "docs: clarify daemon lifecycle"
+git push origin HEAD:main
+git push origin --delete $FEAT  # if a remote branch exists
 cd - && git -C <main-clone> worktree remove ../worktrees/$FEAT/<repo>
+git -C <main-clone> branch -D $FEAT  # if local branch lingers
 ```
 
-The branch existed only as a delivery vehicle; nothing references it after the merge.
+The branch existed only as a delivery vehicle; nothing references it after the push.
 
 ## Do Not
 
