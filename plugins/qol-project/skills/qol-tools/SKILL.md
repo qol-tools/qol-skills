@@ -96,6 +96,35 @@ Plugins, in contrast, are **not** Cargo-linked into qol-tray. They are separate 
 - **Property-based tests preferred** for state machines and invariants. Example-based is fine for simpler logic.
 - **Named constants, not magic numbers.** Named color tokens, not inline hex. (See `qol-tray-ui-systems` for the token taxonomy.)
 
+## Use invariants, not state snapshots
+
+Any prose written into the qol-tools world (CLAUDE.md, SKILL.md, README, commit body, PR description, design spec) must reference scopes by invariant, not by enumerating current state.
+
+**Why:** a snapshot is correct on the day it is written and silently wrong the moment state changes. Nobody updates prose to track filesystem reality. A reader trusts what they read, so stale prose is worse than no prose. The next agent acts on it as if it were current and ends up either rebuilding work that has already happened or skipping work that has not.
+
+**How:** point at the description, the path pattern, or the source-of-truth location instead of restating state.
+
+| Snapshot (wrong) | Invariant (right) |
+|---|---|
+| "the 9 plugins under qol-tools" | "every repo matching `qol-tools/plugin-*`" |
+| "plugin-alt-tab, plugin-launcher, plugin-lights, ..." | "each `plugin-*` repo's release-flow skill" |
+| "qol-tray + qol-config + qol-plugin-api + qol-runtime" | "siblings under the qol-tools workspace that declare `path = \"../<crate>\"` deps" |
+| "the 3 file migrations: v3.15->v3.16, v3.16->v3.17, v3.17->v3.18" | "every migration registered in `PreFlightRegistry::current()`" |
+| "`OLDEST_SUPPORTED = 3.15.0`" | "below `OLDEST_SUPPORTED` (slides per release)" |
+| "active branch is `world-canvas-overhaul`" | omit, or point at `workspace/docs/superpowers/` for current state |
+| "as of qol-config 1.3.0" | omit, or "the current qol-config API" |
+| "754 lib tests" | "the full lib test suite" |
+| "the May 2026 wipe incident" | "the wipe-then-clone incident that motivated this section" (date only if it anchors a specific commit a reader needs to find) |
+
+If the count or list is genuinely essential (rare), generate it from source at read time (`ls plugins/`, `cargo metadata`, `git log`, the runtime API), and say so, rather than restating it.
+
+Two corollaries:
+
+- A commit message that says "the May 2026 incident" is preferable to "the X = 0.1.0 stamp bug from 2026-05-22" because the date appears once in git history naturally. Restating it in prose creates a second moving part.
+- A skill that enumerates "siblings" or "neighboring features" must say what makes a thing a sibling, not list the current siblings. The enumeration belongs in the description or a path glob.
+
+This rule applies to every skill in `qol-skills/`. When you author or extend one, audit your draft for "as of", "current", "the N <things>", "the X, Y, Z <things>", and "in version V" - those are the lexical fingerprints of snapshot drift.
+
 ## Current project-state pointers
 
 - Active branch on qol-tray: `world-canvas-overhaul`. Carrying multiple intertwined refactors (world canvas UI, divable traits, peripheral-preview, atmosphere, and soon: plugin registry unification).
