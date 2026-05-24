@@ -32,6 +32,88 @@ Use this when the task is specifically about the Profile feature in `qol-tray`, 
 - Preserve existing repo URLs for surviving installed plugins when the imported profile does not mention them.
 - Reject wrong-typed plugin config values at validation time. Do not silently accept them just because defaults can be resolved.
 
+## Plugin config storage trichotomy and the resolver
+
+A plugin's persisted config is split across three scope-aware locations under `<profile>/`:
+
+```
+core/plugin-configs/<id>.json        # shared across machines, synced
+os/<bucket>/plugin-configs/<id>.json # OS-specific, synced cross-machine
+device/plugin-configs/<id>.json      # local-only, gitignored (*/device/)
+```
+
+Two declarations in `plugin.toml` drive routing:
+
+- `[config.scope]` is the per-field map (`field_x = "core" | "os" | "device"`). The legacy value `"any"` parses as Core via serde alias.
+- `[config] default_scope = "..."` is the plugin-level fallback for fields that have no per-field entry.
+
+`scope_for(field)` is layered: per-field → `default_scope` → `Default::Core`.
+
+Resolution priority chain (used by reads, writes, and the migration; do not vary):
+
+1. **P0**: manifest declares `config.default_scope = "core" | "os" | "device"` → route the whole plugin to that scope. `Os` resolves the OS bucket via the chain below; `Core` and `Device` go to their respective dirs.
+2. **P1**: `plugins.lock.json` entry has `platforms.len() == 1` → route to `os/<that>/`. Lock wins over manifest because the lock is the cross-machine truth.
+3. **P2**: installed manifest has `platforms.len() == 1` → route to `os/<that>/`.
+4. **P3**: no signals → stay in `core/`.
+
+For a single-platform plugin, the OS bucket is the **declared** platform, never `current_os`. A Linux machine writing a Mac-only plugin's config still lands in `os/macos/`. This is the cross-machine recovery property.
+
+Read semantics (`load_plugin_config_merged`): the loader reads all three scopes and merges them in the order **core → os/current → device**, with later scopes winning on key collision. A field declared `Device` overrides the same key in `core`. An empty slice file is skipped, not treated as `{}` overlay.
+
+Write semantics (`save_plugin_config_split`): split via `split_by_declarations`, write each non-empty slice to its respective path. An empty slice's file is removed so storage stays tidy. The write only touches the plugin's own three files; never touches another plugin's slice files in any scope.
+
+## Sync clone must promote an allowlist, never wipe
+
+`SyncService::connect` never wipes the profile directory before cloning the remote. The wipe pattern deleted gitignored per-machine data (`device/`, `sync/state.json`, `sync/toggles.json`, the active marker, any unrelated local file) in one swing and triggered the May 2026 data loss.
+
+The current pattern: clone the remote into a sibling staging directory, then promote allowlisted paths into the live profile. The `.git` directory is moved separately so subsequent git operations work against the fresh remote.
+
+Allowlist (in `features/profile/sync/promote.rs`):
+
+```
+.gitignore
+<profile>/manifest.json
+<profile>/core/<file>...
+<profile>/os/<bucket>/<file>...
+<profile>/sync/backups/<file>...
+```
+
+The promote contract has two halves:
+
+- **Default-skip for local paths**: anything in the live profile that does NOT match an allowlist pattern is left untouched. `device/`, `sync/state.json`, `sync/toggles.json`, the active marker, and any local untracked file all survive a remote pull. There is no "delete unknown locals" branch and adding one is wrong; recover-on-conflict beats truth-from-remote here.
+- **Default-skip for unknown staging files**: anything the staging clone carries that does NOT match the allowlist is silently dropped, not promoted. Defense in depth - a remote that somehow contains `malicious.sh`, `.bashrc`, a stray `device/` subtree, or a stale `sync/state.json` cannot reach the live profile.
+
+When you extend sync to new file kinds, add them to the allowlist explicitly. Treat any "all unknown files copied through" change as a regression of the May 2026 disaster.
+
+## Migration collision policy: same-content drop, different-content `.legacy`
+
+When a file migration moves `src` to `dst` and `dst` already exists, never silently delete `src`. Apply this three-branch rule:
+
+- **`dst` is not a regular file**: error (something is wrong; refuse to proceed).
+- **`dst` exists and is bit-identical to `src`**: remove `src` as redundant. No `.legacy` sidecar - the data is preserved at `dst` and a sidecar would be clutter.
+- **`dst` exists and differs from `src`**: rename `src` to `<src_name>.legacy`. Leave `dst` untouched. A stale `<src_name>.legacy` from an interrupted prior run is replaced (renaming over it is intentional, not a bug).
+
+Used by both `v3.16-to-v3.17-device-to-os` and `v3.17-to-v3.18-plugin-configs-by-os`. Future migrations that move existing user data MUST follow the same policy. The `MigrationReport.archived` list contains only fresh src-to-dst moves; collision archives do not appear there - downstream consumers count `archived.len()` as the number of files newly placed, not the number of files touched.
+
+## Sync conflict backups are cross-machine recovery, not local-only
+
+Backups under `<profile>/sync/backups/*.json` are intentionally tracked by the synced profile repo. The repo's `.gitignore` (written by `ensure_gitignore`) is:
+
+```
+/active
+/sync.json
+*/device/
+```
+
+Notably it does **not** include `*/sync/backups/`. That is on purpose. Conflict snapshots committed on machine A become available to machine B via the normal sync pull, which is the only mechanism that turned out to recover the May 2026 data loss. If you "tidy up" by moving backups under `device/` or by adding them to the gitignore, you remove the cross-machine recovery property.
+
+Two concerns that DO exist and that this design knowingly accepts:
+
+- Unbounded growth: every conflict produces a new snapshot. A retention policy (`keep last N`, prune by age, or compress old) is a legitimate future change. The fix is at the producer side, not by gitignoring.
+- Sensitive data: a backup may contain values the user would rather not see on another machine. Same producer-side fix - sanitize at write time, do not change the storage location.
+
+A reviewer who flags "these backups can be committed and pushed" as a P1 is misreading the design. Direct them here.
+
 ## Review Checklist
 
 - Does export round-trip the same effective local profile?
