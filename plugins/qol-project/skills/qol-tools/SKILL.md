@@ -43,8 +43,8 @@ Plugins, in contrast, are **not** Cargo-linked into qol-tray. They are separate 
 - `qol-workflow:git-trees` is the canonical contribution-flow skill. It owns the worktree-only rule, direct-vs-PR decision, and final squash delivery invariant.
 - **Main clones stay on `main`.** Feature branches live in worktrees under the shared worktree layout, never in the main clone.
 - **Feature branches span repos by topic.** When a feature touches multiple repos, use the same topic branch name in every participating repo. The sibling `path = "../<crate>"` dependency model means the host builds against whichever sibling branch is checked out in that feature lane.
-- **Worktree commits are scratch history.** Before a worktree branch reaches `main`, squash that repo's branch diff to one polished conventional commit unless the user explicitly asks for multiple delivered commits.
-- **PRs are rare and explicit.** Default is direct commit/push to `main`. If the user asks for branch isolation or review, use a worktree branch and squash-push the final commit to `main`. If the user explicitly asks for a PR, land it with GitHub squash merge.
+- **Worktree commits are scratch history.** Before a worktree branch reaches `main`, merge that repo's branch diff into the local main clone as one polished conventional commit unless the user explicitly asks for multiple delivered commits.
+- **PRs are rare and explicit.** Default is direct commit/push to `main`. If the user asks for branch isolation or review, use a worktree branch, then squash-merge it into the local main clone and push from there. If the user explicitly asks for a PR, land it with GitHub squash merge.
 - **Clean up after landing.** Once the squashed worktree diff reaches `main`, remove the local worktree and delete local/remote feature branches.
 - **Conventional commits.** `feat:`, `fix:`, `refactor:`, `docs:`, `chore:`, `test:`. One-liners. No fluff, no co-authors in the message.
 - **Atomic delivered commits.** The commit that lands on `main` is one coherent delivery. WIP/fixup commits inside a worktree should be amended or squashed away.

@@ -57,16 +57,18 @@ Tests + a small refactor that makes them testable, in the same atomic commit, is
 
 ## Final delivery invariant
 
-**A worktree branch is a staging area, not the contribution unit.** It may contain many WIP, review, or fixup commits while the user and agents iterate. Before it reaches `main`, collapse that branch's repo-local diff into **one polished conventional commit** unless the user explicitly asks for multiple delivered commits.
+**A worktree branch is a staging area, not the contribution unit.** It may contain many WIP, review, or fixup commits while the user and agents iterate. Before it reaches `main`, bring that branch's repo-local diff into the local main clone as **one polished conventional commit** unless the user explicitly asks for multiple delivered commits.
 
 This applies to both routes:
 
-- **Direct route:** squash the worktree branch to one commit, then push that commit to `main`.
+- **Direct route:** from the local main clone, `git merge --squash <feature-branch>`, commit, then push `main`. Never push `HEAD:main` directly from the worktree.
 - **PR route:** open/review from the worktree branch, then use GitHub squash merge. Do not merge-commit or rebase-merge the branch stack into `main`.
 
 For multi-repo lanes, squash each repo independently. The result is one final commit on `main` per participating repo, not one global commit across repos. If an agent thinks a worktree should land as multiple commits, it must ask first and name the independently revertible deliveries.
 
 After the squashed feature lands on `main`, clean up both sides: delete the remote feature branch if it exists, delete the local feature branch if it lingers, and remove the local worktree directory.
+
+The direct route always pushes from the local main clone, not from the worktree. This keeps local `main` and `origin/main` moving together and prevents a worktree push from stranding unpublished commits in the main clone.
 
 ## Goal
 
@@ -146,7 +148,7 @@ git -C /Users/kaho/repos/private/qol-tools/qol-tray worktree add \
   /Users/kaho/repos/private/qol-tools/worktrees/$FEAT/qol-tray \
   -b $FEAT
 cd /Users/kaho/repos/private/qol-tools/worktrees/$FEAT/qol-tray
-# … edit, commit, then squash-push to main unless a PR was explicitly requested …
+# … edit and commit freely while iterating …
 ```
 
 After delivery:
@@ -204,7 +206,7 @@ When work happened on a worktree branch, PR ceremony is still optional. After th
 
 | Route | When | Flow |
 |---|---|---|
-| **Push direct to main** | Default for all work, including work that happened on a branch. | Commit freely while iterating → squash to one delivery commit → `git push origin HEAD:main` → delete branch → `git worktree remove`. No issue, no PR. |
+| **Push direct to main** | Default for all work, including work that happened on a branch. | Commit freely while iterating → update local main clone → `git merge --squash <feature-branch>` there → commit on local `main` → `git push origin main` → delete branch → `git worktree remove`. No issue, no PR. |
 | **Issue + PR** | Only when the user explicitly asks for a PR or issue-backed review. | Create issue only if asked or genuinely needed → branch + worktree → `gh pr create --draft` → mark ready when approved → GitHub squash-merge into `main`. |
 
 Do not infer PR from blast radius. If unsure whether the user wants a branch or PR, ask; otherwise land directly on `main`.
@@ -218,18 +220,20 @@ FEAT=docs-clarify-daemon-lifecycle
 git -C <main-clone> worktree add ../worktrees/$FEAT/<repo> -b $FEAT
 cd ../worktrees/$FEAT/<repo>
 # … edit, commit freely while iterating …
-git fetch origin
-git rebase origin/main
-git status --short  # must be empty before squashing
-git reset --soft origin/main
+
+git status --short  # worktree must be clean; commit/stash first if not
+cd <main-clone>
+git status --short  # main clone must be clean too
+git pull --ff-only origin main
+git merge --squash $FEAT
 git commit -m "docs: clarify daemon lifecycle"
-git push origin HEAD:main
+git push origin main
 git push origin --delete $FEAT  # if a remote branch exists
-cd - && git -C <main-clone> worktree remove ../worktrees/$FEAT/<repo>
+git worktree remove ../worktrees/$FEAT/<repo>
 git -C <main-clone> branch -D $FEAT  # if local branch lingers
 ```
 
-The branch existed only as a delivery vehicle; nothing references it after the push.
+The branch existed only as a delivery vehicle; nothing references it after the push. If the squash merge conflicts, stop and resolve the merge in the main clone; do not delete the worktree until `main` has been pushed successfully.
 
 ## Do Not
 

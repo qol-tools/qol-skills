@@ -38,9 +38,9 @@ optional body explaining WHY when non-obvious
 - Wrap body at ~72 chars
 - Direct-to-main commits are one coherent logical delivery
 - Worktree feature branches may contain WIP/fixup commits while iterating, but
-  the branch must be squashed to one polished conventional commit per repo
-  before it lands on `main` unless the user explicitly asks for multiple
-  delivered commits
+  the branch must be squash-merged into the local main clone as one polished
+  conventional commit per repo before it lands on `main` unless the user
+  explicitly asks for multiple delivered commits
 
 ## What to write
 

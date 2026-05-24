@@ -1,6 +1,6 @@
 {
   "name": "qol-project",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Project-level conventions for the qol-tools ecosystem: qol-mission, qol-tools (org layout), qol-cicd (shared workflows), qol-arch-code (cross-platform code strategy pattern), qol-arch-cross-platform (symbol/import hygiene), qol-arch-cicd (CI/release workflow contract), qol-shared-libs, qol-plugin-template.",
   "author": {
     "name": "KMRH47"
