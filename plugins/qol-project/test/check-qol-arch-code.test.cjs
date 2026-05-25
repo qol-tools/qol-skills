@@ -2,6 +2,8 @@
 
 const test = require('node:test');
 const assert = require('node:assert');
+const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
@@ -13,6 +15,19 @@ function run(payload) {
         encoding: 'utf8',
     });
     return { exitCode: result.status, stderr: result.stderr };
+}
+
+function fixtureFile(relativePath, content) {
+    return fixtureRepo(relativePath, content).file;
+}
+
+function fixtureRepo(relativePath, content) {
+    const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'qol-hook-'));
+    const root = path.join(temp, 'qol-tools');
+    const file = path.join(root, relativePath);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, content);
+    return { root, file };
 }
 
 test('blocks cfg(all(target_os, feature)) gating non-OS module', () => {
@@ -37,6 +52,78 @@ test('passes canonical multi-line cfg + mod re-export pattern', () => {
         },
     });
     assert.equal(r.exitCode, 0);
+});
+
+test('passes edit fragment containing only a canonical cfg attr when full file is valid', () => {
+    const file = fixtureFile(
+        'foo/src/hotkeys/capture/platform/mod.rs',
+        '#[cfg(target_os = "linux")]\nmod linux;\n#[cfg(target_os = "linux")]\npub(crate) use linux::install;\n',
+    );
+    const r = run({
+        tool_name: 'Edit',
+        tool_input: {
+            file_path: file,
+            old_string: '#[cfg(target_os = "linux")]',
+            new_string: '#[cfg(target_os = "linux")]',
+        },
+    });
+    assert.equal(r.exitCode, 0, r.stderr);
+});
+
+test('passes multiedit fragments when reconstructed platform mod file is valid', () => {
+    const file = fixtureFile(
+        'foo/src/hotkeys/capture/platform/mod.rs',
+        '#[cfg(target_os = "linux")]\nmod linux;\n#[cfg(target_os = "macos")]\nmod macos;\n',
+    );
+    const r = run({
+        tool_name: 'MultiEdit',
+        tool_input: {
+            file_path: file,
+            edits: [
+                {
+                    old_string: '#[cfg(target_os = "linux")]',
+                    new_string: '#[cfg(target_os = "linux")]',
+                },
+                {
+                    old_string: '#[cfg(target_os = "macos")]',
+                    new_string: '#[cfg(target_os = "macos")]',
+                },
+            ],
+        },
+    });
+    assert.equal(r.exitCode, 0, r.stderr);
+});
+
+test('blocks edit when reconstructed file gates business code by target_os', () => {
+    const file = fixtureFile('foo/src/hotkeys/mod.rs', 'pub fn install() {}\n');
+    const r = run({
+        tool_name: 'Edit',
+        tool_input: {
+            file_path: file,
+            old_string: 'pub fn install() {}',
+            new_string: '#[cfg(target_os = "linux")]\npub fn install() {}',
+        },
+    });
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /qol-arch-code violation/);
+});
+
+test('consumes bypass marker from edited repo when cwd differs', () => {
+    const { root, file } = fixtureRepo('foo/src/hotkeys/mod.rs', 'pub fn install() {}\n');
+    const marker = path.join(root, '.claude', 'bypass-qol-arch-code');
+    fs.mkdirSync(path.dirname(marker), { recursive: true });
+    fs.writeFileSync(marker, '');
+    const r = run({
+        cwd: os.tmpdir(),
+        tool_name: 'Edit',
+        tool_input: {
+            file_path: file,
+            old_string: 'pub fn install() {}',
+            new_string: '#[cfg(target_os = "linux")]\npub fn install() {}',
+        },
+    });
+    assert.equal(r.exitCode, 0, r.stderr);
+    assert.equal(fs.existsSync(marker), false);
 });
 
 test('blocks compile_error! anywhere', () => {

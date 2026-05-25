@@ -51,10 +51,10 @@ function crossPlatformDirname(p) {
     return parts.join('/');
 }
 
-const CANONICAL_TARGET = /^\s*(mod (linux|macos|windows);|pub use (linux|macos|windows)::|pub\(crate\) use (linux|macos|windows)::)/;
+const CANONICAL_TARGET = /^\s*(mod (linux|macos|windows);|pub(?:\([^)]*\))?\s+use (linux|macos|windows)::)/;
 const ATTRIBUTE_LINE = /^\s*#\[/;
 const CFG_TARGET_OS = /#\[cfg\((not\(|all\(|any\()?target_os\s*=/;
-const SAMELINE_CANONICAL = /\]\s*(mod (linux|macos|windows);|pub use (linux|macos|windows)::|pub\(crate\) use (linux|macos|windows)::)/;
+const SAMELINE_CANONICAL = /\]\s*(mod (linux|macos|windows);|pub(?:\([^)]*\))?\s+use (linux|macos|windows)::)/;
 const COMPILE_ERROR = /\bcompile_error!\s*\(/;
 const ARCH_BOUNDARY_BASENAME = /^(platform|facade|strategy|resolver|scope|scope_store)\.rs$/;
 const ARCH_BOUNDARY_SUFFIX = /_(facade|strategy|resolver|scope|scope_store)\.rs$/;
@@ -84,14 +84,60 @@ function log(msg) {
 function extractNewContent(tool, input) {
     if (!input) return '';
     if (tool === 'Write') return input.content || '';
-    if (tool === 'Edit') return input.new_string || '';
+    if (tool === 'Edit') return applyEdit(input.file_path, input.old_string, input.new_string, input.replace_all);
     if (tool === 'MultiEdit') {
-        return (input.edits || [])
-            .map(e => e.new_string || '')
-            .join('\n\n');
+        return applyMultiEdit(input.file_path, input.edits || []);
     }
     if (tool === 'NotebookEdit') return input.new_source || '';
     return '';
+}
+
+function readExistingFile(filePath) {
+    try {
+        return fs.readFileSync(filePath, 'utf8');
+    } catch {
+        return null;
+    }
+}
+
+function replaceFirst(source, oldString, newString) {
+    const idx = source.indexOf(oldString);
+    if (idx < 0) return null;
+    return source.slice(0, idx) + newString + source.slice(idx + oldString.length);
+}
+
+function editSnippets(edits) {
+    return edits.map(e => e.new_string || '').join('\n\n');
+}
+
+function applyEdit(filePath, oldString = '', newString = '', replaceAll = false) {
+    const existing = readExistingFile(filePath);
+    if (existing === null || !oldString) return newString || '';
+    if (replaceAll) return existing.split(oldString).join(newString);
+    return replaceFirst(existing, oldString, newString) ?? newString ?? '';
+}
+
+function applyMultiEdit(filePath, edits) {
+    let current = readExistingFile(filePath);
+    if (current === null) {
+        return editSnippets(edits);
+    }
+    for (const edit of edits) {
+        const oldString = edit.old_string || '';
+        const newString = edit.new_string || '';
+        if (!oldString) {
+            return editSnippets(edits);
+        }
+        if (edit.replace_all) {
+            if (!current.includes(oldString)) return editSnippets(edits);
+            current = current.split(oldString).join(newString);
+            continue;
+        }
+        const replaced = replaceFirst(current, oldString, newString);
+        if (replaced === null) return editSnippets(edits);
+        current = replaced;
+    }
+    return current;
 }
 
 function findCfgViolations(content) {
@@ -272,6 +318,46 @@ Bypass for this edit only:
 `);
 }
 
+function markerPaths(cwd, filePath) {
+    const markers = [];
+    const seen = new Set();
+    const push = dir => {
+        if (!dir) return;
+        const marker = path.join(dir, '.claude', 'bypass-qol-arch-code');
+        if (seen.has(marker)) return;
+        seen.add(marker);
+        markers.push(marker);
+    };
+    push(cwd);
+    let dir = path.dirname(filePath);
+    for (let i = 0; i < 32; i++) {
+        push(dir);
+        if (fs.existsSync(path.join(dir, '.git'))) break;
+        const parent = path.dirname(dir);
+        if (parent === dir) break;
+        dir = parent;
+    }
+    return markers;
+}
+
+function consumeBypassMarker(marker, basename) {
+    if (!fs.existsSync(marker) || !fs.statSync(marker).isFile()) return false;
+    try {
+        const raw = fs.readFileSync(marker, 'utf8').trim();
+        const count = /^\d+$/.test(raw) ? Number(raw) : 1;
+        if (count > 1) {
+            fs.writeFileSync(marker, String(count - 1));
+            log(`bypass consumed (${count - 1} remaining) — ${basename}`);
+        } else {
+            fs.unlinkSync(marker);
+            log(`bypass consumed (marker removed) — ${basename}`);
+        }
+    } catch {
+        return false;
+    }
+    return true;
+}
+
 function main() {
     const raw = readStdin().trim();
     if (!raw) return 0;
@@ -313,22 +399,10 @@ function main() {
     }
 
     const cwd = payload.cwd || process.cwd();
-    const marker = path.join(cwd, '.claude', 'bypass-qol-arch-code');
-    if (fs.existsSync(marker) && fs.statSync(marker).isFile()) {
-        try {
-            const raw = fs.readFileSync(marker, 'utf8').trim();
-            const count = /^\d+$/.test(raw) ? Number(raw) : 1;
-            if (count > 1) {
-                fs.writeFileSync(marker, String(count - 1));
-                log(`bypass consumed (${count - 1} remaining) — ${basename}`);
-            } else {
-                fs.unlinkSync(marker);
-                log(`bypass consumed (marker removed) — ${basename}`);
-            }
-        } catch {
-            // ignore — never block on bypass-marker IO failure
+    for (const marker of markerPaths(cwd, filePath)) {
+        if (consumeBypassMarker(marker, basename)) {
+            return 0;
         }
-        return 0;
     }
 
     const newContent = extractNewContent(tool, input);
