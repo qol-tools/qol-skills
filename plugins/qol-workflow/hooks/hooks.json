@@ -10,10 +10,6 @@
                     },
                     {
                         "type": "command",
-                        "command": "node ${CLAUDE_PLUGIN_ROOT}/bin/qol-cicd-context.cjs"
-                    },
-                    {
-                        "type": "command",
                         "command": "node ${CLAUDE_PLUGIN_ROOT}/bin/commit-deny-coauthor.cjs"
                     },
                     {
@@ -27,6 +23,16 @@
                     {
                         "type": "command",
                         "command": "node ${CLAUDE_PLUGIN_ROOT}/bin/branch-deny-pid-branch-name.cjs"
+                    }
+                ]
+            }
+        ],
+        "UserPromptSubmit": [
+            {
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "node ${CLAUDE_PLUGIN_ROOT}/bin/qol-cicd-context.cjs"
                     }
                 ]
             }

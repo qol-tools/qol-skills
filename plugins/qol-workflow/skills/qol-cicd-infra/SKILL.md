@@ -3,8 +3,9 @@ name: qol-cicd-infra
 description: >
   Use when discussing, designing, or modifying CI workflows, git hooks, or repo
   bootstrap across qol-tools. qol-cicd already owns this; read it BEFORE
-  proposing anything new. Loaded automatically by a PreToolUse hook when Bash
-  commands touch CI/hook keywords.
+  proposing anything new. Loaded automatically by a UserPromptSubmit hook when
+  the user's message touches CI/workflow/git-hook keywords and the session is
+  rooted in qol-tools.
 ---
 
 # qol-cicd is the source of truth
