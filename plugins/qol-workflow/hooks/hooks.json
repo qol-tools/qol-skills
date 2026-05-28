@@ -10,6 +10,10 @@
                     },
                     {
                         "type": "command",
+                        "command": "node ${CLAUDE_PLUGIN_ROOT}/bin/qol-cicd-context.cjs"
+                    },
+                    {
+                        "type": "command",
                         "command": "node ${CLAUDE_PLUGIN_ROOT}/bin/commit-deny-coauthor.cjs"
                     },
                     {
