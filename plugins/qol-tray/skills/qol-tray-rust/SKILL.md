@@ -91,6 +91,16 @@ The contract:
 
 When reviewing background code, the question is not "is this fast?" but "does this run *at all* when the user is not doing anything?". If yes, redesign.
 
+## Boot path: phases and ordering
+
+Boot runs in three ordered phases; respect the boundary when adding startup work:
+
+1. **Pre-tokio (synchronous, main thread)** — CLI-flag/subcommand handling, logging, install registration, the already-running probe, runtime-dir reset, the migration **pre-flight** (`qol_migrations::run_pre_flight`, which runs *before* housekeeping — housekeeping is cleanup, not "the migrations"), and doctor self-heal.
+2. **Tokio multi-thread (`block_on` async init)** — update check, the desktop-state socket, plugin load, profile sync (spawned, non-blocking), the daemon, feature registry, the axum server, hotkey capture, the daemon supervisor, and the post-auth migration pass (`run_post_auth_if_authed`).
+3. **Main thread (after init returns)** — `TrayManager::new` then the native OS event loop.
+
+New startup work goes in the phase that matches its dependency, not wherever is convenient. Data migrations are pre-flight (phase 1) or post-auth (phase 2) — never folded into housekeeping.
+
 ## Boot path: never block on networked I/O
 
 The tray daemon, plugin loading, and `TrayManager::new` must never `await`
@@ -117,6 +127,16 @@ UI ↔ backend communication lives in `src/runtime/`. When adding an endpoint:
 - Keep the handler thin. Business logic belongs in a feature module or shared crate — the runtime layer is transport only.
 - Match existing URL/path conventions (`/api/<area>/<resource>`).
 - Return structured errors, not stringly-typed ones. Let the serializer render them.
+
+## The three communication channels
+
+There is not one IPC path — there are three, with distinct roles. Don't conflate them:
+
+1. **axum HTTP** (`127.0.0.1:42700`) — the dashboard, the `qol-tray exec` CLI, and the plugin-store API. The CLI does *not* speak a plugin's socket directly; it POSTs to axum, which dispatches onward.
+2. **desktop-state Unix socket** (Unix only) — a one-way feed of monitor/cursor/focus state that plugin daemons and external tools *read*. Never used for action dispatch.
+3. **per-plugin Unix socket** (path from each `plugin.toml` `daemon.socket`) — the actual plugin RPC; tray + axum dispatch actions here.
+
+**EventBus is broadcast, not a dispatch path.** `EventBus` is a `tokio::sync::broadcast` of `DaemonEvent`s — *outbound* state-change notifications from the daemon to subscribers (tray menu, dashboard SSE). Tray clicks never publish to it. A click flows on the request side (native menu callback → menu router → action executor → one-shot subprocess or plugin socket); the bus only appears on the response side, e.g. the tray re-subscribes to rebuild its menu on `PluginsChanged`. When wiring a feature, ask "is this an outbound state change (bus) or a request dispatch (router/socket)?" — they are never the same edge.
 
 ## Feature modules
 

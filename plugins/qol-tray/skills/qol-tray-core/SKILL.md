@@ -1,302 +1,53 @@
 ---
 name: qol-tray-core
-description: Use when working on the core qol-tray application, including plugin system, tray platform modules, and feature architecture. Other qol-tray-related skills (UI systems, Rust internals, world canvas, Profile feature) live alongside in the qol-tray plugin.
+description: Use when working on the core qol-tray application - the plugin system, tray, feature architecture, and the plugin contract formats (plugin.toml / qol-config.toml / qol-runtime.toml). Rust internals, UI systems, world canvas, and the Profile feature have their own skills.
 ---
 
-# qol-tray
+# qol-tray (core)
 
-## Cross-Platform Support
+This skill owns the **core app model**: plugin system, tray, feature architecture,
+and the plugin-author contracts. It deliberately holds no file inventories or
+line numbers - those rot. Read the code (or the contract files) for the current
+shape; this skill holds the durable rules.
 
-Platform-specific code lives in `src/tray/platform/`:
-- `linux.rs` - GTK event loop in separate thread
-- `macos.rs` - NSApplication.run() on main thread (objc2)
-- `windows.rs` - Condvar-based blocking
+Adjacent durable knowledge lives in dedicated skills - do not duplicate it here:
 
-Prefer keeping platform differences in platform modules. Some lifecycle-specific macOS handling already exists in `main.rs`, so do not force refactors just to remove existing `#[cfg]` usage.
+| Topic | Skill |
+|---|---|
+| Rust internals, the three IPC channels, boot phases, concurrency | `qol-tray-rust` |
+| Generic workspace Rust style (error handling, graceful shutdown, idle-cost loops) | `rust-conventions` |
+| Cross-platform compartmentalization methodology | `qol-arch-code` |
+| UI components, Surface system, keyboard nav, styling | `qol-tray-ui-systems` |
+| World canvas / dive / minimap | `qol-world-canvas` |
+| Profile export/import, sync, backups | `qol-tray-feature-profile` |
+| Verification stack | `qol-tray-rust` |
 
-## Development Commands
+## Tray menu
 
-```bash
-make run      # Build and run
-make dev      # Build and run with dev features (Developer tab)
-make test     # Run tests
-make install  # Build release and install to /usr/bin
-make clean    # Clean build artifacts
-make release  # Local helper: lint, test, bump Cargo.toml, commit, tag, push
-```
+Feature-driven: the menu appends each registered feature's items, an update item
+when a newer version is available, then `Quit`. There are no per-plugin tray items.
 
-## Required Verification
+## Plugin system (the model)
 
-Do not report `qol-tray` work as complete until the repo-native verification commands pass unless the user explicitly says not to run them:
+- Plugins live in `~/.config/qol-tray/plugins/`, external to this codebase. Each has a `plugin.toml` manifest, binary entrypoints, and an optional `config.json`.
+- Loading scans the plugin dir, parses + validates each manifest, and resolves a source per plugin.
+- Execution is manifest-driven: **daemon-socket dispatch first, runtime-binary fallback.**
+- Source resolution unifies installed, dev-linked, and worktree-linked plugins through the registry (`src/plugins/registry/` + `resolver.rs`). The `SlotSource` variants and the per-slot fallback are defined there - read the enum, never memorize a list. Dev-link/worktree resolution is `#[cfg(feature = "dev")]`-gated; prod resolves installed plugins only.
+- A plugin's id derives from its directory name.
+- **When a `SlotSource` variant is added, audit every `matches!(source, ...)` branch** - the autostart guard, the execution-contract binary search, and the profile-sync-lock filter each special-case the source. A missed branch silently mis-handles the new kind.
 
-```bash
-make build
-make test
-cargo build --features dev
-```
-
-These are the primary source of truth because they match how this repo is actually built and exercised in day-to-day work.
-
-After the repo-native commands pass, the direct CI-equivalent Rust stack is still required for thoroughness when you changed Rust, tests, or build wiring:
-
-```bash
-cargo fmt --all --check
-cargo clippy --all-targets --all-features -- -D warnings
-cargo build
-cargo test
-```
-
-Rules:
-- Run `make build`, `make test`, and `cargo build --features dev` first after code, test, config, or UI changes. Do not stop at a targeted test slice if you touched the repo.
-- Then run the direct Rust stack when the change touched Rust code, tests, feature wiring, or verification-sensitive behavior.
-- `cargo test` is not enough. Clippy catches real failures in test targets and helper code that compile and tests can miss.
-- `cargo build` is still required after lint. The repo CI runs a separate build job, so passing clippy does not replace build validation.
-- If you edit `ui/` files, `node --check` on the changed files is useful, but it is additive. It does not replace the Rust stack above.
-- If one command fails, fix the issue or report the concrete blocker before saying the repo is green.
-- If a user says `qol-tray` still does not build, rerun their exact failing repo command immediately. Do not argue from substitute commands.
-
-## Hotkeys System
-
-qol-tray has a native global hotkey system (`src/hotkeys/`) that grabs keys at the X11 level, intercepting them before the window manager (e.g., Cinnamon) can act on them.
-
-Hotkey bindings live in `~/.config/qol-tray/hotkeys.json`:
-
-```json
-{
-  "hotkeys": [
-    {
-      "id": "hk-alt-tab-plugin",
-      "key": "Alt+Tab",
-      "plugin_id": "plugin-alt-tab",
-      "action": "open",
-      "enabled": true
-    }
-  ]
-}
-```
-
-Key names (case-insensitive) are defined in `src/hotkeys/types.rs` (`KEY_CODE_MAP`). Supported modifiers: `Alt`, `Ctrl`, `Shift`, `Super`. Supported keys: `a-z`, `0-9`, `f1-f12`, `space`, `enter`, `escape`, `tab`, `backspace`, `delete`, `insert`, `home`, `end`, `pageup`, `pagedown`, arrow keys, `printscreen`, `pause`.
-
-**To replace an OS-level shortcut** (e.g., replacing the native Alt+Tab switcher):
-1. Disable the OS shortcut in System Settings → Keyboard → Shortcuts → Windows
-2. Add the binding to `hotkeys.json` pointing to the relevant plugin action
-3. Restart qol-tray — it will grab the key exclusively via `XGrabKey`
-
-## Architecture
-
-**Tray menu:** The tray menu is feature-driven. It appends feature menu items, an update item when a newer version is available, and `Quit`.
-
-### Core Modules
-
-**src/plugins/** - Plugin loading, execution, and configuration
-- Scans `~/.config/qol-tray/plugins/` for plugin directories
-- Each plugin has: `plugin.toml` (manifest), binary entrypoints, optional `config.json`
-- Runtime execution is manifest-driven: daemon socket dispatch first, runtime binary fallback
-- Supports daemon processes and config toggles
-- Key types: `Plugin`, `PluginManager`, `PluginManifest`
-- Files: `mod.rs` (`Plugin` + exports), `manager/mod.rs` (load/reload/runtime), `loader/mod.rs` + `loader/scan.rs`/`loader/manifest_loader.rs`, `manifest/mod.rs` + `schema.rs`/`validation.rs`, `resolver.rs`
-
-**src/menu/** - Menu abstraction and event routing
-- `builder.rs`: Builds the tray menu from registered feature menu items, plus optional update item and Quit (no per-plugin tray items)
-- `router.rs`: EventRouter with EventPattern (Exact/Prefix) for O(k) routing
-- Event format: `feature-id::menu-item-id`
-
-**src/tray/** - System tray UI with platform abstraction
-- Platform-specific implementations in `platform/` subdirectory:
-  - `linux.rs`: GTK event loop in separate thread, glib polling for menu events
-  - `macos.rs`: NSApplication.run() on main thread, objc2 for Cocoa bindings
-  - `windows.rs`: Condvar-based blocking, menu events via spawned thread
-  - `mod.rs`: Routing to platform modules, shared `spawn_menu_event_handler`
-- `PlatformTray` enum handles platform differences at compile time
-- `icon.rs`: Icon loading from embedded RGBA data, supports notification dot variant
-- Uses `tray-icon` crate (cross-platform)
-
-**src/features/plugin_store/** - Browser-based plugin management
-- Serves web UI at `http://127.0.0.1:42700`
-- Landing page shows installed plugins and plugin store
-- Plugin settings accessed via `/plugins/{plugin_id}/`
-- API endpoints for install/uninstall operations
-- Fetches available plugins from `github.com/qol-tools/*`
-- Remote version metadata is release-gated: version comes from `releases/latest` tag and is only surfaced when required dependency assets exist for the active OS/arch
-- Asset pattern resolution is centralized in `src/features/plugin_store/release_assets.rs`
-
-**src/features/profile/** - Profile import/export, sync, backups, and profile UI transport
-- `core/`: profile bundle, storage, lock reconciliation, import/export rules
-- `sync/`: sync service, state, provider adapters, and platform integration
-- `http/`: export/import and sync HTTP routes mounted from plugin-store settings
-- `startup.rs`: startup migration from legacy config layout into `profile/`
-
-**src/updates/** - Auto-update system
-- Checks GitHub API on startup for new releases (2s timeout)
-- Compares semantic versions
-- Shows orange notification dot on tray icon when update available
-- Linux updates use release packages for local or system installs
-- macOS updates consume the universal app-bundle archive and replace the enclosing `.app` bundle
-- Windows opens the latest release page
-- Kills plugin daemons before restart to avoid socket conflicts
-
-**src/plugins/resolver.rs** - Plugin path resolution
-- Current (pre-registry-unification): merges installed plugins (`~/.config/qol-tray/plugins/`) with dev-links from `dev/links.json` via `resolve_all(plugins_dir, dev_links)`
-- `PluginSource` currently has two variants: `Installed` and `DevLinked` — no `WorktreeLink` variant yet
-- Dev-links always win on conflict; silent override with no fallback tracking
-- Dev-link resolution is `#[cfg(feature = "dev")]` gated: prod builds always return `HashMap::new()` from `dev_registry.rs`
-- **Pending spec:** `plugin-registry.json` unification will replace `dev/links.json`, add a `WorktreeLink` variant, add a fallback slot per entry, and remove the `dev` feature gate from resolution
-
-**Plugin ID derivation** — id is derived from directory `file_name()` at both installed scan time (`resolver.rs:44`) and dev-link creation time (`dev/linking/store.rs:91-94`). The spec's v2 `plugin.id` field override is future work.
-
-**dev_link conflict guard** (`installer/operations.rs:44-54`): `ensure_no_dev_link_conflict` is called on install, install_exact, update, and update_exact. It hard-blocks all install/update operations when a dev-link exists for the same id. The registry-unification spec removes this in favor of writing a new fallback slot instead.
-
-**Daemon autostart and PluginSource coupling** (`manager/autostart.rs`): daemon autostart for dev-linked plugins is blocked unless a `.qol-tray-dev-autostart` marker file exists in the plugin directory. After registry unification adds `WorktreeLink` as a third `PluginSource` variant, this `matches!(source, DevLinked)` check must be updated or `WorktreeLink` will silently bypass the autostart guard.
-
-**Execution contract and PluginSource** (`execution_contract.rs:90`): binary candidate resolution branches on `Some(PluginSource::DevLinked)` to prioritize `target/debug/` and `target/release/`. After unification, `WorktreeLink` must be added to this branch or dev-built binaries won't be found for worktree-linked plugins.
-
-**Profile sync filtering** (`profile/core/plugins_lock.rs:108`): `sync_plugins_lock_from_plugins` filters to `PluginSource::Installed` only, intentionally excluding dev-linked plugins from the sync lock. After unification adds `WorktreeLink`, this filter still holds — the property is correct but must be verified to exclude `WorktreeLink` too.
-
-**Operation lock scope** (`installer/operation_lock.rs`): per-plugin file lock at `plugins_dir/.{id}.lock`. Protects install/update/uninstall serialization. Does not protect registry JSON writes — registry write atomicity relies solely on the temp-file-rename pattern.
-
-**src/logging/** - Centralized logging with filterable logger
-- `control.rs`: Log control persistence (mute, suppress patterns) for plugins and core sections
-- `relay.rs`: Stdout/stderr relay with pattern-based suppression
-- Dev mode: `FilterableLogger` with runtime-adjustable core log controls via dev UI
-
-### Web UI Architecture
-
-Preact with htm tagged templates (no JSX, no build step). Views mount lazily and then stay mounted behind layer-aware `display:none`.
-
-**HARD RULE: New Views Must Honor ALL Infrastructure**
-
-Every view is a citizen of the qol-tray dashboard. Adding a view without integrating with all infrastructure systems is incomplete. Use existing views (hotkeys-view.js, plugins-view.js, store-view.js) as reference.
-
-**Mandatory integration checklist for every new view:**
-
-1. **Global keyboard routing** (`useRegisterViewKeyboard`)
-   - Import from `../app/view-keyboard-context.js`
-   - Register `handleKey` callback for the view ID
-   - Arrow keys navigate content, Enter activates, Escape dismisses modals
-   - `isBlocking` prevents Tab cycling during modal/edit states
-   - NEVER use local `onKeyDown`/`tabIndex` on divs
-
-2. **Command palette search** (`usePaletteContext`)
-   - Import from `../palette/context.js`
-   - Read `searchQuery` and filter displayed content when non-empty
-   - Use `matchesQuery()` from `../utils/collections.js` for consistent filtering
-
-3. **Command palette actions** (`useRegisterCommands`)
-   - Import from `../palette/useRegisterCommands.js`
-   - Register view-specific commands (e.g., "Clear suppressed", "Refresh logs")
-   - Commands appear in the `>` action mode of the palette (Ctrl+E then `>`)
-
-4. **View registration** (`ui/app/views.js`)
-   - Add to `VIEW_LABELS`, `BASE_ORDER`, and `renderWorldViews`
-   - Pass `active` prop if the view needs to know when it's visible
-
-5. **World labels/navigation**
-   - `ui/app/WorldNav.js` and `ui/components/shell/RegionLabels.js` read the shared `VIEW_LABELS` map from `ui/app/views.js`
-   - Do not introduce a second local label registry
-
-6. **CSS** (`ui/styles/`)
-   - Create view-specific CSS file, import in `styles.css`
-   - Use design tokens from `theme-tokens.css` — never hardcode values
-
-7. **Display:none lifecycle**
-   - Views are NEVER unmounted, only hidden via `display:none`
-   - Polling/intervals MUST stop when `active` is false
-   - Subscriptions MUST be gated on visibility
-
-If any of these is missing, the view is broken.
-
-**UI component layout**
-
-- `ui/components/App.js`, `ui/components/PageHeader.js`, `ui/components/ViewTabs.js`, `ui/components/CommandPalette.js`, `ui/components/ApiErrorToast.js`: top-level app chrome.
-- `ui/components/shell/` — shell components: `WorldViewport.js`, `RegionLabels.js`, `AtmosphereLayer.js`, `PeripheralPreview.js`, `Minimap.js`.
-- `ui/components/domain-rows/` — specialized rows: `PluginRow.js`, `LogRow.js`, `SuppressedRow.js`, `BackupRow.js`, `HotkeyRow.js`, `ShortcutRow.js`, `DevPluginRow.js`, `StoreCard.js`.
-- `ui/lib/components/` — reusable primitives and controls: `Surface.js`, `ListRow.js`, `TableRow.js`, `Card.js`, `Button.js`, `Expander.js`, `CustomSelect.js`, `DropdownMenu.js`, `ModalPreact.js`, `ToggleSwitch.js`, `SelectionCursorOverlay.js`, `SelectionWedgeGlyph.js`, `SurfaceContainer.js`, `StatusIndicators.js`, `EmptyState.js`, `CodeBlock.js`, `NoiseBorder.js`, `NoiseReveal.js`, `ScrambleText.js`, `RecompileDissolve.js`, `ShortcutLegendPreact.js`.
-- `ui/app/` — app-level coordination: `views.js` (view registry: `VIEW_LABELS`, `BASE_ORDER`, `buildViewOrder`, `WorldViewSlot`/`renderWorldViews`), `useApp.js`, `useAppBootstrap.js`, `useAppKeyboardRouting.js`, `useAppUpdateCoordinator.js`, `useMountedViews.js`, `useSidebarActions.js`, `WorldNav.js`, `view-keyboard-context.js`, `dev-flows.js`, `use-dev-actions.js`, `use-dev-flows.js`, `use-update-checker.js`.
-
-**Component responsibilities**
-
-- `Surface.js`: Primordial component — all interactive elements derive from this. Exports `useSurface()` trait hook, `useInputSurface()` (with ref ownership), and `Surface` component. Never write raw `data-selected-surface=""`.
-- `ListRow.js`: Row component composing Surface — accent border, header/body strips, optional action column. Sub-components: `ListRowHeader`, `ListRowBody`, `ListRowTitle`, `ListRowText`. Container: `ListGroup` with deselect-on-blur.
-- `domain-rows/*`: Specialized row components composing ListRow with variant-specific accent, badges, and actions.
-- `PageHeader.js`: Uniform 48px header with title, subtitle, optional badge, command palette, noise animations.
-- `ViewTabs.js`: Shared tabbed content switcher — tab buttons use Surface, manages preview/activate routing. ANY view with tabs MUST use this component.
-- `Expander.js`: Expand/collapse component composing Surface.
-- `CustomSelect.js`: Dropdown using Surface (trigger) + useInputSurface (list with ref ownership).
-- `CommandPalette.js`: Global command palette, dual-mode: `>` prefix for actions, plain text for search. Items use Surface.
-- `ModalPreact.js`: Modal + ModalFooter, action buttons use Surface.
-- `CodeBlock.js`: Formatted code display with click-to-copy.
-- `SurfaceContainer.js`: Navigation region boundary (NOT a Surface — structural only).
-- `StatusIndicators.js`: Badge, HealthDot, Alert (display-only, no Surface).
-- `NoiseBorder.js`: Canvas-based noise accent line on PageHeader, activates when palette opens.
-- `NoiseReveal.js`: Canvas-based bubble buoyancy reveal animation.
-- `ScrambleText.js`: Random-order character reveal animation for titles.
-- `WorldNav.js`: Command-palette and keyboard world navigation across root-layer views.
-- `RegionLabels.js`: Overlay labels for world regions sourced from the shared view registry.
-
-### UI Component Rules (Mandatory)
-
-- **Surface is the primordial.** Every interactive element uses `Surface` or `useSurface()`/`useInputSurface()`. Never write raw `data-selected-surface=""`.
-- **Composition is hierarchical, never bespoke.** Every component must compose from the trait hierarchy: `Surface` → base shapes (`TableRow`, `ListRow`, `Card`) → specialized components (`DevPluginRow`, `PluginRow`, `LogRow`, etc.). No component may be a completely bespoke one-off — it must derive from an existing shared component unless there is an explicit, stated reason to diverge. If a new row behaves like an existing row type (same layout, same interaction), it MUST use that component with different props — not reimplement the same pattern.
-- **Traits are hooks, shapes are components.** Behaviors compose via hooks (useClickOutside, useScrollFollow, useListSelection). Visual structure composes via components (ListRow → PluginRow). Variants come from props and data, not from separate components with duplicated markup.
-- **Refs never cross boundaries.** Components needing DOM access use `useInputSurface()` internally. No ref forwarding.
-- **No boilerplate duplication.** If two views share structural markup, extract a shared component. If it already exists, use it.
-- **Keyboard navigation is automatic.** Surface provides `data-selected-surface`. Do NOT manually add keyboard handlers for basic navigation.
-- **Tabs use `ViewTabs`.** Do not implement tab switching manually.
-- **Buttons use `Surface as="button"` with `.btn` classes.** Variants: `btn-primary`, `btn-ghost`, `btn-danger`, `btn-dropdown`.
-- **Rows use specialized row components** (PluginRow, LogRow, etc.) inside ListGroup/Table. Never build row markup from scratch. Data-driven lists render all items through one component — differentiate via props, not separate components.
-- **Provider fields are strategy-driven.** The backend defines all fields per provider. The frontend renders whatever the provider declares.
-- **Components catalog (Dev tab) is the POC.** All new patterns must be showcased in the catalog before migrating to real views.
-
-**ui/palette/** - Command palette infrastructure
-- `context.js`: PaletteContext provider with dual-mode state (search vs action)
-- `registry.js`: Command registry for palette actions
-- `useRegisterCommands.js`: Hook for views to register their commands
-
-**ui/lib/** - Shared utilities and hooks
-- `canvas.js`: Canvas helpers for noise/reveal animations (resolveColor, pixel manipulation)
-- `scramble.js`: Fisher-Yates shuffle, deterministic hash for per-pixel random phase/speed
-- `html.js`, `preact.module.js`, `hooks.module.js`, `htm.module.js`: htm + preact binding
-- `debug.js`: `createDebug(namespace)` logging utility (see `qol-tray-dev-logging` skill)
-- `selected-surface.js`, `spatial-nav.js`, `viewport-spatial.js`: wedge selection + spatial navigation
-- `world-camera.js`, `world-navigation.js`, `world-registry.js`, `world-settings.js`, `world-canvas-bg.js`: world canvas + camera
-- `atmosphere-presets.js`, `plugin-trait-overrides.js`: dive traits (see `qol-world-canvas` skill)
-- `dissolve.js` + `dissolve-gpu.js` + `dissolve-worker.js` + `dissolve-engine.js`, `glow.js`, `glitch-squares.js`: animations
-- `input-mode.js`, `ctrl-state.js`, `focus-grid.js`, `shared-slot.js`, `surface-traits.js`: input + focus helpers
-- `toast.js`: global toast system
-- `color.js`: color utilities
-- `hooks/`: hook library (`useModalKeyboard`, `useListKeyboard`, `useListSelection`, `useClickOutside`, `useScrollFollow`, `useStateRef`, `useViewTabs`, `useGridNav`, `useKeyboard`, `useHashSubPath`, `useQueryPoll`, `useRefreshOnFocus`, `useAsyncToken`, `useDispatchAction`, `usePersistedIndex`, `modifier-state-context.js`)
-- `components/`: reusable component primitives (see the component layout above)
-
-**ui/views/** - Page views
-- Organised as feature subdirectories (`plugins/`, `store/`, `hotkeys/`, `shortcuts/`, `task-runner/`, `profile/`, `plugin-config/`, `dev/`)
-- Each view uses either a top-level `view.js` or a coordinator plus focused helpers/hooks for data/state
-- `plugin-config/fields/` renders individual field kinds in auto-config mode
-- `dev/` hosts `plugin-actions/`, `cpu/`, `mock/`, `discovery/`, `build-overlay/`, `components/`, `build/` subsections
-- Dev view uses Preact components (migrated from full-DOM string templates)
-
-**ui/hooks/** - Route-level hooks (`useRouter.js`, `useInstalling.js`, `useSSE.js`, `useSSEDebounce.js`). Most reusable hooks live under `ui/lib/hooks/`, not here.
-
-**ui/styles/** - CSS architecture
-- `theme-tokens.css`: Color palette and semantic tokens
-- `styles.css`: Global token definitions
-- `page-header.css`: PageHeader layout with noise animation support
-- `common-controls.css`: Shared form controls, search bars
-- View-specific files: `dev-layout.css`, `plugin-grid.css`, etc.
-
-### Plugin Manifest Format
-
-Plugins define their menu structure in `plugin.toml`:
+## Plugin manifest (`plugin.toml`)
 
 ```toml
 [plugin]
 name = "Plugin Name"
 description = "Description"
 version = "1.0.0"
-platforms = ["linux"]  # Optional - omit for all platforms
+platforms = ["linux"]            # optional - omit for all platforms
 
 [runtime]
 command = "plugin-binary"
-actions = { run = ["run"], settings = ["settings"] }  # Optional map
+actions = { run = ["run"], settings = ["settings"] }   # optional map
 
 [menu]
 label = "Menu Label"
@@ -305,10 +56,10 @@ items = [
     { type = "checkbox", id = "toggle", label = "Enable", checked = true,
       action = "toggle-config", config_key = "enabled" },
     { type = "separator" },
-    { type = "submenu", id = "sub", label = "More", items = [...] }
+    { type = "submenu", id = "sub", label = "More", items = [...] },
 ]
 
-[daemon]  # Optional
+[daemon]                          # optional
 enabled = true
 command = "plugin-binary"
 socket = "/tmp/qol-plugin.sock"
@@ -319,275 +70,123 @@ repo = "qol-tools/plugin-repo"
 pattern = "plugin-binary-{os}-{arch}"
 ```
 
-Action types:
-- `run` - Execute action via daemon socket or runtime binary
-- `toggle-config` - Toggle boolean in `config.json` at `config_key` path
-- `settings` - Execute mapped runtime action
+Action types: `run` (daemon socket or runtime binary), `toggle-config` (flip a
+boolean in `config.json` at `config_key`), `settings` (mapped runtime action).
 
-Platform-specific code belongs in `platform/` directories, not root modules.
+## Plugin contracts (two-file pattern)
 
-### Plugin Contracts (Two-File Pattern)
+Plugins declare their user-facing surface through two TOML files at the plugin
+root, both parsed by the `qol-config` crate.
 
-Every plugin declares its user-facing surface through two TOML files at the plugin root. Both are parsed by the `qol-config` crate (v1.3.0+).
+**`qol-config.toml`** - persistent config the user edits, saved to `config.json`.
+Field kinds include `boolean`, `string`, `number`, `select`, `string_array`,
+`object_array`, `object_map`, `color`, `action`, `list`, `status`, `qr_code`.
 
-**`qol-config.toml`** — Config Contract (persistent state)
-Describes fields that the user can edit and qol-tray persists to the plugin's `config.json`. Parsed into `ConfigSpec`. Field kinds: `boolean`, `string`, `number`, `select`, `string_array`, `object_array`, `object_map`, `color`, `action`, `list`, `status`, `qr_code`.
+**`qol-runtime.toml`** - named actions and queries the plugin exposes (non-persistent).
+Required only when `qol-config.toml` references action/query names.
 
 ```toml
+# qol-config.toml
 schema_version = 1
-
-[field.window_border_color]
-type = "color"
-default = "#5FA8FF"
-alpha = false
 
 [field.pair_device]
 type = "action"
 label = "Pair Device"
-action = "pair_device"    # references [action.pair_device] in qol-runtime.toml
-variant = "primary"
-
-[field.paired_devices]
-type = "list"
-label = "Paired"
-query = "list_devices"    # references [query.list_devices] in qol-runtime.toml
-row_label = "{name}"
-row_subtitle = "{ieee}"
-empty_message = "No devices paired yet."
+action = "pair_device"           # references [action.pair_device] in qol-runtime.toml
 
 [field.coordinator_status]
 type = "status"
-label = "Coordinator"
-query = "connection_status"
+query = "connection_status"      # references [query.connection_status]
 value_from = "state"
-label_map = { ok = "Connected", offline = "Offline" }
 tone_map = { ok = "success", offline = "danger" }
 ```
 
-**`qol-runtime.toml`** — Runable Contract (non-persistent interactions, NEW in this architecture)
-Declares named actions and queries the plugin exposes. Required only when `qol-config.toml` references action/query names. Parsed into `RuntimeSpec`.
-
 ```toml
+# qol-runtime.toml
 schema_version = 1
 
 [action.pair_device]
 description = "Initiate Zigbee device pairing"
 confirm = "Start pairing mode?"
 
-[query.list_devices]
-description = "All currently paired Zigbee devices"
-poll_interval_ms = 2000
-
 [query.connection_status]
 description = "Current coordinator state"
 poll_interval_ms = 1000
 ```
 
-Naming rules: lowercase snake_case (`[a-z][a-z0-9_]*`). Action and query names share one namespace — no collisions allowed.
+Names are lowercase snake_case; actions and queries share one namespace (no
+collisions). Cross-validation happens at three layers: the `qol-config` CLI
+(run by qol-cicd on every PR), the qol-tray runtime (refuses to load a plugin
+with dangling references), and a per-plugin `validate_qol_contracts` test.
 
-**Cross-validation** happens at three layers:
-1. **qol-config CLI** (`cargo run --bin qol-config -- validate --plugin-root <path>`) — run by `qol-cicd`'s `plugin-ci.yml` on every PR
-2. **qol-tray runtime** — `load_combined_contracts_from_root()` refuses to load a plugin with dangling references
-3. **Per-plugin `validate_qol_contracts` test** — each plugin includes a Rust test that parses both files
+The field kinds that reference the runable contract (`action`, `list`, `status`,
+`qr_code`, plus `color` against config) are what auto-config renders into live,
+keyboard-navigable controls.
 
-**Field kinds that reference the runable contract** (auto-config rendering):
-| Kind | What it renders | Keyboard | Backed by |
-|---|---|---|---|
-| `color` | Hex picker (native `<input type="color">` + text input) | focus, commit | config value |
-| `action` | Button | Enter/Space | `[action.NAME]` → daemon action |
-| `list` | Live-polled list with row templates | arrow nav | `[query.NAME]` → daemon response data |
-| `status` | Live-polled chip with label/tone maps | non-interactive | `[query.NAME]` → value_from path |
-| `qr_code` | Canvas (stub renderer; needs QR library) | non-interactive | `[query.NAME]` → value_from path |
+## Daemon protocol
 
-### Daemon Protocol: Query Responses Carry Payloads
+`DaemonResponse::Handled { data: Option<Value> }` carries structured JSON back to
+qol-tray; plugins handling **query** actions must populate `data`. The dispatch
+layer extracts the payload and returns it to the caller. Plain actions work with
+or without a payload.
 
-As of the runable-contract migration, `DaemonResponse::Handled { data: Option<Value> }` carries structured JSON back to qol-tray. The `action_transport::DaemonActionDispatch::Handled { payload }` variant propagates this.
+HTTP surface for the contracts:
+- `POST /api/plugins/<id>/actions/<action_name>` - dispatches via the action executor.
+- `GET  /api/plugins/<id>/queries/<query_name>` - validates the query exists, dispatches, returns the JSON payload.
 
-**Plugins handling query actions** must populate the `data` field in their daemon response. Example daemon handler:
+## Auto-config rendering
 
-```rust
-fn handle_action(action: &str) -> DaemonResponse {
-    match action {
-        "list_devices" => DaemonResponse::Handled {
-            data: Some(serde_json::json!({
-                "devices": [{"ieee": "0x00124b00...", "name": "Kitchen", "online": true}]
-            })),
-        },
-        "pair_device" => {
-            start_pairing();
-            DaemonResponse::Handled { data: None }
-        }
-        _ => DaemonResponse::Fallback,
-    }
-}
-```
+Plugins are rendered by qol-tray's auto-config frontend (`ui/views/plugin-config/`)
+directly from their `qol-config.toml` fields. **This is the only rendering path** -
+there is no per-plugin iframe / custom-UI path. New plugins express their UI through
+field kinds; expand the kind catalog if a field kind is missing.
 
-`dispatch_query` in `action_executor.rs` extracts `payload` and returns it via `Result<serde_json::Value, ActionExecutionError>`. Actions still work with or without payloads.
+## Contract and delivery rules
 
-### HTTP Routes
+- Commands are strict binary basenames (`[A-Za-z0-9_-]+`) - never `.sh`, absolute paths, or traversal.
+- When `runtime.actions` is present, every executable menu action requires a mapping (strict coverage).
+- Command resolution is symlink-safe: canonicalized targets must stay under the plugin root.
+- Dev-mode binary resolution order is **plugin root first, then `target/debug/`, then `target/release/`**. Do not leave stale binaries in the plugin root - they win over a fresh `target/debug/` build.
+- In dev mode qol-tray runs `cargo build` directly; a plugin needs a `Cargo.toml`, not a Makefile.
+- Plugin reload (`/api/dev/reload`) is single-flight via an `AtomicBool` guard; concurrent requests get `409`. The build runs in `spawn_blocking` so it never blocks axum workers.
+- Every plugin must include a contract-validation test that parses `plugin.toml` and calls `manifest.validate()`, with `qol-tray` + `toml` in `[dev-dependencies]`.
 
-- `POST /api/plugins/<id>/actions/<action_name>` — dispatches via existing `try_execute_action` + action executor
-- `GET /api/plugins/<id>/queries/<query_name>` — validates query exists in runable contract, dispatches via `dispatch_query`, returns JSON payload
+## Hotkeys
 
-### Auto-Config Rendering Path (current)
+qol-tray grabs global hotkeys at the X11 level (`src/hotkeys/`), intercepting them
+before the window manager. Bindings live in `~/.config/qol-tray/hotkeys.json`
+(`id`, `key`, `plugin_id`, `action`, `enabled`); key/modifier names are defined in
+`src/hotkeys/types.rs`. To replace an OS shortcut: disable it in System Settings,
+add the binding, restart so qol-tray grabs the key exclusively.
 
-Plugins without `ui/index.html` (or with one that contains `initAutoConfigPage` — the legacy bootstrap template) are routed by `use-actions.js:41-44` through `openPluginConfig` → auto-config. qol-tray's Preact frontend at `ui/views/plugin-config/` renders fields via `field-map.js` → `fields/*.js`. Keyboard nav works via `delegateToPluginConfig` in `useAppKeyboardRouting.js`.
+## Cross-platform tray
 
-Plugins with a real `ui/index.html` (not containing `initAutoConfigPage`) are routed to `openPluginUi` → iframe. **This path is scheduled for removal once all plugins migrate to auto-config.** Do not add new plugins that rely on iframe rendering.
+Platform tray impls live in `src/tray/platform/` (linux: GTK loop on its own
+thread; macOS: `NSApplication.run()` on the main thread via objc2; windows:
+Condvar blocking). The **one hard host-app invariant**: the macOS tray icon and
+`NSApplication.run()` must be created on the main thread, with tokio on a
+background thread. Broader Rust platform gotchas → `qol-tray-rust`; the
+strategy-pattern methodology that replaces scattered `#[cfg]` → `qol-arch-code`.
 
-### Iframe Path Deprecation (In-Progress Migration)
+## New-view integration
 
-The `mode='ui'` iframe path is a **temporary backward-compat shim**. The migration plan deletes:
-- `mode='ui'` branch in `ui/views/plugin-config/view.js:20-32`
-- `openPluginUi` in `ui/hooks/useRouter.js`
-- `activePluginMode` state threading through `App.js`, `useApp.js`
-- `has_custom_ui` routing branch in `ui/views/plugins/use-actions.js:41-44`
-- `.plugin-ui-*` CSS rules in `ui/styles/plugin-config.css`
+Every dashboard view is a citizen of all infrastructure or it is broken. A new
+view must integrate, at minimum:
 
-Per-plugin migrations (one plan per plugin) are the path forward. Each plugin migration:
-1. Verify the plugin's custom UI features are expressible through auto-config field kinds (or expand the kind catalog first)
-2. Create `qol-runtime.toml` if the plugin needs actions/queries
-3. Update `qol-config.toml` to use the new field kinds
-4. Delete the plugin's `ui/` directory
-5. Remove any plugin-side static file HTTP routes
-6. Test and release
+- **Global keyboard routing** via the view-keyboard registration hook - never local `onKeyDown`/`tabIndex` on divs.
+- **Command-palette** search (filter on the shared query) and actions (register view commands).
+- **The shared view registry** - one label/order map; never a second local registry.
+- **The `display:none` lifecycle** - views are hidden, never unmounted, so polling/intervals/subscriptions must stop while inactive.
 
-## Icon Management
+Component, Surface, and styling details → `qol-tray-ui-systems`.
 
-Icon is embedded as raw RGBA data at compile time from `assets/icon.rgba` (64x64 pixels, generated from `icon.png`).
+## Icon
 
-To update icon:
-1. Edit `assets/icon.png`
-2. Convert to RGBA: `python3 -c "from PIL import Image; img = Image.open('assets/icon.png'); open('assets/icon.rgba', 'wb').write(img.tobytes())"`
-3. Rebuild
+The tray icon is embedded at compile time from `assets/icon.rgba` (raw RGBA,
+generated from `assets/icon.png`). Update the PNG, regenerate the RGBA, rebuild.
 
-## Plugin Development
+## Verification
 
-Plugins are external to this codebase. They live in `~/.config/qol-tray/plugins/`.
-
-The daemon provides:
-- Plugin loading and manifest parsing
-- Browser-based settings UI (each plugin can have `ui/index.html`)
-- Config file management (read/write JSON)
-- Process execution (runtime binaries and daemons)
-
-Plugins should expose binary entrypoints through `runtime.command` and optional `daemon.command`.
-
-## Contract and Delivery Rules
-
-- Commands are strict binary basenames (`[A-Za-z0-9_-]+`), never `.sh`, never absolute paths, never traversal.
-- Runtime coverage is strict: when `runtime.actions` is present, all executable menu actions require mappings.
-- Command resolution is symlink-safe: canonicalized command targets must stay under plugin root.
-- In dev mode, binary resolution order is: **plugin root directory first**, then `target/debug/`, then `target/release/`. **Do not leave stale binaries in the plugin root** — they will be preferred over freshly built `target/debug/` binaries.
-- In dev mode, `qol-tray` uses `cargo build` directly. No Makefile is needed or expected. Ensure your plugin contains a `Cargo.toml`.
-- Plugin reload (`/api/dev/reload`) is protected by a single-flight `AtomicBool` guard (`BUILD_IN_PROGRESS`). Concurrent reload requests return `409 Conflict`. The build runs in `tokio::task::spawn_blocking` to avoid blocking axum worker threads.
-- Every plugin **must** include a contract validation test in its main source file:
-
-```rust
-#[cfg(test)]
-mod tests {
-    use qol_tray::plugins::manifest::PluginManifest;
-
-    #[test]
-    fn validate_plugin_contract() {
-        let manifest_str =
-            std::fs::read_to_string("plugin.toml").expect("Failed to read plugin.toml");
-        let manifest: PluginManifest =
-            toml::from_str(&manifest_str).expect("Failed to parse plugin.toml");
-        manifest.validate().expect("Manifest validation failed");
-    }
-}
-```
-
-  Add `qol-tray` and `toml` to `[dev-dependencies]` in `Cargo.toml`:
-
-```toml
-[dev-dependencies]
-qol-tray = { path = "../../qol-tray" }
-toml = "0.9"
-```
-
-## Lessons Learned
-
-### Test-Driven Bug Discovery
-Adding comprehensive edge case tests often reveals bugs in the implementation:
-- Adding `("V1.2.3", vec![1, 2, 3])` test case revealed version parser only handled lowercase 'v'
-- Adding `("--help", false)` test case revealed action ID validation didn't check leading dashes
-- Adding `("<body data-x='a>b'>", Some(19))` test case revealed HTML parser didn't handle `>` inside quotes
-
-**Pattern:** When adding tests, think about what the implementation *actually does* vs what it *should do*. Write the test for expected behavior first, then fix the implementation if it fails.
-
-### Consolidate Validation Functions
-Path/ID validation functions tend to get duplicated. Keep them in one place:
-- `paths::is_safe_path_component()` - validates single path components (no `/`, `\`, `..`, `.`, null bytes)
-- Used by: `config.rs`, `plugin_ui.rs`, anywhere plugin IDs are used in paths
-
-### Graceful Process Shutdown
-When stopping child processes:
-1. Send SIGTERM first (Unix) to allow graceful cleanup
-2. Wait with timeout (2s is reasonable)
-3. Only SIGKILL if process doesn't respond
-4. Use `libc::kill()` directly - no Rust wrapper needed
-
-### Error Handling Patterns
-- `.expect()` is acceptable for compile-time invariants (embedded assets)
-- `.expect()` is NOT acceptable for runtime operations (file paths, config dirs)
-- Return `Option` or `Result` and let callers decide how to handle
-- Log errors at the point of failure, not just at the top level
-
-### HTML Parsing Edge Cases
-Simple string matching for HTML tags needs to handle:
-- Case insensitivity (`<body>` vs `<BODY>`)
-- Attributes containing `>` (need quote-aware parsing)
-- Tags inside comments (skip `<!-- <body> -->`)
-
-A proper HTML parser would be overkill - just handle the common cases correctly.
-
-### GitHub Token Validation
-Token validation uses typed errors (`TokenValidationError::Empty`, `Invalid`, `Upstream`) to distinguish between user mistakes (400) and GitHub API failures (502). The frontend renders a state-driven token banner based on `showTokenInput`, `rateLimited`, and `hasToken` flags — no imperative show/hide calls.
-
-### macOS Tray Icon Requirements
-On macOS, `tray-icon` crate requires:
-1. Tray icon must be created on the main thread
-2. `NSApplication.run()` must be called on the main thread (blocks until quit)
-3. Tokio runtime must run on a background thread
-
-The pattern is: main thread runs Cocoa event loop, background thread runs tokio for async operations (web server, etc.). Use `objc2` crate for Cocoa bindings.
-
-## Rust Gotchas (host-app)
-
-These platform rules apply to qol-tray and any plugin that embeds its own windowed UI (e.g. GPUI-based plugins):
-
-**macOS:**
-- UI frameworks (NSApplication, tray icons, GPUI windows) MUST be created on the main thread.
-- `NSApplication.run()` blocks the main thread until quit. Run async runtimes (Tokio) on background threads.
-- Use `objc2` for Cocoa bindings and CoreGraphics APIs directly for performance-critical operations.
-- Never shell-split paths for `Command` args — pass `Path` directly to `Command::new("open").arg(path)` to avoid crashes on paths with spaces (e.g., `.app` bundles).
-- `cx.hide()` hides the entire NSApplication — use `window.remove_window()` for popup-style windows that need to reappear later.
-
-**Linux:**
-- GTK event loops run in a separate thread, with `glib` polling for menu events (`src/tray/platform/linux.rs`).
-- X11 bindings (e.g. `x11rb`) handle low-level system interactions such as hotkey grabbing and window enumeration.
-
-**Windows:**
-- Menu events arrive on a spawned thread; the main thread uses Condvar-based blocking for lifecycle (`src/tray/platform/windows.rs`).
-
-## Local CI Verification (cargo stack)
-
-Beyond the repo-native `make build` / `make test` commands above, the raw cargo stack CI enforces is:
-
-```bash
-cargo fmt -- --check
-cargo clippy --all-targets --all-features --keep-going -- -D warnings
-cargo test --all-features
-```
-
-Critical rules:
-- Prefer `make build` / `make test` first; fall back to raw cargo commands when the Makefile doesn't cover your change.
-- `--keep-going` is required so ALL errors across all targets (lib, bin, tests, examples) are reported in one pass.
-- `--all-targets` is required — clippy errors in test files won't show up without it.
-- `-D warnings` is required — this is what CI uses. Warnings are errors.
-- `cargo check` or `cargo test` alone is NOT sufficient. Clippy is what CI enforces.
-- If local `rustc --version` doesn't match CI (CI uses latest stable via `dtolnay/rust-toolchain@stable`), update local Rust first (`rustup update stable`) or flag the version mismatch.
-- Fix ALL reported errors before committing. Never fix-commit-push iteratively.
-- If the user reports a build failure after you claimed success, rerun the user's exact failing command first and treat that command as the source of truth.
+Run the repo-native build + test first (via `qol`/`make`), then the cargo
+`-D warnings` stack. The full command set and rules live in `qol-tray-rust`
+(Verification) - do not report core work green until they pass.
