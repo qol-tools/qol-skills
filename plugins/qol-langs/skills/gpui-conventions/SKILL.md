@@ -404,6 +404,23 @@ Wrapping elements in `gpui_component::Scrollable` violently breaks native GPUI `
 
 If you launch a popup window and it doesn't immediately receive input (you have to click it first), ensure you are calling BOTH `window.focus(handle)` AND `window.activate_window()` when opening it. `activate_window` tells the GPUI platform layer to physically raise and steal focus from the compositor.
 
+This is about your OWN window. To foreground ANOTHER app's window on macOS (alt-tab/window-actions), `window.activate_window()` does not apply — see the `macos-window-activation` skill (SkyLight, AXRaise).
+
+### Shared image / atlas refcount lifecycle (Metal backend)
+
+`MetalAtlas::remove` **double-decrements** a texture's refcount if called twice for the same `ImageId`. Every cache that holds an `Arc<RenderImage>` must route inserts/removals through ONE registry that guarantees `App::drop_image` runs exactly once per `ImageId` on last release. Two rules fall out:
+
+- A view that owns `Arc<RenderImage>`s must **drain them back to the registry in `Context::on_release`**, or refcounts stay inflated and `drop_image` never fires for successor windows. The dying window's GPU atlas is GC'd by the platform regardless, so passing `window = None` to the release path during teardown is correct.
+- During a `WindowHandle::update` lease the leased window is **`None` in `App::windows`**. Any `&mut App` op that walks platform windows (e.g. `drop_image`) must run with the right context: pass `None` at the App level (no window leased), `Some(window)` inside `handle.update`.
+
+### `window_bounds()` can report a stale tiny size during warmup
+
+Beyond "set full size at creation": a pre-created / ghost window can have `window.window_bounds()` return a stale tiny size (e.g. 720x321) during the warmup render *before* a programmatic resize lands. Never feed `window_bounds()` into layout math on the first frames — use your intended size, not the reported one.
+
+### Backing scale drifts across monitors
+
+GPUI caches a window's backing scale factor. When the window moves to a monitor with a different DPI the cache drifts (blurry / mis-scaled render). Query the real `NSWindow.backingScaleFactor` and re-sync when a reposition crosses monitors.
+
 ## Low-Level Patterns (verified)
 
 Alternative to gpui-component for full control.
