@@ -1,6 +1,6 @@
 {
   "name": "qol-skills",
-  "description": "Claude Code skills for the qol-tools ecosystem (qol-tray host app, plugins, shared libs, CI workflows, and general engineering practices) — split into fine-grained plugins for per-plugin toggling.",
+  "description": "Claude Code skills for the qol-tools ecosystem (qol-tray host app, plugins, shared libs, CI workflows, and general engineering practices) \u2014 split into fine-grained plugins for per-plugin toggling.",
   "owner": {
     "name": "KMRH47"
   },
@@ -106,7 +106,7 @@
     },
     {
       "name": "qol-langs",
-      "description": "Personal-experience wells for languages and frameworks used in qol-tools: rust-conventions, gpui-conventions, preact-conventions. Workspace-specific style and gotchas, NOT canonical library docs — for those, use context7.",
+      "description": "Personal-experience wells for languages and frameworks used in qol-tools: rust-conventions, gpui-conventions, preact-conventions. Workspace-specific style and gotchas, NOT canonical library docs \u2014 for those, use context7.",
       "source": "./plugins/qol-langs",
       "version": "0.2.0",
       "author": {
@@ -118,6 +118,15 @@
       "description": "Project-level conventions for the qol-tools ecosystem: the qol-mission (non-negotiable user-facing promises), qol-tools (org layout, dependency model), qol-cicd (shared workflows), qol-arch-code (cross-platform code strategy pattern), qol-arch-cross-platform (symbol/import hygiene that prevents dead_code-on-other-platform under -D warnings), qol-arch-cicd (CI/release workflow contract that enforces matrix builds and path-dep parity), qol-arch-channels (the four host<->plugin IPC channels and when to use which), qol-shared-libs, qol-plugin-template. Ships three PreToolUse hooks (one per arch skill) that block edits violating each contract.",
       "source": "./plugins/qol-project",
       "version": "0.5.3",
+      "author": {
+        "name": "KMRH47"
+      }
+    },
+    {
+      "name": "qol-trace-discipline",
+      "description": "Cross-cutting qol trace discipline: reminds agents to consider new or richer qol trace targets whenever code changes touch behavior, persistence, runtime flows, tests, or bug investigations.",
+      "source": "./plugins/qol-trace-discipline",
+      "version": "0.1.1",
       "author": {
         "name": "KMRH47"
       }
