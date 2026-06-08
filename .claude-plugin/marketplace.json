@@ -130,6 +130,15 @@
       "author": {
         "name": "KMRH47"
       }
+    },
+    {
+      "name": "workflow-nodes",
+      "description": "Personal workflow-automation discipline for KMRH47: convert repeated multi-step work into deterministic scriptable workflow nodes with small inputs, concrete outputs, reports, and composable orchestrators for humans and AI.",
+      "source": "./plugins/workflow-nodes",
+      "version": "0.1.0",
+      "author": {
+        "name": "KMRH47"
+      }
     }
   ]
 }

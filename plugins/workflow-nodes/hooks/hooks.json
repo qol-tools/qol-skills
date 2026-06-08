@@ -1,0 +1,35 @@
+{
+  "description": "Once-per-session workflow-node reminder for KMRH47. UserPromptSubmit injects the rule, PreCompact and SessionStart clear the session sentinel so refreshed contexts receive it again.",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/inject_workflow_nodes_reminder.mjs"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/clear_workflow_nodes_sentinel.mjs"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/clear_workflow_nodes_sentinel.mjs"
+          }
+        ]
+      }
+    ]
+  }
+}
