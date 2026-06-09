@@ -19,11 +19,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+      - name: Check plugin manifests
+        shell: bash
+        run: node scripts/sync-plugin-manifests.cjs --check
       - name: Run all hook tests
         shell: bash
         run: |
           shopt -s nullglob
-          tests=(plugins/*/test/*.test.cjs)
+          tests=(test/*.test.cjs plugins/*/test/*.test.cjs)
           if [ ${#tests[@]} -eq 0 ]; then
             echo "No hook tests found — nothing to run."
             exit 0

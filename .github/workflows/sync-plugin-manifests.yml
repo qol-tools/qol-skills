@@ -1,0 +1,72 @@
+name: sync plugin manifests
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.agents/plugins/marketplace.json'
+      - '.claude-plugin/marketplace.json'
+      - '.github/workflows/sync-plugin-manifests.yml'
+      - 'plugins/**'
+      - 'scripts/sync-plugin-manifests.cjs'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-plugin-manifests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Sync manifests
+        env:
+          PLUGIN_SYNC_BASE_REF: ${{ github.event.before }}
+        run: node scripts/sync-plugin-manifests.cjs
+      - name: Validate generated manifests
+        shell: bash
+        run: |
+          node --check scripts/sync-plugin-manifests.cjs
+          node scripts/sync-plugin-manifests.cjs --check
+          node --test test/sync-plugin-manifests.test.cjs
+          node - <<'NODE'
+          const fs = require("fs");
+          const path = require("path");
+
+          for (const file of [".claude-plugin/marketplace.json", ".agents/plugins/marketplace.json"]) {
+            const marketplace = JSON.parse(fs.readFileSync(file, "utf8"));
+            const manifestDir = file.startsWith(".claude") ? ".claude-plugin" : ".codex-plugin";
+
+            for (const entry of marketplace.plugins) {
+              const source = typeof entry.source === "string" ? entry.source : entry.source.path;
+              const manifest = JSON.parse(fs.readFileSync(path.join(source, manifestDir, "plugin.json"), "utf8"));
+
+              if (manifest.name !== entry.name) {
+                throw new Error(`${file}: ${entry.name} does not match ${manifest.name}`);
+              }
+            }
+          }
+          NODE
+      - name: Commit generated files
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "Plugin manifests are already in sync."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .agents/plugins/marketplace.json .claude-plugin/marketplace.json plugins
+          git commit -m "chore: sync plugin manifests"
+          git push

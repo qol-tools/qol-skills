@@ -125,10 +125,10 @@
       "category": "Productivity"
     },
     {
-      "name": "qol-host",
+      "name": "qol-tray",
       "source": {
         "source": "local",
-        "path": "./plugins/qol-host"
+        "path": "./plugins/qol-tray"
       },
       "policy": {
         "installation": "INSTALLED_BY_DEFAULT",
@@ -137,10 +137,10 @@
       "category": "Productivity"
     },
     {
-      "name": "qol-dev-conventions",
+      "name": "qol-workflow",
       "source": {
         "source": "local",
-        "path": "./plugins/qol-dev-conventions"
+        "path": "./plugins/qol-workflow"
       },
       "policy": {
         "installation": "INSTALLED_BY_DEFAULT",
@@ -149,10 +149,10 @@
       "category": "Productivity"
     },
     {
-      "name": "qol-ecosystem",
+      "name": "qol-langs",
       "source": {
         "source": "local",
-        "path": "./plugins/qol-ecosystem"
+        "path": "./plugins/qol-langs"
       },
       "policy": {
         "installation": "INSTALLED_BY_DEFAULT",
@@ -161,10 +161,10 @@
       "category": "Productivity"
     },
     {
-      "name": "arch-pathways",
+      "name": "qol-project",
       "source": {
         "source": "local",
-        "path": "./plugins/arch-pathways"
+        "path": "./plugins/qol-project"
       },
       "policy": {
         "installation": "INSTALLED_BY_DEFAULT",

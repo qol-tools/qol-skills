@@ -1,7 +1,7 @@
 {
   "name": "workflow-nodes",
   "version": "0.1.0",
-  "description": "Personal workflow-automation discipline for KMRH47: convert repeated multi-step work into deterministic scriptable workflow nodes with small inputs, concrete outputs, reports, and composable orchestrators for humans and AI.",
+  "description": "Personal productivity rule for KMRH47: when work repeats, convert it into deterministic scriptable workflow nodes with explicit inputs, outputs, reports, and composable orchestrators instead of burning human memory and agent tokens.",
   "author": {
     "name": "KMRH47"
   },

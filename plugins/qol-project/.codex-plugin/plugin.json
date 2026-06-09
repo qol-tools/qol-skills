@@ -1,7 +1,7 @@
 {
   "name": "qol-project",
-  "version": "0.2.4",
-  "description": "Project-level conventions for the qol-tools ecosystem: qol-mission, qol-tools (org layout), qol-cicd (shared workflows), qol-arch-code (cross-platform code strategy pattern), qol-arch-cross-platform (symbol/import hygiene), qol-arch-cicd (CI/release workflow contract), qol-shared-libs, qol-plugin-template.",
+  "version": "0.5.3",
+  "description": "Project-level conventions for the qol-tools ecosystem: the qol-mission (non-negotiable user-facing promises), qol-tools (org layout, dependency model), qol-cicd (shared workflows), qol-arch-code (cross-platform code strategy pattern), qol-arch-cross-platform (symbol/import hygiene that prevents dead_code-on-other-platform under -D warnings), qol-arch-cicd (CI/release workflow contract that enforces matrix builds and path-dep parity), qol-shared-libs, qol-plugin-template. Ships three PreToolUse hooks (one per arch skill) that block edits violating each contract, plus a UserPromptSubmit hook that reminds Claude to consult qol-mission when prompts mention design/scope/issue terms in a qol-tools repo.",
   "author": {
     "name": "KMRH47"
   },
