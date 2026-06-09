@@ -19,6 +19,14 @@ Use this severity scale:
 
 Use these checklists to tailor agent prompts. Do not paste every item into every prompt; choose the concerns that match the change.
 
+## Review Router
+
+- Identify touched surfaces: runtime code, UI, CLI, CI/release, docs, scripts, manifests, migrations, tests.
+- Choose the smallest reviewer set that covers real risk; avoid running every persona by default.
+- Escalate to security/release/adversarial when refs, permissions, shell execution, secrets, artifacts, migrations, or data loss are in scope.
+- Add style/redundancy/history only when the patch touches established local patterns, compatibility paths, or duplicate mechanisms.
+- Report the selected reviewers and one-line rationale for each.
+
 ## Security
 
 - Validate command inputs, shell usage, quoting, and path handling.
@@ -38,6 +46,30 @@ Use these checklists to tailor agent prompts. Do not paste every item into every
 - Look for data-loss, migration, persistence, concurrency, and ordering regressions.
 - Validate compatibility boundaries (API/schema/contract) across supported plugin/workspace variants.
 - Prefer changed-hunk review first, then direct call graph/dependency impact before broad scans.
+
+## Requirements
+
+- Compare implementation against the user's explicit request, mission statements, issue text, and acceptance criteria.
+- Flag missing acceptance tests, undefined assumptions, and behavior that is "implemented" but not actually user-verifiable.
+- Separate deliberate out-of-scope work from accidental incompleteness.
+- Check whether docs, command output, and final UX match what the change claims to provide.
+- Confirm the smallest deterministic verification path is named.
+
+## Redundancy
+
+- Search for existing helpers, scripts, skills, components, workflows, or conventions before accepting new mechanisms.
+- Identify duplicate logic, duplicate state updates, parallel manifests, redundant validation, and repeated parsing.
+- Flag divergence risk when two paths enforce the same rule differently.
+- Distinguish useful defense-in-depth from noise: redundancy is justified only when it adds fault tolerance or clearer diagnostics.
+- Prefer extending established local patterns over adding a second abstraction.
+
+## History / Compatibility
+
+- Check behavior against prior release paths, old config/schema names, old plugin IDs, migration rules, and documented workflows.
+- Validate deprecation and fallback behavior: old paths should fail loudly, migrate cleanly, or remain intentionally supported.
+- Look for changes that break existing user muscle memory, automation, caches, or installed plugin layouts.
+- Confirm changelog/docs/test updates cover compatibility-sensitive behavior.
+- Treat "not reproducible from fresh install" and "only after restart/upgrade" as first-class review cases.
 
 ## Performance
 
@@ -66,6 +98,14 @@ Use these checklists to tailor agent prompts. Do not paste every item into every
 - Identify extension points for the next similar feature.
 - Check for circular dependencies, unexpected abstraction leaks, and API lock-in.
 - Confirm there is a clear rollback path if release automation fails partway.
+
+## Style / Local Fit
+
+- Match the immediate context's style, not generic taste: UI density, CLI framing, naming, diagnostics, test shape, and file organization.
+- Check whether new text sounds like the surrounding product/tool and avoids explanatory noise inside the UI.
+- Reuse local components, helpers, command conventions, and result formats before introducing new ones.
+- Flag formatting or structure that makes future patches harder to scan.
+- For qol CLI/UI changes, preserve concise operator-focused surfaces and avoid marketing/explainer copy.
 
 ## QoL / Vision
 

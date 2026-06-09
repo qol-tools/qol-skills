@@ -20,6 +20,15 @@ async function readPayload() {
     }
 }
 
+function emitReminder() {
+    process.stdout.write(JSON.stringify({
+        hookSpecificOutput: {
+            hookEventName: "UserPromptSubmit",
+            additionalContext: REMINDER,
+        },
+    }));
+}
+
 const payload = await readPayload();
 if (payload?.hook_event_name && payload.hook_event_name !== "UserPromptSubmit") {
     process.exit(0);
@@ -27,16 +36,16 @@ if (payload?.hook_event_name && payload.hook_event_name !== "UserPromptSubmit") 
 
 const sid = payload.session_id || payload.sessionId || "";
 if (!sid) {
-    process.stdout.write(REMINDER);
+    emitReminder();
     process.exit(0);
 }
 
 const stateDir = join(homedir(), ".claude", "state");
-const sentinel = join(stateDir, `workflow-nodes-${sid}`);
+const sentinel = join(stateDir, "workflow-nodes-" + sid);
 if (existsSync(sentinel)) process.exit(0);
 
 mkdirSync(stateDir, { recursive: true });
 writeFileSync(sentinel, "");
-process.stdout.write(REMINDER);
+emitReminder();
 
-export { REMINDER };
+export { REMINDER, emitReminder };

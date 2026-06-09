@@ -17,6 +17,7 @@ Default safety posture: read-only. Do not edit files or write comments unless th
 
 - Spawn agents only when the user explicitly asks for review-board style delegation.
 - If multi-agent support is unavailable, use `tool_search` to discover it before retrying.
+- Use one canonical reviewer catalog for all runtimes. Runtime-specific agent files may exist, but they are generated/adapted from this skill contract.
 - Define review scope before spawning:
   - changed files
   - commit range
@@ -25,6 +26,16 @@ Default safety posture: read-only. Do not edit files or write comments unless th
 - Keep reviewers independent: pass scope + domain instructions without biasing expected findings.
 - Set follow-up reviewers with only the smallest set of relevant findings.
 - Keep any branch or checkout actions read-only unless explicitly permitted.
+
+## Unified Runtime Approach
+
+Use the same review semantics in Claude Code and Codex, but adapt execution to what the runtime actually supports.
+
+- Canonical source: this `SKILL.md` plus `references/review-checklists.md`.
+- Claude Code adapter: may use real `agents/*.md` specialist files with frontmatter such as `model: haiku` or `model: opus`, when those files are present in the plugin.
+- Codex adapter: do not assume `.codex/agents/*.toml` named-agent configs apply. Local testing showed `subagent://name` can spawn a generic child while ignoring the TOML instructions/model. For Codex, express reviewer roles in the spawn prompt and assume the child inherits the current Codex model unless a future local smoke test proves otherwise.
+- Model preferences are advisory metadata, not correctness requirements. The review must still work when all reviewers run on the current parent model.
+- If a generated runtime manifest disagrees with this skill, this skill wins.
 
 ## Inputs and Scope Capture
 
@@ -44,16 +55,24 @@ Default safety posture: read-only. Do not edit files or write comments unless th
 
 Use the smallest set that matches the request and risk level.
 
+Start with a lightweight router unless the user explicitly names reviewers:
+
+- `review-router`: inspect the diff shape, user request, touched systems, and risk boundaries; select the smallest useful reviewer set. It must not produce final findings except "reviewer selection risk" notes. Prefer 3-5 reviewers for ordinary changes, 6-8 for release/security/workflow changes, and add adversarial/contextual passes only when warranted.
+
 Core reviewers:
 
 - `security-reviewer`: trust boundaries, command execution, path traversal, secrets, permissions, supply-chain trust, CI/workflow hardening.
 - `correctness-reviewer`: regressions, edge cases, idempotency, release semantics, contract drift, migration and persistence correctness.
 - `performance-reviewer`: algorithmic cost, subprocess count, parallelism, build/runtime fanout, memory and I/O scaling.
 - `quality-reviewer`: maintainability, naming, structure, readability, testability, diagnostics, repo conventions.
+- `requirements-reviewer`: explicit requirements, user promises, acceptance criteria, scope completeness, and undefined assumptions.
 
 Specialized reviewers:
 
 - `contextual-quick-wins-reviewer`: contextual nice-to-haves, unidentified quick wins, cheap diagnostics, small test gaps, local-operator ergonomics, and low-risk cleanup opportunities. This reviewer cannot block; cap output at 5 items and require each item to be actionable in one sitting.
+- `redundancy-reviewer`: whether this already exists, whether existing helpers/patterns should be reused, duplicate logic/state/checks, and unjustified parallel mechanisms.
+- `history-reviewer`: behavioral continuity, compatibility with old paths, migration/deprecation consistency, changelog/doc alignment, and regression risk against prior behavior.
+- `style-reviewer`: context-specific style fit for the touched area, including local UI/CLI language, naming, density, component shape, diagnostics tone, and repo-specific conventions.
 - `optimization-reviewer`: duplicate passes, cache misses, dependency churn, over-eager invalidation, complexity hotspots.
 - `architecture-reviewer`: ownership boundaries, coupling, data flow, API contracts, rollback and migration paths.
 - `qol-vision-reviewer`: operator ergonomics, diagnostics, observability, local/dev feedback loops, output readability.
@@ -68,6 +87,7 @@ Read `references/review-checklists.md` whenever a review spans more than two dom
 
 ## Sequencing
 
+- Run `review-router` first when reviewer choice is not obvious.
 - Run independent primary reviewers in parallel unless they share hard dependencies.
 - Run sequentially when one pass should inform another (for example, correctness before architecture, then performance, then adversarial).
 - Run `contextual-quick-wins-reviewer` after the primary risk reviewers have enough signal; keep it separate from must-fix review so nice-to-haves do not dilute blockers.
