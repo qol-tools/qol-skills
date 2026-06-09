@@ -53,6 +53,7 @@ Core reviewers:
 
 Specialized reviewers:
 
+- `contextual-quick-wins-reviewer`: contextual nice-to-haves, unidentified quick wins, cheap diagnostics, small test gaps, local-operator ergonomics, and low-risk cleanup opportunities. This reviewer cannot block; cap output at 5 items and require each item to be actionable in one sitting.
 - `optimization-reviewer`: duplicate passes, cache misses, dependency churn, over-eager invalidation, complexity hotspots.
 - `architecture-reviewer`: ownership boundaries, coupling, data flow, API contracts, rollback and migration paths.
 - `qol-vision-reviewer`: operator ergonomics, diagnostics, observability, local/dev feedback loops, output readability.
@@ -69,6 +70,7 @@ Read `references/review-checklists.md` whenever a review spans more than two dom
 
 - Run independent primary reviewers in parallel unless they share hard dependencies.
 - Run sequentially when one pass should inform another (for example, correctness before architecture, then performance, then adversarial).
+- Run `contextual-quick-wins-reviewer` after the primary risk reviewers have enough signal; keep it separate from must-fix review so nice-to-haves do not dilute blockers.
 - Execute `adversarial-reviewer` last; ask it to target the highest-impact prior findings and report only newly discovered or under-severity risks.
 - While reviewers run, do non-overlapping prep work:
   - capture diff slices
@@ -100,6 +102,7 @@ Actionability gates:
 - Report all `blocker` and `high` findings unless clearly disproven.
 - Report `medium` findings only when confidence is `high` or `medium` and there is a concrete required action.
 - Collapse `low` and `note` findings unless they reveal a pattern, explain residual risk, or are explicitly requested.
+- Report contextual quick wins only when they are evidence-backed, low risk, cheap to apply, and not already covered by a higher-severity finding.
 - Keep security, correctness, and release findings separate from style/noise.
 
 ## Agent Prompt Template
@@ -133,6 +136,25 @@ For each finding include:
 - rationale and impact
 - required_action
 - command to verify (if applicable)
+```
+
+Contextual quick wins reviewer prompt:
+
+```text
+Review the same patch for contextual nice-to-haves and unidentified quick wins only. Do not edit files.
+
+Report at most 5 items. Return "none" if there are no strong candidates.
+
+Only include opportunities that are evidence-backed, low risk, cheap to apply, and adjacent to the changed code.
+Do not report blockers, broad refactors, taste-only style preferences, or duplicates of security/correctness/release findings.
+
+For each item include:
+- stable id (`quick-win-<number>`)
+- confidence (high|medium|low)
+- file:line or line range
+- why it is useful now
+- concrete edit path
+- expected payoff
 ```
 
 Adversarial review prompt:
@@ -172,6 +194,7 @@ Review board result:
 - Confirmed medium: <findings only>
 - Confirmed low: <findings only>
 - Notes: <informational findings>
+- Contextual quick wins: <capped non-blocking opportunities or "none">
 - Must fix before commit: <items>
 - Deferred follow-ups: <items>
 - Risks now accepted by design: <items or "none">
@@ -202,6 +225,7 @@ Also include a machine-parseable block for downstream CI or follow-up agents:
     }
   ],
   "deferred_followups": [],
+  "contextual_quick_wins": [],
   "accepted_risks": [],
   "verification": []
 }

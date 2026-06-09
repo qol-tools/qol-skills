@@ -5,4 +5,5 @@ interface:
     Use code-review to run a read-only code review or multi-domain review board.
     Spawn independent domain reviewers, then synthesize findings into:
     verdict (pass | conditional | block), must-fix items, deferred follow-ups,
-    verification commands, and a compact machine-parseable result block.
+    contextual quick wins, verification commands, and a compact machine-parseable
+    result block.

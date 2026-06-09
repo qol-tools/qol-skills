@@ -77,6 +77,15 @@ Use these checklists to tailor agent prompts. Do not paste every item into every
 - Enforce deterministic ordering of logs and artifact names.
 - Ensure error text is attributable and actionable with next steps.
 
+## Contextual Quick Wins
+
+- Look for cheap improvements adjacent to the patch that reviewers would otherwise skip: clearer step summaries, narrower validation commands, missing dry-run examples, small naming clarifications, and low-effort guardrails.
+- Prefer opportunities that reduce future operator confusion, shorten feedback loops, or make the next review/test/debug session easier.
+- Report only items with a concrete edit path and low blast radius; each item should be doable in one focused sitting.
+- Do not duplicate security/correctness/release findings. If an item can break users or releases, escalate it to the proper domain reviewer instead of calling it a quick win.
+- Cap the list at 5 items, ordered by expected usefulness. Return "none" when there are no strong candidates.
+- Avoid speculative rewrites, broad refactors, taste-only style preferences, or improvements that require new product direction.
+
 ## Cutting-Edge Practices
 
 - Check for deprecated APIs or syntax in touched stacks.
