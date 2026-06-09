@@ -6,7 +6,13 @@ const AUTHOR = { name: "KMRH47" };
 const SHARED_FIELDS = ["name", "description", "version", "author"];
 
 function parseArgs(argv) {
-  const options = { check: false, root: path.resolve(__dirname, ".."), baseRef: process.env.PLUGIN_SYNC_BASE_REF };
+  const envBaseRef = process.env.PLUGIN_SYNC_BASE_REF;
+  const options = {
+    check: false,
+    root: path.resolve(__dirname, ".."),
+    baseRef: envBaseRef,
+    baseRefExplicit: false,
+  };
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -32,6 +38,7 @@ function parseArgs(argv) {
         throw new Error("--base-ref requires a git ref");
       }
       options.baseRef = value;
+      options.baseRefExplicit = true;
       index += 1;
       continue;
     }
@@ -110,27 +117,100 @@ function sameJson(left, right) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
-function validBaseRef(ref) {
-  return Boolean(ref) && !/^0+$/.test(ref);
+function hasBaseRef(ref) {
+  return ref !== undefined && ref !== null && ref !== "";
 }
 
-function gitChangedFiles(root, baseRef) {
-  const args = validBaseRef(baseRef)
-    ? ["diff", "--name-only", `${baseRef}..HEAD`, "--"]
-    : ["diff", "--name-only", "HEAD", "--"];
+function allZeroRef(ref) {
+  return /^0+$/.test(ref);
+}
+
+function unsafeBaseRef(ref) {
+  return ref.startsWith("-") || /[\x00-\x1F\x7F]/.test(ref);
+}
+
+function logValue(value, maxLength = 160) {
+  const text = String(value ?? "");
+  const clipped = text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
+  return JSON.stringify(clipped);
+}
+
+function gitErrorMessage(error) {
+  const message = error.stderr?.toString().trim() || error.message;
+  return logValue(message, 240);
+}
+
+function resolveBaseRef(root, baseRef) {
+  if (unsafeBaseRef(baseRef)) {
+    throw new Error(`Invalid manifest sync base ref ${logValue(baseRef)}: refs must not start with '-' or contain control characters`);
+  }
+
+  if (allZeroRef(baseRef)) {
+    return { ok: false, message: "all-zero ref" };
+  }
 
   try {
-    return new Set(execFileSync("git", args, { cwd: root, encoding: "utf8" })
-      .split(/\r?\n/)
-      .filter(Boolean)
-      .map((file) => file.split(path.sep).join("/")));
+    const commit = execFileSync(
+      "git",
+      ["rev-parse", "--verify", "--end-of-options", `${baseRef}^{commit}`],
+      { cwd: root, encoding: "utf8" },
+    ).trim();
+    return { ok: true, commit };
   } catch (error) {
-    if (validBaseRef(baseRef)) {
-      const message = error.stderr?.toString().trim() || error.message;
-      throw new Error(`Could not resolve manifest sync base ref ${baseRef}: ${message}`);
-    }
+    return { ok: false, message: gitErrorMessage(error) };
+  }
+}
 
-    return new Set();
+function unknownBaseRef(baseRef, message, options) {
+  if (options.baseRefExplicit) {
+    throw new Error(`Could not resolve manifest sync base ref ${logValue(baseRef)}: ${message}`);
+  }
+
+  console.warn(
+    `Could not resolve manifest sync base ref ${logValue(baseRef)}; changed-file provenance is unavailable: ${message}`,
+  );
+  return changedFilesResult(new Set(), { provenanceKnown: false });
+}
+
+function changedFilesResult(files, options = {}) {
+  return {
+    files,
+    provenanceKnown: options.provenanceKnown ?? true,
+  };
+}
+
+function readChangedFiles(root, diffArgs) {
+  return new Set(execFileSync("git", diffArgs, { cwd: root, encoding: "utf8" })
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map((file) => file.split(path.sep).join("/")));
+}
+
+function gitChangedFiles(root, baseRef, options = {}) {
+  if (!hasBaseRef(baseRef)) {
+    try {
+      return changedFilesResult(readChangedFiles(root, ["diff", "--name-only", "HEAD", "--"]));
+    } catch {
+      return changedFilesResult(new Set());
+    }
+  }
+
+  const resolved = resolveBaseRef(root, baseRef);
+
+  if (!resolved.ok) {
+    return unknownBaseRef(baseRef, resolved.message, options);
+  }
+
+  try {
+    return changedFilesResult(readChangedFiles(root, [
+      "diff",
+      "--name-only",
+      "--end-of-options",
+      `${resolved.commit}..HEAD`,
+      "--",
+    ]));
+  } catch (error) {
+    return unknownBaseRef(baseRef, gitErrorMessage(error), options);
   }
 }
 
@@ -201,8 +281,13 @@ function sharedBase(root, pluginName, claudeManifest, codexManifest, files, chan
     return baseFromManifest(root, pluginName, claudeManifest);
   }
 
-  const claudeChanged = changedFiles.has(relative(root, files.claude));
-  const codexChanged = changedFiles.has(relative(root, files.codex));
+  if (!changedFiles.provenanceKnown) {
+    failures.push(`Cannot resolve shared manifest metadata edits in plugins/${pluginName}: Claude and Codex metadata differ, but changed-file provenance is unavailable`);
+    return baseFromManifest(root, pluginName, claudeManifest);
+  }
+
+  const claudeChanged = changedFiles.files.has(relative(root, files.claude));
+  const codexChanged = changedFiles.files.has(relative(root, files.codex));
 
   if (claudeChanged && codexChanged) {
     failures.push(`Conflicting shared manifest metadata edits in plugins/${pluginName}`);
@@ -435,7 +520,9 @@ function run() {
   const pluginNames = directories(path.join(options.root, "plugins"));
   const changes = [];
   const failures = [];
-  const changedFiles = gitChangedFiles(options.root, options.baseRef);
+  const changedFiles = gitChangedFiles(options.root, options.baseRef, {
+    baseRefExplicit: options.baseRefExplicit,
+  });
   const plugins = pluginNames.map((pluginName) => syncPlugin(options.root, pluginName, options, changes, failures, changedFiles));
 
   if (failures.length > 0) {

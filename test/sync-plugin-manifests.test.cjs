@@ -1,5 +1,5 @@
 const assert = require("node:assert/strict");
-const { execFileSync } = require("node:child_process");
+const { execFileSync, spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
@@ -23,6 +23,45 @@ function rewriteWithCrlf(file) {
 
 function git(root, args) {
   execFileSync("git", args, { cwd: root, stdio: "pipe" });
+}
+
+function commandText(error) {
+  return [
+    error.stdout?.toString(),
+    error.stderr?.toString(),
+    error.message,
+  ].filter(Boolean).join("\n");
+}
+
+function assertCommandFails(fn, pattern) {
+  let error = null;
+  try {
+    fn();
+  } catch (caught) {
+    error = caught;
+  }
+
+  assert.ok(error, "expected command to fail");
+  assert.match(commandText(error), pattern);
+}
+
+function runScript(args, options = {}) {
+  return spawnSync("node", [script, ...args], {
+    env: options.env,
+    encoding: "utf8",
+  });
+}
+
+function expectScript(args, options = {}) {
+  const result = runScript(args, options);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  return result;
+}
+
+function expectScriptFailure(args, options = {}) {
+  const result = runScript(args, options);
+  assert.notEqual(result.status, 0, result.stderr || result.stdout);
+  return result;
 }
 
 function commitRepo(root) {
@@ -231,10 +270,135 @@ test("rejects unresolved explicit base refs", () => {
   codex.version = "0.5.0";
   writeJson(codexFile, codex);
 
-  assert.throws(
+  assertCommandFails(
     () => execFileSync("node", [script, "--root", root, "--base-ref", "deadbeef"], { stdio: "pipe" }),
-    /Command failed/,
+    /Could not resolve manifest sync base ref "deadbeef"/,
   );
+});
+
+test("ignores unresolved environment base refs when shared metadata matches", () => {
+  const root = makeRepo();
+
+  execFileSync("node", [script, "--root", root], { stdio: "pipe" });
+  commitRepo(root);
+
+  const result = expectScript(["--root", root, "--check"], {
+    env: {
+      ...process.env,
+      PLUGIN_SYNC_BASE_REF: "deadbeef",
+    },
+  });
+
+  assert.match(
+    result.stderr,
+    /Could not resolve manifest sync base ref "deadbeef"; changed-file provenance is unavailable/,
+  );
+});
+
+test("rejects unresolved environment base refs when shared metadata differs", () => {
+  const root = makeRepo();
+
+  execFileSync("node", [script, "--root", root], { stdio: "pipe" });
+  commitRepo(root);
+
+  const codexFile = path.join(root, "plugins", "beta", ".codex-plugin", "plugin.json");
+  const codex = readJson(codexFile);
+  codex.version = "0.5.0";
+  writeJson(codexFile, codex);
+
+  const result = expectScriptFailure(["--root", root], {
+    env: {
+      ...process.env,
+      PLUGIN_SYNC_BASE_REF: "deadbeef",
+    },
+  });
+
+  assert.match(
+    result.stderr,
+    /Cannot resolve shared manifest metadata edits in plugins\/beta/,
+  );
+});
+
+test("treats all-zero environment base refs as unknown provenance", () => {
+  const root = makeRepo();
+
+  execFileSync("node", [script, "--root", root], { stdio: "pipe" });
+  commitRepo(root);
+
+  const result = expectScript(["--root", root, "--check"], {
+    env: {
+      ...process.env,
+      PLUGIN_SYNC_BASE_REF: "0000000000000000000000000000000000000000",
+    },
+  });
+
+  assert.match(
+    result.stderr,
+    /Could not resolve manifest sync base ref "0000000000000000000000000000000000000000"; changed-file provenance is unavailable: all-zero ref/,
+  );
+});
+
+test("rejects all-zero environment base refs when shared metadata differs", () => {
+  const root = makeRepo();
+
+  execFileSync("node", [script, "--root", root], { stdio: "pipe" });
+  commitRepo(root);
+
+  const codexFile = path.join(root, "plugins", "beta", ".codex-plugin", "plugin.json");
+  const codex = readJson(codexFile);
+  codex.version = "0.5.0";
+  writeJson(codexFile, codex);
+
+  const result = expectScriptFailure(["--root", root], {
+    env: {
+      ...process.env,
+      PLUGIN_SYNC_BASE_REF: "0000000000000000000000000000000000000000",
+    },
+  });
+
+  assert.match(result.stderr, /changed-file provenance is unavailable: all-zero ref/);
+  assert.match(
+    result.stderr,
+    /Cannot resolve shared manifest metadata edits in plugins\/beta/,
+  );
+});
+
+test("rejects unsafe base refs before git diff", () => {
+  const root = makeRepo();
+
+  execFileSync("node", [script, "--root", root], { stdio: "pipe" });
+  commitRepo(root);
+
+  assertCommandFails(
+    () => execFileSync("node", [script, "--root", root, "--base-ref", "--relative=scripts"], { stdio: "pipe" }),
+    /Invalid manifest sync base ref "--relative=scripts"/,
+  );
+
+  const result = expectScriptFailure(["--root", root, "--check"], {
+    env: {
+      ...process.env,
+      PLUGIN_SYNC_BASE_REF: "--relative=scripts",
+    },
+  });
+
+  assert.match(result.stderr, /Invalid manifest sync base ref "--relative=scripts"/);
+});
+
+test("escapes unsafe base refs in diagnostics", () => {
+  const root = makeRepo();
+
+  execFileSync("node", [script, "--root", root], { stdio: "pipe" });
+  commitRepo(root);
+
+  const result = expectScriptFailure(["--root", root, "--check"], {
+    env: {
+      ...process.env,
+      PLUGIN_SYNC_BASE_REF: "bad\n::error::spoofed",
+    },
+  });
+
+  assert.match(result.stderr, /Invalid manifest sync base ref "bad\\n::error::spoofed"/);
+  assert.doesNotMatch(result.stderr, /\n::error::spoofed/);
 });
 
 test("accepts CRLF-normalized marketplace files from Windows checkouts", () => {
