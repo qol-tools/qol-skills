@@ -6,6 +6,15 @@
   },
   "plugins": [
     {
+      "name": "code-review",
+      "description": "Code review skill with read-only review orchestration, domain-focused reviewer agents, severity/confidence gates, adversarial passes, and machine-parseable synthesis.",
+      "source": "./plugins/code-review",
+      "version": "0.1.0",
+      "author": {
+        "name": "KMRH47"
+      }
+    },
+    {
       "name": "qol-plugin-alt-tab",
       "description": "Skills for the qol-tray alt-tab plugin: GPUI window list, X11/macOS preview capture, daemon lifecycle, settings UI, and release flow.",
       "source": "./plugins/qol-plugin-alt-tab",

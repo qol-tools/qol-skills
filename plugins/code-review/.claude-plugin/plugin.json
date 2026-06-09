@@ -1,0 +1,8 @@
+{
+  "name": "code-review",
+  "description": "Code review skill with read-only review orchestration, domain-focused reviewer agents, severity/confidence gates, adversarial passes, and machine-parseable synthesis.",
+  "version": "0.1.0",
+  "author": {
+    "name": "KMRH47"
+  }
+}

@@ -5,6 +5,18 @@
   },
   "plugins": [
     {
+      "name": "code-review",
+      "source": {
+        "source": "local",
+        "path": "./plugins/code-review"
+      },
+      "policy": {
+        "installation": "INSTALLED_BY_DEFAULT",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
       "name": "qol-plugin-alt-tab",
       "source": {
         "source": "local",
