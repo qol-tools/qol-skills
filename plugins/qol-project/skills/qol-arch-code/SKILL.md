@@ -292,7 +292,7 @@ echo 5 > .claude/bypass-qol-arch-code
 
 The marker is auto-consumed per edit; no cleanup needed.
 
-Implementation: Node.js (`bin/check-qol-arch-code.cjs`) — Claude Code requires Node, so the dependency is free across Linux, macOS, and Windows. Wired via `hooks/hooks.json` as `node ${CLAUDE_PLUGIN_ROOT}/bin/check-qol-arch-code.cjs` so Windows doesn't need a shebang interpreter.
+Implementation: Node.js (`bin/check-qol-arch-code.cjs`) — Claude Code requires Node, so the dependency is free across Linux, macOS, and Windows. Wired via `hooks/hooks.json` as `node "${CLAUDE_PLUGIN_ROOT}"/bin/check-qol-arch-code.cjs` so Windows doesn't need a shebang interpreter.
 
 ## Sibling skills
 

@@ -6,15 +6,15 @@
                 "hooks": [
                     {
                         "type": "command",
-                        "command": "node ${CLAUDE_PLUGIN_ROOT}/bin/check-qol-arch-code.cjs"
+                        "command": "node \"${CLAUDE_PLUGIN_ROOT}\"/bin/check-qol-arch-code.cjs"
                     },
                     {
                         "type": "command",
-                        "command": "node ${CLAUDE_PLUGIN_ROOT}/bin/check-qol-arch-cross-platform.cjs"
+                        "command": "node \"${CLAUDE_PLUGIN_ROOT}\"/bin/check-qol-arch-cross-platform.cjs"
                     },
                     {
                         "type": "command",
-                        "command": "node ${CLAUDE_PLUGIN_ROOT}/bin/check-qol-arch-cicd.cjs"
+                        "command": "node \"${CLAUDE_PLUGIN_ROOT}\"/bin/check-qol-arch-cicd.cjs"
                     }
                 ]
             }
@@ -24,7 +24,7 @@
                 "hooks": [
                     {
                         "type": "command",
-                        "command": "node ${CLAUDE_PLUGIN_ROOT}/bin/qol-mission-reminder.cjs"
+                        "command": "node \"${CLAUDE_PLUGIN_ROOT}\"/bin/qol-mission-reminder.cjs"
                     }
                 ]
             }

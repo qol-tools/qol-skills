@@ -1,7 +1,7 @@
 {
   "name": "workflow-nodes",
   "description": "Personal productivity rule for KMRH47: when work repeats, convert it into deterministic scriptable workflow nodes with explicit inputs, outputs, reports, and composable orchestrators instead of burning human memory and agent tokens.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": {
     "name": "KMRH47"
   }

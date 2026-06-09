@@ -6,23 +6,23 @@
                 "hooks": [
                     {
                         "type": "command",
-                        "command": "node ${CLAUDE_PLUGIN_ROOT}/bin/commit-skill-context.cjs"
+                        "command": "node \"${CLAUDE_PLUGIN_ROOT}\"/bin/commit-skill-context.cjs"
                     },
                     {
                         "type": "command",
-                        "command": "node ${CLAUDE_PLUGIN_ROOT}/bin/commit-deny-coauthor.cjs"
+                        "command": "node \"${CLAUDE_PLUGIN_ROOT}\"/bin/commit-deny-coauthor.cjs"
                     },
                     {
                         "type": "command",
-                        "command": "node ${CLAUDE_PLUGIN_ROOT}/bin/branch-deny-checkout-in-main-clone.cjs"
+                        "command": "node \"${CLAUDE_PLUGIN_ROOT}\"/bin/branch-deny-checkout-in-main-clone.cjs"
                     },
                     {
                         "type": "command",
-                        "command": "node ${CLAUDE_PLUGIN_ROOT}/bin/branch-deny-agent-checkout.cjs"
+                        "command": "node \"${CLAUDE_PLUGIN_ROOT}\"/bin/branch-deny-agent-checkout.cjs"
                     },
                     {
                         "type": "command",
-                        "command": "node ${CLAUDE_PLUGIN_ROOT}/bin/branch-deny-pid-branch-name.cjs"
+                        "command": "node \"${CLAUDE_PLUGIN_ROOT}\"/bin/branch-deny-pid-branch-name.cjs"
                     }
                 ]
             }
@@ -32,7 +32,7 @@
                 "hooks": [
                     {
                         "type": "command",
-                        "command": "node ${CLAUDE_PLUGIN_ROOT}/bin/qol-cicd-context.cjs"
+                        "command": "node \"${CLAUDE_PLUGIN_ROOT}\"/bin/qol-cicd-context.cjs"
                     }
                 ]
             }

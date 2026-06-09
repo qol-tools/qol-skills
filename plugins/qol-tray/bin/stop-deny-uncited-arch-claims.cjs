@@ -77,6 +77,21 @@ function readLastAssistantMessage(transcriptPath) {
     return '';
 }
 
+function textFromContent(content) {
+    if (typeof content === 'string') return content;
+    if (!Array.isArray(content)) return '';
+    return content
+        .filter((block) => block && block.type === 'text' && typeof block.text === 'string')
+        .map((block) => block.text)
+        .join('\n');
+}
+
+function lastAssistantText(payload) {
+    const direct = textFromContent(payload?.last_assistant_message);
+    if (direct) return direct;
+    return readLastAssistantMessage(payload?.transcript_path);
+}
+
 function findTriggers(text) {
     if (typeof text !== 'string' || text.length === 0) return [];
     return TRIGGER_PATTERNS.filter((re) => re.test(text));
@@ -151,14 +166,14 @@ function main() {
         return 0;
     }
 
-    const cwd = payload.cwd || process.cwd();
+    const cwd = payload.cwd || payload.project_dir || process.env.CLAUDE_PROJECT_DIR || process.cwd();
     if (!QOL_TOOLS_RE.test(cwd)) return 0;
 
     if (payload.stop_hook_active) return 0;
 
     if (consumeBypass(cwd)) return 0;
 
-    const text = readLastAssistantMessage(payload.transcript_path);
+    const text = lastAssistantText(payload);
     if (!text) return 0;
 
     const triggers = findTriggers(text);
@@ -176,7 +191,11 @@ function main() {
 }
 
 if (require.main === module) {
-    process.exit(main());
+    try {
+        process.exit(main());
+    } catch {
+        process.exit(0);
+    }
 }
 
 module.exports = {
@@ -187,4 +206,6 @@ module.exports = {
     consumeBypass,
     blockReason,
     readLastAssistantMessage,
+    textFromContent,
+    lastAssistantText,
 };

@@ -6,7 +6,7 @@
                 "hooks": [
                     {
                         "type": "command",
-                        "command": "node ${CLAUDE_PLUGIN_ROOT}/bin/inject-dev-recompile-context.cjs"
+                        "command": "node \"${CLAUDE_PLUGIN_ROOT}\"/bin/inject-dev-recompile-context.cjs"
                     }
                 ]
             }
@@ -17,7 +17,7 @@
                 "hooks": [
                     {
                         "type": "command",
-                        "command": "node ${CLAUDE_PLUGIN_ROOT}/bin/reflect-agent.cjs"
+                        "command": "node \"${CLAUDE_PLUGIN_ROOT}\"/bin/reflect-agent.cjs"
                     }
                 ]
             }
@@ -27,7 +27,7 @@
                 "hooks": [
                     {
                         "type": "command",
-                        "command": "node ${CLAUDE_PLUGIN_ROOT}/bin/stop-deny-uncited-arch-claims.cjs"
+                        "command": "node \"${CLAUDE_PLUGIN_ROOT}\"/bin/stop-deny-uncited-arch-claims.cjs"
                     }
                 ]
             }

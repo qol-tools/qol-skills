@@ -2,6 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert');
+const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -11,8 +12,18 @@ const {
     hasCitation,
     consumeBypass,
     readLastAssistantMessage,
+    lastAssistantText,
     TRIGGER_PATTERNS,
 } = require('../bin/stop-deny-uncited-arch-claims.cjs');
+
+const hookScript = path.join(__dirname, '..', 'bin', 'stop-deny-uncited-arch-claims.cjs');
+
+function runHook(payload) {
+    return execFileSync('node', [hookScript], {
+        input: JSON.stringify(payload),
+        encoding: 'utf8',
+    });
+}
 
 test('TRIGGER_PATTERNS exports a non-empty array of regexes', () => {
     assert.ok(Array.isArray(TRIGGER_PATTERNS));
@@ -142,6 +153,51 @@ test('readLastAssistantMessage returns empty when no assistant message exists', 
     } finally {
         fs.rmSync(tmp, { recursive: true });
     }
+});
+
+test('lastAssistantText prefers direct Stop hook payload text', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'stop-hook-'));
+    const transcript = path.join(tmp, 'transcript.jsonl');
+    fs.writeFileSync(
+        transcript,
+        JSON.stringify({ message: { role: 'assistant', content: 'from transcript' } }),
+    );
+    try {
+        assert.equal(
+            lastAssistantText({
+                last_assistant_message: 'from payload',
+                transcript_path: transcript,
+            }),
+            'from payload',
+        );
+    } finally {
+        fs.rmSync(tmp, { recursive: true });
+    }
+});
+
+test('CLI blocks direct Stop hook payload verdicts without transcript parsing', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'stop-hook-'));
+    const cwd = path.join(tmp, 'qol-tools', 'repo');
+    fs.mkdirSync(cwd, { recursive: true });
+    try {
+        const output = runHook({
+            cwd,
+            last_assistant_message: 'This is untestable without a refactor.',
+        });
+        const parsed = JSON.parse(output);
+        assert.equal(parsed.decision, 'block');
+        assert.match(parsed.reason, /untestable/);
+    } finally {
+        fs.rmSync(tmp, { recursive: true });
+    }
+});
+
+test('CLI exits cleanly on malformed JSON input', () => {
+    const output = execFileSync('node', [hookScript], {
+        input: '{',
+        encoding: 'utf8',
+    });
+    assert.equal(output, '');
 });
 
 test('consumeBypass deletes single-shot marker and returns true', () => {
