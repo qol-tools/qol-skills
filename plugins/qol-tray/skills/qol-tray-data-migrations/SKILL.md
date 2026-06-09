@@ -1,33 +1,40 @@
 ---
 name: qol-tray-data-migrations
-description: Use when a qol-tray release breaks the on-disk config layout or the cloud backend that stores user data, when adding a new migration between releases, or when debugging "the daemon starts but my data is missing / duplicated / stomped on". Defines the two-phase sliding-window migration pattern: each breaking release ships exactly one migration in the qol-migrations sibling crate, PreFlight runs sync before any feature reads config, PostAuth runs async after GitHub auth loads, and old migrations are deleted once they fall outside the supported upgrade window.
+description: >-
+  Use when a qol-tray release breaks the on-disk config layout or cloud-backed user data,
+  when adding a new migration between releases, or when debugging missing, duplicated,
+  or stomped user data after startup. Defines the two-phase sliding-window migration
+  pattern in the monorepo qol-migrations crate: PreFlight runs synchronously before
+  any feature reads config, PostAuth runs asynchronously after GitHub auth loads,
+  and old migrations are pruned once they fall outside the supported upgrade window.
 ---
 
 # qol-tray-data-migrations
 
 ## Where things live
 
-- Crate: sibling repo of qol-tray inside the qol-tools workspace (`<workspace>/qol-migrations/` on the main clone, `<workspace>/worktrees/<feat>/qol-migrations/` inside a feature lane).
+- Crate: `libs/qol-migrations/` in the qol-monorepo.
+- Root workspace dependency: `Cargo.toml` has `qol-migrations = { path = "libs/qol-migrations" }`.
+- Host dependency: `apps/qol-tray/Cargo.toml` uses `qol-migrations.workspace = true`.
+- PreFlight call site: `apps/qol-tray/src/main.rs`.
+- PostAuth call sites: `apps/qol-tray/src/main.rs`, `apps/qol-tray/src/migrations_startup.rs`, and `apps/qol-tray/src/features/github_auth/service.rs`.
+- Standalone binary: `apps/qol-tray/src/migrate/main.rs`.
 
-## Cargo dependency form (read this before touching qol-tray's Cargo.toml)
+## Cargo dependency form (read this before touching Cargo.toml)
 
-qol-tray declares qol-migrations as a **path dep**, always:
+qol-tray consumes qol-migrations through the workspace dependency, always:
 
 ```toml
-qol-migrations = { path = "../qol-migrations" }
+# Cargo.toml
+[workspace.dependencies]
+qol-migrations = { path = "libs/qol-migrations" }
+
+# apps/qol-tray/Cargo.toml
+[dependencies]
+qol-migrations.workspace = true
 ```
 
-NEVER as `git = "..." branch = "..."`. Rationale:
-
-- `../qol-migrations` is sibling-relative, so it resolves correctly from both the main clone (`qol-tools/qol-tray/` -> `qol-tools/qol-migrations/`) AND from any feature worktree (`worktrees/<feat>/qol-tray/` -> `worktrees/<feat>/qol-migrations/`). Worktree-aware for free.
-- A `git + branch` dep forces a push every time qol-migrations changes during local iteration, pins to a SHA in `Cargo.lock` (so `cargo update -p qol-migrations` is needed each cycle), and breaks the symmetry above.
-- "Until pushed to GitHub" is misleading shorthand from earlier docs. There is no flip to a git dep on release - the path dep stays. Each repo ships from its own `main`, independently versioned; qol-tray consumers (CI, distros, end-user installs) build from qol-tray's source tree, which checks out the matching qol-migrations sibling. No release-time substitution is needed.
-
-If you find a `git = "https://github.com/qol-tools/qol-migrations"` form in `qol-tray/Cargo.toml`, treat it as drift to revert, not as a deliberate choice.
-
-- qol-tray PreFlight call site: `qol-tray/src/main.rs`, near `run_startup_cleanup` (PreFlight runs immediately BEFORE housekeeping; housekeeping populates whatever the migration left behind).
-- qol-tray PostAuth call site: after GitHub auth loads. TBD: exact file path; the assembly agent introducing the first cloud migration picks where in the boot flow this lands. Search for `qol_migrations::run_post_auth` once the assembly agent's branch is merged.
-- Standalone binary: `qol-tray-migrate` at `qol-tray/src/migrate/main.rs`. Thin wrapper for `--dry-run` debugging or running against a custom config dir. Shares the same registries as the daemon path.
+Do not replace this with `git = "..."`, `branch = "..."`, or a stale sibling path such as `../qol-migrations`. In the monorepo layout, `libs/qol-migrations` is the source of truth and Cargo.lock should resolve it as a path workspace crate.
 
 ## Two-phase boot model
 
@@ -40,13 +47,14 @@ Call shape in qol-tray:
 
 ```rust
 // pre-flight (sync, in main.rs before housekeeping)
-qol_migrations::run_pre_flight(&config_dir)?;
+qol_migrations::run_pre_flight(&config_dir, env!("CARGO_PKG_VERSION"))?;
 
 // post-auth (async, after github_auth loads)
 qol_migrations::run_post_auth(&MigrationContext {
     config_dir,
     github_token,
     http,
+    host_version: env!("CARGO_PKG_VERSION"),
 }).await?;
 ```
 
@@ -81,7 +89,10 @@ src/
   transforms/gist_v1_to_layout.rs  pure gist JSON -> {path -> bytes} map
   portability/                   unicode.rs, paths.rs, gitattributes.rs
   v3_15_to_v3_16/                file migration (PreFlight)
-  v3_15_to_v3_16_gist_to_repo/   cloud migration (PostAuth) - added by parallel assembly agent
+  v3_15_to_v3_16_gist_to_repo/   cloud migration (PostAuth)
+  v3_16_to_v3_17_device_to_os/   file migration (PreFlight)
+  v3_17_to_v3_18_plugin_configs_by_os/  file migration (PreFlight)
+  v3_18_to_v3_19_declared_plugin_id/    file migration (PreFlight)
 fixtures/<future migration>/before/, after/  (recommended for big migrations)
 ```
 
@@ -89,7 +100,7 @@ fixtures/<future migration>/before/, after/  (recommended for big migrations)
 
 1. **Pick the trait.** `FileMigration` for on-disk changes (sync, PreFlight). `CloudMigration` for anything touching a remote (async, PostAuth, gets `MigrationContext`). A release needing both ships two migrations.
 2. **Folder-per-migration default.** `mkdir src/vN_to_vNplus1_<short_name>/` and create `mod.rs`. Aux files (transforms, schema converters, split tests) live in the same folder so pruning is a single `rm -rf`.
-3. **Register it.** Append to `file_registry()` or `cloud_registry()` in `src/lib.rs`. Registry order is application order; never reorder.
+3. **Register it.** Append to `PreFlightRegistry::current()` or `PostAuthRegistry::current()` in `src/lib.rs`. Registry order is application order; never reorder.
 4. **Tests.** Cover both `applies()` paths (true AND false) and a full `migrate()` round trip asserting archive contents and resulting config-dir or remote state. Cloud migrations use `MemoryGistStore`. Inline tests in `mod.rs` until ~150 lines, then split into `tests.rs`.
 5. **Prune.** If this release pushes a migration outside the supported window, `rm -rf src/vN_oldest/ fixtures/vN_oldest/` in the same commit. Drop the entry from the registry. Bump `qol-migrations` minor version.
 
