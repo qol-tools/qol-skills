@@ -16,7 +16,8 @@ Default safety posture: read-only. Do not edit files or write comments unless th
 ## Preconditions
 
 - Spawn agents only when the user explicitly asks for review-board style delegation.
-- If multi-agent support is unavailable, use `tool_search` to discover it before retrying.
+- In Codex, explicit asks include phrases like "spawn agents", "review board", "delegate reviewers", "parallel reviewers", "one agent per point", or naming multiple reviewer agents to run.
+- If Codex multi-agent tools are not visible, use `tool_search` with `multi-agent spawn_agent Codex`, then use the returned `multi_agent_v1` tools.
 - Use one canonical reviewer catalog for all runtimes. Runtime-specific agent files may exist, but they are generated/adapted from this skill contract.
 - Define review scope before spawning:
   - changed files
@@ -27,13 +28,23 @@ Default safety posture: read-only. Do not edit files or write comments unless th
 - Set follow-up reviewers with only the smallest set of relevant findings.
 - Keep any branch or checkout actions read-only unless explicitly permitted.
 
+## Runtime routing
+
+Keep review semantics shared, but keep subagent execution runtime-specific.
+
+- In Codex, read `references/codex-adapter.md` before spawning reviewer agents.
+- In Claude Code, read `references/claude-code-adapter.md` before spawning reviewer agents.
+- Do not mix Claude Code `agents/*.md` assumptions into Codex execution.
+- Do not mix Codex `multi_agent_v1` tool calls into Claude Code execution.
+- If runtime-specific adapter guidance conflicts with this shared skill, this shared skill owns the review contract and the adapter owns the mechanics.
+
 ## Unified Runtime Approach
 
 Use the same review semantics in Claude Code and Codex, but adapt execution to what the runtime actually supports.
 
 - Canonical source: this `SKILL.md` plus `references/review-checklists.md`.
-- Claude Code adapter: may use real `agents/*.md` specialist files with frontmatter such as `model: haiku` or `model: opus`, when those files are present in the plugin.
-- Codex adapter: do not assume `.codex/agents/*.toml` named-agent configs apply. Local testing showed `subagent://name` can spawn a generic child while ignoring the TOML instructions/model. For Codex, express reviewer roles in the spawn prompt and assume the child inherits the current Codex model unless a future local smoke test proves otherwise.
+- Claude Code adapter: `references/claude-code-adapter.md`.
+- Codex adapter: `references/codex-adapter.md`.
 - Model preferences are advisory metadata, not correctness requirements. The review must still work when all reviewers run on the current parent model.
 - If a generated runtime manifest disagrees with this skill, this skill wins.
 
@@ -113,6 +124,8 @@ Read `references/review-checklists.md` whenever a review spans more than two dom
 
 - Run `review-router` first when reviewer choice is not obvious.
 - Run independent primary reviewers in parallel unless they share hard dependencies.
+- In Codex, "run independent reviewers in parallel" means use the Codex adapter, not parent-thread roleplay.
+- In Claude Code, "run independent reviewers in parallel" means use the Claude Code adapter, not parent-thread roleplay.
 - Run sequentially when one pass should inform another (for example, correctness before architecture, then performance, then adversarial).
 - Run `contextual-quick-wins-reviewer` after the primary risk reviewers have enough signal; keep it separate from must-fix review so nice-to-haves do not dilute blockers.
 - Execute `adversarial-reviewer` last; ask it to target the highest-impact prior findings and report only newly discovered or under-severity risks.
