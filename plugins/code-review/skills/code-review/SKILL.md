@@ -51,6 +51,30 @@ Use the same review semantics in Claude Code and Codex, but adapt execution to w
 - For workflow/release changes, capture workflow permissions, triggers, and guard conditions explicitly.
 - Record command constraints that could affect review validity (network, root access, credentials, caches).
 
+## Command index (reviewer entry points)
+
+Use these as deterministic review commands. Each command name maps to one reviewer role; scope/context is provided externally.
+
+- `review-router`: pick the smallest useful reviewer set from diff shape, touched systems, and risk boundaries.
+- `security-reviewer`: trust boundaries, command execution surfaces, secrets, permissions, and workflow hardening.
+- `correctness-reviewer`: regressions, edge cases, idempotency, migration, release semantics, and contract drift.
+- `performance-reviewer`: complexity, process/fan-out, memory and I/O scaling, and avoidable recomputation.
+- `quality-reviewer`: readability, naming, diagnostics, maintainability, and consistency with repo conventions.
+- `requirements-reviewer`: explicit requirement coverage, acceptance criteria, and assumption gaps.
+- `contextual-quick-wins-reviewer`: low-risk, low-cost improvements adjacent to the patch.
+- `redundancy-reviewer`: duplication and reuse checks, redundant state/logic checks, and unnecessary parallelism.
+- `history-reviewer`: backward compatibility, migration/deprecation continuity, and docs/changelog alignment.
+- `style-reviewer`: context-aware style fit in target area (e.g., `qol-tray` UI vs CLI conventions).
+- `optimization-reviewer`: cache misses, duplicate parsing, dependency churn, and hotspot complexity.
+- `architecture-reviewer`: ownership boundaries, coupling, and data-flow integrity.
+- `qol-vision-reviewer`: operator ergonomics, observability, and useful diagnostics.
+- `cutting-edge-best-practices-reviewer`: deprecations, platform drift, and reproducibility changes.
+- `tests-qa-reviewer`: coverage adequacy, flaky behavior, fixture quality, and oracle strength.
+- `release-ci-reviewer`: triggers, permissions, checkout semantics, artifact publishing, and rerun idempotency.
+- `ux-api-reviewer`: CLI/API compatibility, error UX, and config semantics.
+- `compliance-and-risk-reviewer`: operational policy, provenance, and auditability risks.
+- `adversarial-reviewer`: attack-path validation and assumption-breaking scenarios.
+
 ## Reviewer Board
 
 Use the smallest set that matches the request and risk level.
