@@ -13,11 +13,16 @@ The skill is for review orchestration, not implementation, unless the user expli
 
 Default safety posture: read-only. Do not edit files or write comments unless the user explicitly requests edits.
 
-## Preconditions
+## Board Mode Contract
 
-- Spawn agents only when the user explicitly asks for review-board style delegation.
-- In Codex, explicit asks include phrases like "spawn agents", "review board", "delegate reviewers", "parallel reviewers", "one agent per point", or naming multiple reviewer agents to run.
+- Treat an explicit `$code-review`, `$code-review:code-review`, or "use the code-review skill" invocation as review-board mode unless the user explicitly asks for a solo/no-agent review.
+- Spawn agents for review-board mode. Do not perform a parent-thread solo review and present it as a code-review skill result.
+- In Codex, explicit asks include phrases like "spawn agents", "review board", "delegate reviewers", "parallel reviewers", "one agent per point", naming multiple reviewer agents to run, or invoking the code-review skill by name.
+- In Codex review-board mode, read `references/codex-adapter.md` before reviewer selection and obey it as mandatory execution mechanics.
 - If Codex multi-agent tools are not visible, use `tool_search` with `multi-agent spawn_agent Codex`, then use the returned `multi_agent_v1` tools.
+- If real agents cannot be spawned in review-board mode, start the final answer with `AGENT BOARD NOT RUN: <reason>`, set verdict to `invalid`, and do not silently fall back to a normal review.
+- The final review-board output must include reviewer names and agent ids. If no agent ids are present, the code-review skill contract was not satisfied.
+- Spawn agents only after defining the review scope.
 - Use one canonical reviewer catalog for all runtimes. Runtime-specific agent files may exist, but they are generated/adapted from this skill contract.
 - Define review scope before spawning:
   - changed files
@@ -246,6 +251,7 @@ Final output shape (ordered by risk):
 Review board result:
 - Scope: <scope summary>
 - Verdict: <pass | conditional | block>
+- Agent board: <reviewer -> agent id/status list; required in board mode>
 - Confirmed blockers: <findings only>
 - Confirmed high: <findings only>
 - Confirmed medium: <findings only>
@@ -264,6 +270,13 @@ Also include a machine-parseable block for downstream CI or follow-up agents:
 ```json
 {
   "verdict": "pass|conditional|block",
+  "agent_board": [
+    {
+      "reviewer": "correctness-reviewer",
+      "agent_id": "agent-id-returned-by-runtime",
+      "status": "completed|failed|closed"
+    }
+  ],
   "counts": {
     "blocker": 0,
     "high": 0,

@@ -2,12 +2,10 @@ interface:
   display_name: "Code Review"
   short_description: "Review code with focused agents."
   default_prompt: |
-    Use code-review to run a read-only code review or multi-domain review board.
-    Route first with the lightweight reviewer selector unless the user named reviewers.
-    Use the canonical reviewer catalog from the skill. In Claude Code, real agent
-    files may provide model-specific execution. In Codex, prompt reviewer roles
-    explicitly and do not assume named .codex/agents TOML files are applied.
-    Spawn independent domain reviewers only when useful, then synthesize findings into:
-    verdict (pass | conditional | block), must-fix items, deferred follow-ups,
-    contextual quick wins, verification commands, and a compact machine-parseable
-    result block.
+    Use code-review to run a read-only code review. If the user invokes
+    $code-review or asks for the code-review skill without requesting solo mode,
+    run review-board mode: read the runtime adapter, spawn real reviewer agents,
+    record reviewer agent ids, then synthesize findings. In Codex, use
+    multi_agent_v1 via tool_search if needed; do not simulate agents in the
+    parent thread. If agents cannot be spawned, report AGENT BOARD NOT RUN and
+    verdict invalid instead of silently falling back.
