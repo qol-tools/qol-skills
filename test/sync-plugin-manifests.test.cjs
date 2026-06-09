@@ -17,6 +17,10 @@ function readJson(file) {
   return JSON.parse(fs.readFileSync(file, "utf8"));
 }
 
+function rewriteWithCrlf(file) {
+  fs.writeFileSync(file, fs.readFileSync(file, "utf8").replace(/\n/g, "\r\n"));
+}
+
 function git(root, args) {
   execFileSync("git", args, { cwd: root, stdio: "pipe" });
 }
@@ -231,4 +235,14 @@ test("rejects unresolved explicit base refs", () => {
     () => execFileSync("node", [script, "--root", root, "--base-ref", "deadbeef"], { stdio: "pipe" }),
     /Command failed/,
   );
+});
+
+test("accepts CRLF-normalized marketplace files from Windows checkouts", () => {
+  const root = makeRepo();
+
+  execFileSync("node", [script, "--root", root], { stdio: "pipe" });
+  rewriteWithCrlf(path.join(root, ".claude-plugin", "marketplace.json"));
+  rewriteWithCrlf(path.join(root, ".agents", "plugins", "marketplace.json"));
+
+  execFileSync("node", [script, "--root", root, "--check"], { stdio: "pipe" });
 });

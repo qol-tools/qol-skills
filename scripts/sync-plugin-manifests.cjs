@@ -60,6 +60,10 @@ function jsonText(value) {
   })}\n`;
 }
 
+function normalizeNewlines(text) {
+  return text.replace(/\r\n/g, "\n");
+}
+
 function relative(root, file) {
   return path.relative(root, file).split(path.sep).join("/");
 }
@@ -68,7 +72,7 @@ function writeJson(root, file, value, options, changes) {
   const next = jsonText(value);
   const current = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : null;
 
-  if (current === next) {
+  if (current !== null && normalizeNewlines(current) === next) {
     return;
   }
 
