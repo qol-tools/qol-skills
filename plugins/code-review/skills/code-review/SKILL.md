@@ -13,6 +13,8 @@ The skill is for review orchestration, not implementation, unless the user expli
 
 Default safety posture: read-only. Do not edit files or write comments unless the user explicitly requests edits.
 
+Always persist the finished review to a temporary markdown file via the bundled writer (see "Persisting the review"). This applies to every run, board or solo, pass or block. Writing that one temp artifact is the sole exception to the read-only posture; it never touches the reviewed codebase.
+
 ## Board Mode Contract
 
 - Treat an explicit `$code-review`, `$code-review:code-review`, or "use the code-review skill" invocation as review-board mode unless the user explicitly asks for a solo/no-agent review.
@@ -302,3 +304,37 @@ Also include a machine-parseable block for downstream CI or follow-up agents:
 ```
 
 Required rule: security/correctness/release blockers must appear before any lower-priority notes.
+
+After producing the output above, persist it (see "Persisting the review"). The saved file path is part of the deliverable you report back.
+
+## Persisting the review (required)
+
+Every completed review ends by writing the full review to a temporary markdown file. Do not leave the review only in the chat transcript. The chat reply is a summary; the temp file is the durable artifact a human or a follow-up agent reads.
+
+This is a workflow node, not a manual step. A bundled writer owns the canonical temp path and emits a sidecar report, so you never hand-invent a path or reformat by hand. Resolve `scripts/save-review.cjs` against this skill's base directory (the path announced as "Base directory for this skill"; in Claude Code that is `${CLAUDE_PLUGIN_ROOT}/skills/code-review`).
+
+1. Put the full final review (the human-readable result plus the machine-parseable JSON block) into a file, or stream it on stdin.
+2. Run the writer:
+
+   ```bash
+   node "<skill-dir>/scripts/save-review.cjs" \
+     --verdict <pass|conditional|block|invalid> \
+     --slug <short-scope-slug> \
+     --in <path-to-review.md>
+   # or stream it:
+   #   <review-producing command> | node "<skill-dir>/scripts/save-review.cjs" --verdict <v> --slug <slug>
+   ```
+
+3. The writer creates `<tmpdir>/code-review/<run-id>/review.md` plus `report.json`, prints the absolute `review:` path, and prints the next command. Report that `review:` path to the user as part of the deliverable.
+
+Node contract:
+
+```text
+input : review markdown via --in <file> or stdin; --verdict and --slug modifiers;
+        optional --json <file> to persist the machine-parseable block as summary.json;
+        optional --out-dir / --run-id overrides; optional CODE_REVIEW_OUT_DIR env to relocate the base
+work  : compute a stable run id, create the temp run dir, write review.md (+ summary.json), write report.json
+output: review.md (primary), report.json, optional summary.json; the canonical path printed to stdout
+```
+
+The writer fails early if the review content is empty. Node is always available in both runtimes, so this step has no extra dependency.
