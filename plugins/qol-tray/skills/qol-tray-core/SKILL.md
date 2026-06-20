@@ -10,6 +10,14 @@ and the plugin-author contracts. It deliberately holds no file inventories or
 line numbers - those rot. Read the code (or the contract files) for the current
 shape; this skill holds the durable rules.
 
+> **Full cited reference:** the qol-monorepo carries a comprehensive
+> plugin-contract hub at `docs/plugin-contract.md` - every host<->plugin channel,
+> the manifest/config/runtime schemas and their validation invariants, the action
+> dispatch path, the process lifecycle and host-death watchdog, an injected-env-var
+> table, a footgun index, and an add-a-hotkey-action recipe, all cited to
+> `file:line`. It lives next to the code (so its citations are maintained with the
+> code); use it as the detailed map, and keep this skill for the durable rules.
+
 Adjacent durable knowledge lives in dedicated skills - do not duplicate it here:
 
 | Topic | Skill |
