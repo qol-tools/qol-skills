@@ -61,19 +61,54 @@ Every binary must support:
 
 ```text
 <binary> help
-<binary> help <command>
+<binary> help <command-path>
+<binary> <command-path> help
 <binary> doctor
+<binary> --json doctor
 <binary> doctor --json
 ```
 
 Rules:
 
 - `help` is a real command, not only `--help`. `--help` may alias to `help`.
-- `help <command>` documents command intent, important flags, output behavior, and exit behavior.
+- `help` may appear as the first token for general/lookup help or as the final token for contextual help.
+- `help <command-path>` and `<command-path> help` are equivalent.
+- `help` in the middle of a command path is invalid. Reject it with guidance instead of guessing.
+- Contextual help documents command intent, important flags, output behavior, and exit behavior.
 - `doctor` is read-only by default. Repairs require an explicit flag such as `doctor --fix`.
-- `doctor --json` prints parseable JSON to stdout and nothing else to stdout.
+- `--json` is a global output-mode flag, not a doctor-specific converter. It may appear before or after the command path.
+- `--json` is valid only for commands that explicitly register a structured JSON interface.
+- Reject `--json` before running a command that does not support structured output.
+- `doctor` must support JSON because host doctor aggregation depends on it.
 - Normal human output goes to stdout; diagnostics, progress, and logs go to stderr.
+- JSON mode prints parseable JSON to stdout and nothing else to stdout.
 - Successful user cancellation (for example pressing Esc during selection) exits `0`; operational failures exit non-zero with an actionable message.
+
+Examples:
+
+```text
+<binary> help doctor
+<binary> doctor help
+<binary> help config show
+<binary> config show help
+<binary> --json doctor
+<binary> doctor --json
+```
+
+All are valid. `<binary> config help show` is invalid because `help` is in the middle.
+
+Do not implement `--json` as "serialize whatever happened." A command supports JSON only when it declares a stable structured output contract:
+
+```rust
+Command::new("doctor")
+    .run_human(run_doctor_human)
+    .run_json(run_doctor_json)
+
+Command::new("settings")
+    .run_human(open_settings)
+```
+
+`qol-headless` owns the output-mode gate and should return a standard unsupported-output error for commands without a JSON handler.
 
 Recommended universal commands:
 
