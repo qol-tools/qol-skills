@@ -1,6 +1,6 @@
 ---
 name: qol-arch-code
-description: Use when designing or refactoring Rust plugins/libs that need cross-platform support. Defines the strategy-pattern compartmentalization (platform/ subfolders, trait + per-OS impls) that replaces scattered #[cfg(target_os)] gates and compile_error! fallbacks. Triggers on platform-specific code, multi-OS support, plugin platform modules, OS-named files, or any time you see #[cfg(target_os)] sprawl. For symbol/import hygiene that prevents dead_code warnings under `-D warnings`, see `qol-arch-cross-platform`. For CI/release workflow contracts that enforce cross-platform builds, see `qol-arch-cicd`.
+description: Use when designing or refactoring Rust plugins/libs that need cross-platform support or headless-first CLI/plugin contracts. Defines strategy-pattern compartmentalization (platform/ subfolders, trait + per-OS impls), headless binary layering, mandatory help/doctor commands, and plugin doctor output contracts. Triggers on platform-specific code, multi-OS support, plugin platform modules, OS-named files, headless CLI design, plugin runtime action design, doctor commands, or any time you see #[cfg(target_os)] sprawl. For symbol/import hygiene that prevents dead_code warnings under `-D warnings`, see `qol-arch-cross-platform`. For CI/release workflow contracts that enforce cross-platform builds, see `qol-arch-cicd`.
 ---
 
 # qol-arch-code: Cross-Platform Strategy Pattern (Code Layout)
@@ -13,6 +13,134 @@ This makes the codebase:
 - Compile on every host (no `compile_error!` blocking macOS devs)
 - Easy to verify in CI on a matrix
 - Clear about which behavior is genuinely platform-specific vs accidentally so
+
+## Headless-first feature shape
+
+Prefer applications and plugins that work as standalone headless tools first. The qol-tray integration should be an adapter over that tool, not where the feature's core behavior lives.
+
+Layer Rust plugins like this:
+
+```
+src/
+  lib.rs             # public feature API and module wiring
+  main.rs            # tiny CLI entrypoint
+  cli.rs             # argument parsing and command UX
+  <feature>.rs       # headless domain flow; no qol-tray assumptions
+  platform/          # OS-specific implementation boundary
+```
+
+The headless layer owns useful behavior: lifecycle, validation, state machines, file planning, domain errors, and testable pure helpers. Adapters own context: CLI args, plugin action ids, host-injected config, tray settings URLs, and user-facing presentation.
+
+For plugins:
+
+- Keep `plugin.toml` runtime actions mapped to CLI/API commands the binary also supports standalone.
+- Load host-injected qol config only in the adapter layer; pass typed config into the headless API.
+- Keep plugin action names out of domain modules unless they are genuine domain commands.
+- Put system UI and OS APIs behind `platform/`; put qol UI URLs and manifest-specific behavior behind a `qol`, `plugin`, or `adapter` module when they are not generally useful CLI behavior.
+- Do not force every command into one generic engine. Share primitives such as geometry, path planning, and state parsing; keep different lifecycles as explicit modules.
+
+Good dependency direction:
+
+```text
+main.rs -> cli/plugin adapter -> headless feature API -> platform facade
+```
+
+Bad dependency direction:
+
+```text
+feature logic -> plugin action ids / tray settings / env contract
+```
+
+This keeps the tool useful from a terminal, script, test, or future host while still letting qol-tray consume the same API.
+
+## Headless CLI contract
+
+Every application/plugin binary is a standalone CLI first. `qol-tray` invokes that CLI; it does not own the feature.
+
+Every binary must support:
+
+```text
+<binary> help
+<binary> help <command>
+<binary> doctor
+<binary> doctor --json
+```
+
+Rules:
+
+- `help` is a real command, not only `--help`. `--help` may alias to `help`.
+- `help <command>` documents command intent, important flags, output behavior, and exit behavior.
+- `doctor` is read-only by default. Repairs require an explicit flag such as `doctor --fix`.
+- `doctor --json` prints parseable JSON to stdout and nothing else to stdout.
+- Normal human output goes to stdout; diagnostics, progress, and logs go to stderr.
+- Successful user cancellation (for example pressing Esc during selection) exits `0`; operational failures exit non-zero with an actionable message.
+
+Recommended universal commands:
+
+```text
+<binary> version
+<binary> doctor --fix
+```
+
+Command names should be explicit domain verbs. Host action ids map to CLI commands; they are not the domain model.
+
+Good:
+
+```toml
+actions = { record = ["toggle"], settings = ["settings"] }
+```
+
+Avoid leaking tray semantics into the feature:
+
+```text
+recording.rs -> "tray record action fired"
+```
+
+Prefer:
+
+```text
+recording.rs -> toggle_recording(config)
+```
+
+Config precedence for standalone-capable plugins:
+
+```text
+1. explicit CLI flags
+2. explicit --config path
+3. host-injected qol config, when present
+4. standalone user config
+5. defaults
+```
+
+`doctor` should check at least:
+
+```text
+platform_supported
+required_binaries
+permissions
+config_readable
+runtime_dirs
+external_services
+```
+
+Use this JSON shape for host aggregation:
+
+```json
+{
+  "plugin_id": "plugin-screen-recorder",
+  "status": "ok|warn|fail",
+  "checks": [
+    {
+      "id": "required_binaries",
+      "status": "warn",
+      "message": "ffmpeg is missing; non-MOV conversion is unavailable",
+      "fix": "Install ffmpeg"
+    }
+  ]
+}
+```
+
+`qol-tray doctor` should be able to invoke each installed plugin's `doctor --json` command and render per-plugin results without hardcoding plugin-specific diagnostic logic in the host.
 
 ## Required structure
 
