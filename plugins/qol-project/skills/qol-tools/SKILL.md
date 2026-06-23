@@ -19,7 +19,7 @@ Repos are siblings under the qol-tools workspace directory — typically `~/repo
 - `qol-plugin-api/` — SDK crate plugins depend on. Runtime message types, daemon protocol helpers.
 - `qol-runtime/` — shared runtime protocol crate.
 - `qol-cicd/` — reusable GitHub Actions workflows (plugin-release.yml, plugin-version.yml, qol-tray-release.yml, auto-label-plugin.yml).
-- `plugin-*/` — individual plugins (plugin-alt-tab, plugin-launcher, plugin-lights, plugin-os-themes, plugin-pointz, plugin-screen-recorder, plugin-template, plugin-window-actions, ...). Each is its own cargo binary + `plugin.toml` manifest.
+- `plugin-*/` — individual plugins (plugin-alt-tab, plugin-launcher, plugin-lights, plugin-os-themes, plugin-pointz, qol-shot, plugin-template, plugin-window-actions, ...). Each is its own cargo binary + `plugin.toml` manifest.
 - `qol-frecency/`, `qol-color/`, `qol-search/`, `qol-fx/`, ... — smaller shared-library crates.
 
 See `workspace/` for the canonical layout; it's the only repo that holds cross-org knowledge.

@@ -1,6 +1,6 @@
 ---
 name: qol-shared-libs
-description: Use when adding new functionality, dependencies, or platform-specific code to any qol-tray plugin. MUST check shared libraries before adding code directly to a plugin. Triggers on any change to plugin-alt-tab, plugin-launcher, plugin-keyremap, plugin-lights, plugin-window-actions, plugin-os-themes, plugin-screen-recorder, plugin-pointz.
+description: Use when adding new functionality, dependencies, or platform-specific code to any qol-tray plugin. MUST check shared libraries before adding code directly to a plugin. Triggers on any change to plugin-alt-tab, plugin-launcher, plugin-keyremap, plugin-lights, plugin-window-actions, plugin-os-themes, qol-shot, plugin-pointz.
 ---
 
 # Shared Library Check
@@ -30,7 +30,7 @@ Before adding functionality to a plugin, check if it belongs in a shared library
 | plugin-os-themes | qol-plugin-api, qol-config |
 | plugin-pointz | qol-plugin-api |
 | plugin-window-actions | qol-config |
-| plugin-screen-recorder | qol-config |
+| qol-shot | qol-config |
 | plugin-lights | (none) |
 
 ## Before Adding Code to a Plugin

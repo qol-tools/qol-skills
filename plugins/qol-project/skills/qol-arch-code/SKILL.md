@@ -162,7 +162,7 @@ Use this JSON shape for host aggregation:
 
 ```json
 {
-  "plugin_id": "plugin-screen-recorder",
+  "plugin_id": "qol-shot",
   "status": "ok|warn|fail",
   "checks": [
     {
