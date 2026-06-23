@@ -48,6 +48,8 @@ when a newer version is available, then `Quit`. There are no per-plugin tray ite
 
 ```toml
 [plugin]
+id = "plugin-name"               # mutable display label
+uid = "<uuid-v4>"                # frozen identity, authored once, never changed
 name = "Plugin Name"
 description = "Description"
 version = "1.0.0"
@@ -163,7 +165,8 @@ field kinds; expand the kind catalog if a field kind is missing.
 
 qol-tray grabs global hotkeys at the X11 level (`src/hotkeys/`), intercepting them
 before the window manager. Bindings live in `~/.config/qol-tray/hotkeys.json`
-(`id`, `key`, `plugin_id`, `action`, `enabled`); key/modifier names are defined in
+(`id`, `key`, `plugin_uid`, `action`, `enabled`; legacy `plugin_id` still read via
+serde alias); key/modifier names are defined in
 `src/hotkeys/types.rs`. To replace an OS shortcut: disable it in System Settings,
 add the binding, restart so qol-tray grabs the key exclusively.
 

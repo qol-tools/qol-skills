@@ -93,6 +93,7 @@ src/
   v3_16_to_v3_17_device_to_os/   file migration (PreFlight)
   v3_17_to_v3_18_plugin_configs_by_os/  file migration (PreFlight)
   v3_18_to_v3_19_declared_plugin_id/    file migration (PreFlight)
+  v3_19_to_v3_20_plugin_uid/            file migration (PreFlight)
 fixtures/<future migration>/before/, after/  (recommended for big migrations)
 ```
 

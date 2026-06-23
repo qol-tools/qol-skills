@@ -37,9 +37,9 @@ Use this when the task is specifically about the Profile feature in `qol-tray`, 
 A plugin's persisted config is split across three scope-aware locations under `<profile>/`:
 
 ```
-core/plugin-configs/<id>.json        # shared across machines, synced
-os/<bucket>/plugin-configs/<id>.json # OS-specific, synced cross-machine
-device/plugin-configs/<id>.json      # local-only, gitignored (*/device/)
+core/plugin-configs/<uid>.json         # shared across machines, synced
+os/<bucket>/plugin-configs/<uid>.json  # OS-specific, synced cross-machine
+device/plugin-configs/<uid>.json       # local-only, gitignored (*/device/)
 ```
 
 Two declarations in `plugin.toml` drive routing:

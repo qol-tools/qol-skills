@@ -11,6 +11,7 @@ description: Use when bootstrapping a new qol-tray plugin from plugin-template, 
 
 `plugin.toml`:
 
+- `uid = "<uuid-v4>"` - frozen identity; mint a fresh one when forking, never reuse the template's, never change it after publishing
 - `name = "My Plugin"` (placeholder)
 - `runtime.command = "plugin-template"`
 - `runtime.actions = { run = ["run"], settings = ["settings"] }`
@@ -47,7 +48,7 @@ The standard `validate_plugin_contract` test sits in `#[cfg(test)] mod tests`.
 
 When forking the template into a new plugin, change:
 
-1. **Names**: rename `plugin-template` in `Cargo.toml`, `plugin.toml`, `.gitignore`, `Makefile`, and workflow artifact names. Keep a single source of truth — the binary name in `Cargo.toml`'s `[package].name` and the runtime command in `plugin.toml` must match.
+1. **Identity**: mint a fresh uuid v4 into `plugin.toml`'s `[plugin] uid` and never change it after publishing. `id`, `name`, the binary name, and `runtime.command` are mutable labels. Rename `plugin-template` across `Cargo.toml`, `plugin.toml`, `.gitignore`, `Makefile`, and workflow artifact names, keeping the `Cargo.toml` `[package].name` and the `plugin.toml` runtime command in sync.
 2. **Manifest metadata**: update `plugin.toml`'s `name`, `description`, `author`, `platforms`, and `[[dependencies.binaries]]` block.
 3. **Plugin behavior**: replace the `run` action body in `src/main.rs` with real logic. Move logic into modules as it grows — keep `main.rs` thin.
 4. **Platform support**: trim `src/platform/` if your plugin's settings action doesn't differ by OS. Add stubs (returning typed `Err`) for any OS you don't support — see the `qol-arch-code` skill.
