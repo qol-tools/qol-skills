@@ -1,15 +1,16 @@
 ---
-name: qol-plugin-screen-recorder
-description: Use when working on the qol-tray screen recorder plugin, including ffmpeg recording flow and Linux display capture behavior.
+name: qol-shot
+description: Use when working on the qol-shot plugin (qol-tray screenshots and screen recording), including ffmpeg recording flow and Linux display capture behavior.
 ---
 
-Screen recording plugin for qol-tray (Linux-focused). Binary-first runtime plugin.
+Screenshot and screen-recording plugin for qol-tray (Linux-focused). Binary-first runtime plugin.
 
 ## Contract
 
-- Runtime command: `screen-recorder`
+- Runtime command: `qol-shot`
 - Runtime actions map:
   - `record -> ["record"]`
+  - `screenshot -> ["screenshot"]`
   - `settings -> ["settings"]`
 - Menu includes `toggle-config` checkbox (`audio-enable`) for config state; this does not require runtime action mapping.
 - No shell runtime entrypoint.
@@ -45,7 +46,7 @@ toml = "0.9"
 ## Build and Dev Workflow
 
 - No Makefile. qol-tray uses `cargo build` directly in dev mode.
-- Do **not** leave a `screen-recorder` binary in the plugin root directory — it will shadow `target/debug/screen-recorder`.
+- Do **not** leave a `qol-shot` binary in the plugin root directory - it will shadow `target/debug/qol-shot`.
 - `qol-tray` resolves binaries in order: plugin root → `target/debug/` → `target/release/`.
 - Run `cargo test` to validate the contract before linking or shipping.
 

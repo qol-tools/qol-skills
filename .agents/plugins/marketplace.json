@@ -101,10 +101,10 @@
       "category": "Productivity"
     },
     {
-      "name": "qol-plugin-screen-recorder",
+      "name": "qol-shot",
       "source": {
         "source": "local",
-        "path": "./plugins/qol-plugin-screen-recorder"
+        "path": "./plugins/qol-shot"
       },
       "policy": {
         "installation": "INSTALLED_BY_DEFAULT",
