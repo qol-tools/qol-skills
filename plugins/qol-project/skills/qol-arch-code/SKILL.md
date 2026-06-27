@@ -9,7 +9,7 @@ description: Use when designing or refactoring Rust plugins/libs that need cross
 
 **Don't sprinkle `#[cfg(target_os)]` through business code.** Compartmentalize platform differences behind a trait or struct facade, with one implementation per OS unless a specific feature capability has its own backend split. Business code calls the abstraction; cfg gates exist only at the wiring layer in `mod.rs`.
 
-`target_os` is the first question, not automatically the final module boundary. Start from the feature capability. If it only needs OS primitives, keep one `platform/linux.rs`. If that capability must choose between runtime substrates with different contracts, model those as private backends behind the capability facade. The substrate split belongs next to the capability it implements, not as a global Linux taxonomy.
+`target_os` is the first question, not automatically the final module boundary. Start from the feature capability. If it only needs OS primitives, keep one OS module form: `platform/linux.rs` inside an all-flat `platform/` directory, or `platform/linux/mod.rs` inside an all-directory `platform/` directory. If that capability must choose between runtime substrates with different contracts, model those as private backends behind the capability facade. The substrate split belongs next to the capability it implements, not as a global Linux taxonomy.
 
 This makes the codebase:
 - Compile on every host (no `compile_error!` blocking macOS devs)
@@ -207,6 +207,30 @@ src/platform/
 
 In both cases the OS-named files (`linux.rs`, `macos.rs`, `windows.rs`) sit inside a directory named `platform`. **Don't put OS files directly under a feature dir** — that's how cfg sprawl creeps back in over time. This is the default shape; only add deeper backend structure when a specific capability has genuinely different runtime contracts.
 
+Use exactly one Rust module form per `platform/` directory:
+
+```
+platform/
+  linux.rs              # flat form: no private OS child modules
+  macos.rs
+  windows.rs
+```
+
+or:
+
+```
+platform/
+  linux/
+    mod.rs              # directory form: OS impls may have private child modules
+    x11_window_ops.rs
+  macos/
+    mod.rs
+  windows/
+    mod.rs
+```
+
+Never mix flat OS files and OS directories in the same `platform/` directory. `platform/linux.rs` next to `platform/linux/` is the worst case, but `linux/mod.rs` next to `macos.rs` is also forbidden. The mixed shape is legal Rust, but forbidden here because it hides ownership and makes future backend splits easy to misread. If the child module is a capability substrate rather than an OS-local helper, put it under the capability's `backends/` directory instead.
+
 `platform/mod.rs`:
 
 ```rust
@@ -277,7 +301,7 @@ Same `platform/` subfolder rule applies. Use this shape when there's no shared m
 
 ## Capability-specific backends
 
-Do not create a generic `platform/linux/{x11,wayland,...}` tree just because code runs on Linux. Split only inside the capability that owns the differing contract. Normal Linux-only code should stay in `platform/linux.rs`.
+Do not create a generic `platform/linux/{x11,wayland,...}` tree just because code runs on Linux. Split only inside the capability that owns the differing contract. Normal Linux-only code should stay in the OS module (`platform/linux.rs`, or `platform/linux/mod.rs` when that `platform/` directory uses directory form).
 
 When one capability has multiple runtime substrates, keep the public feature API stable and put the backend split under that capability:
 
@@ -370,6 +394,7 @@ The `<os>.rs` source files use these unconditionally — the cfg gate at the man
 
 - ❌ **Never `compile_error!("only X is supported")`** at module top.
 - ❌ **Never sprinkle `#[cfg(target_os = "...")]` in business logic.** If you see more than one cfg per file outside `platform/mod.rs`, refactor.
+- ❌ **Never mix platform module forms** in one `platform/` directory. Choose all flat OS files or all OS directory modules.
 - ❌ **Never branch on platform identity in business logic.** Runtime OS checks, OS-specific imports, OS command choices, and OS-keyed storage/path routing belong in a facade/resolver/scope store.
 - ❌ **Never force distinct capability substrates into `linux.rs`** when they have different contracts. Create a capability-local backend split and have the OS adapter select or use it.
 - ❌ **Never have a trait method that exists only on one OS via cfg.** Add it to the trait, stub it on others.
