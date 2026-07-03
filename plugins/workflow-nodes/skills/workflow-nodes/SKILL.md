@@ -1,6 +1,6 @@
 ---
 name: workflow-nodes
-description: Personal workflow-automation discipline for KMRH47. Use when a task has repeated commands, multi-step tool chains, fragile manual instructions, build/export/test loops, human verdict loops, or any chance to convert agentic tool calls into deterministic scripts with explicit inputs, outputs, reports, and composable workflow nodes. Also use when the user asks for a one-command lane, scriptification, orchestration, reproducibility, token reduction, or making a workflow easier for humans and AI.
+description: Personal workflow-automation discipline for KMRH47. Use when a task has repeated commands, multi-step tool chains, fragile manual instructions, build/export/test loops, human verdict loops, performance optimization workflows, performance measurement ledgers, before/after metric comparisons, or any chance to convert agentic tool calls into deterministic scripts with explicit inputs, outputs, reports, and composable workflow nodes. Also use when the user asks for a one-command lane, scriptification, orchestration, reproducibility, token reduction, or making a workflow easier for humans and AI.
 ---
 
 # Workflow Nodes
@@ -88,6 +88,44 @@ Write a machine-readable report whenever the node does meaningful work:
 ```
 
 Use stable paths such as `reports/<workflow>/<run-id>/report.json`. Include hashes for important artifacts when cheap.
+
+## Measurement-ledger workflow
+
+When optimizing a hot path or comparing behavior, make the evidence artifact before changing code. Use a temporary Markdown ledger while discovering the workflow; promote it to a stable report only when the user wants the history kept.
+
+Minimum table:
+
+```markdown
+| Iteration | Scenario | Before | After | Delta | Correctness | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+```
+
+Required sequence:
+
+1. **Create ledger first.** Record date, branch/worktree, target component, scope, and the rule that every new performance test needs before and after numbers.
+2. **Map the current flow.** Identify action entrypoints, state touched, existing tests, and trace/log hooks before editing implementation.
+3. **Run one manual baseline loop.** Verify the command actually exercises the intended scenario and that correctness can be observed.
+4. **Script repeats only after the manual loop.** Keep discovery scripts temporary unless the user asks to keep them. Record temp script paths in the ledger.
+5. **Record baseline rows before patching.** Every scenario row needs repeat count, command/source app, environment assumptions, speed metric, and correctness verdict.
+6. **Patch one candidate at a time.** After each candidate, rerun the same scenarios and update `After`, `Delta`, and `Correctness`.
+7. **Reject invalid runs explicitly.** If external state invalidates a run (locked screen, wrong active app, stale daemon, permission prompt, noisy data), mark it invalid or inconclusive with the concrete reason instead of blending it into results.
+8. **Stop on correctness regressions.** Faster is not progress if state restore, focus, window identity, or edge cases regress.
+
+Rules:
+
+- Record every new performance test as before vs after; do not compare a new after-only number against memory.
+- Include the scenario shape that affects the result: OS, app/window type, action, command, repeat count, and relevant config.
+- Update the ledger incrementally as each run completes, including failed or inconclusive runs.
+- Keep correctness beside speed. Faster is not progress if the window type, state restore, or edge case regresses.
+- If measurements are noisy, add repeats or mark `inconclusive` before changing code again.
+- Extract a script only after one manual loop identifies stable inputs, commands, and outputs.
+
+Done criteria:
+
+- The ledger has before, after, delta, and correctness for every accepted scenario.
+- Rejected hypotheses or invalid runs are recorded with concrete reasons.
+- Focused tests or builds that guard the changed code pass.
+- The final response names the ledger path, changed scope, headline deltas, and any remaining tradeoff.
 
 ## Human verdict loops
 
