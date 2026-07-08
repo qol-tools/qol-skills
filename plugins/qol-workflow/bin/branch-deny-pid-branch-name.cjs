@@ -18,7 +18,7 @@
  *   - `git branch <NAME>` (positional creation form)
  *
  * Blocked when <NAME> matches /^[a-z][a-z0-9]*-\d+(-|$)/ and the effective
- * cwd is under /media/kmrh47/WD_SN850X/Git/qol-tools/.
+ * cwd has a qol-* path component (the monorepo, its worktrees, qol-skills).
  *
  * Bypass: append ` # intentional` for genuinely single-repo PID branches.
  */
@@ -27,7 +27,7 @@
 
 const fs = require('node:fs');
 
-const QOL_TOOLS_ROOT = '/media/kmrh47/WD_SN850X/Git/qol-tools';
+const QOL_PATH_COMPONENT = /(^|[\\/])qol-[^\\/]+([\\/]|$)/;
 const PID_PATTERN = /^[a-z][a-z0-9]*-\d+(-|$)/;
 const INTENTIONAL_SUFFIX = /#\s*intentional\b/;
 
@@ -65,16 +65,15 @@ function detectNewBranchName(cmd) {
 
 function inQolToolsTree(cwd) {
     if (typeof cwd !== 'string' || !cwd) return false;
-    if (cwd === QOL_TOOLS_ROOT) return true;
-    return cwd.startsWith(QOL_TOOLS_ROOT + '/');
+    return QOL_PATH_COMPONENT.test(cwd);
 }
 
 function emitDeny(name, command) {
-    const reason = `Branch name "${name}" looks PID-prefixed; coordinated qol-tools work needs a shared topic name across repos so qol-tray's Active Worktree Branch picker can switch all dev-linked plugins together.
+    const reason = `Branch name "${name}" looks PID-prefixed; qol worktree branches need topic-led names because \`qol dev <worktree>\` selects the dev build by branch name and a topic outlives any single issue or PR.
 
 Command: ${command.trim()}
 
-Pick a topic name instead (e.g. wasm, theming, sync-v2). See the qol-workflow:git-trees skill, section "Cross-repo dev recompile loop".
+Pick a topic name instead (e.g. wasm, theming, sync-v2). See the qol-workflow:git-trees skill, section "Branch naming".
 
 Bypass (rare, genuine single-repo work): append \` # intentional\` to the command.`;
 

@@ -11,14 +11,14 @@ const HOOK = path.join(__dirname, '..', 'bin', 'branch-deny-checkout-in-main-clo
 const { CHECKOUT_OR_SWITCH, classify, isMainClone, resolveEffectiveCwd } = require('../bin/branch-deny-checkout-in-main-clone.cjs');
 
 function withRepo(kind, fn) {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'qol-tools-'));
-    const repo = path.join(root, 'qol-tools', 'qol-tray');
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'qol-'));
+    const repo = path.join(root, 'Git', 'qol-monorepo');
     fs.mkdirSync(repo, { recursive: true });
     if (kind === 'main') {
         fs.mkdirSync(path.join(repo, '.git'));
     } else if (kind === 'worktree') {
-        const treesParent = path.join(root, 'qol-tools', 'worktrees', 'feat-x');
-        const wt = path.join(treesParent, 'qol-tray');
+        const treesParent = path.join(root, 'Git', 'worktrees', 'feat-x');
+        const wt = path.join(treesParent, 'qol-monorepo');
         fs.mkdirSync(wt, { recursive: true });
         fs.writeFileSync(path.join(wt, '.git'), 'gitdir: /tmp/x\n');
         fn(wt);
@@ -139,7 +139,7 @@ test('hook ignores non-checkout commands', () => {
     });
 });
 
-test('hook ignores commands outside qol-tools tree', () => {
+test('hook ignores commands outside any qol-* repo', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'other-'));
     fs.mkdirSync(path.join(root, '.git'));
     const r = run('git checkout -b feat-x', root);
@@ -166,8 +166,8 @@ const SKIP_WIN = process.platform === 'win32' && 'asserts POSIX-style absolute p
 
 test('resolveEffectiveCwd handles relative cd target', { skip: SKIP_WIN }, () => {
     assert.strictEqual(
-        resolveEffectiveCwd('cd qol-tray && git checkout -b x', '/Users/kaho/repos/private/qol-tools'),
-        '/Users/kaho/repos/private/qol-tools/qol-tray',
+        resolveEffectiveCwd('cd qol-monorepo && git checkout -b x', '/a/b/Git'),
+        '/a/b/Git/qol-monorepo',
     );
 });
 

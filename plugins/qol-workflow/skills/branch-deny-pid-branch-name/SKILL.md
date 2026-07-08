@@ -1,21 +1,22 @@
 ---
 name: branch-deny-pid-branch-name
-description: Blocks creation of PID-prefixed git branch names (`^[a-z]+-\d+(-|$)` like `tray-32-foo`, `alttab-2-bar`) inside any qol-tools repo. Coordinated work across qol-tray + plugin repos must share a single topic name so qol-tray's Active Worktree Branch picker can switch all dev-linked plugins together. Use ` # intentional` suffix to bypass for genuine single-repo PID branches. Pairs with the `qol-workflow:git-trees` "Cross-repo dev recompile loop" section.
+description: Use when a branch-creation command is blocked with a "looks PID-prefixed" message, or when naming a new qol branch. Blocks PID-prefixed branch names (`^[a-z]+-\d+(-|$)` like `tray-32-foo`) in any qol-* repo; use ` # intentional` to bypass for genuine one-off PID branches.
 ---
 
 # branch-deny-pid-branch-name
 
 ## The rule
 
-Coordinated work across qol-tray and any plugin repo must use a **single topic-led branch name** (e.g. `wasm`, `theming`, `sync-v2`).
+qol worktree branches use **topic-led names** (e.g. `wasm`, `theming`, `sync-v2`), never PID-prefixed names.
 
-qol-tray's dev mode exposes an "Active Worktree Branch" picker (Settings, dev panel; persisted at `~/.config/qol-tray/dev/active-worktree.txt`). The selected branch name is applied to every dev-linked plugin repo: each plugin resolves to its worktree on that branch if one exists, else falls back to `main`. PID-prefixed names cannot serve this role because the PID is qol-tray-specific and no plugin repo will ever carry a matching branch.
+`qol dev <worktree>` selects the dev build by branch name, and a topic outlives any single issue or PR.
+PID-prefixed names (`tray-32-integration`) tie the branch to one issue and go stale the moment the issue closes.
 
-See `qol-workflow:git-trees` -> "Cross-repo dev recompile loop" for the full convention.
+See `qol-workflow:git-trees`, section "Branch naming", for the full convention.
 
 ## What this hook blocks
 
-Inside `/media/kmrh47/WD_SN850X/Git/qol-tools/**`, these commands fail when `<NAME>` matches `^[a-z][a-z0-9]*-\d+(-|$)`:
+When the effective cwd has a `qol-*` path component (the monorepo, its worktrees, qol-skills), these commands fail when `<NAME>` matches `^[a-z][a-z0-9]*-\d+(-|$)`:
 
 - `git checkout -b <NAME>` / `git checkout -B <NAME>`
 - `git switch -c <NAME>` / `git switch -C <NAME>`
@@ -26,13 +27,13 @@ The hook reads the Bash payload, identifies the branch name the command would cr
 
 ## What stays allowed
 
-- Topic names: `git checkout -b wasm`, `git switch -c theming`, `git worktree add ../worktrees/qol-tray/wasm -b wasm`
+- Topic names: `git checkout -b wasm`, `git switch -c theming`, `git worktree add ../worktrees/wasm/qol-monorepo -b wasm`
 - All non-creation git ops: `git checkout main`, `git status`, `git push`, `git branch -d <stale>`, `git branch -m <old> <new>`
-- Commands outside the qol-tools workspace (the hook only fires when the effective cwd is under `/media/kmrh47/WD_SN850X/Git/qol-tools/`)
-- Genuinely single-repo work: append ` # intentional` to the command, e.g.
+- Commands outside any `qol-*` repo
+- Genuinely one-off PID branches: append ` # intentional` to the command, e.g.
 
 ```bash
-git checkout -b tray-99-only-here  # intentional: single-repo refactor, no plugin coordination
+git checkout -b tray-99-only-here  # intentional: throwaway bisect branch
 ```
 
 ## Layered with other qol-workflow hooks

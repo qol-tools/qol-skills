@@ -2,12 +2,12 @@
 /*
  * PreToolUse hook (Bash matcher): block `git checkout -b`, `git checkout <other>`,
  * `git switch -c`, and `git switch <other>` when the current working directory is
- * a qol-tools repo's MAIN clone (not a worktree).
+ * a qol-* repo's MAIN clone (not a worktree).
  *
  * Rule: in qol-tools we develop on worktrees, not feature branches inside the
  * main clone. Branching from main clone leaves the workstation stuck on a
- * feature branch after the PR merges, qol-sync silently reports "ok" against
- * the wrong tracking branch, and the next `make dev` runs out of date.
+ * feature branch after the PR merges, `qol sync` silently tracks the wrong
+ * branch, and the next `qol dev` runs out of date.
  *
  * Bypass: append ` # intentional` to the command (matches the convention used
  * by other qol-host hooks).
@@ -24,7 +24,7 @@ const PATH_SEP = /(^|\s)--\s/;
 const SHA_LIKE = /^[0-9a-f]{4,40}$/i;
 const REVISION_LIKE = /[~^@]/;
 const ALLOWED_BRANCHES = new Set(['main', 'master']);
-const QOL_REPO_RE = /[\\/]qol-tools[\\/](?!worktrees[\\/])([^\\/]+)[\\/]?$/;
+const QOL_REPO_RE = /[\\/]qol-[^\\/]+[\\/]?$/;
 
 // Match an opening `cd <path> [&&|;]` group anchored at the start of the
 // command (after any whitespace or opening paren). Captures the path.

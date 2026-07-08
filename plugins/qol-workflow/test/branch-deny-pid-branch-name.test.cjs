@@ -6,7 +6,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const HOOK = path.join(__dirname, '..', 'bin', 'branch-deny-pid-branch-name.cjs');
-const QOL_CWD = '/media/kmrh47/WD_SN850X/Git/qol-tools/qol-tray';
+const QOL_CWD = '/a/b/Git/qol-monorepo';
 const OTHER_CWD = '/home/anywhere/else';
 
 function run(command, cwd = QOL_CWD) {
