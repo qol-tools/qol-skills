@@ -352,6 +352,23 @@ function ObjectArrayField({ field }) {
 }
 ```
 
+### List row actions (`row_action` + `when`)
+
+`list` fields may declare a `row_action` in qol-config.toml; `ListField` renders it as a per-row button. The optional `when` key names a row field that must be truthy for the button to appear on that row - the daemon decides per row, the UI stays declarative.
+
+```toml
+[field.detected_pads.row_action]
+action = "apply_fixes"
+label = "Fix"
+when = "fixable"
+```
+
+- Schema: `RowActionSpec` in `libs/qol-config/src/contract/v1.rs` (`action`, `label`, `when`, `input`, `key`); `action` must be declared in qol-runtime.toml (cross-validated).
+- Rendering + gating helper: `ui/views/plugin-config/fields/row-action.js` (`visibleRowAction`, `firstActionableRow`), consumed by `ListField`.
+- Keyboard: Enter/Space on the selected list field runs the FIRST actionable row's action. Mouse: per-row button.
+- `input` and `key` are parsed but not yet consumed by the UI; the action currently dispatches with an empty body.
+- Prefer a gated row action over a standalone always-visible `action` field whenever the action only makes sense for specific rows.
+
 ### HA-style status gating
 
 `PluginConfigContext` (`ui/views/plugin-config/context.js`) tracks `statusTones` reported by `StatusField` (driven by polled queries). `isRuntimeDisabled = some tone === 'danger'` gates runtime-dependent fields (`action`, `color+stream`, `list`). Recovery actions (reload, pair) are exempt — they're how the user fixes the broken state.
