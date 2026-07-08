@@ -23,7 +23,7 @@ function fixtureFile(relativePath, content) {
 
 function fixtureRepo(relativePath, content) {
     const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'qol-hook-'));
-    const root = path.join(temp, 'qol-tools');
+    const root = path.join(temp, 'qol-monorepo');
     const file = path.join(root, relativePath);
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, content);
@@ -34,7 +34,7 @@ test('blocks cfg(all(target_os, feature)) gating non-OS module', () => {
     const r = run({
         tool_name: 'Write',
         tool_input: {
-            file_path: '/x/qol-tools/foo/src/hotkeys/mod.rs',
+            file_path: '/x/Git/qol-monorepo/src/hotkeys/mod.rs',
             content: '#[cfg(all(target_os = "linux", feature = "foo"))]\nmod capture;\n',
         },
     });
@@ -46,7 +46,7 @@ test('passes canonical multi-line cfg + mod re-export pattern', () => {
     const r = run({
         tool_name: 'Write',
         tool_input: {
-            file_path: '/x/qol-tools/foo/src/platform/mod.rs',
+            file_path: '/x/Git/qol-monorepo/src/platform/mod.rs',
             content:
                 '#[cfg(target_os = "linux")]\nmod linux;\n#[cfg(target_os = "linux")]\npub use linux::Platform;\n',
         },
@@ -130,7 +130,7 @@ test('blocks compile_error! anywhere', () => {
     const r = run({
         tool_name: 'Write',
         tool_input: {
-            file_path: '/x/qol-tools/foo/src/lib.rs',
+            file_path: '/x/Git/qol-monorepo/src/lib.rs',
             content:
                 '#[cfg(not(target_os = "linux"))]\ncompile_error!("only Linux");\n',
         },
@@ -143,14 +143,14 @@ test('passes same-line cfg + mod re-export pattern', () => {
     const r = run({
         tool_name: 'Write',
         tool_input: {
-            file_path: '/x/qol-tools/foo/src/platform/mod.rs',
+            file_path: '/x/Git/qol-monorepo/src/platform/mod.rs',
             content: '#[cfg(target_os = "linux")] mod linux;\n#[cfg(target_os = "macos")] mod macos;\n',
         },
     });
     assert.equal(r.exitCode, 0);
 });
 
-test('passes files outside the qol-tools workspace', () => {
+test('passes files outside any qol-* repo', () => {
     const r = run({
         tool_name: 'Write',
         tool_input: {
@@ -166,7 +166,7 @@ test('passes OS-named files when nested in a platform/ directory', () => {
         const r = run({
             tool_name: 'Write',
             tool_input: {
-                file_path: `/x/qol-tools/foo/src/platform/${name}`,
+                file_path: `/x/Git/qol-monorepo/src/platform/${name}`,
                 content: '#[cfg(target_os = "linux")] pub fn anything() {}\n',
             },
         });
@@ -178,7 +178,7 @@ test('passes per-feature platform/ directory', () => {
     const r = run({
         tool_name: 'Write',
         tool_input: {
-            file_path: '/x/qol-tools/foo/src/hotkeys/capture/platform/linux.rs',
+            file_path: '/x/Git/qol-monorepo/src/hotkeys/capture/platform/linux.rs',
             content: 'pub(crate) fn install() {}\n',
         },
     });
@@ -189,7 +189,7 @@ test('blocks OS-named files placed outside a platform/ directory', () => {
     const r = run({
         tool_name: 'Write',
         tool_input: {
-            file_path: '/x/qol-tools/foo/src/hotkeys/capture/linux.rs',
+            file_path: '/x/Git/qol-monorepo/src/hotkeys/capture/linux.rs',
             content: 'pub(crate) fn install() {}\n',
         },
     });
@@ -201,7 +201,7 @@ test('blocks cfg(target_os) gating a pub fn in business code', () => {
     const r = run({
         tool_name: 'Edit',
         tool_input: {
-            file_path: '/x/qol-tools/foo/src/hotkeys/mod.rs',
+            file_path: '/x/Git/qol-monorepo/src/hotkeys/mod.rs',
             new_string:
                 '#[cfg(all(target_os = "linux", feature = "linux_evdev"))]\npub fn start_evdev_capture() {}\n',
         },
@@ -213,7 +213,7 @@ test('passes stacked attributes ending in canonical re-export', () => {
     const r = run({
         tool_name: 'Write',
         tool_input: {
-            file_path: '/x/qol-tools/foo/src/platform/mod.rs',
+            file_path: '/x/Git/qol-monorepo/src/platform/mod.rs',
             content: '#[cfg(target_os = "linux")]\n#[allow(dead_code)]\nmod linux;\n',
         },
     });
@@ -224,7 +224,7 @@ test('blocks cfg(any(target_os)) gating non-OS item', () => {
     const r = run({
         tool_name: 'Write',
         tool_input: {
-            file_path: '/x/qol-tools/foo/src/lib.rs',
+            file_path: '/x/Git/qol-monorepo/src/lib.rs',
             content:
                 '#[cfg(any(target_os = "linux", target_os = "macos"))]\npub fn unix_thing() {}\n',
         },
@@ -236,7 +236,7 @@ test('passes feature-only cfg (no target_os involved)', () => {
     const r = run({
         tool_name: 'Write',
         tool_input: {
-            file_path: '/x/qol-tools/foo/src/lib.rs',
+            file_path: '/x/Git/qol-monorepo/src/lib.rs',
             content: '#[cfg(feature = "dev")]\npub fn dev_thing() {}\n',
         },
     });
@@ -248,7 +248,7 @@ test('blocks architecture violations when subagent is the caller', () => {
         tool_name: 'Write',
         agent_type: 'qol-host:qol-tray-backend',
         tool_input: {
-            file_path: '/x/qol-tools/foo/src/lib.rs',
+            file_path: '/x/Git/qol-monorepo/src/lib.rs',
             content: '#[cfg(target_os = "linux")] pub fn foo() {}\n',
         },
     });
@@ -259,7 +259,7 @@ test('passes test files', () => {
     const r = run({
         tool_name: 'Write',
         tool_input: {
-            file_path: '/x/qol-tools/foo/tests/integration.rs',
+            file_path: '/x/Git/qol-monorepo/tests/integration.rs',
             content: '#[cfg(target_os = "linux")] fn t() {}\n',
         },
     });
@@ -270,7 +270,7 @@ test('blocks cfg macro platform branch outside facade', () => {
     const r = run({
         tool_name: 'Write',
         tool_input: {
-            file_path: '/x/qol-tools/foo/src/sync/service.rs',
+            file_path: '/x/Git/qol-monorepo/src/sync/service.rs',
             content: 'pub fn bucket() -> &' + '\'static str { if cfg!(target_os = "macos") { return "macos"; } "linux" }\n',
         },
     });
@@ -282,7 +282,7 @@ test('blocks runtime OS constant outside facade', () => {
     const r = run({
         tool_name: 'Write',
         tool_input: {
-            file_path: '/x/qol-tools/foo/src/profile/storage.rs',
+            file_path: '/x/Git/qol-monorepo/src/profile/storage.rs',
             content: 'pub fn current() -> &' + '\'static str { std::env::consts::OS }\n',
         },
     });
@@ -294,7 +294,7 @@ test('blocks OS-specific import outside facade', () => {
     const r = run({
         tool_name: 'Write',
         tool_input: {
-            file_path: '/x/qol-tools/foo/src/window/list.rs',
+            file_path: '/x/Git/qol-monorepo/src/window/list.rs',
             content: 'use core_graphics::window::CGWindowListCopyWindowInfo;\n',
         },
     });
@@ -306,7 +306,7 @@ test('blocks OS command dispatch outside facade', () => {
     const r = run({
         tool_name: 'Write',
         tool_input: {
-            file_path: '/x/qol-tools/foo/src/launcher/open.rs',
+            file_path: '/x/Git/qol-monorepo/src/launcher/open.rs',
             content: 'pub fn open_file(path: &Path) { let _ = Command::new("open").arg(path).status(); }\n',
         },
     });
@@ -318,7 +318,7 @@ test('blocks profile scoped path routing outside facade', () => {
     const r = run({
         tool_name: 'Write',
         tool_input: {
-            file_path: '/x/qol-tools/qol-tray/src/features/profile/core/storage.rs',
+            file_path: '/x/Git/qol-monorepo/apps/qol-tray/src/features/profile/core/storage.rs',
             content: 'pub fn os_path(profile: &Path, current_os: &str) -> PathBuf { profile.join("os").join(current_os).join("plugin-configs") }\n',
         },
     });
@@ -330,7 +330,7 @@ test('blocks manifest platform routing outside facade', () => {
     const r = run({
         tool_name: 'Write',
         tool_input: {
-            file_path: '/x/qol-tools/qol-migrations/src/v3_17_to_v3_18/mod.rs',
+            file_path: '/x/Git/qol-monorepo/libs/qol-migrations/src/v3_17_to_v3_18/mod.rs',
             content: 'if entry.platforms.len() == 1 { target = profile.join("os").join(&entry.platforms[0]); }\n',
         },
     });
@@ -342,7 +342,7 @@ test('passes platform decision inside ProfileScopeStore facade', () => {
     const r = run({
         tool_name: 'Write',
         tool_input: {
-            file_path: '/x/qol-tools/qol-tray/src/features/profile/core/scope_store.rs',
+            file_path: '/x/Git/qol-monorepo/apps/qol-tray/src/features/profile/core/scope_store.rs',
             content: 'pub(crate) struct ProfileScopeStore { os_bucket: String }\nimpl ProfileScopeStore { pub(crate) fn os_dir(&self, profile: &Path) -> PathBuf { profile.join("os").join(&self.os_bucket) } }\n',
         },
     });
@@ -353,7 +353,7 @@ test('passes platform decision inside resolver facade', () => {
     const r = run({
         tool_name: 'Write',
         tool_input: {
-            file_path: '/x/qol-tools/foo/src/plugins/config/resolver.rs',
+            file_path: '/x/Git/qol-monorepo/src/plugins/config/resolver.rs',
             content: 'pub fn resolve(platforms: &[String], profile: &Path) -> PathBuf { if platforms.len() == 1 { return profile.join("os").join(&platforms[0]); } profile.join("core") }\n',
         },
     });
@@ -364,7 +364,7 @@ test('passes platform decision inside named facade type', () => {
     const r = run({
         tool_name: 'Write',
         tool_input: {
-            file_path: '/x/qol-tools/foo/src/profile/layout.rs',
+            file_path: '/x/Git/qol-monorepo/src/profile/layout.rs',
             content: 'pub(crate) struct ProfileLayoutFacade;\nimpl ProfileLayoutFacade { pub(crate) fn os_path(profile: &Path, current_os: &str) -> PathBuf { profile.join("os").join(current_os) } }\n',
         },
     });

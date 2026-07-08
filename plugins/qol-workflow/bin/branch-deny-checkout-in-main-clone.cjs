@@ -108,16 +108,15 @@ Command: ${command.trim()}
 qol-tools rule (plugin:qol-workflow:git-trees skill):
   Develop on worktrees, never on feature branches inside the main clone.
   The main clone of every qol-* repo MUST stay on main. Switching it leaves
-  the workstation stuck on a feature branch after PR merge — the next
-  qol-sync silently reports "ok" against the wrong tracking branch, and
-  \`make dev\` runs out of date code.
+  the workstation stuck on a feature branch after PR merge — \`qol sync\`
+  silently tracks the wrong branch, and \`qol dev\` runs out of date code.
 
 Use a worktree instead:
 
   git -C <repo> worktree add \\
-    /Users/kaho/repos/private/qol-tools/worktrees/<feature>/<repo> \\
+    ../worktrees/<feature>/<repo> \\
     -b <branch-name>
-  cd /Users/kaho/repos/private/qol-tools/worktrees/<feature>/<repo>
+  cd ../worktrees/<feature>/<repo>
   # work, commit, push, open PR from here
 
 Bypass (rare, e.g. recovery): append \` # intentional\` to the command.

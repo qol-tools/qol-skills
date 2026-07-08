@@ -36,7 +36,7 @@ const path = require('node:path');
 
 const INSPECTED_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 const OS_BASENAMES = new Set(['linux.rs', 'macos.rs', 'windows.rs']);
-const QOL_TOOLS_PATH_RE = /[\\/]qol-tools[\\/]/;
+const QOL_TOOLS_PATH_RE = /[\\/]qol-[^\\/]+[\\/]/;
 const TESTS_PATH_RE = /[\\/]tests[\\/]/;
 const EXAMPLES_PATH_RE = /[\\/]examples[\\/]/;
 

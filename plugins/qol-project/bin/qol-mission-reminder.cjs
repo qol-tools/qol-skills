@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 const { readFileSync } = require("node:fs");
 
-const QOL_ROOT = "/media/kmrh47/WD_SN850X/Git/qol-tools/";
+const QOL_PATH_COMPONENT = /(^|[\\/])qol-[^\\/]+([\\/]|$)/;
 const TRIGGERS = /\b(feature|scope|design|issue|should qol-tray|follow-up|out of scope|roadmap|rfc|adr)\b/i;
 const MIN_LEN = 8;
 
@@ -32,7 +32,7 @@ let payload;
 try { payload = JSON.parse(raw); } catch { ok(); }
 
 const cwd = payload.cwd || process.cwd();
-if (!cwd.startsWith(QOL_ROOT)) ok();
+if (!QOL_PATH_COMPONENT.test(cwd)) ok();
 
 const prompt = (payload.prompt || "").trim();
 if (prompt.length < MIN_LEN) ok();
