@@ -6,7 +6,6 @@ color: purple
 memory: project
 skills:
   - qol-plugin-alt-tab
-  - plugin-alt-tab-release-flow
   - qol-tools
   - qol-apps-testing
   - rust

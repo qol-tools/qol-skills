@@ -1,6 +1,6 @@
 ---
 name: qol-tray-release-flow
-description: Enforces correct release tagging, commit message rules, and CI triggers for qol-tray. Use this when the user asks to create or prepare a release.
+description: Use when cutting, tagging, or preparing a release for qol-tray or any plugin release unit in the monorepo, or when release CI does not trigger as expected.
 ---
 
 # qol-tray-release-flow

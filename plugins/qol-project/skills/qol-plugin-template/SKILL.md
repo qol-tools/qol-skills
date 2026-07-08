@@ -105,6 +105,6 @@ None at template baseline. Add `qol-plugin-api`, `qol-config`, etc. as the custo
 - `qol-arch-cross-platform` — symbol/import hygiene preventing dead_code-on-other-platform under `-D warnings`.
 - `qol-arch-cicd` — CI/release workflow contract: matrix builds derived from `plugin.toml` `platforms`, `RUSTFLAGS=-D warnings` everywhere, sibling-checkout parity for path-deps.
 - `qol-cicd` — the reusable workflows the template's `version.yml` and `release.yml` call into.
-- `plugin-<name>-release-flow` — once your forked plugin has a release process, write a per-plugin release-flow skill. See `plugin-launcher-release-flow` and `plugin-alt-tab-release-flow` as templates.
+- Releases: every plugin under `plugins/*` with a `plugin.toml` is a release unit covered by `qol-tray-release-flow`; no per-plugin release skill is needed.
 - `qol-shared-libs` — what belongs in shared libs vs the plugin itself.
 - `coding-general` — universal guidelines that apply to plugin code.
