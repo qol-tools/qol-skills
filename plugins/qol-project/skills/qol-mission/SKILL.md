@@ -1,6 +1,6 @@
 ---
 name: qol-mission
-description: The overarching mission of qol-tools — what the product is, who it's for, and the non-negotiable user-facing promises that any feature, bug fix, or architecture decision must respect. Load this whenever you're about to weigh trade-offs that touch the user experience, portability, host-OS interaction, hotkeys, settings, sync, or "what qol-tools should do for the user".
+description: Use when weighing trade-offs that touch the mission of qol-tools — what the product is, who it's for, and the non-negotiable user-facing promises that any feature, bug fix, or architecture decision must respect. Covers the user experience, portability, host-OS interaction, hotkeys, settings, sync, and "what qol-tools should do for the user".
 ---
 
 # qol-tools Mission

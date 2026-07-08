@@ -1,6 +1,6 @@
 ---
 name: code-review
-description: Run code reviews, from ordinary patch review to domain-focused sub-agent review boards. Use when the user asks to review code, review a patch/diff/PR, run security/correctness/performance/architecture/release/CI review, spin up reviewer agents, delegate reviewers, or synthesize pass/conditional/block findings with severity, confidence, actionability, and machine-parseable output.
+description: Use when the user asks to review code, review a patch/diff/PR, run security/correctness/performance/architecture/release/CI review, spin up reviewer agents, delegate reviewers, or synthesize pass/conditional/block findings with severity, confidence, actionability, and machine-parseable output.
 ---
 
 # Code Review

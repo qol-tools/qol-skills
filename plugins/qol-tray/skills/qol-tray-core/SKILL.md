@@ -76,7 +76,7 @@ socket = "/tmp/qol-plugin.sock"
 
 [[dependencies.binaries]]
 name = "plugin-binary"
-repo = "qol-tools/plugin-repo"
+repo = "owner/plugin-repo"
 pattern = "plugin-binary-{os}-{arch}"
 ```
 

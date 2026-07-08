@@ -25,7 +25,7 @@ Do not assume `origin/<branch>` is unchanged, even if the local repo looked curr
 
 ## Branch lives in a worktree, not the main clone
 
-Before pushing, confirm you are inside a worktree path (`<workspace>/worktrees/<feature>/<repo>/`), not the main clone (`/Users/kaho/repos/private/qol-tools/<repo>/`). Branching inside the main clone is blocked by the `branch-deny-checkout-in-main-clone` hook in this plugin — see the `git-trees` skill for the worktree creation flow. If you somehow arrived on a feature branch in a main clone, push it first to remote, then move work into a fresh worktree before continuing.
+Before pushing, confirm you are inside a worktree path (`worktrees/<feature>/<repo>/`), not the main clone. Branching inside the main clone is blocked by the `branch-deny-checkout-in-main-clone` hook in this plugin — see the `git-trees` skill for the worktree creation flow. If you somehow arrived on a feature branch in a main clone, push it first to remote, then move work into a fresh worktree before continuing.
 
 ## Workflow
 

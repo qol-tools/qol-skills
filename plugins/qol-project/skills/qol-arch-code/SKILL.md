@@ -509,7 +509,7 @@ All three should be replaced with the trait+impls pattern above.
 
 ## Enforcement: PreToolUse hook
 
-This skill ships with a Claude Code PreToolUse hook (`bin/check-qol-arch-code.cjs`) that blocks Edit/Write/MultiEdit/NotebookEdit operations introducing the violations listed above. Active on any `*.rs` file under `*/qol-tools/*`. Specifically blocks:
+This skill ships with a Claude Code PreToolUse hook (`bin/check-qol-arch-code.cjs`) that blocks Edit/Write/MultiEdit/NotebookEdit operations introducing the violations listed above. Active on any `*.rs` file under a `qol-*` repo path. Specifically blocks:
 
 - `compile_error!(...)` — anywhere.
 - `#[cfg(target_os = ...)]` (including `all/any/not(target_os = ...)`) outside the canonical mod.rs re-export pattern (`#[cfg(target_os = "X")] mod X;` or `#[cfg(target_os = "X")] pub use X::Platform;`).

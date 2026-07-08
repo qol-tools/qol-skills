@@ -45,7 +45,7 @@ Required `Cargo.toml` dev-dependencies:
 
 ```toml
 [dev-dependencies]
-qol-tray = { path = "../../qol-tray" }
+qol-plugin-api.workspace = true
 toml = "0.9"
 ```
 

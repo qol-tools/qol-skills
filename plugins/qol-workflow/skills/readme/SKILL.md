@@ -69,7 +69,7 @@ Blazingly fast, feature-rich window switcher with awesome thumbnails!
 
 Good:
 ```
-A window switcher with live previews for [QoL Tray](https://github.com/qol-tools/qol-tray).
+A window switcher with live previews for [QoL Tray](https://github.com/qol-tools/qol-monorepo).
 ```
 
 ### Quick start

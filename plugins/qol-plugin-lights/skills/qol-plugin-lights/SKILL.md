@@ -16,7 +16,7 @@ Lights domain plugin for qol-tray. Daemon-driven, backend-adapter shaped, with s
 - `[capabilities] serial = true` — declares the plugin needs serial-port access (Zigbee coordinator).
 - `[daemon] enabled = true`, `socket = "/tmp/plugin-lights.sock"`, command shares the runtime binary.
 - Platforms: `linux`, `macos`
-- Binary download repo: `qol-tools/plugin-lights`, pattern `plugin-lights-{os}-{arch}`
+- Binary download source: see `[[dependencies.binaries]]` in `plugin.toml`.
 
 `qol-config.toml`:
 

@@ -1,6 +1,6 @@
 ---
 name: coding-general
-description: Universal coding and response-style guidelines for all projects in this workspace. Use when writing or reviewing any code regardless of language, and as the default response-brevity contract for every agent in qol-skills.
+description: Use when writing or reviewing any code in this workspace, regardless of language. Universal coding guidelines and the default response-brevity contract for every agent in qol-skills.
 ---
 
 # General Coding Guidelines

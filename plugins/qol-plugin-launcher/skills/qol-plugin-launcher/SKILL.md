@@ -30,7 +30,7 @@ GPUI launcher is the production launcher. Runs as a long-lived daemon under qol-
 - `[daemon] enabled = true`, `command = "launcher"`, `socket = "/tmp/qol-launcher.sock"`
 - Menu: `Open Launcher` (action `run`)
 - Platforms: `linux`, `macos`
-- Binary download repo: `qol-tools/plugin-launcher`, pattern `launcher-{os}-{arch}`
+- Binary download source: see `[[dependencies.binaries]]` in `plugin.toml`.
 
 ## File Layout
 
@@ -159,7 +159,7 @@ Required `Cargo.toml` dev-dependencies:
 
 ```toml
 [dev-dependencies]
-qol-tray = { path = "../../qol-tray" }
+qol-plugin-api.workspace = true
 toml = "0.9"
 ```
 

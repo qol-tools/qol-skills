@@ -16,7 +16,7 @@ macOS-only key, mouse, and scroll remapping plugin for qol-tray. Runs as a long-
 - `[daemon] enabled = true`, `socket = "/tmp/qol-keyremap.sock"`
 - Menu: `Reload Config` (action `run`)
 - Platforms: `macos` only — the binary `compile_error!`s on other OSes. This predates the `qol-arch-code` strategy-pattern guidance; see that skill (and the sibling `qol-arch-cross-platform` for symbol hygiene, `qol-arch-cicd` for the CI matrix) for the preferred approach when migrating cross-platform.
-- Binary download repo: `qol-tools/plugin-keyremap`, pattern `keyremap-{os}-{arch}`
+- Binary download source: see `[[dependencies.binaries]]` in `plugin.toml`.
 
 `qol-config.toml`:
 

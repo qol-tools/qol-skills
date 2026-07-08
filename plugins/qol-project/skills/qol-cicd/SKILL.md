@@ -1,112 +1,35 @@
 ---
 name: qol-cicd
-description: Use when working on shared CI, versioning, and release automation in qol-cicd, especially reusable workflows consumed by qol repos.
+description: Use when authoring or modifying CI, versioning, or release workflows in the qol-monorepo (.github/workflows/*.yml, .github/scripts/*), or when a release or version bump does not behave as expected.
 ---
 
 # qol-cicd
 
 ## Scope
 
-`qol-cicd` owns shared GitHub Actions workflows and release/versioning standards for qol repos.
+All CI/CD lives in the monorepo under `.github/workflows/` and `.github/scripts/`.
+There are no shared or reusable workflows in a separate repo; each workflow file is the source of truth for its own behavior.
 
-For `qol-tray`, the repo-local workflows are intentionally thin:
-- `.github/workflows/version.yml` calls the reusable `plugin-version.yml`
-- `.github/workflows/release.yml` calls the reusable `qol-tray-release.yml`
+## Workflow inventory, by role
 
-Keep release implementation in `qol-cicd`, not in individual app repos, unless the caller workflow contract itself needs to change.
+- `ci.yml` - lint + test on push/PR. Plans affected crates via `.github/scripts/affected_crates.py`, then runs fmt, clippy `-D warnings`, and tests on an ubuntu + macos matrix. Skips itself on version-bump commits.
+- `plugin-version.yml` - versioning. Runs on push to main (or dispatch); computes a bump per release unit from conventional-commit history, commits `chore(plugins): bump plugin versions`, and pushes `<id>-vX.Y.Z` tags.
+- `release.yml` - plugin releases. Fires on a `<id>-vX.Y.Z` tag; resolves the tag to a crate, derives the platform matrix from that plugin's `plugin.toml` `platforms` via `.github/scripts/plugin_matrix.py`, builds, and publishes assets.
+- `qol-tray-release.yml` - host release. Fires on a `qol-tray-vX.Y.Z` tag.
+- `release-prune.yml` - scheduled cleanup of old releases.
 
-## Current QoL Tray Release Contract
+Release units and tagging rules live in the `qol-tray-release-flow` skill; read it before cutting any release.
 
-The reusable workflow at `.github/workflows/qol-tray-release.yml` is the source of truth for `qol-tray` tagged releases.
+## Editing guidance
 
-- Linux release always builds and publishes
-- macOS release is conditional on Apple signing secrets being present
-- When macOS signing is configured, the workflow builds a universal app bundle, signs it, notarizes it, staples it, and publishes:
-  - `qol-tray-macos-universal.dmg`
-  - `qol-tray-macos-universal.tar.gz`
+- The Python release scripts under `.github/scripts/` have tests in `.github/scripts/tests/`; `ci.yml` runs them on every push, and any script change needs a matching test change.
+- Pin third-party actions to a commit SHA (the existing workflows all do).
+- Keep `RUSTFLAGS`/clippy at `-D warnings` parity with local checks; a workflow that is more lenient than the local gate hides breakage until release time.
+- Platform coverage derives from `plugin.toml` `platforms` - never hardcode a runner list for plugin builds.
 
-Required Apple secrets are optional at the workflow boundary. If they are absent, macOS release is skipped and Linux release still proceeds.
-
-## Versioning
-
-Version computation is centralized in `.github/workflows/plugin-version.yml`.
-
-- It validates manifest version consistency before bumping
-- It computes the next semver from commit history
-- It updates manifests, commits `chore(release): vX.Y.Z`, tags `vX.Y.Z`, and pushes both
-
-For `qol-tray`, `version.yml` currently passes `Cargo.toml` as both cargo and plugin manifest because the app has no separate `plugin.toml`.
-
-## Editing Guidance
-
-- Prefer reusable workflows over copy-pasted repo-local workflow logic
-- Keep secrets optional unless the entire caller workflow must hard-fail without them
-- Be careful with GitHub workflow evaluation rules: `workflow_call` secret requirements are validated before jobs start
-- When changing reusable release contracts, update the README in the same change
-
-## Sibling repo checkout in CI
-
-When a qol-* repo declares a sibling as a Cargo path dep (`path = "../<sibling>"`), CI has to check out the matching branch of the sibling next to the consumer, then run cargo from the consumer's subdir. See the consumer's `Cargo.toml` for the live pairings.
-
-Workflow shape:
-
-```yaml
-steps:
-  - name: Checkout consumer
-    uses: actions/checkout@v4
-    with:
-      path: qol-tray            # consumer goes into a subdir
-
-  - name: Checkout other sibling
-    uses: actions/checkout@v4
-    with:
-      repository: qol-tools/qol-config
-      path: qol-config
-
-  - name: Resolve sibling ref
-    env:
-      HEAD_REF: ${{ github.head_ref }}
-      REF_NAME: ${{ github.ref_name }}
-    shell: bash
-    run: |
-      if [ -n "$HEAD_REF" ]; then
-        printf 'SIBLING_REF=%s\n' "$HEAD_REF" >> "$GITHUB_ENV"
-      else
-        printf 'SIBLING_REF=%s\n' "$REF_NAME" >> "$GITHUB_ENV"
-      fi
-
-  - name: Checkout qol-migrations at matching ref
-    uses: actions/checkout@v4
-    with:
-      repository: qol-tools/qol-migrations
-      ref: ${{ env.SIBLING_REF }}
-      path: qol-migrations
-
-  - name: Build
-    working-directory: qol-tray
-    run: cargo build
-
-  - name: Test
-    working-directory: qol-tray
-    run: cargo test
-```
-
-Two things make this non-obvious:
-
-- **Env-indirection is mandatory.** Writing `ref: ${{ github.head_ref }}` (or any input on the workflow-injection deny list) directly in a `with:` block is blocked by the security-reminder hook. Pass risky inputs through `env:` first, resolve in a `bash` step, then read from `env.<NAME>` in the `with:`. The example above survives the hook.
-- **Both repos check out as siblings.** The consumer must use `path:` so it doesn't land at `$GITHUB_WORKSPACE` root; otherwise the sibling has nowhere to go that satisfies `path = "../<sibling>"`. Run cargo with `working-directory: <consumer>` after.
-
-Branch-parity is the convention: a feature branch in the consumer is built against the same-named branch in each sibling it declares as a path dep. The resolver falls back to `github.ref_name` (which is `main` on push-to-main) so the default flow keeps working. If a sibling does not have a matching branch, the clone step fails loudly - that is the correct failure mode, not a fallback to main with a warning.
-
-A `git = "...", branch = "..."` Cargo dep form looks like it would avoid this dance, but it pins to a SHA in `Cargo.lock`, breaks worktree-local iteration, and contradicts the qol-tray-data-migrations skill. Keep path deps and pay the small CI complexity.
-
-## Local Verification
-
-Useful checks:
+## Local verification
 
 ```bash
-ruby -e 'require "yaml"; YAML.load_file(".github/workflows/qol-tray-release.yml"); puts "ok"'
-git diff --check
+ruby -e 'require "yaml"; YAML.load_file(".github/workflows/release.yml"); puts "ok"'
+python3 -m unittest discover -s .github/scripts/tests -p 'test_*.py'
 ```
-
-Python versioning tests live in `standards/versioning/tests` and should be run from the `qol-cicd` repo root when `pytest` is available.

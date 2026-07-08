@@ -20,7 +20,7 @@ The "Task Runner" plugin for qol-tray. Despite the directory name, the plugin na
 - `[daemon] enabled = true`, `command = "task-runner"` (no args → daemon mode)
 - Menu: `Status` (action `run`) — pops a desktop notification with daemon health
 - Platforms: `macos`, `linux`
-- Binary download repo: `qol-tools/plugin-ide-checkout`, pattern `task-runner-{os}-{arch}`
+- Binary download source: see `[[dependencies.binaries]]` in `plugin.toml`.
 
 `qol-config.toml`:
 

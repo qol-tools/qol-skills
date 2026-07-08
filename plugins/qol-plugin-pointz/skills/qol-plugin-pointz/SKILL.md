@@ -5,7 +5,7 @@ description: Use when working on the qol-tray pointz desktop server plugin. Cove
 
 # qol-plugin-pointz
 
-Desktop-side daemon for PointZ — the mobile remote-control feature. Lives in the `qol-tools/plugin-pointz` repo. The Rust binary is named `pointzerver` (not `plugin-pointz`) and runs as a long-lived qol-tray daemon. The mobile client is a separate Flutter app — see the `pointz-client` skill.
+Desktop-side daemon for PointZ — the mobile remote-control feature. Lives under `plugins/plugin-pointz` in the monorepo. The Rust binary is named `pointzerver` (not `plugin-pointz`) and runs as a long-lived qol-tray daemon. The mobile client is a separate Flutter app — see the `pointz-client` skill.
 
 ## Plugin Contract
 
@@ -16,7 +16,7 @@ Desktop-side daemon for PointZ — the mobile remote-control feature. Lives in t
 - `[daemon] enabled = true`, `socket = "/tmp/qol-pointz.sock"` (env-overridable via `TMPDIR`)
 - `[menu]` exposes one item: `Settings`
 - Platforms: `linux`, `macos` (Windows partially compiled — `windows` cargo deps present, but the plugin manifest does not declare windows yet)
-- Binary download repo: `qol-tools/pointzerver`, pattern `pointzerver-{os}-{arch}`
+- Binary download source: see `[[dependencies.binaries]]` in `plugin.toml`.
 
 `qol-config.toml`:
 
@@ -85,4 +85,4 @@ The mobile-side protocol is documented in the `pointz-client` skill.
 
 - `cargo test` validates the contract (every plugin includes the standard `validate_plugin_contract` test).
 - No Makefile in this repo. qol-tray uses `cargo build` directly in dev mode.
-- Release flow: tag-driven via `qol-cicd`. `pointzerver` binaries publish to `qol-tools/pointzerver` releases.
+- Release flow: tag-driven release units on the monorepo (`plugin-pointz-vX.Y.Z`); see `qol-tray-release-flow`.

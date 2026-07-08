@@ -5,7 +5,7 @@ description: Use when bootstrapping a new qol-tray plugin from plugin-template, 
 
 # qol-plugin-template
 
-`plugin-template` is the canonical starting point for new qol-tray plugins. It ships a binary-first runtime entrypoint, contract-validation test, atomic install flow, and `qol-cicd`-wired GitHub Actions. Forking this repo (or copying its files into a new repo) is the recommended way to start a new plugin.
+`plugin-template` is the canonical starting point for new qol-tray plugins. It ships a binary-first runtime entrypoint, contract-validation test, and atomic install flow. Copying `plugins/plugin-template/` to a new `plugins/<id>/` directory is the recommended way to start a new plugin.
 
 ## Plugin Contract
 
@@ -17,7 +17,7 @@ description: Use when bootstrapping a new qol-tray plugin from plugin-template, 
 - `runtime.actions = { run = ["run"], settings = ["settings"] }`
 - Menu: `Run` + `Settings`
 - Platforms: `linux`, `macos`
-- `[[dependencies.binaries]]` points at `qol-tools/plugin-template`
+- `[[dependencies.binaries]]` declares where the built binary downloads from; see the template's `plugin.toml`
 
 No `qol-config.toml` — the template ships without editable settings. Add one when your plugin needs them.
 
@@ -52,7 +52,7 @@ When forking the template into a new plugin, change:
 2. **Manifest metadata**: update `plugin.toml`'s `name`, `description`, `author`, `platforms`, and `[[dependencies.binaries]]` block.
 3. **Plugin behavior**: replace the `run` action body in `src/main.rs` with real logic. Move logic into modules as it grows — keep `main.rs` thin.
 4. **Platform support**: trim `src/platform/` if your plugin's settings action doesn't differ by OS. Add stubs (returning typed `Err`) for any OS you don't support — see the `qol-arch-code` skill.
-5. **Versioning**: keep `Cargo.toml` and `plugin.toml` versions in sync. `qol-cicd`'s plugin-version workflow validates this.
+5. **Versioning**: keep `Cargo.toml` and `plugin.toml` versions in sync. The monorepo version workflow validates this.
 6. **Daemon**: not in the template. Add `[daemon]` to `plugin.toml` and a daemon socket loop only if the plugin needs a long-running process.
 7. **Settings**: add `qol-config.toml` when you need editable settings. Auto-config in qol-tray will render them. If your contract references actions/queries by name, also add `qol-runtime.toml`.
 
@@ -65,13 +65,10 @@ When forking the template into a new plugin, change:
 
 ## CI/CD
 
-Three reusable workflows live in `.github/workflows/`:
+The template is a workspace member of the monorepo; there are no per-plugin workflows.
 
-- **`ci.yml`** — runs on PRs. `cargo check` + `cargo test`. Calls into `qol-cicd`'s reusable plugin-ci workflow when present.
-- **`version.yml`** — wired to `qol-tools/qol-cicd`'s `plugin-version.yml`. Bumps semver from commit history, validates manifest version consistency, commits `chore(release): vX.Y.Z`, pushes the tag.
-- **`release.yml`** — fires on `v*` tag push. Builds Linux + macOS binaries, attaches to the GitHub release.
-
-The plugin-template ships with these wired correctly — don't strip them when forking. If the user forks to a private repo, they may need to update workflow permissions, but the workflow YAMLs themselves stay as-is.
+- The monorepo `ci.yml` covers it via affected-crate planning (fmt, clippy `-D warnings`, tests, ubuntu + macos).
+- Releases are tag-driven release units (`<plugin-id>-vX.Y.Z`); see `qol-tray-release-flow`.
 
 ## Atomic Install Flow
 
@@ -89,11 +86,10 @@ This pattern is worth preserving when customizing — keep the `*.new` rename st
 
 ## Gotchas
 
-- **README's "License: MIT"** is wrong — the actual `LICENSE` file is PolyForm-Noncommercial-1.0.0 to match the rest of the org. Fix when you fork (or update the template).
-- **`Cargo.toml` declares `qol-tray` as git dep**, not path. That's intentional for the template (it has no fixed sibling layout). When forking into the qol-tools workspace, you may want to switch to `path = "../qol-tray"` for dev iteration speed.
+- **Shared crates come in as workspace deps** (`qol-plugin-api.workspace = true`); no git or path dep juggling.
 - **No `qol-config` dep** in the template — adding it is part of customization. Don't be surprised if a fresh fork has no config-reading code.
 - **`anyhow = "1"`** is the only runtime dep. Keep it minimal — every dep is a transitive cost.
-- **`make release`** runs lint, test, version bump, commit, tag, push in one command. Read the Makefile before running it on a real plugin — it's destructive on purpose.
+- **`make release`** just runs `cargo build --release`; versioning and tagging are owned by the monorepo release pipeline.
 
 ## Shared library usage
 
@@ -104,7 +100,6 @@ None at template baseline. Add `qol-plugin-api`, `qol-config`, etc. as the custo
 - `qol-arch-code` — strategy-pattern compartmentalization for platform code (mandatory once you add multi-OS behavior).
 - `qol-arch-cross-platform` — symbol/import hygiene preventing dead_code-on-other-platform under `-D warnings`.
 - `qol-arch-cicd` — CI/release workflow contract: matrix builds derived from `plugin.toml` `platforms`, `RUSTFLAGS=-D warnings` everywhere, sibling-checkout parity for path-deps.
-- `qol-cicd` — the reusable workflows the template's `version.yml` and `release.yml` call into.
 - Releases: every plugin under `plugins/*` with a `plugin.toml` is a release unit covered by `qol-tray-release-flow`; no per-plugin release skill is needed.
 - `qol-shared-libs` — what belongs in shared libs vs the plugin itself.
 - `coding-general` — universal guidelines that apply to plugin code.

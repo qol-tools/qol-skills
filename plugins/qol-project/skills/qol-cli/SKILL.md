@@ -1,6 +1,6 @@
 ---
 name: qol-cli
-description: Stable mental model for the local `qol` CLI; command facts come from `qol --help`.
+description: Use when answering questions about `qol` CLI commands or changing `tools/qol-cli` behavior. Stable ownership model only; command facts come from `qol --help`, never from memory.
 ---
 
 # qol CLI

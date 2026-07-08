@@ -57,7 +57,7 @@ When a plugin needs a new crate (e.g., `x11rb`, `libc`):
 - If TWO+ plugins use it for the SAME purpose → add to the relevant shared lib
 - Platform-specific deps use `[target.'cfg(target_os = "...")'.dependencies]`
 
-All shared lib repos live at `<qol-tools-workspace>/qol-*/` — typically `~/repos/private/qol-tools/qol-*/` on Mac or `/media/kmrh47/WD_SN850X/Git/qol-tools/qol-*/` on Linux. Adjust to your machine.
+All shared lib crates live under `libs/` in the monorepo, consumed as workspace deps.
 
 ## Plugin Contract Files (v1.3+ of qol-config)
 

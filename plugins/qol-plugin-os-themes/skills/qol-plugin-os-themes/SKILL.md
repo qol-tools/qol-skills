@@ -18,7 +18,7 @@ The broader plan (GTK theme switching, Qt, icon themes, cursor themes, Wayland) 
 - `[daemon] enabled = true`, `socket = "/tmp/qol-os-themes.sock"`
 - Menu: `Cursor Grow` (action `run`) + `Settings`
 - Platforms: `linux` only
-- Binary download repo: `qol-tools/plugin-os-themes`
+- Binary download source: see `[[dependencies.binaries]]` in `plugin.toml`.
 
 `qol-config.toml`:
 
