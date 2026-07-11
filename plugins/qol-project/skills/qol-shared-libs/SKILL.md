@@ -17,6 +17,7 @@ Before adding functionality to a plugin, check if it belongs in a shared library
 | `qol-runtime` | State socket protocol, monitor bounds | `PlatformStateClient`, `MonitorBounds`, `CursorPos`, `protocol` |
 | `qol-process` | Cross-platform process lifecycle | detached spawning, PID liveness, termination, waiting, child reaping |
 | `qol-apps` | App inventory and desktop integration | Linux desktop entries, macOS bundles, default open, file-manager reveal |
+| `qol-hotkeys` | Shared hotkey grammar and native key adapters | canonical grammar, evdev keycodes and modifier state, macOS keycodes |
 | `qol-color` | Color utilities | |
 | `qol-search` | Fuzzy matching | `fuzzy_match`, `FuzzyMatch` |
 | `qol-fx` | Standalone canvas/CSS animation effects (JS) | `dissolve`, `dissolve-gpu`, `glitch-squares`, `glow`, `canvas` |
@@ -28,7 +29,7 @@ Before adding functionality to a plugin, check if it belongs in a shared library
 |--------|-------------|
 | plugin-alt-tab | qol-plugin-api, qol-config, qol-color |
 | plugin-launcher | qol-plugin-api, qol-search, qol-frecency, qol-platform, qol-apps |
-| plugin-keyremap | qol-plugin-api, qol-config |
+| plugin-keyremap | qol-plugin-api, qol-config, qol-hotkeys |
 | plugin-os-themes | qol-plugin-api, qol-config |
 | plugin-pointz | qol-plugin-api |
 | plugin-window-actions | qol-config |
@@ -44,13 +45,14 @@ Before adding functionality to a plugin, check if it belongs in a shared library
 5. **Is this config loading?** → Check `qol-config`
 6. **Is this app discovery, default opening, or file-manager reveal?** → Check `qol-apps`
 7. **Is this process lifecycle or detached spawning?** → Check `qol-process`
-8. **Could another plugin need this?** → Put it in the shared lib
+8. **Is this hotkey grammar, native keycode mapping, or modifier state?** → Check `qol-hotkeys`
+9. **Could another plugin need this?** → Put it in the shared lib
 
 ## Push Order
 
 Shared libs must be pushed BEFORE plugins that depend on them. Order:
 1. `qol-runtime` (lowest level)
-2. `qol-platform`, `qol-config`, `qol-color`, `qol-search`, `qol-frecency`, `qol-process`
+2. `qol-platform`, `qol-config`, `qol-color`, `qol-search`, `qol-frecency`, `qol-process`, `qol-hotkeys`
 3. `qol-plugin-api` (depends on qol-runtime)
 4. `qol-apps` (depends on qol-platform and qol-process)
 5. Individual plugins (depend on above)
