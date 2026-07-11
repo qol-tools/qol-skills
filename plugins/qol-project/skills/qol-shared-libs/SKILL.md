@@ -15,6 +15,8 @@ Before adding functionality to a plugin, check if it belongs in a shared library
 | `qol-config` | Plugin config + runable contracts, validation, CLI validator | `contract::v1` (ConfigSpec, FieldKind incl. Color/Action/List/Status/QrCode), `contract::runtime` (RuntimeSpec, ActionSpec, QuerySpec), `contract::cross_validate` (validate_contracts), `normalized`, `validation` |
 | `qol-platform` | OS detection, capability flags | `PlatformCapabilities` (can_global_hotkey, can_focus_popup, can_clipboard_monitor, can_window_positioning) |
 | `qol-runtime` | State socket protocol, monitor bounds | `PlatformStateClient`, `MonitorBounds`, `CursorPos`, `protocol` |
+| `qol-process` | Cross-platform process lifecycle | detached spawning, PID liveness, termination, waiting, child reaping |
+| `qol-apps` | App inventory and desktop integration | Linux desktop entries, macOS bundles, default open, file-manager reveal |
 | `qol-color` | Color utilities | |
 | `qol-search` | Fuzzy matching | `fuzzy_match`, `FuzzyMatch` |
 | `qol-fx` | Standalone canvas/CSS animation effects (JS) | `dissolve`, `dissolve-gpu`, `glitch-squares`, `glow`, `canvas` |
@@ -25,12 +27,12 @@ Before adding functionality to a plugin, check if it belongs in a shared library
 | Plugin | Shared Libs |
 |--------|-------------|
 | plugin-alt-tab | qol-plugin-api, qol-config, qol-color |
-| plugin-launcher | qol-plugin-api, qol-search, qol-frecency, qol-platform |
+| plugin-launcher | qol-plugin-api, qol-search, qol-frecency, qol-platform, qol-apps |
 | plugin-keyremap | qol-plugin-api, qol-config |
 | plugin-os-themes | qol-plugin-api, qol-config |
 | plugin-pointz | qol-plugin-api |
 | plugin-window-actions | qol-config |
-| qol-shot | qol-config |
+| qol-shot | qol-config, qol-apps |
 | plugin-lights | (none) |
 
 ## Before Adding Code to a Plugin
@@ -40,15 +42,18 @@ Before adding functionality to a plugin, check if it belongs in a shared library
 3. **Is this GPUI window management?** → Check `qol-plugin-api::window`
 4. **Is this X11/focus/monitor?** → Check `qol-plugin-api::focus` or `qol-plugin-api::monitor`
 5. **Is this config loading?** → Check `qol-config`
-6. **Could another plugin need this?** → Put it in the shared lib
+6. **Is this app discovery, default opening, or file-manager reveal?** → Check `qol-apps`
+7. **Is this process lifecycle or detached spawning?** → Check `qol-process`
+8. **Could another plugin need this?** → Put it in the shared lib
 
 ## Push Order
 
 Shared libs must be pushed BEFORE plugins that depend on them. Order:
 1. `qol-runtime` (lowest level)
-2. `qol-platform`, `qol-config`, `qol-color`, `qol-search`, `qol-frecency`
+2. `qol-platform`, `qol-config`, `qol-color`, `qol-search`, `qol-frecency`, `qol-process`
 3. `qol-plugin-api` (depends on qol-runtime)
-4. Individual plugins (depend on above)
+4. `qol-apps` (depends on qol-platform and qol-process)
+5. Individual plugins (depend on above)
 
 ## Adding a New Dependency
 

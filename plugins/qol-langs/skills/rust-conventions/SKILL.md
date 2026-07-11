@@ -28,9 +28,9 @@ When stopping child processes:
 1. Send SIGTERM first (Unix) to allow graceful cleanup
 2. Wait with timeout (2s is reasonable)
 3. Only SIGKILL if process doesn't respond
-4. Use `qol-process` for PID liveness, termination escalation, waiting, and
-   child reaping; do not duplicate `kill`, `waitpid`, or Windows process-handle
-   plumbing in apps and plugins
+4. Use `qol-process` for detached spawning, PID liveness, termination
+   escalation, waiting, and child reaping; do not duplicate process-group,
+   `kill`, `waitpid`, or Windows process-handle plumbing in apps and plugins
 5. Keep raw platform signaling capability-local only when a non-standard signal
    such as SIGINT is part of the external program's protocol
 
