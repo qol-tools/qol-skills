@@ -11,6 +11,7 @@ Before adding functionality to a plugin, check if it belongs in a shared library
 
 | Library | Purpose | Key Modules |
 |---------|---------|-------------|
+| `qol-conventions` | Cross-process constants and wire contracts | doctor CLI/report contract, daemon health snapshots, settings URLs |
 | `qol-plugin-api` | Shared GPUI plugin infrastructure | `daemon` (socket IPC), `window` (ActiveWindows, open_window_with_focus), `keepalive` (keepalive window), `monitor` (MonitorTracker), `focus` (X11 process focus check), `activation` (macOS policy), `app_icon` |
 | `qol-config` | Plugin config + runable contracts, validation, CLI validator | `contract::v1` (ConfigSpec, FieldKind incl. Color/Action/List/Status/QrCode), `contract::runtime` (RuntimeSpec, ActionSpec, QuerySpec), `contract::cross_validate` (validate_contracts), `normalized`, `validation` |
 | `qol-platform` | OS detection, capability flags | `PlatformCapabilities` (can_global_hotkey, can_focus_popup, can_clipboard_monitor, can_window_positioning) |
@@ -38,20 +39,21 @@ Before adding functionality to a plugin, check if it belongs in a shared library
 
 ## Before Adding Code to a Plugin
 
-1. **Is this platform-specific behavior?** → Check `qol-platform` or `qol-plugin-api`
-2. **Is this daemon/socket/IPC?** → Check `qol-plugin-api::daemon`
-3. **Is this GPUI window management?** → Check `qol-plugin-api::window`
-4. **Is this X11/focus/monitor?** → Check `qol-plugin-api::focus` or `qol-plugin-api::monitor`
-5. **Is this config loading?** → Check `qol-config`
-6. **Is this app discovery, default opening, or file-manager reveal?** → Check `qol-apps`
-7. **Is this process lifecycle or detached spawning?** → Check `qol-process`
-8. **Is this hotkey grammar, native keycode mapping, or modifier state?** → Check `qol-hotkeys`
-9. **Could another plugin need this?** → Put it in the shared lib
+1. **Is this a cross-process constant or serialized wire type?** → Check `qol-conventions`
+2. **Is this platform-specific behavior?** → Check `qol-platform` or `qol-plugin-api`
+3. **Is this daemon/socket/IPC?** → Check `qol-plugin-api::daemon`
+4. **Is this GPUI window management?** → Check `qol-plugin-api::window`
+5. **Is this X11/focus/monitor?** → Check `qol-plugin-api::focus` or `qol-plugin-api::monitor`
+6. **Is this config loading?** → Check `qol-config`
+7. **Is this app discovery, default opening, or file-manager reveal?** → Check `qol-apps`
+8. **Is this process lifecycle or detached spawning?** → Check `qol-process`
+9. **Is this hotkey grammar, native keycode mapping, or modifier state?** → Check `qol-hotkeys`
+10. **Could another plugin need this?** → Put it in the shared lib
 
 ## Push Order
 
 Shared libs must be pushed BEFORE plugins that depend on them. Order:
-1. `qol-runtime` (lowest level)
+1. `qol-conventions`, `qol-runtime` (lowest level)
 2. `qol-platform`, `qol-config`, `qol-color`, `qol-search`, `qol-frecency`, `qol-process`, `qol-hotkeys`
 3. `qol-plugin-api` (depends on qol-runtime)
 4. `qol-apps` (depends on qol-platform and qol-process)
