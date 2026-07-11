@@ -35,6 +35,9 @@ When stopping child processes:
 - Use `std::path::PathBuf` and `Path` for all file operations
 - Use `std::env::temp_dir()` instead of hardcoded `/tmp`
 - `Path::exists()` returns `false` for broken symlinks - use `symlink_metadata().is_ok()` to detect symlink existence
+- Use `qol-fs::{atomic_write, atomic_write_durable}` for regular file-content
+  replacement; never hand-roll sibling temp writes and renames. Binary swaps,
+  directory promotion, and no-clobber creation stay capability-local.
 
 ## Performance
 
