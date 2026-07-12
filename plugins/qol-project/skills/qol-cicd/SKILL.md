@@ -26,6 +26,7 @@ Release units and tagging rules live in the `qol-tray-release-flow` skill; read 
 - Pin third-party actions to a commit SHA (the existing workflows all do).
 - Keep `RUSTFLAGS`/clippy at `-D warnings` parity with local checks; a workflow that is more lenient than the local gate hides breakage until release time.
 - Platform coverage derives from `plugin.toml` `platforms` - never hardcode a runner list for plugin builds.
+- Run release pruning sub-daily at a non-zero minute and keep manual dispatch available; weekly cleanup allows bursty versioning to accumulate stale releases for too long.
 
 ## Local verification
 
