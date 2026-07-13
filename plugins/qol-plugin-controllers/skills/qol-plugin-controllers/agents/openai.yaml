@@ -1,0 +1,4 @@
+interface:
+  display_name: "QoL Controllers"
+  short_description: "Controller input, Bluetooth, and rumble internals"
+  default_prompt: "Use $qol-plugin-controllers to diagnose or change the qol Controllers plugin safely."

@@ -148,6 +148,15 @@
       "author": {
         "name": "KMRH47"
       }
+    },
+    {
+      "name": "qol-plugin-controllers",
+      "description": "Skills for the qol-tray Controllers plugin: browser Gamepad mapping, hardware profiles, Linux evdev and Bluetooth diagnostics, signal semantics, and rumble testing.",
+      "source": "./plugins/qol-plugin-controllers",
+      "version": "0.1.0",
+      "author": {
+        "name": "KMRH47"
+      }
     }
   ]
 }

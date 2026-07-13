@@ -266,6 +266,20 @@ When upgrading older example-tests, follow the picker above. Do not migrate work
 
 ## Recipes (concrete patterns from the workspace)
 
+### Recipe: browser hardware APIs
+
+Source-check the API contract, then split deterministic transformation from the live browser boundary. For the Gamepad API, use the [W3C Gamepad Working Draft dated 2025-07-10](https://www.w3.org/TR/2025/WD-gamepad-20250710/) until a newer primary specification is verified.
+
+Test pure normalization, profile selection, presentation, and effect planning with plain objects. For the browser integration surface:
+
+1. Inject the smallest fake for `navigator.getGamepads()` or the relevant hardware API.
+2. Give fake actuators or devices a call log that records payloads, ordering, cancellation, and reset.
+3. Intercept the native/backend query when the UI merges browser and host data.
+4. Assert lifecycle behavior such as disconnect, selection change, visibility loss, and unmount, not only the happy-path payload.
+5. Assert requested timing independently from promise resolution; a fake that resolves immediately must not collapse a duration-based sequence.
+
+Use Playwright first for the real rendered surface. If its shared transport is unavailable, a local browser driven through the Chrome DevTools Protocol is an acceptable fallback when it runs the same page and assertions. Keep this separate from a real-hardware smoke test: fakes prove browser and IPC contracts, while physical hardware proves the OS/browser/device stack.
+
 ### Recipe: testing command-execution wrappers (tokio::process)
 
 Use real shell commands instead of mocking the process layer. POSIX coreutils give you a stable, fast vocabulary for every behaviour you need to assert:
