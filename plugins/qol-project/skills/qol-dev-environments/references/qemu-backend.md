@@ -8,6 +8,7 @@
 - [Launch construction](#launch-construction)
 - [Ownership order](#ownership-order)
 - [Process and identity model](#process-and-identity-model)
+- [Guest control and development payloads](#guest-control-and-development-payloads)
 - [Teardown and recovery](#teardown-and-recovery)
 - [Security posture](#security-posture)
 
@@ -102,6 +103,22 @@ Bind destructive control to multiple matching facts:
 - process liveness and exit evidence
 
 Never trust a report-provided arbitrary pidfile or artifact path over the canonical run layout.
+
+## Guest control and development payloads
+
+Run desktop automation through a versioned guest runner attached to a dedicated
+virtio-serial port. Start it as the logged-in desktop user, then verify the protocol,
+prepared-image identity, user, desktop, display protocol, and graphical-session
+environment before sending typed argv commands. Keep this channel guest-only; agent
+automation must not fall back to host input or host window control.
+
+Build real plugin artifacts once on the host and copy only those artifacts into an
+immutable per-run staging directory. A backend may expose that directory through QEMU
+9p with `readonly=on`, but must never expose the repository, worktree, home directory,
+or mutable build directory. Bind the canonical staging path and manifest to parent/child
+run evidence, and collect guest results through a separate explicit channel. This is an
+internal sandbox transport, not a substitute for the user-facing injection `Medium`
+being tested. See the current [QEMU filesystem-device documentation](https://www.qemu.org/docs/master/system/qemu-manpage.html) for `-fsdev`/`virtio-9p` options.
 
 ## Teardown and recovery
 
