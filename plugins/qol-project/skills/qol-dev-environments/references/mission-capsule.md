@@ -1,52 +1,47 @@
 # Mission Capsule
 
-## Framing
-
-Primary contract:
+## Primary contract
 
 ```text
 environment registry first
-VM/QEMU first backend
-workflows as per-environment actions
+backend capability second
+workflows as environment actions
+evidence and cleanup as completion criteria
 ```
 
-## Core contract
+Build clean-OS testing as an executable product surface, not a collection of VM instructions. A person or agent should supply a small set of inputs and receive a reproducible environment or a structured report.
 
-- Keep the first artifact executable, not documentation-only: `env up` clean environment -> `flow run` deterministic scenario with optional reboot and rerun checks -> teardown/report.
-- Treat `qol-mission` value as measured by repeatable behavior, not spec volume.
-- Do not move beyond the first deterministic loop until it is stable.
+## User-facing promises
+
+- Keep testing off the user's active desktop session when a clean environment can host it.
+- Make prerequisites and unsupported capabilities visible before launch.
+- Leave the host as found outside declared config, cache, run, and evidence locations.
+- Make failure recoverable from durable ownership and report state.
+- Make parallelism bounded by explicit resource admission.
+- Preserve enough evidence for another human or agent to continue without rediscovery.
 
 ## Concept split
 
-- `env up`: boot/open a clean OS instance for manual or assisted testing.
-- `flow run`: run one deterministic scenario inside that environment, optionally reboot and rerun checks, without host mutation.
+- Use `env up` for detached clean guests that still need manual or assisted interaction.
+- Use `flow run` for deterministic input-to-verdict scenarios that own their teardown.
+- Use environment definitions for OS identity and requirements.
+- Use backend modules for QEMU or another runtime's mechanics.
+- Use workflow adapters for guest-specific automation.
 
-## Registry model
+Do not force UI-heavy behavior into a fake deterministic test. A quickly reproducible guest with logs and screenshots is a valid workflow node when human judgment remains necessary.
 
-- Repo-owned environment definitions (`flows/envs/*.toml`): OS identity, boot/runtime needs, backend, and capability metadata.
-- Local overrides (`~/.config/qol/dev-envs.toml`): image paths, cache/run roots, and host-specific behavior.
-- Resolver states:
-  - `ready`: path exists and backend is supported.
-  - `missing`: definition exists but image is unavailable locally.
-  - `unsupported`: definition exists but backend or distro capability is missing on this host.
+## Portability rule
 
-## MVP execution
+Represent portability through declared capabilities and resolver outcomes. Never infer that an environment, workflow adapter, or process-control backend works because another platform does.
 
-- First backend/case: QEMU + Linux Mint.
-- Per case: `qcow2` clone from a base image.
-- Steps: install/start -> action check (runtime/socket/process) -> reboot -> same action check -> teardown.
-- Required log outputs: startup, action result, cleanup.
-- Host invariant: host config/files/state remain unchanged outside declared cache/run artifacts.
+Use the definitions and implementation at read time instead of documenting a fixed distro or platform matrix here.
 
-## Not yet
+## Completion rule
 
-- No full UI automation in the first loop.
-- No multi-distro matrix until the first flow is stable.
-- No implied Windows/macOS parity assumptions.
+Treat a run as complete only when:
 
-## Next priorities
-
-1. Build deterministic `flow run` contract and log schema.
-2. Add capability-aware resolver (`ready` / `missing` / `unsupported`) in discovery UI.
-3. Add extension points for additional `flows/envs/*.toml` providers.
-
+1. Its inputs and effective environment are recorded.
+2. Its workload verdict is recorded or the blocking prerequisite is explicit.
+3. Every owned process has a verified terminal outcome.
+4. Disposable artifacts are removed or deliberately retained with a reported reason.
+5. Resource reservations are released only after cleanup proof.

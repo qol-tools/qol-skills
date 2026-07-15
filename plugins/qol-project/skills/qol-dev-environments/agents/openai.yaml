@@ -1,0 +1,4 @@
+interface:
+  display_name: "QoL Dev Environments"
+  short_description: "Operate disposable parallel QoL test environments"
+  default_prompt: "Use $qol-dev-environments to run, recover, or evolve a disposable QoL environment or parallel VM flow with verified cleanup."

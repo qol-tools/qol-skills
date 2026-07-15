@@ -1,93 +1,95 @@
 # Environment Registry
 
-The registry is data-driven. Adding an OS should mean adding or contributing an environment definition, not editing UI code.
+## Ownership
 
-## Definition vs local config
+Keep the registry data-driven. Add or change an OS through its definition and capability model, not through UI conditionals.
 
-Repo or plugin definition:
+- Store repo-owned definitions under `flows/envs/*.toml`.
+- Read the local config path from `qol env doctor` rather than hard-coding it.
+- Resolve the merged view through the shared registry under `tools/qol-cli/src/commands/dev_env/`.
+- Render CLI or UI state from resolver output instead of rediscovering paths independently.
 
-- identifies the environment
-- declares backend and capability requirements
-- supplies boot defaults
-- describes mounts and runtime expectations
+## Definition and local configuration
 
-Local config:
+Use a definition for portable meaning:
 
-- maps environment ids to image paths
-- selects cache/run roots
-- stores host-specific overrides
-- never changes what the environment means
+- stable environment id and display name
+- OS family
+- backend id
+- image kind, base name, architecture, firmware, and sizing guidance
+- boot defaults
+- mount policy
+- capability and adapter declarations
 
-## Environment definition shape
+Use local configuration for host-specific placement:
+
+- image root
+- run root
+- per-environment image overrides
+
+Never let a local override silently change what an environment means.
+
+## Definition shape
+
+Treat the Rust definition types as authoritative. A representative shape is:
 
 ```toml
-id = "linux/mint"
-name = "Linux Mint"
+id = "linux/example"
+name = "Example Linux"
 family = "linux"
 backend = "qemu"
 
 [image]
 kind = "qcow2"
-base = "linux-mint-base.qcow2"
-recommended_size_gb = 40
+base = "example.qcow2"
+recommended_size_gb = 8
+arch = "x86_64"
+firmware = "bios"
 
 [boot]
-memory_mb = 4096
-cpus = 4
-display = "gtk"
-ssh_port = 2222
+memory_mb = 1024
+cpus = 1
+display = "headless"
 
 [mounts]
-workspace = true
+workspace = false
+
+[capabilities]
+acceleration = "hardware"
+flow_adapter = "example-adapter"
 ```
 
-## Local config shape
+Use capability strings to select behavior. Do not turn environment ids into code branches.
 
-```toml
-image_root = "/media/kmrh47/WD_SN850X/qol-env/images"
-run_root = "/media/kmrh47/WD_SN850X/qol-env/runs"
+An environment may intentionally omit `flow_adapter`. Keep it available for manual `qol env up` sessions and reject automated flows with a visible capability error.
 
-[images]
-"linux/mint" = "linux-mint-base.qcow2"
-"linux/ubuntu" = "ubuntu-base.qcow2"
-"windows/11" = "windows-11-base.qcow2"
-```
+## Resolver states
 
-Local paths are examples. Implementations must allow the user to choose host-appropriate roots.
+Resolve every discovered definition to one explicit state:
 
-## Discovery
+- `ready`: the definition, backend, host capabilities, and image are sufficient to launch.
+- `missing`: the definition is valid but a user-provided prerequisite such as the image is unavailable.
+- `unsupported`: this host or implementation cannot satisfy the backend/capability tuple.
 
-Search definitions from stable providers:
+Attach actionable messages. Do not silently fall back to another image, accelerator, architecture, firmware, or backend.
 
-- app-owned flow definitions
-- enabled plugin flow definitions
-- local user definitions, if supported
+Show missing and unsupported definitions in discovery output. Hidden failures make configuration arbitrary and prevent the next action from being inferred.
 
-Merge by environment id. Prefer failing on conflicting definitions unless the override layer is explicit.
+## Adding an environment
 
-## Resolver output
+1. Inspect the current definition types and existing manifests.
+2. Add one definition with a stable id and explicit backend requirements.
+3. Keep the image base immutable and outside disposable case directories.
+4. Run `qol env list` and `qol env doctor` to verify resolver state and messages.
+5. Boot one detached lane before enabling automated flow use.
+6. Add `flow_adapter` only after guest control and teardown are deterministic.
+7. Exercise the adapter with one case before increasing `--jobs`.
 
-Each environment should resolve to exactly one state:
+Do not enumerate a distro matrix in prose. Discover the available set from `flows/envs/*.toml` or `qol env list` at execution time.
 
-```json
-{
-  "id": "linux/mint",
-  "state": "ready",
-  "backend": "qemu",
-  "image": "/path/to/image.qcow2",
-  "run_root": "/path/to/runs",
-  "capabilities": {
-    "acceleration": "kvm",
-    "display": "gtk",
-    "shared_folder": "virtio-9p"
-  },
-  "messages": []
-}
-```
+## Conflict and trust rules
 
-Use `missing` when the user can fix the issue by configuring/downloading an image. Use `unsupported` when this host cannot run the definition with available backends.
-
-## UI rule
-
-`qol dev` should show missing and unsupported entries. Hiding them makes the system feel arbitrary and prevents the user from learning what to fix.
-
+- Reject ambiguous definitions unless an explicit override layer owns the conflict.
+- Validate ids before using them in directory, machine, journal, or lease names.
+- Canonicalize report and run relationships before reconciliation.
+- Treat paths read from reports as evidence to validate, not authority to delete.
