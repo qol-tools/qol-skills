@@ -3,8 +3,8 @@
  * UserPromptSubmit hook: when the user's message mentions CI, workflows, git
  * hooks, or repo bootstrap topics and the session is rooted in qol-tools,
  * inject the `qol-cicd-infra` skill content as additionalContext so the
- * existing qol-cicd infrastructure is in front of Claude BEFORE the first
- * reply. Prevents redesigning what qol-cicd already owns.
+ * repository workflow ownership and architecture constraints are in front of
+ * Claude BEFORE the first reply.
  *
  * Fires on prompt submit, not on tool calls. Design happens in prose, so the
  * trigger has to be the prose. Tool-call matchers fire after the design
@@ -19,7 +19,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const CICD_TOPIC_PATTERN = /\b(CI|CI\/CD|pipeline|workflow|workflows|github actions|reusable workflow|workflow_call|workflow_dispatch|git hook|git hooks|pre-commit|pre-push|commit-msg|cargo-husky|lefthook|husky|cargo-assist|qol-cicd|qol-install-hooks|qol-sync|rustfmt|cargo fmt|cargo clippy|bootstrap|repo setup)\b/i;
-const QOL_WORKSPACE_PATTERN = /qol-tools/;
+const QOL_WORKSPACE_PATTERN =
+    /(?:^|[\\/])(?:qol-tools|qol-[a-z0-9][a-z0-9-]*|plugin-[a-z0-9][a-z0-9-]*)(?:[\\/]|$)/i;
 
 function readStdin() {
     try {
@@ -90,7 +91,7 @@ function main() {
 
 ${body}
 
-The user's message touches CI/workflow/git-hook territory in qol-tools. Read qol-cicd FIRST before proposing or designing anything. Don't duplicate reusable workflows, don't introduce a parallel hook manager, don't write per-repo workflow logic.`;
+The user's message touches CI/workflow/git-hook territory in qol-tools. Route the change from the current repository root. In qol-monorepo, read qol-project:qol-cicd and qol-project:qol-arch-cicd and treat its .github workflows and scripts as product CI. In qol-skills, inspect its own .github workflows, scripts, hooks, and tests. Don't introduce a separate workflow repository or parallel hook manager.`;
 
     const out = {
         hookSpecificOutput: {

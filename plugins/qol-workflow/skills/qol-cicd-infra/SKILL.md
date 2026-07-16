@@ -2,48 +2,58 @@
 name: qol-cicd-infra
 description: >
   Use when discussing, designing, or modifying CI workflows, git hooks, or repo
-  bootstrap across qol-tools. qol-cicd already owns this; read it BEFORE
-  proposing anything new. Loaded automatically by a UserPromptSubmit hook when
-  the user's message touches CI/workflow/git-hook keywords and the session is
-  rooted in qol-tools.
+  bootstrap across qol-tools. Routes each change to the automation owned by the
+  current repository, with extra architecture guidance for qol-monorepo product
+  CI. Loaded automatically by a UserPromptSubmit hook for CI and workflow
+  prompts rooted in qol repositories.
 ---
 
-# qol-cicd is the source of truth
+# Route automation to its repository owner
 
-For org-wide CI, shared git hooks, and repo bootstrap inside `qol-tools`.
+Use this skill as a routing layer. First locate the current repository with
+`git rev-parse --show-toplevel`, then inspect that repository's automation. Do
+not treat a separate `qol-cicd` repository as the owner of current workflows.
 
-## Read before designing
+## qol-monorepo product workflows
 
-- `qol-cicd/.github/workflows/` - reusable workflow definitions (`lib-lint`,
-  `lib-tests`, `lib-version`, `plugin-lint`, `plugin-tests`, `plugin-version`,
-  `plugin-release`, `file-sync`, `auto-label-plugins`, `qol-tray-release`,
-  `release-plugins`, `pr-labeler`, `test-standards`).
-- `qol-cicd/hooks/` - shared local hooks (`pre-commit`, `commit-msg`). Installed
-  into each sibling repo by `qol-install-hooks`.
-- `qol-cicd/bin/` - cross-repo commands: `qol-install-hooks`, `qol-sync`,
-  `qol-repo-status`, `qol-install-merge-driver`, `qol-gh-account`. Activated by
-  sourcing `bin/activate.sh`.
+1. Confirm the repository root is `qol-monorepo`.
+2. Read `qol-project:qol-cicd` for product workflow ownership and local
+   verification.
+3. Read `qol-project:qol-arch-cicd` for platform coverage and warning-parity
+   constraints.
+4. Inspect the owning file under `.github/workflows/` and any helper under
+   `.github/scripts/` before designing a change.
 
-## How repos consume it
+Those monorepo-local files are the source of truth. There is no separate
+reusable-workflow layer to edit or call. Extend the existing owning workflow or
+helper instead of creating parallel automation.
 
-Each qol-* repo's `.github/workflows/lint.yml` (or `ci.yml`, `tests.yml`,
-`version.yml`, `release.yml`) is a 3-line caller of the matching reusable
-workflow in `qol-cicd`. Don't duplicate workflow logic per repo; extend
-qol-cicd and let callers pick it up.
+## qol-skills automation
 
-## Extending, not duplicating
+When the repository root is `qol-skills`, its own `.github/workflows/`,
+`scripts/`, plugin hooks, and tests own skill validation and manifest-sync
+automation. Inspect those files directly. Do not redirect a qol-skills CI change
+to qol-monorepo, and do not describe qol-skills workflows as product CI.
 
-If a desired behavior is missing:
+## Other qol repositories
 
-1. Check whether an existing reusable workflow / hook covers it.
-2. If a gap is real, extend the canonical file in `qol-cicd` (not in N caller
-   repos). Callers stay 3 lines.
-3. For local-side gaps, add a hook to `qol-cicd/hooks/` and re-run
-   `qol-install-hooks` so every clone picks it up.
+Inspect the current repository's `.github/`, hooks, setup commands, and
+repository instructions before choosing an owner. If a workflow delegates to a
+canonical external owner, follow the reference found in the file instead of
+assuming one from historical architecture.
 
-## Anti-patterns to refuse
+## Git hooks and bootstrap
 
-- Designing a fresh CI/hook system without first reading `qol-cicd/`.
-- Adding per-repo workflow logic when a reusable workflow exists.
-- Proposing third-party hook managers (cargo-husky, lefthook, husky) before
-  checking what `qol-install-hooks` + `qol-cicd/hooks/` already deliver.
+Treat these as repository-local concerns unless the current implementation
+delegates them explicitly. In qol-monorepo, inspect `.githooks/` for Git hook
+behavior and the `qol` CLI implementation for setup behavior. Historical
+references to sibling tooling are not ownership evidence.
+
+## Refuse
+
+- Editing or introducing a separate `qol-cicd` workflow repository.
+- Redirecting qol-skills automation into qol-monorepo product CI.
+- Adding a reusable-workflow caller for logic already owned by the current
+  repository.
+- Duplicating a job or release rule without checking its current owning file.
+- Proposing a new hook manager before inspecting `.githooks/` and `qol setup`.

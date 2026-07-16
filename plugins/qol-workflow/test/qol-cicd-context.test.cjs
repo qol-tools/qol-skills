@@ -36,8 +36,12 @@ test('CICD_TOPIC_PATTERN ignores unrelated prose', () => {
     assert.ok(!CICD_TOPIC_PATTERN.test('what is the focused monitor'));
 });
 
-test('QOL_WORKSPACE_PATTERN scopes to qol-tools cwd', () => {
+test('QOL_WORKSPACE_PATTERN scopes to qol repository paths', () => {
     assert.ok(QOL_WORKSPACE_PATTERN.test('/Users/x/repos/private/qol-tools/plugin-alt-tab'));
+    assert.ok(QOL_WORKSPACE_PATTERN.test('/media/x/Git/qol-monorepo'));
+    assert.ok(QOL_WORKSPACE_PATTERN.test('/media/x/Git/qol-skills/plugins/qol-workflow'));
+    assert.ok(QOL_WORKSPACE_PATTERN.test('C:\\Git\\plugin-launcher'));
+    assert.ok(!QOL_WORKSPACE_PATTERN.test('/Users/x/repos/my-qol-project'));
     assert.ok(!QOL_WORKSPACE_PATTERN.test('/Users/x/other-project'));
 });
 
@@ -50,16 +54,33 @@ test('stripFrontmatter returns empty when no frontmatter', () => {
     assert.equal(stripFrontmatter('plain markdown'), '');
 });
 
-test('injects context for matching prompt in qol-tools cwd', () => {
+test('injects context for matching prompt in the monorepo cwd', () => {
     const r = run({
         hook_event_name: 'UserPromptSubmit',
         prompt: 'why did the CI workflow fail with rustfmt',
-        cwd: '/Users/x/repos/private/qol-tools/plugin-alt-tab',
+        cwd: '/media/x/Git/qol-monorepo',
     });
     assert.equal(r.exitCode, 0);
     const parsed = JSON.parse(r.stdout);
     assert.equal(parsed.hookSpecificOutput.hookEventName, 'UserPromptSubmit');
-    assert.match(parsed.hookSpecificOutput.additionalContext, /qol-cicd/);
+    const context = parsed.hookSpecificOutput.additionalContext;
+    assert.match(context, /qol-project:qol-cicd/);
+    assert.match(context, /qol-project:qol-arch-cicd/);
+    assert.match(context, /qol-monorepo product workflows/);
+    assert.doesNotMatch(context, /qol-cicd\/\.github\/workflows/);
+});
+
+test('injects repository-local guidance for a qol-skills CI prompt', () => {
+    const r = run({
+        hook_event_name: 'UserPromptSubmit',
+        prompt: 'update the manifest sync CI workflow',
+        cwd: '/media/x/Git/qol-skills',
+    });
+    assert.equal(r.exitCode, 0);
+    const context = JSON.parse(r.stdout).hookSpecificOutput.additionalContext;
+    assert.match(context, /qol-skills automation/);
+    assert.match(context, /qol-skills, inspect its own \.github workflows/);
+    assert.doesNotMatch(context, /qol-cicd\/\.github\/workflows/);
 });
 
 test('silent when prompt matches but cwd is outside qol-tools', () => {
@@ -72,11 +93,11 @@ test('silent when prompt matches but cwd is outside qol-tools', () => {
     assert.equal(r.stdout.trim(), '');
 });
 
-test('silent when cwd is qol-tools but prompt is off-topic', () => {
+test('silent when cwd is a qol repository but prompt is off-topic', () => {
     const r = run({
         hook_event_name: 'UserPromptSubmit',
         prompt: 'fix the ghost popup placement',
-        cwd: '/Users/x/repos/private/qol-tools/plugin-alt-tab',
+        cwd: '/media/x/Git/qol-monorepo',
     });
     assert.equal(r.exitCode, 0);
     assert.equal(r.stdout.trim(), '');
