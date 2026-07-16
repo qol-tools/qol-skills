@@ -1,6 +1,6 @@
 ---
 name: qol-tray-page-creation
-description: Use when adding a new world-canvas page, dive target, or sub-page to qol-tray. Covers the four page types (top-level, single-page dive, multi-page dive, plugin section), the required registration sites, the data-dive-source contract, content-sized rules, and the don'ts that cause architectural drift.
+description: Use when adding a qol-tray world-canvas page, dive target, sub-page, Component Gallery showcase, or reusable user-facing UI component that must be represented in the gallery. Trigger on gallery source-of-truth, gallery/production parity or drift, and requests to prevent plugin-local or stray UI implementations. Covers page registration, dive contracts, content sizing, and the 1:1 production/gallery test-bed rule.
 ---
 
 # qol-tray Page Creation Reference
@@ -317,6 +317,10 @@ state the fact ("No actions configured.") without repeating the key.
 Component Gallery showcases MUST render the same component, in the same shell,
 with the same props as production. Drift here is a bug. The gallery becomes
 useless as a regression catcher.
+
+Every new reusable user-facing component MUST ship with a Component Gallery
+showcase in the same change. Production and the gallery import the same
+component; a gallery-only copy or plugin-local reimplementation is forbidden.
 
 When prod and gallery render the same detail/sub-page, extract a shared
 presentational component (e.g. `LogDetailContent`, `BackupDetailContent`) into

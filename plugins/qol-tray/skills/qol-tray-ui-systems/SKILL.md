@@ -1,6 +1,6 @@
 ---
 name: qol-tray-ui-systems
-description: Use when adding or modifying UI components, modals, keyboard navigation, dropdowns, toggles, focus management, or selection wedge behavior in qol-tray. Use when touching any file under ui/views/, ui/components/, ui/lib/components/, ui/lib/hooks/, ui/app/, or ui/styles/.
+description: Use when adding or modifying qol-tray UI components, reusable or shared UI, Component Gallery entries, modals, keyboard navigation, dropdowns, toggles, focus management, or selection wedge behavior. Trigger on UI component reuse, stray UI components, gallery/production drift, and changes under ui/views/, ui/components/, ui/lib/components/, ui/lib/hooks/, ui/app/, or ui/styles/. Do not trigger for generic non-UI uses of "component".
 ---
 
 # qol-tray UI Systems Reference
@@ -352,21 +352,22 @@ function ObjectArrayField({ field }) {
 }
 ```
 
-### List row actions (`row_action` + `when`)
+### List row actions (`row_action` / `row_actions`)
 
-`list` fields may declare a `row_action` in qol-config.toml; `ListField` renders it as a per-row button. The optional `when` key names a row field that must be truthy for the button to appear on that row - the daemon decides per row, the UI stays declarative.
+`list` fields declare one `row_action` or an ordered `row_actions` array in qol-config.toml. `ListField` maps query rows into the gallery-owned `SearchableActionList`; each result is its own `ListRow` surface. The first action whose optional `when` field is truthy becomes that row's Enter/Space/click action.
 
 ```toml
 [field.detected_pads.row_action]
 action = "apply_fixes"
 label = "Fix"
 when = "fixable"
+input = { address = "{address}" }
 ```
 
 - Schema: `RowActionSpec` in `libs/qol-config/src/contract/v1.rs` (`action`, `label`, `when`, `input`, `key`); `action` must be declared in qol-runtime.toml (cross-validated).
-- Rendering + gating helper: `ui/views/plugin-config/fields/row-action.js` (`visibleRowAction`, `firstActionableRow`), consumed by `ListField`.
-- Keyboard: Enter/Space on the selected list field runs the FIRST actionable row's action. Mouse: per-row button.
-- `input` and `key` are parsed but not yet consumed by the UI; the action currently dispatches with an empty body.
+- Rendering + gating helper: `ui/views/plugin-config/fields/row-action.js` (`visibleFieldRowAction`, `rowActionInput`), consumed by `ListField`.
+- `input` values interpolate from the activated row and travel through the HTTP action endpoint into `DaemonRequest.input`. Preserve the complete action descriptor during gating or the input is silently lost.
+- Production and the Component Gallery import the same `SearchableActionList`; do not create plugin-specific result-list markup.
 - Prefer a gated row action over a standalone always-visible `action` field whenever the action only makes sense for specific rows.
 
 ### HA-style status gating
