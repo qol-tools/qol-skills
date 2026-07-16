@@ -42,6 +42,7 @@ Keep forced admission explicit and visible in the report.
 ## Image model
 
 - Keep the base image immutable and reusable.
+- Admit prepared qcow2 images only through the verified content-addressed import path.
 - Create one disposable case image per lane.
 - Record every mutable artifact before or as it is created.
 - Remove disposable artifacts only after process identity and exit are verified.
@@ -96,7 +97,7 @@ Bind destructive control to multiple matching facts:
 
 - run id and canonical run directory
 - report kind and report run id
-- supervisor ownership
+- supervisor PID and platform process-start identity
 - canonical QEMU machine name
 - canonical pidfile
 - QMP identity
@@ -108,21 +109,35 @@ Never trust a report-provided arbitrary pidfile or artifact path over the canoni
 
 Run desktop automation through a versioned guest runner attached to a dedicated
 virtio-serial port. Start it as the logged-in desktop user, then verify the protocol,
-prepared-image identity, user, desktop, display protocol, and graphical-session
-environment before sending typed argv commands. Keep this channel guest-only; agent
-automation must not fall back to host input or host window control.
+environment id, prepared-image revision, QEMU-provided run id, user, desktop, display
+protocol, and graphical-session environment before sending typed argv commands. Keep
+this channel guest-only; agent automation must not fall back to host input or host
+window control.
+
+Start automated desktop payload flows only from a worker that has cleared and then
+verified the absence of host graphical-session variables. Treat that as defense in
+depth, not same-user OS isolation. Require the aggregate report to record the cleared
+environment, the lack of an OS security boundary around the host worker, headless guest
+display, offline networking, disabled workspace mount, and read-only payload identity.
+This contract does not cover Enter's manual windowed VM or make all of `qol dev` an
+agent-security boundary.
 
 Build real plugin artifacts once on the host and copy only those artifacts into an
-immutable per-run staging directory. A backend may expose that directory through QEMU
-9p with `readonly=on`, but must never expose the repository, worktree, home directory,
-or mutable build directory. Bind the canonical staging path and manifest to parent/child
-run evidence, and collect guest results through a separate explicit channel. This is an
-internal sandbox transport, not a substitute for the user-facing injection `Medium`
-being tested. See the current [QEMU filesystem-device documentation](https://www.qemu.org/docs/master/system/qemu-manpage.html) for `-fsdev`/`virtio-9p` options.
+immutable per-run staging directory. Package the verified tree as a read-only ISO,
+attach the same image to every lane in the fan-out, and mount it `ro,nosuid,nodev,noexec`
+inside the guest. Never expose the repository, worktree, home directory, or mutable
+build directory. Bind the canonical staging path, image, and manifest digest to
+parent/child run evidence, and collect guest results through a separate explicit
+channel. This is an internal sandbox transport, not a substitute for the user-facing
+injection `Medium` being tested.
+
+Host compilation runs as the current user and may execute build scripts or procedural
+macros. Do not claim hostile-source isolation. Add a separate-user, container, or build
+VM boundary before accepting adversarial source or build dependencies.
 
 ## Teardown and recovery
 
-Prefer graceful QMP shutdown, then escalate through the owned process tree when the timeout expires. Record whether QEMU was alive, whether its exit was verified, whether the tree exited, which artifacts were removed, and why cleanup failed.
+Prefer graceful QMP shutdown, then escalate through the owned process tree when the timeout expires. Never signal only the supervisor or immediate child and infer that descendants exited. Record whether QEMU was alive, whether its exit was verified, whether the tree exited, which artifacts were removed, and why cleanup failed.
 
 Recover orphaned runs through the normal scanners before reading aggregate lane state. A dead supervisor with a still-live QEMU process must trigger owned cleanup, not a stale-report verdict.
 

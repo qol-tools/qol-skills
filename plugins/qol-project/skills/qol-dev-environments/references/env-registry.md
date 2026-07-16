@@ -6,7 +6,7 @@ Keep the registry data-driven. Add or change an OS through its definition and ca
 
 - Store repo-owned definitions under `flows/envs/*.toml`.
 - Read the local config path from `qol env doctor` rather than hard-coding it.
-- Resolve the merged view through the shared registry under `tools/qol-cli/src/commands/dev_env/`.
+- Resolve the merged view through the shared registry under `libs/qol-dev-env/`.
 - Render CLI or UI state from resolver output instead of rediscovering paths independently.
 
 ## Definition and local configuration
@@ -57,11 +57,29 @@ workspace = false
 [capabilities]
 acceleration = "hardware"
 flow_adapter = "example-adapter"
+default_workflow = "example-workflow"
+image_revision = "example-prepared-image-1"
 ```
 
 Use capability strings to select behavior. Do not turn environment ids into code branches.
 
+Use `default_workflow` to declare the action exposed by `qol dev`; do not hard-code workflow ids in the panel. A desktop automation adapter must also declare the exact prepared `image_revision` expected by the guest-control handshake.
+
 An environment may intentionally omit `flow_adapter`. Keep it available for manual `qol env up` sessions and reject automated flows with a visible capability error.
+
+## Verified prepared-image import
+
+Treat `qol dev` `a` as a verification workflow, not raw path registration. Match the selected missing environment to a qcow2 candidate by its exact declared base filename and refuse zero or multiple matches. Keep `qol env image import` as a thin direct veneer over the same typed worker.
+
+The importer must:
+
+1. Canonicalize the source and exact worktree, then persist an `image-import` report before bulk work.
+2. Sparse-convert into owned staging, detect source changes, re-inspect the staged qcow2, and hash the staged bytes.
+3. Boot the staged image headlessly and offline, verify the exact QEMU and prepared-guest identity, and run the manifest-declared live probes.
+4. Stop the owned process tree and prove cleanup before releasing its resource lease.
+5. Promote the verified image read-only to `<image_root>/verified/images/<sha256>.qcow2`, register it atomically, and finalize `<image_root>/verified/imports/<run-id>/report.json`.
+
+Publish the registration before the terminal pass report so config failure cannot leave a falsely successful import. If interrupted between those writes, keep the environment missing until reconciliation validates the already-durable registration and terminalizes the exact report. Treat published-but-unregistered content as abandoned. Resolve a managed registration only when its environment revision, digest, size, read-only image, exact read-only report, successful probes, and cleanup proof agree. Never infer readiness from filename placement alone.
 
 ## Resolver states
 
@@ -81,9 +99,10 @@ Show missing and unsupported definitions in discovery output. Hidden failures ma
 2. Add one definition with a stable id and explicit backend requirements.
 3. Keep the image base immutable and outside disposable case directories.
 4. Run `qol env list` and `qol env doctor` to verify resolver state and messages.
-5. Boot one detached lane before enabling automated flow use.
-6. Add `flow_adapter` only after guest control and teardown are deterministic.
-7. Exercise the adapter with one case before increasing `--jobs`.
+5. Verify and import the exact prepared image before enabling automated flow use.
+6. Boot one detached lane before enabling automated flow use.
+7. Add `flow_adapter` only after guest control and teardown are deterministic.
+8. Exercise the adapter with one case before increasing `--jobs`.
 
 Do not enumerate a distro matrix in prose. Discover the available set from `flows/envs/*.toml` or `qol env list` at execution time.
 

@@ -3,27 +3,33 @@
 ## Primary contract
 
 ```text
+qol dev as the normal user surface
+shared environment engine beneath every surface
 environment registry first
 backend capability second
 workflows as environment actions
 evidence and cleanup as completion criteria
 ```
 
-Build clean-OS testing as an executable product surface, not a collection of VM instructions. A person or agent should supply a small set of inputs and receive a reproducible environment or a structured report.
+Build clean-OS testing as an integrated `qol dev` product surface, not a collection of VM instructions. A person or agent should select a sandbox action and receive a reproducible environment or a structured report. CLI commands remain useful as thin automation and debugging veneers over the same engine.
 
 ## User-facing promises
 
-- Keep testing off the user's active desktop session when a clean environment can host it.
+- Keep automated guest-flow testing off the user's active desktop session.
+- Keep agent-driven pointer, keyboard, window, display, and plugin actions inside verified guest control.
 - Make prerequisites and unsupported capabilities visible before launch.
 - Leave the host as found outside declared config, cache, run, and evidence locations.
 - Make failure recoverable from durable ownership and report state.
 - Make parallelism bounded by explicit resource admission.
 - Preserve enough evidence for another human or agent to continue without rediscovery.
 
+These promises describe the automated desktop-flow path. `qol dev` also starts host-side development services, and Enter deliberately opens a manual windowed VM; the application as a whole is not a global agent-security boundary.
+
 ## Concept split
 
-- Use `env up` for detached clean guests that still need manual or assisted interaction.
-- Use `flow run` for deterministic input-to-verdict scenarios that own their teardown.
+- Use the `qol dev` Sandbox panel for ordinary selection, verified image import, launch, lane count, and status.
+- Use `env up` as the direct engine veneer for detached clean guests that still need manual or assisted interaction.
+- Use `flow run` as the direct engine veneer for deterministic input-to-verdict scenarios that own their teardown.
 - Use environment definitions for OS identity and requirements.
 - Use backend modules for QEMU or another runtime's mechanics.
 - Use workflow adapters for guest-specific automation.

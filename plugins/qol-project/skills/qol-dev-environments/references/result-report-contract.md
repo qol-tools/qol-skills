@@ -31,6 +31,7 @@ Keep separate but linked reports for:
 
 - the detached environment batch
 - the automated flow fan-out
+- the verified prepared-image import
 - each child VM case
 - interruption evidence when an owner dies
 - stable step, preflight, environment, log, and artifact outputs
@@ -42,12 +43,14 @@ Derive paths from the configured run root and canonical run ids. Validate every 
 Record these concepts even if their exact serialization evolves:
 
 - report kind and run id
-- owner PID and ownership state
+- owner PID, platform process-start identity, and ownership state
 - start time and terminal finish time
 - active, terminal, or cleanup-incomplete status
 - requested environment and effective definition
 - requested concurrency and per-lane resources
 - host capacity, budgets, pre-existing reservations, and forced admission
+- prepared-image revision and immutable payload manifest/image identity when required
+- automated desktop-runtime boundary evidence: host session environment cleared as defense in depth, host worker OS security boundary absent, guest headless and offline, no workspace mount, and read-only payload
 - complete planned lane set
 - lane phase, child report path, verdict, and cleanup proof
 - aggregate error when applicable
@@ -68,6 +71,7 @@ Record during the active lifecycle:
 - canonical spawn state and pidfile
 - QEMU PID after observation
 - QMP and serial endpoints
+- guest-control endpoint and verified guest environment/revision/run identity when used
 - canonical machine identity
 - commands as program plus argv
 
@@ -104,6 +108,7 @@ Make cleanup a first-class verdict. For each owned lane, record:
 - process and process-tree exit verification
 - QEMU identity evidence when it may have spawned
 - disposable artifact removal
+- shared payload cleanup or an explicit retained-for-recovery reason
 - cleanup error or ambiguity
 
 Require a terminal cleanup-complete aggregate before removing its host resource lease. Keep the lease on report-write failure or uncertain cleanup.
@@ -129,4 +134,4 @@ Make CLI, UI, CI, and agents summarize the same fields:
 - report path
 - next command
 
-Keep detailed diagnosis in child reports and logs. Keep the aggregate concise enough to scan without hiding cleanup uncertainty.
+Let `qol dev` and CLI veneers own the same typed `RunHandle` and consume these reports directly. Keep stdout and worker logs diagnostic only. Keep detailed diagnosis in child reports and logs, and keep the aggregate concise enough to scan without hiding cleanup uncertainty.
