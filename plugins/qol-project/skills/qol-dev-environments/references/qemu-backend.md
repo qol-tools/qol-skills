@@ -47,6 +47,7 @@ Keep forced admission explicit and visible in the report.
 - Record every mutable artifact before or as it is created.
 - Remove disposable artifacts only after process identity and exit are verified.
 - Preserve evidence reports even when case images are removed.
+- Reuse a persisted managed-image hash only when its cache stamp still matches the exact canonical file identity, size, timestamps, and mode; otherwise hash the image again.
 
 Do not retain a failed case image by accident. If a workflow supports deliberate retention, report that policy and artifact path explicitly.
 
@@ -119,17 +120,25 @@ verified the absence of host graphical-session variables. Treat that as defense 
 depth, not same-user OS isolation. Require the aggregate report to record the cleared
 environment, the lack of an OS security boundary around the host worker, headless guest
 display, offline networking, disabled workspace mount, and read-only payload identity.
-This contract does not cover Enter's manual windowed VM or make all of `qol dev` an
-agent-security boundary.
+This contract covers Enter's guest runtime, but not the host compilation and bundle
+preparation that precede it, and does not make all of `qol dev` an agent-security
+boundary.
 
-Build real plugin artifacts once on the host and copy only those artifacts into an
-immutable per-run staging directory. Package the verified tree as a read-only ISO,
+Select the already-built CLI, tray, plugin artifacts, and required runtime files on the
+host and copy only those artifacts into an immutable per-run staging directory. Package
+the verified tree as a read-only ISO,
 attach the same image to every lane in the fan-out, and mount it `ro,nosuid,nodev,noexec`
 inside the guest. Never expose the repository, worktree, home directory, or mutable
 build directory. Bind the canonical staging path, image, and manifest digest to
 parent/child run evidence, and collect guest results through a separate explicit
 channel. This is an internal sandbox transport, not a substitute for the user-facing
 injection `Medium` being tested.
+
+Install a development bundle through the prepared guest's versioned installer, publish
+it atomically, then start the bundled `qol dev` under an owned user service. Report the
+session ready only after the service is active and its installed-plugin API contains the
+bundle's declared plugins. Do not add a compiler toolchain or rebuild fallback inside
+the guest.
 
 Host compilation runs as the current user and may execute build scripts or procedural
 macros. Do not claim hostile-source isolation. Add a separate-user, container, or build

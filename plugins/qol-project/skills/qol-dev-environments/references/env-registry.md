@@ -81,6 +81,8 @@ The importer must:
 
 Publish the registration before the terminal pass report so config failure cannot leave a falsely successful import. If interrupted between those writes, keep the environment missing until reconciliation validates the already-durable registration and terminalizes the exact report. Treat published-but-unregistered content as abandoned. Resolve a managed registration only when its environment revision, digest, size, read-only image, exact read-only report, successful probes, and cleanup proof agree. Never infer readiness from filename placement alone.
 
+Cache an expensive managed-image content hash only when the cache entry is bound to the exact canonical image identity, size, filesystem timestamps, and mode used by the implementation. Rehash after any mismatch. Treat malformed or incomplete cache state as a miss, never as verification.
+
 ## Resolver states
 
 Resolve every discovered definition to one explicit state:
@@ -103,6 +105,7 @@ Show missing and unsupported definitions in discovery output. Hidden failures ma
 6. Boot one detached lane before enabling automated flow use.
 7. Add `flow_adapter` only after guest control and teardown are deterministic.
 8. Exercise the adapter with one case before increasing `--jobs`.
+9. Exercise artifact-backed Enter only after the prepared desktop accepts the read-only development bundle and reports the guest `qol dev` service and installed plugins ready.
 
 Do not enumerate a distro matrix in prose. Discover the available set from `flows/envs/*.toml` or `qol env list` at execution time.
 

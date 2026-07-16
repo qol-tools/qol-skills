@@ -50,6 +50,7 @@ Record these concepts even if their exact serialization evolves:
 - requested concurrency and per-lane resources
 - host capacity, budgets, pre-existing reservations, and forced admission
 - prepared-image revision and immutable payload manifest/image identity when required
+- development-bundle provenance, manifest digest, declared plugin count, and read-only transport identity when requested
 - automated desktop-runtime boundary evidence: host session environment cleared as defense in depth, host worker OS security boundary absent, guest headless and offline, no workspace mount, and read-only payload
 - complete planned lane set
 - lane phase, child report path, verdict, and cleanup proof
@@ -72,6 +73,7 @@ Record during the active lifecycle:
 - QEMU PID after observation
 - QMP and serial endpoints
 - guest-control endpoint and verified guest environment/revision/run identity when used
+- guest development-service identity and installed-plugin readiness when a development bundle is used
 - canonical machine identity
 - commands as program plus argv
 
@@ -126,7 +128,7 @@ Require a terminal cleanup-complete aggregate before removing its host resource 
 Make CLI, UI, CI, and agents summarize the same fields:
 
 - environment
-- workflow or manual batch
+- workflow, generic environment batch, or artifact-backed development batch
 - lane counts and concurrency
 - current or terminal status
 - failed or incomplete lane

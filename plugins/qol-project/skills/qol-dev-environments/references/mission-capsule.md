@@ -23,18 +23,19 @@ Build clean-OS testing as an integrated `qol dev` product surface, not a collect
 - Make parallelism bounded by explicit resource admission.
 - Preserve enough evidence for another human or agent to continue without rediscovery.
 
-These promises describe the automated desktop-flow path. `qol dev` also starts host-side development services, and Enter deliberately opens a manual windowed VM; the application as a whole is not a global agent-security boundary.
+These promises describe the automated guest-runtime path. The outer `qol dev` session still builds and packages development artifacts as the host user, so the application as a whole is not a hostile-source or global agent-security boundary.
 
 ## Concept split
 
 - Use the `qol dev` Sandbox panel for ordinary selection, verified image import, launch, lane count, and status.
-- Use `env up` as the direct engine veneer for detached clean guests that still need manual or assisted interaction.
+- Use Enter to package existing host-built artifacts and run `qol dev` inside a headless guest without compiling there.
+- Use `env up` as the direct engine veneer for generic detached guests or parallel artifact-backed development sessions.
 - Use `flow run` as the direct engine veneer for deterministic input-to-verdict scenarios that own their teardown.
 - Use environment definitions for OS identity and requirements.
 - Use backend modules for QEMU or another runtime's mechanics.
 - Use workflow adapters for guest-specific automation.
 
-Do not force UI-heavy behavior into a fake deterministic test. A quickly reproducible guest with logs and screenshots is a valid workflow node when human judgment remains necessary.
+Do not force UI-heavy behavior into a fake deterministic test. An artifact-backed guest with logs and screenshots is a valid workflow node when human judgment remains necessary. Keep an explicitly windowed manual path below the normal sandbox surface when direct observation is genuinely required.
 
 ## Portability rule
 

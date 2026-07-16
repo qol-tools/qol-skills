@@ -1,4 +1,4 @@
 interface:
   display_name: "QoL Dev Environments"
-  short_description: "Run headless QoL desktop test guests"
-  default_prompt: "Use $qol-dev-environments to operate the qol dev Sandbox panel and keep automated desktop testing inside disposable headless guests."
+  short_description: "Run isolated host-built QoL dev guests"
+  default_prompt: "Use $qol-dev-environments to run host-built qol dev sessions inside disposable headless guests."

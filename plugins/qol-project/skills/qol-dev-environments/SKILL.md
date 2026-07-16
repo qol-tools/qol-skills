@@ -1,6 +1,6 @@
 ---
 name: qol-dev-environments
-description: Operate, debug, and evolve the `qol dev` Sandbox panel and its disposable OS environments. Use for typed sandbox workers, verified qcow2 import, `qol env`, `qol flow`, prepared desktop images, guest control, QEMU lifecycle or recovery, resource admission, clean-session plugin testing, and parallel guest work that must stay off the user's active desktop session.
+description: Operate, debug, and evolve the `qol dev` Sandbox panel and its disposable OS environments. Use for typed sandbox workers, artifact-backed `qol dev` guests, host-built bundle transport, verified qcow2 import, `qol env`, `qol flow`, prepared desktop images, guest control, QEMU lifecycle or recovery, resource admission, clean-session plugin testing, and parallel guest work that must stay off the user's active desktop session.
 ---
 
 # qol-dev-environments
@@ -25,8 +25,9 @@ Treat the CLI output, environment definitions, implementation source, and run re
 | Run the selected environment's declared real workflow | `qol dev` Sandbox panel, then `r` |
 | Set the next flow's bounded parallelism | `qol dev` Sandbox panel, then `-` or `+` |
 | Verify and import a matching prepared qcow2 image | `qol dev` Sandbox panel, then `a` |
-| Boot or stop a windowed guest for manual work | `qol dev` Sandbox panel, then Enter |
-| Keep one or more clean guests running for manual or assisted testing | `qol env up` |
+| Run or stop isolated `qol dev` using the active worktree's built artifacts | `qol dev` Sandbox panel, then Enter |
+| Run one or more artifact-backed development guests directly | `qol env up <environment> --dev-worktree <absolute-worktree>` |
+| Keep a generic clean guest running without a development payload | `qol env up` without `--dev-worktree` |
 | Execute a deterministic scenario in disposable headless lanes | `qol flow run` |
 | Inspect, screenshot, or stop detached guests | `qol env runs`, `qol env shot`, `qol env down` |
 | Reconcile interrupted fan-outs | `qol flow runs` |
@@ -38,13 +39,26 @@ Prefer `qol dev` for normal work. Keep `qol env` and `qol flow` as thin engine v
 
 From `qol dev`, select an environment in the Sandbox panel. Use `-` and `+` to set the next run's lane count, then press `r` to run its declared `default_workflow`. The panel starts the shared typed worker directly and owns its `RunHandle`; it does not invoke a sibling CLI and scrape stdout.
 
-Treat a desktop workflow as real only when its adapter builds and transports the production artifacts, drives the declared behavior through verified guest control, and records behavior-specific evidence. The current Mint `qol-shot-capture` adapter exercises screenshot selection, preview, pin, and pinned-window movement inside the guest; a harness stub does not satisfy that workflow.
+Treat a desktop workflow as real only when its adapter builds and transports the production artifacts, drives the declared behavior through verified guest control, and records behavior-specific evidence. Inspect the selected adapter rather than relying on a documented behavior snapshot; a harness stub does not satisfy a production workflow.
 
 Press `a` on a missing environment or its exact matching candidate to verify and import the qcow2 image. The result is a read-only content-addressed image at `<image_root>/verified/images/<sha256>.qcow2` and its exact report at `<image_root>/verified/imports/<run-id>/report.json`. Refuse missing or ambiguous matches rather than guessing. See [references/env-registry.md](references/env-registry.md) for the import contract.
 
-Use Enter only for a visible, windowed guest that still needs human judgment. This is a manual VM path, not the automated desktop-flow isolation path. The direct typed-handle integration currently covers `r` and `a`; Enter delegates the CLI-owned `env up` lifecycle, so do not cite it as proof that all detached environment orchestration has been extracted below `qol dev`.
+On a compatible ready environment, Enter packages the active worktree's existing host-built CLI, tray, plugin binaries, and runtime files into one immutable read-only payload. It installs that payload atomically in a headless offline guest, starts the bundled `qol dev` under a user service, and verifies both the service and installed-plugin readiness. It does not compile inside the guest. Press Enter again to stop the owned batch.
 
-Use detached environments from the diagnostic CLI when the task still needs a human or agent to interact with a guest:
+Enter delegates the CLI-owned artifact-backed `env up` lifecycle and consumes its structured report; unlike `r` and `a`, it does not yet own a typed `RunHandle` directly. The panel's `-` and `+` keys set flow fan-out only. Use direct `env up --count` when parallel development guests are needed.
+
+Use detached artifact-backed sessions from the diagnostic CLI when an agent needs one or more isolated `qol dev` instances without controlling the host desktop:
+
+```bash
+qol env up <environment> --dev-worktree <absolute-worktree> --count <lanes>
+qol env runs
+qol env shot <run-id-or-environment>
+qol env down <run-id-or-environment>
+```
+
+Make the host artifacts current through the normal host development workflow before launch. The environment batch selects those artifacts, prepares one bundle, and attaches the same immutable payload to every lane.
+
+Omit `--dev-worktree` when the task needs a generic detached guest rather than an artifact-backed development session:
 
 ```bash
 qol env up <environment> --count <lanes>
@@ -72,9 +86,9 @@ Never let an agent fall back to host mouse, keyboard, window, display, or sessio
 
 The enforced guest-only guarantee is narrow: automated plugin runtime and desktop control launch in a headless, offline guest with workspace mounts disabled and only the immutable payload attached read-only. The host worker also clears graphical-session environment variables as defense in depth. Require the aggregate report to record those facts.
 
-Compilation still runs as the current host user. Clearing environment variables is not an OS security boundary because same-user code can rediscover host sockets and files. This feature protects the user's desktop from normal plugin runtime and input automation; it is not safe for adversarial source code or build scripts without an additional container, separate user, or build VM.
+Compilation and development-bundle preparation still run as the current host user. Clearing environment variables is not an OS security boundary because same-user code can rediscover host sockets and files. This feature protects the user's desktop from normal plugin runtime and input automation; it is not safe for adversarial source code or build scripts without an additional container, separate user, or build VM.
 
-Do not describe `qol dev` itself as a global agent-security boundary. It also runs host-side development services, and Enter deliberately opens a manual windowed VM. Keep agent-driven desktop input and plugin actions on the automated guest-control path.
+Do not describe `qol dev` itself as a global agent-security boundary. The outer development session still builds and packages code on the host even when Enter runs the packaged runtime in a guest. Keep agent-driven desktop input and plugin actions on the automated guest-control path.
 
 ## Preserve lifecycle invariants
 
@@ -82,6 +96,7 @@ Maintain this order:
 
 ```text
 resolve environment
+select existing host-built artifacts and prepare an immutable development bundle when requested
 admit and reserve host resources
 persist aggregate ownership
 persist lane ownership
@@ -106,6 +121,7 @@ Enforce these invariants:
 - Persist the owner PID together with its platform process-start identity, and require both to match before treating an owner as live; a reused PID is not ownership proof.
 - Bind desktop guest control to the environment id, prepared-image revision, QEMU-provided run id, guest user, desktop, and display protocol.
 - Build a real plugin payload once per fan-out, attach it read-only, and record its manifest and image in parent and child reports.
+- Never compile an artifact-backed development payload in the guest; select host-built artifacts once and attach the same payload image to every lane.
 - Keep resource admission atomic across independent `qol` processes.
 - Retain capacity after launcher failure until a report proves terminal cleanup.
 - Never publish a terminal aggregate while any owned lane lacks verified cleanup.
@@ -136,7 +152,9 @@ Inspect these source-of-truth areas before editing:
 - Typed guest-control protocol: `libs/qol-dev-guest/`
 - Typed worker requests, tickets, and handles: `libs/qol-dev-orchestrator/`
 - Prepared desktop-session runner: `tools/qol-guest-runner/`
-- Detached orchestration: `tools/qol-cli/src/commands/env.rs`
+- Development-bundle selection and packaging: `tools/qol-cli/src/commands/dev_bundle.rs` and `tools/qol-cli/src/commands/dev.rs`
+- Detached orchestration and guest development sessions: `tools/qol-cli/src/commands/env.rs` and `tools/qol-cli/src/commands/env/dev_session.rs`
+- Sandbox panel integration: `tools/qol-cli/src/dev_console/`
 - Parallel orchestration and recovery: `tools/qol-cli/src/commands/flow.rs`
 - Verified prepared-image import: `tools/qol-cli/src/commands/emu/image_import/`
 - VM backend and workflow driving: `tools/qol-cli/src/commands/emu.rs` and `tools/qol-cli/src/commands/emu/`
@@ -158,7 +176,7 @@ For implementation work, validate in this order when the requested scope permits
 2. Run strict host lint or compile checks for changed crates.
 3. Cross-check platform-specific process code on its target triples.
 4. Provision or select the exact prepared desktop image required by the environment manifest.
-5. Run one real lane through the `qol dev` Sandbox panel and inspect its child and aggregate reports.
+5. Run one artifact-backed lane with Enter in the `qol dev` Sandbox panel; verify bundle identity, guest service identity, installed-plugin readiness, headless display, offline networking, and cleanup in its child and aggregate reports.
 6. Run one detached `env up`/`env down` lifecycle and verify canonical process identity.
 7. Exercise graceful cancellation and abrupt owner death.
 8. Run the requested bounded fan-out and confirm every lane reports cleanup.
@@ -174,7 +192,7 @@ Do not claim runtime parity for a host that was only compile-checked. Do not cla
 - Treat localhost QMP and user-mode VM networking as development control channels, not a hostile-code security boundary.
 - Preserve reports for failed and abandoned runs even after disposable artifacts are removed.
 - Keep the repository, worktree, home directory, host display, and host input devices outside the guest boundary.
-- Add real plugin payload transport and UI automation as workflow adapters, not as special cases in environment discovery or the `qol dev` panel.
+- Keep generic payload transport in shared environment orchestration. Add behavior-specific UI automation as workflow adapters, not as special cases in environment discovery or the `qol dev` panel.
 
 ## References
 
