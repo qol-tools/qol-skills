@@ -1,11 +1,11 @@
 ---
 name: git-trees
-description: Use when creating, switching, or branching in the qol-monorepo or qol-skills repo. Defines the branch-based worktree workflow, direct-vs-PR route, and final squash delivery invariant.
+description: Use whenever modifying files, creating commits, or creating, switching, or branching in the qol-monorepo or qol-skills repo. Defines completion-as-commit, the branch-based worktree workflow, the direct-vs-PR route, and final squash delivery.
 ---
 
 # git-trees
 
-Use this skill any time a change is made on a branch other than `main` in a qol repo.
+Use this skill whenever work modifies a qol repo, and any time a change is made on a branch other than `main`.
 The qol-tools workflow is **worktrees-only**: the main clone MUST stay on `main` forever.
 Feature branches live in dedicated worktree directories.
 
@@ -24,6 +24,18 @@ If the change is direct-to-main, stay on `main` in the main clone.
 The branch-switch ban is enforced by the `branch-deny-checkout-in-main-clone` PreToolUse hook.
 It exists to keep the main clone on `main` so `qol sync` and `qol dev` see fresh code.
 Direct-to-main work happens on `main` without switching branches.
+
+## Completion means committed
+
+A task that modifies repository files is not complete until the changes owned by that task are committed locally. Create the scoped commit without waiting for a separate user prompt unless the user explicitly asks to leave the work uncommitted or inspect the diff first. A safe commit requires the build, test, format, and lint gate required by the repository's `CLAUDE.md` to pass with real output before committing.
+
+- Stage only the task's files or hunks; preserve unrelated dirty work.
+- When hunk-staging a shared generated file or lockfile, validate the exact index tree independently; a passing dirty worktree does not prove the commit is self-consistent.
+- Create one coherent commit in each affected repository.
+- If a safe commit is blocked, report the blocker instead of claiming completion.
+- A commit never implies a push. Push only when explicitly requested.
+
+Follow `qol-workflow:commit` for message and hook rules before invoking `git commit`.
 
 ### Why
 
