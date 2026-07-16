@@ -1,4 +1,4 @@
-# qol-skills
+# QoL Skills
 
 [![tests](https://github.com/qol-tools/qol-skills/actions/workflows/tests.yml/badge.svg)](https://github.com/qol-tools/qol-skills/actions/workflows/tests.yml)
 
@@ -8,7 +8,7 @@ Claude Code and Codex skills marketplace for the [qol-tools](https://github.com/
 
 ### Claude Code
 
-```
+```bash
 /plugin marketplace add qol-tools/qol-skills
 ```
 
@@ -24,7 +24,7 @@ Invoke a skill with `$<skill-name>` inside `codex`.
 
 ## About
 
-One plugin per logical area (host app, each plugin repo, languages, workflow, project-wide conventions). Skills live at `plugins/<plugin>/skills/<skill>/SKILL.md`; hooks and tests sit beside them under `bin/` and `test/`.
+Installable packages group guidance and automation by stable ownership boundary, so consumers can load only the context relevant to their task.
 
 ## License
 
