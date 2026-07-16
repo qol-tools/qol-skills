@@ -64,6 +64,8 @@ test('injects context for matching prompt in the monorepo cwd', () => {
     const parsed = JSON.parse(r.stdout);
     assert.equal(parsed.hookSpecificOutput.hookEventName, 'UserPromptSubmit');
     const context = parsed.hookSpecificOutput.additionalContext;
+    assert.match(context, /qol-\* or plugin-\* repository path/);
+    assert.doesNotMatch(context, /territory in qol-tools/);
     assert.match(context, /qol-project:qol-cicd/);
     assert.match(context, /qol-project:qol-arch-cicd/);
     assert.match(context, /qol-monorepo product workflows/);
@@ -83,7 +85,7 @@ test('injects repository-local guidance for a qol-skills CI prompt', () => {
     assert.doesNotMatch(context, /qol-cicd\/\.github\/workflows/);
 });
 
-test('silent when prompt matches but cwd is outside qol-tools', () => {
+test('silent when prompt matches but cwd is outside qol/plugin repository paths', () => {
     const r = run({
         hook_event_name: 'UserPromptSubmit',
         prompt: 'add a pre-push hook',

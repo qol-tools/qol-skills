@@ -91,7 +91,7 @@ function main() {
 
 ${body}
 
-The user's message touches CI/workflow/git-hook territory in qol-tools. Route the change from the current repository root. In qol-monorepo, read qol-project:qol-cicd and qol-project:qol-arch-cicd and treat its .github workflows and scripts as product CI. In qol-skills, inspect its own .github workflows, scripts, hooks, and tests. Don't introduce a separate workflow repository or parallel hook manager.`;
+The user's message touches CI/workflow/git-hook territory in a qol-* or plugin-* repository path. Route the change from the current repository root. In qol-monorepo, read qol-project:qol-cicd and qol-project:qol-arch-cicd and treat its .github workflows and scripts as product CI. In qol-skills, inspect its own .github workflows, scripts, hooks, and tests. Don't introduce a separate workflow repository or parallel hook manager.`;
 
     const out = {
         hookSpecificOutput: {
