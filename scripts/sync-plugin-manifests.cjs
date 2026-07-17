@@ -4,6 +4,9 @@ const { execFileSync } = require("node:child_process");
 
 const AUTHOR = { name: "KMRH47" };
 const SHARED_FIELDS = ["name", "description", "version", "author"];
+const KIMI_METADATA_FIELDS = ["keywords", "homepage", "license"];
+const KIMI_BEHAVIOR_FIELDS = ["sessionStart", "skillInstructions", "commands", "mcpServers"];
+const KIMI_INTERFACE_FIELDS = ["displayName", "shortDescription", "longDescription", "developerName", "websiteURL"];
 
 function parseArgs(argv) {
   const envBaseRef = process.env.PLUGIN_SYNC_BASE_REF;
@@ -344,6 +347,120 @@ function claudeManifest(base, codexSource) {
   return manifest;
 }
 
+function kimiInterface(existing, codex) {
+  if (existing?.interface) {
+    return existing.interface;
+  }
+
+  if (!codex?.interface) {
+    return undefined;
+  }
+
+  const picked = {};
+
+  for (const field of KIMI_INTERFACE_FIELDS) {
+    if (codex.interface[field] !== undefined) {
+      picked[field] = codex.interface[field];
+    }
+  }
+
+  return Object.keys(picked).length > 0 ? picked : undefined;
+}
+
+function kimiManifest(root, pluginName, base, codex, existing) {
+  const source = existing ?? {};
+  const manifest = {
+    name: base.name,
+    version: base.version,
+    description: base.description,
+    author: base.author,
+  };
+
+  for (const field of KIMI_METADATA_FIELDS) {
+    if (source[field] !== undefined) {
+      manifest[field] = source[field];
+    }
+  }
+
+  if (hasDir(root, pluginName, "skills")) {
+    manifest.skills = "./skills/";
+  }
+
+  const interfaceValue = kimiInterface(source, codex);
+
+  if (interfaceValue) {
+    manifest.interface = interfaceValue;
+  }
+
+  for (const field of KIMI_BEHAVIOR_FIELDS) {
+    if (source[field] !== undefined) {
+      manifest[field] = source[field];
+    }
+  }
+
+  return manifest;
+}
+
+function kimiHookCommand(command, pluginName) {
+  const match = command.match(/^node -e '[^']*' (\S+) (\S+)$/);
+
+  if (match && match[1] === pluginName) {
+    return `node ${match[2]}`;
+  }
+
+  return command;
+}
+
+function kimiHooks(root, pluginName, failures) {
+  const file = path.join(root, "plugins", pluginName, "hooks", "hooks.json");
+
+  if (!fs.existsSync(file)) {
+    return undefined;
+  }
+
+  let document;
+
+  try {
+    document = JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch (error) {
+    failures.push(`Cannot parse hooks/hooks.json in plugins/${pluginName}: ${error.message}`);
+    return undefined;
+  }
+
+  if (!document || typeof document !== "object" || Array.isArray(document) || !document.hooks || typeof document.hooks !== "object" || Array.isArray(document.hooks)) {
+    failures.push(`Unexpected hooks/hooks.json shape in plugins/${pluginName}: expected an object with a "hooks" object`);
+    return undefined;
+  }
+
+  const rules = [];
+
+  for (const [event, entries] of Object.entries(document.hooks)) {
+    if (!Array.isArray(entries)) {
+      failures.push(`Unexpected hooks/hooks.json shape in plugins/${pluginName}: "${event}" is not an array`);
+      return undefined;
+    }
+
+    for (const entry of entries) {
+      for (const hook of entry?.hooks ?? []) {
+        if (hook?.type !== "command" || typeof hook.command !== "string") {
+          continue;
+        }
+
+        const rule = { event };
+
+        if (entry?.matcher) {
+          rule.matcher = entry.matcher;
+        }
+
+        rule.command = kimiHookCommand(hook.command, pluginName);
+        rules.push(rule);
+      }
+    }
+  }
+
+  return rules.length > 0 ? rules : undefined;
+}
+
 function validateManifestName(kind, root, pluginName, manifest, failures) {
   if (!manifest) {
     return;
@@ -362,6 +479,7 @@ function manifestPaths(root, pluginName) {
   return {
     claude: path.join(pluginRoot, ".claude-plugin", "plugin.json"),
     codex: path.join(pluginRoot, ".codex-plugin", "plugin.json"),
+    kimi: path.join(pluginRoot, ".kimi-plugin", "plugin.json"),
   };
 }
 
@@ -369,18 +487,20 @@ function syncPlugin(root, pluginName, options, changes, failures, changedFiles) 
   const files = manifestPaths(root, pluginName);
   let claude = maybeReadJson(files.claude);
   let codex = maybeReadJson(files.codex);
+  const kimi = maybeReadJson(files.kimi);
 
   validateManifestName("Claude", root, pluginName, claude, failures);
   validateManifestName("Codex", root, pluginName, codex, failures);
+  validateManifestName("Kimi", root, pluginName, kimi, failures);
 
   if (failures.length > 0) {
-    return { pluginName, claude, codex };
+    return { pluginName, claude, codex, kimi };
   }
 
   const base = sharedBase(root, pluginName, claude, codex, files, changedFiles, failures);
 
   if (failures.length > 0) {
-    return { pluginName, claude, codex };
+    return { pluginName, claude, codex, kimi };
   }
 
   if (!claude) {
@@ -402,7 +522,24 @@ function syncPlugin(root, pluginName, options, changes, failures, changedFiles) 
     writeJson(root, files.codex, codex, options, changes);
   }
 
-  return { pluginName, claude, codex };
+  const nextKimi = kimiManifest(root, pluginName, base, codex, kimi);
+  const translatedHooks = kimiHooks(root, pluginName, failures);
+
+  if (failures.length > 0) {
+    return { pluginName, claude, codex, kimi };
+  }
+
+  const hooks = translatedHooks ?? kimi?.hooks;
+
+  if (hooks) {
+    nextKimi.hooks = hooks;
+  }
+
+  if (!sameJson(kimi, nextKimi)) {
+    writeJson(root, files.kimi, nextKimi, options, changes);
+  }
+
+  return { pluginName, claude, codex, kimi: nextKimi };
 }
 
 function existingOrder(marketplace, pluginNames) {
@@ -515,6 +652,41 @@ function syncCodexMarketplace(root, plugins, options, changes) {
   writeJson(root, file, next, options, changes);
 }
 
+function syncKimiMarketplace(root, plugins, options, changes) {
+  const file = path.join(root, ".kimi-plugin", "marketplace.json");
+  const current = maybeReadJson(file) ?? {
+    version: "2",
+    plugins: [],
+  };
+  const byId = new Map((current.plugins ?? []).map((entry) => [entry.id, entry]));
+  const pluginNames = plugins.map((plugin) => plugin.pluginName);
+  const byPlugin = new Map(plugins.map((plugin) => [plugin.pluginName, plugin]));
+  const orderSource = maybeReadJson(path.join(root, ".claude-plugin", "marketplace.json")) ?? current;
+  const order = existingOrder(orderSource, pluginNames);
+
+  const next = {
+    ...current,
+    plugins: order.map((pluginName) => {
+      const plugin = byPlugin.get(pluginName);
+      const existing = byId.get(pluginName) ?? {};
+      const entry = {
+        ...existing,
+        id: pluginName,
+        source: `./plugins/${pluginName}`,
+      };
+      const displayName = existing.displayName ?? plugin.codex?.interface?.displayName;
+
+      if (displayName) {
+        entry.displayName = displayName;
+      }
+
+      return entry;
+    }),
+  };
+
+  writeJson(root, file, next, options, changes);
+}
+
 function run() {
   const options = parseArgs(process.argv.slice(2));
   const pluginNames = directories(path.join(options.root, "plugins"));
@@ -535,6 +707,7 @@ function run() {
 
   syncClaudeMarketplace(options.root, plugins, options, changes);
   syncCodexMarketplace(options.root, plugins, options, changes);
+  syncKimiMarketplace(options.root, plugins, options, changes);
 
   if (changes.length === 0) {
     console.log("Plugin manifests and marketplaces are in sync.");

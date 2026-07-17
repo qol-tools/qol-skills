@@ -410,3 +410,241 @@ test("accepts CRLF-normalized marketplace files from Windows checkouts", () => {
 
   execFileSync("node", [script, "--root", root, "--check"], { stdio: "pipe" });
 });
+
+test("generates kimi manifests from resolved base metadata", () => {
+  const root = makeRepo();
+
+  execFileSync("node", [script, "--root", root], { stdio: "pipe" });
+
+  const alphaKimi = readJson(path.join(root, "plugins", "alpha", ".kimi-plugin", "plugin.json"));
+  const betaKimi = readJson(path.join(root, "plugins", "beta", ".kimi-plugin", "plugin.json"));
+  const gammaKimi = readJson(path.join(root, "plugins", "gamma", ".kimi-plugin", "plugin.json"));
+
+  assert.equal(alphaKimi.name, "alpha");
+  assert.equal(alphaKimi.version, "0.2.0");
+  assert.equal(alphaKimi.description, "Alpha plugin.");
+  assert.deepEqual(alphaKimi.author, { name: "KMRH47" });
+  assert.equal(alphaKimi.skills, "./skills/");
+  assert.equal(alphaKimi.interface, undefined);
+
+  assert.equal(betaKimi.name, "beta");
+  assert.equal(betaKimi.version, "0.3.0");
+  assert.equal(betaKimi.description, "Beta plugin.");
+  assert.deepEqual(betaKimi.interface, { displayName: "Beta" });
+
+  assert.equal(gammaKimi.version, "0.4.0");
+  assert.equal(gammaKimi.description, "Gamma plugin.");
+  assert.deepEqual(gammaKimi.interface, { displayName: "Gamma" });
+
+  execFileSync("node", [script, "--root", root, "--check"], { stdio: "pipe" });
+});
+
+test("preserves kimi-only extras and a hand-written interface across re-sync", () => {
+  const root = makeRepo();
+
+  writeJson(path.join(root, "plugins", "alpha", ".kimi-plugin", "plugin.json"), {
+    name: "alpha",
+    version: "0.0.1",
+    description: "Stale alpha.",
+    author: { name: "KMRH47" },
+    keywords: ["alpha", "test"],
+    homepage: "https://example.com/alpha",
+    sessionStart: { skill: "alpha-start" },
+    skillInstructions: "Extra alpha instructions.",
+    commands: "./commands/",
+    interface: {
+      displayName: "Alpha Custom",
+      websiteURL: "https://example.com/alpha",
+    },
+  });
+
+  execFileSync("node", [script, "--root", root], { stdio: "pipe" });
+
+  const kimi = readJson(path.join(root, "plugins", "alpha", ".kimi-plugin", "plugin.json"));
+
+  assert.equal(kimi.version, "0.2.0");
+  assert.equal(kimi.description, "Alpha plugin.");
+  assert.deepEqual(kimi.author, { name: "KMRH47" });
+  assert.equal(kimi.skills, "./skills/");
+  assert.deepEqual(kimi.keywords, ["alpha", "test"]);
+  assert.equal(kimi.homepage, "https://example.com/alpha");
+  assert.deepEqual(kimi.sessionStart, { skill: "alpha-start" });
+  assert.equal(kimi.skillInstructions, "Extra alpha instructions.");
+  assert.equal(kimi.commands, "./commands/");
+  assert.deepEqual(kimi.interface, {
+    displayName: "Alpha Custom",
+    websiteURL: "https://example.com/alpha",
+  });
+
+  execFileSync("node", [script, "--root", root, "--check"], { stdio: "pipe" });
+});
+
+test("rejects kimi manifest names that do not match plugin folders", () => {
+  const root = makeRepo();
+
+  writeJson(path.join(root, "plugins", "alpha", ".kimi-plugin", "plugin.json"), {
+    name: "wrong-name",
+    version: "0.2.0",
+    description: "Alpha plugin.",
+    author: { name: "KMRH47" },
+  });
+
+  const result = expectScriptFailure(["--root", root]);
+
+  assert.match(result.stderr, /Kimi manifest name mismatch in plugins\/alpha: wrong-name/);
+});
+
+function writeAlphaHooks(root, document) {
+  fs.mkdirSync(path.join(root, "plugins", "alpha", "hooks"), { recursive: true });
+  writeJson(path.join(root, "plugins", "alpha", "hooks", "hooks.json"), document);
+}
+
+test("translates claude-format hooks into inline kimi hook rules", () => {
+  const root = makeRepo();
+
+  writeAlphaHooks(root, {
+    hooks: {
+      PreToolUse: [
+        {
+          matcher: "Bash",
+          hooks: [
+            { type: "command", command: "node -e 'const fs=require(\"node:fs\");' alpha bin/one.cjs" },
+            { type: "command", command: "node -e 'const fs=require(\"node:fs\");' alpha bin/two.cjs" },
+          ],
+        },
+      ],
+      UserPromptSubmit: [
+        {
+          hooks: [
+            { type: "command", command: "node -e 'const fs=require(\"node:fs\");' alpha bin/three.cjs" },
+          ],
+        },
+      ],
+    },
+  });
+
+  execFileSync("node", [script, "--root", root], { stdio: "pipe" });
+
+  const kimi = readJson(path.join(root, "plugins", "alpha", ".kimi-plugin", "plugin.json"));
+
+  assert.deepEqual(kimi.hooks, [
+    { event: "PreToolUse", matcher: "Bash", command: "node bin/one.cjs" },
+    { event: "PreToolUse", matcher: "Bash", command: "node bin/two.cjs" },
+    { event: "UserPromptSubmit", command: "node bin/three.cjs" },
+  ]);
+
+  execFileSync("node", [script, "--root", root, "--check"], { stdio: "pipe" });
+});
+
+test("passes non-wrapper hook commands through verbatim", () => {
+  const root = makeRepo();
+
+  writeAlphaHooks(root, {
+    hooks: {
+      PreToolUse: [
+        {
+          matcher: "Bash",
+          hooks: [
+            { type: "command", command: "node -e 'const fs=require(\"node:fs\");' other bin/one.cjs" },
+            { type: "command", command: "python3 scripts/check.py --flag" },
+          ],
+        },
+      ],
+    },
+  });
+
+  execFileSync("node", [script, "--root", root], { stdio: "pipe" });
+
+  const kimi = readJson(path.join(root, "plugins", "alpha", ".kimi-plugin", "plugin.json"));
+
+  assert.deepEqual(kimi.hooks, [
+    { event: "PreToolUse", matcher: "Bash", command: "node -e 'const fs=require(\"node:fs\");' other bin/one.cjs" },
+    { event: "PreToolUse", matcher: "Bash", command: "python3 scripts/check.py --flag" },
+  ]);
+});
+
+test("preserves hand-written kimi hooks when no hooks.json exists", () => {
+  const root = makeRepo();
+
+  writeJson(path.join(root, "plugins", "alpha", ".kimi-plugin", "plugin.json"), {
+    name: "alpha",
+    version: "0.2.0",
+    description: "Alpha plugin.",
+    author: { name: "KMRH47" },
+    hooks: [{ event: "SessionStart", command: "node bootstrap.cjs" }],
+  });
+
+  execFileSync("node", [script, "--root", root], { stdio: "pipe" });
+
+  const kimi = readJson(path.join(root, "plugins", "alpha", ".kimi-plugin", "plugin.json"));
+
+  assert.deepEqual(kimi.hooks, [{ event: "SessionStart", command: "node bootstrap.cjs" }]);
+});
+
+test("fails loudly on malformed hooks.json", () => {
+  const root = makeRepo();
+
+  fs.mkdirSync(path.join(root, "plugins", "alpha", "hooks"), { recursive: true });
+  fs.writeFileSync(path.join(root, "plugins", "alpha", "hooks", "hooks.json"), "{ not json");
+
+  const result = expectScriptFailure(["--root", root]);
+
+  assert.match(result.stderr, /Cannot parse hooks\/hooks\.json in plugins\/alpha/);
+});
+
+test("generates the kimi marketplace catalog", () => {
+  const root = makeRepo();
+
+  writeJson(path.join(root, ".kimi-plugin", "marketplace.json"), {
+    version: "2",
+    plugins: [
+      {
+        id: "stale",
+        source: "./plugins/stale",
+      },
+      {
+        id: "beta",
+        source: "./plugins/beta",
+        displayName: "Beta Custom",
+        trust: "curated",
+      },
+    ],
+  });
+
+  execFileSync("node", [script, "--root", root], { stdio: "pipe" });
+
+  const marketplace = readJson(path.join(root, ".kimi-plugin", "marketplace.json"));
+
+  assert.equal(marketplace.version, "2");
+  assert.deepEqual(
+    marketplace.plugins.map((entry) => entry.id),
+    ["alpha", "beta", "gamma"],
+  );
+  assert.deepEqual(
+    marketplace.plugins.map((entry) => entry.source),
+    ["./plugins/alpha", "./plugins/beta", "./plugins/gamma"],
+  );
+  assert.equal(marketplace.plugins[0].displayName, undefined);
+  assert.equal(marketplace.plugins[1].displayName, "Beta Custom");
+  assert.equal(marketplace.plugins[1].trust, "curated");
+  assert.equal(marketplace.plugins[2].displayName, "Gamma");
+
+  execFileSync("node", [script, "--root", root, "--check"], { stdio: "pipe" });
+});
+
+test("--check lists drifted kimi files", () => {
+  const root = makeRepo();
+
+  execFileSync("node", [script, "--root", root], { stdio: "pipe" });
+  commitRepo(root);
+
+  const kimiFile = path.join(root, "plugins", "beta", ".kimi-plugin", "plugin.json");
+  const kimi = readJson(kimiFile);
+  kimi.version = "9.9.9";
+  writeJson(kimiFile, kimi);
+
+  const result = expectScriptFailure(["--root", root, "--check"]);
+
+  assert.match(result.stderr, /out of sync/);
+  assert.match(result.stderr, /plugins\/beta\/\.kimi-plugin\/plugin\.json/);
+});

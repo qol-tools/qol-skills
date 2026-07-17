@@ -1,0 +1,9 @@
+{
+  "name": "qol-plugin-os-themes",
+  "version": "0.1.0",
+  "description": "Skills for the qol-tray OS themes plugin: shake-to-grow cursor effect, X11 cursor manipulation via xfixes, and the broader theming roadmap.",
+  "author": {
+    "name": "KMRH47"
+  },
+  "skills": "./skills/"
+}

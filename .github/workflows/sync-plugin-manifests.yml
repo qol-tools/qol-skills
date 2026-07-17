@@ -7,6 +7,7 @@ on:
     paths:
       - '.agents/plugins/marketplace.json'
       - '.claude-plugin/marketplace.json'
+      - '.kimi-plugin/marketplace.json'
       - '.github/workflows/sync-plugin-manifests.yml'
       - 'plugins/**'
       - 'scripts/sync-plugin-manifests.cjs'
@@ -43,16 +44,21 @@ jobs:
           const fs = require("fs");
           const path = require("path");
 
-          for (const file of [".claude-plugin/marketplace.json", ".agents/plugins/marketplace.json"]) {
+          const markets = [
+            { file: ".claude-plugin/marketplace.json", manifestDir: ".claude-plugin", key: "name" },
+            { file: ".agents/plugins/marketplace.json", manifestDir: ".codex-plugin", key: "name" },
+            { file: ".kimi-plugin/marketplace.json", manifestDir: ".kimi-plugin", key: "id" },
+          ];
+
+          for (const { file, manifestDir, key } of markets) {
             const marketplace = JSON.parse(fs.readFileSync(file, "utf8"));
-            const manifestDir = file.startsWith(".claude") ? ".claude-plugin" : ".codex-plugin";
 
             for (const entry of marketplace.plugins) {
               const source = typeof entry.source === "string" ? entry.source : entry.source.path;
               const manifest = JSON.parse(fs.readFileSync(path.join(source, manifestDir, "plugin.json"), "utf8"));
 
-              if (manifest.name !== entry.name) {
-                throw new Error(`${file}: ${entry.name} does not match ${manifest.name}`);
+              if (manifest.name !== entry[key]) {
+                throw new Error(`${file}: ${entry[key]} does not match ${manifest.name}`);
               }
             }
           }
@@ -67,6 +73,6 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .agents/plugins/marketplace.json .claude-plugin/marketplace.json plugins
+          git add .agents/plugins/marketplace.json .claude-plugin/marketplace.json .kimi-plugin/marketplace.json plugins
           git commit -m "chore: sync plugin manifests"
           git push

@@ -1,0 +1,9 @@
+{
+  "name": "qol-plugin-pointz",
+  "version": "0.1.0",
+  "description": "Skills for the PointZ pair: qol-tray desktop server plugin and the Flutter mobile client (discovery, UDP transport, input injection).",
+  "author": {
+    "name": "KMRH47"
+  },
+  "skills": "./skills/"
+}
