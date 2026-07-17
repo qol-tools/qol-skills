@@ -1,6 +1,6 @@
 ---
 name: qol-dev-environments
-description: Operate, debug, and evolve the `qol dev` Sandbox panel and its disposable OS environments. Use for typed sandbox workers, artifact-backed `qol dev` guests, host-built bundle transport, verified qcow2 import, `qol env`, `qol flow`, prepared desktop images, guest control, QEMU lifecycle or recovery, resource admission, clean-session plugin testing, and parallel guest work that must stay off the user's active desktop session.
+description: Operate, debug, and evolve the `qol dev` Sandbox panel and its disposable OS environments. Use for typed sandbox workers, artifact-backed `qol dev` guests, host-built bundle transport, verified qcow2 import, `qol env`, `qol flow`, prepared desktop images, guest control, QEMU lifecycle or recovery, resource admission, clean-session plugin testing, and parallel guest work that must stay off the user's active desktop session. Also use whenever a task reproduces, debugs, or verifies qol runtime desktop behavior — plugin windows, hotkeys, previews, popups, tray actions — which happens in a guest, not on the host session.
 ---
 
 # qol-dev-environments
@@ -30,6 +30,8 @@ Treat the CLI output, environment definitions, implementation source, and run re
 | Keep a generic clean guest running without a development payload | `qol env up` without `--dev-worktree` |
 | Execute a deterministic scenario in disposable headless lanes | `qol flow run` |
 | Inspect, screenshot, or stop detached guests | `qol env runs`, `qol env shot`, `qol env down` |
+| Run a command in a guest as its desktop user | `qol env exec <selector> <absolute-program> [args...]` |
+| Drive the guest pointer to reproduce a gesture | `qol env drag <selector> <x1,y1> <x2,y2>`, `qol emu key` |
 | Reconcile interrupted fan-outs | `qol flow runs` |
 | Debug the backend below environment orchestration | `qol emu` |
 
@@ -81,6 +83,19 @@ Do not add a wrapper script around these commands unless the CLI cannot express 
 Do not pass `--force` automatically. Use it only after explaining which resource guard is being overridden and why the host can tolerate it.
 
 Never let an agent fall back to host mouse, keyboard, window, display, or session APIs. If the selected guest cannot expose the required guest-control capability, report that prerequisite instead of controlling the user's desktop.
+
+## Verify feature behavior in a guest
+
+When the task is a runtime bug repro or fix verification for a qol feature (a preview that closes, a hotkey that misfires, a window that will not focus), run the loop below in an artifact-backed guest. Do not verify on the host session unless the user explicitly asks; do not claim a repro or a fix from code reading alone.
+
+1. Build debug artifacts on the host first: debug builds carry `qol_runtime::probe!` tracing; a release bundle is evidence-blind. Then `qol env up <environment> --dev-worktree <worktree>`.
+2. Trigger the behavior through the same route the user's gesture takes. For plugin actions that means the tray action endpoint inside the guest (`POST /api/plugins/<id>/actions/<action>` on the tray port), which dispatches to the plugin daemon exactly like a hotkey. Invoking the plugin binary directly is a different dispatch path (CLI-inline instead of daemon) and produces false repros — entry probes record which path ran; check before trusting the run.
+3. Drive input and commands through guest control only: `qol env exec` for in-guest commands (they run as the desktop user with the session display — no sudo, no runuser), `qol env drag` / `qol emu key` for pointer and keyboard. Resolve ports and identity from the case run directory (`report.json`, `qemu-command.txt`); never hardcode them.
+4. Collect evidence, not impressions: burst `qol env shot` around the interaction (the state right after a gesture is the one that matters), and read the guest probe log (`qol_conventions::TRACE_LOG_PATH`) via `qol env exec`. Decision-level probe lines beat screenshots; screenshots corroborate.
+5. A fix claim needs both directions on a fresh lane: the failure no longer occurs from a cold first run, and the adjacent designed behavior (the dismiss, the timeout, the focus return) still fires.
+6. `qol env down` when finished. Reports stay; the host stays as found.
+
+If the loop needs a control surface the CLI lacks, extend the `qol env`/`qol emu` control verbs at their owners (see below) instead of hand-rolling a socket client in scratch space — the protocol clients already exist in `libs/qol-dev-guest` and the emu backend.
 
 ## Respect the desktop runtime boundary
 
