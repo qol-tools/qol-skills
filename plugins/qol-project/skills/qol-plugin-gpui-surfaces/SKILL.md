@@ -17,6 +17,7 @@ qol-shot is the reference implementation end to end.
 | --- | --- | --- |
 | `Surface` builder | `surface.rs` | Window creation for `SurfaceKind::Toast` (PopUp, unfocused, corner-anchored, optional timeout) and `SurfaceKind::Panel` (Normal, focused, monitor-centered) |
 | `SurfaceDismisser` | `surface.rs` | Close from anywhere (key handler, click, timer). Deferred out of event dispatch - see invariants |
+| `settings_panel::open` | `settings_panel.rs` | The complete contract-driven settings panel: row mapping, keyboard flow, tray-API persistence, `SettingsPanelPalette` styling. Plugins pass `SettingsPanel { plugin_id, contract, heading }` plus an in-process query provider - nothing else |
 | `Dropdown` + `DropdownStyle` | `dropdown.rs` | Keyboard option picker built on `ScrollList`; caller decorates labels (e.g. `[x]` marks for multi-select) and paints it via `deferred(anchored(...))` so it overlays later rows |
 | `ScrollList` | `scroll_list.rs` | Selection + scroll-window state shared with launcher/removeapp |
 
@@ -28,20 +29,34 @@ qol-shot is the reference implementation end to end.
 
 A plugin's gpui settings panel derives everything from the existing
 `qol-config.toml` contract - the same single source the web auto-config
-renders. No parallel schema, no new persistence:
+renders. The entire panel lives in the kit
+(`qol_gpui::settings_panel`); a plugin wires it in one call:
 
-1. `qol_config::contract::parse_spec_str(contract)` →
-   `resolve_config(spec, values)` with values loaded via
-   `GET /api/plugins/{id}/config` on the tray (127.0.0.1:42700), falling
-   back to the plugin's `config.json` only when the tray is unreachable.
-2. Map `ResolvedField` kinds to row controls: boolean → toggle (space),
+```rust
+qol_gpui::settings_panel::open(
+    SettingsPanel { plugin_id, contract, heading: "Alt Tab Settings" },
+    tracker,
+    &|query| ...,   // in-process query provider; &|_| Vec::new() if none
+    cx,
+)
+```
+
+Do not re-implement rows, key handling, or persistence per plugin -
+extend `settings_panel.rs` instead. What the kit module guarantees:
+
+1. Values load via `GET /api/plugins/{id}/config` on the tray
+   (127.0.0.1:42700), falling back to the plugin's `config.json` only
+   when the tray is unreachable; `resolve_config` merges them over the
+   contract.
+2. `ResolvedField` kinds map to row controls: boolean → toggle (space),
    select → dropdown (enter), string_array with `options` →
    multi-select dropdown, number → typed edit with min/max clamp,
-   string/string_array → text edit. Skip kinds the panel doesn't
-   support; the web page still shows them.
+   string/string_array → text edit. Unsupported kinds (color, object
+   maps, ...) are skipped; the web page still shows them.
 3. Query-backed selects (`query = "..."` on a select) resolve options
-   **in-process** - the panel runs inside the plugin, so it calls the
-   same provider the daemon uses for the tray query, no socket hop.
+   **in-process** through the provider closure - the panel runs inside
+   the plugin, so it calls the same provider the daemon uses for the
+   tray query, no socket hop.
 4. Every change saves immediately by PUTting the **full row-derived
    config** to `PUT /api/plugins/{id}/config`. No apply button. NEVER
    write `config.json` directly as the primary save: those files are
@@ -52,6 +67,8 @@ renders. No parallel schema, no new persistence:
    rows also self-heals stale values the contract no longer allows.
    File write is the offline fallback only; the boot-time config drain
    merges it back into the store.
+5. Colors come from `qol-theme`'s `SettingsPanelPalette`
+   (`settings_panel_runtime()`) - every plugin panel looks the same.
 
 Contract field capabilities (options on string_array, query-backed
 selects) are documented in `qol-project:qol-shared-libs`.
