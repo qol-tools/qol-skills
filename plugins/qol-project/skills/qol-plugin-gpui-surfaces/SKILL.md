@@ -31,8 +31,9 @@ A plugin's gpui settings panel derives everything from the existing
 renders. No parallel schema, no new persistence:
 
 1. `qol_config::contract::parse_spec_str(contract)` →
-   `resolve_config(spec, values)` with values loaded from the plugin's
-   `config.json` (`plugin_config_paths_from_env`).
+   `resolve_config(spec, values)` with values loaded via
+   `GET /api/plugins/{id}/config` on the tray (127.0.0.1:42700), falling
+   back to the plugin's `config.json` only when the tray is unreachable.
 2. Map `ResolvedField` kinds to row controls: boolean → toggle (space),
    select → dropdown (enter), string_array with `options` →
    multi-select dropdown, number → typed edit with min/max clamp,
@@ -41,8 +42,16 @@ renders. No parallel schema, no new persistence:
 3. Query-backed selects (`query = "..."` on a select) resolve options
    **in-process** - the panel runs inside the plugin, so it calls the
    same provider the daemon uses for the tray query, no socket hop.
-4. Every change writes through to `config.json` immediately
-   (`set_config_value` dotted-key set + save). No apply button.
+4. Every change saves immediately by PUTting the **full row-derived
+   config** to `PUT /api/plugins/{id}/config`. No apply button. NEVER
+   write `config.json` directly as the primary save: those files are
+   materialized artifacts the tray regenerates from its profile scope
+   store at boot, so direct writes silently revert on restart (and a
+   partial file in the installs root shadows the whole canonical
+   config, because first-readable-wins). Rebuilding the payload from
+   rows also self-heals stale values the contract no longer allows.
+   File write is the offline fallback only; the boot-time config drain
+   merges it back into the store.
 
 Contract field capabilities (options on string_array, query-backed
 selects) are documented in `qol-project:qol-shared-libs`.
@@ -75,8 +84,12 @@ selects) are documented in `qol-project:qol-shared-libs`.
   last-focused window's monitor). Toasts use `snapshot_cursor` corners.
 - **Panels reveal only after placement settles.** Muffin places
   WM-managed Normal windows itself; `Surface` maps the window painting
-  nothing, asserts the origin, then reveals. Don't bypass the gate -
-  a visible map-then-jump is the failure mode it exists to kill.
+  nothing, asserts the origin, then reveals (plus a short post-reveal
+  reassert). Don't bypass the gate - a visible map-then-jump is the
+  failure mode it exists to kill. The kit suffixes every window title
+  with a per-open sequence number because the origin assert looks
+  windows up by title: a reused title can match a lingering previous
+  window and leave the new one wherever the WM dumped it.
 - **Interactive surfaces are `WindowKind::Normal`** on Linux; PopUp maps
   to a non-focusable NOTIFICATION and keystrokes leak to the terminal.
 - **Window closes are deferred.** `SurfaceDismisser::dismiss` runs the
