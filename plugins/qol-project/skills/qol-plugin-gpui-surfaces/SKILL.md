@@ -33,13 +33,17 @@ renders. The entire panel lives in the kit
 (`qol_gpui::settings_panel`); a plugin wires it in one call:
 
 ```rust
-qol_gpui::settings_panel::open(
+qol_gpui::settings_panel::open_from_async(
     SettingsPanel { plugin_id, contract, heading: "Alt Tab Settings" },
-    tracker,
-    &|query| ...,   // in-process query provider; &|_| Vec::new() if none
-    cx,
+    tracker.clone(),
+    |query| ...,   // in-process query provider; |_| Vec::new() if none
+    &cx,           // AsyncApp; wraps cx.update and flattens both Results
 )
 ```
+
+From a daemon command loop use `open_from_async` (one `Result` to match
+for the browser fallback); `open(panel, &tracker, &provider, cx)` is the
+same entry for code already holding `&mut App`.
 
 Do not re-implement rows, key handling, or persistence per plugin -
 extend `settings_panel.rs` instead. What the kit module guarantees:
@@ -51,8 +55,10 @@ extend `settings_panel.rs` instead. What the kit module guarantees:
 2. `ResolvedField` kinds map to row controls: boolean → toggle (space),
    select → dropdown (enter), string_array with `options` →
    multi-select dropdown, number → typed edit with min/max clamp,
-   string/string_array → text edit. Unsupported kinds (color, object
-   maps, ...) are skipped; the web page still shows them.
+   string/string_array → text edit, color → hex text edit with a live
+   swatch (6-digit hex, optional `#`, invalid input rejected on
+   commit). Unsupported kinds (object maps, ...) are skipped; the web
+   page still shows them.
 3. Query-backed selects (`query = "..."` on a select) resolve options
    **in-process** through the provider closure - the panel runs inside
    the plugin, so it calls the same provider the daemon uses for the
@@ -60,7 +66,7 @@ extend `settings_panel.rs` instead. What the kit module guarantees:
 4. Every change saves immediately by PUTting **row values merged over
    the loaded config** to `PUT /api/plugins/{id}/config`. No apply
    button. Merging (not rebuilding from rows) is load-bearing: fields
-   the panel skips (color, object maps) must survive a save, while row
+   the panel skips (object maps, ...) must survive a save, while row
    fields still self-heal stale values. NEVER write `config.json`
    directly as the primary save: those files are materialized artifacts
    the tray regenerates from its profile scope store at boot, so direct
@@ -87,9 +93,9 @@ selects) are documented in `qol-project:qol-shared-libs`.
    plugin with one - no per-plugin launcher code.
 2. **Daemon routes the action** to the panel: single-binary daemons
    receive every action on the socket, so the settings branch calls
-   `settings_panel::open(tracker, cx)` via `cx.update`, and **falls back
-   to the browser settings URL on error** - a headless or broken gpui
-   context must not strand the user.
+   `settings_panel::open_from_async(panel, tracker, provider, &cx)` and
+   **falls back to the browser settings URL on `Err`** - a headless or
+   broken gpui context must not strand the user.
 3. **Queries the contract references** are declared in
    `qol-runtime.toml` and answered by the daemon
    (`ReadResult::HandledWithData(json)`), so the web UI gets the same
