@@ -57,17 +57,24 @@ extend `settings_panel.rs` instead. What the kit module guarantees:
    **in-process** through the provider closure - the panel runs inside
    the plugin, so it calls the same provider the daemon uses for the
    tray query, no socket hop.
-4. Every change saves immediately by PUTting the **full row-derived
-   config** to `PUT /api/plugins/{id}/config`. No apply button. NEVER
-   write `config.json` directly as the primary save: those files are
-   materialized artifacts the tray regenerates from its profile scope
-   store at boot, so direct writes silently revert on restart (and a
-   partial file in the installs root shadows the whole canonical
-   config, because first-readable-wins). Rebuilding the payload from
-   rows also self-heals stale values the contract no longer allows.
-   File write is the offline fallback only; the boot-time config drain
-   merges it back into the store.
-5. Colors come from `qol-theme`'s `SettingsPanelPalette`
+4. Every change saves immediately by PUTting **row values merged over
+   the loaded config** to `PUT /api/plugins/{id}/config`. No apply
+   button. Merging (not rebuilding from rows) is load-bearing: fields
+   the panel skips (color, object maps) must survive a save, while row
+   fields still self-heal stale values. NEVER write `config.json`
+   directly as the primary save: those files are materialized artifacts
+   the tray regenerates from its profile scope store at boot, so direct
+   writes silently revert on restart (and a partial file in the
+   installs root shadows the whole canonical config, because
+   first-readable-wins). File write is the offline fallback only; the
+   boot-time config drain merges it back into the store.
+5. Whole numbers serialize as JSON integers, and `qol-config`
+   canonicalizes whole floats at load as the backstop - a `6.0` in a
+   stored config once made a `usize`-typed plugin config fail to parse
+   ENTIRELY, silently reverting every setting to compiled defaults.
+6. Rows scroll when the contract is taller than the monitor; selection
+   stays visible, so keyboard-first holds on any screen size.
+7. Colors come from `qol-theme`'s `SettingsPanelPalette`
    (`settings_panel_runtime()`) - every plugin panel looks the same.
 
 Contract field capabilities (options on string_array, query-backed
