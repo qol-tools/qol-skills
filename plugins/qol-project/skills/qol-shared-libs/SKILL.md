@@ -82,4 +82,10 @@ Cross-validation runs at three layers:
 
 **Daemon query responses carry payloads.** Plugins handling query actions must populate `DaemonResponse::Handled { data: Some(...) }`. qol-tray's `dispatch_query` extracts `payload` and returns JSON to the frontend via `GET /api/plugins/<id>/queries/<name>`.
 
+**Field kinds have richer shapes than their base types** - model the real value space instead of falling back to free text:
+
+- `string_array` accepts `options` + `option_labels`: values are then validated as members and UIs render a multi-select instead of a comma text field (e.g. qol-shot `audio.inputs`).
+- `select` accepts `query = "<name>"` for machine-specific options (e.g. PulseAudio devices): `options` may be omitted, membership validation is skipped, `option_labels` keys seed always-available well-known values (like `default`), and the query name is cross-validated against `qol-runtime.toml`. Query rows are `[{ "value", "label" }]`; UIs merge them with the labeled seeds and keep an unknown stored value selectable. The web SelectField polls the query; a gpui panel calls the provider in-process (`qol-project:qol-plugin-gpui-surfaces`).
+- `number` accepts `variant = "slider"` for bounded knobs (web renders a slider; 0..1 ranges slider automatically).
+
 **Migration in progress**: Plugins still using `ui/index.html` iframes are scheduled for migration to auto-config. The iframe path in qol-tray (`mode='ui'`, `openPluginUi`, `has_custom_ui`) is slated for deletion once all plugins land on the auto-config path. Do not introduce new iframe-based plugin UIs — use the contract pattern.

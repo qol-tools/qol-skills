@@ -117,7 +117,7 @@
       "name": "qol-langs",
       "description": "Personal-experience wells for languages and frameworks used in qol-tools: rust-conventions, gpui-conventions, preact-conventions. Workspace-specific style and gotchas, NOT canonical library docs \u2014 for those, use context7.",
       "source": "./plugins/qol-langs",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "author": {
         "name": "KMRH47"
       }
@@ -126,7 +126,7 @@
       "name": "qol-project",
       "description": "Project-level conventions for the qol-tools ecosystem: mission invariants, org layout, shared CI/release contracts, cross-platform architecture guardrails, shared library placement, plugin templates, and clean OS development environments for portability validation. Ships PreToolUse hooks that block architecture-contract violations plus a UserPromptSubmit hook that reminds Claude to consult qol-mission when prompts mention design/scope/issue terms in a qol-tools repo.",
       "source": "./plugins/qol-project",
-      "version": "0.6.1",
+      "version": "0.7.0",
       "author": {
         "name": "KMRH47"
       }

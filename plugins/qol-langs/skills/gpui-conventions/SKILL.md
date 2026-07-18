@@ -353,7 +353,44 @@ cargo test prop_                     # Only property tests
 cargo test --test integration_tests  # Integration test file
 ```
 
+## Shared plugin surfaces
+
+Toasts, settings panels, and dropdowns for qol plugins come from the shared
+kit in `libs/qol-gpui` (`surface.rs`, `dropdown.rs`, `scroll_list.rs`) - do
+not hand-roll windows per plugin. Wiring, invariants, and the qol-shot
+reference implementation: `qol-project:qol-plugin-gpui-surfaces`.
+
 ## Gotchas (learned the hard way)
+
+### `gpui::*` glob hijacks `#[test]`
+
+`use gpui::*` exports a `test` attribute macro. A `#[cfg(test)] mod tests`
+doing `use super::*` inherits it and every `#[test]` explodes with
+"recursion limit reached while expanding `#[test]`". Import test-module
+items explicitly instead of `use super::*`.
+
+### Re-entrant `WindowHandle::update` fails silently
+
+Calling `handle.update(cx, |_, window, _| window.remove_window())` from
+inside that window's own event dispatch (e.g. an `on_key_down` listener)
+hits gpui's re-entrancy guard and returns an `Err` that is easy to drop.
+Defer the close: `cx.defer(move |cx| { let _ = handle.update(...); })`.
+`SurfaceDismisser` in qol-gpui already does this.
+
+### Overlays: `deferred(anchored().child(...))`
+
+An absolutely-positioned child paints in tree order, so later siblings
+draw over it. Wrap popover-like overlays (dropdowns, menus) in
+`deferred(anchored() ...)` - deferred paints after everything else and
+anchored keeps it inside the window (`snap_to_window_with_margin`).
+
+### The WM owns Normal-window placement on X11
+
+Muffin ignores requested origins for `WindowKind::Normal` windows and
+places them itself; moving after map produces a visible jump. Either use
+per-monitor pre-created ghosts (launcher/alt-tab) or map the window
+painting nothing, assert the origin via X11, and reveal once the move
+lands (qol-gpui `Surface` panels).
 
 ### Multi-monitor is broken on Linux
 

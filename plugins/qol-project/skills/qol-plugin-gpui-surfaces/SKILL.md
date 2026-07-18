@@ -1,0 +1,101 @@
+---
+name: qol-plugin-gpui-surfaces
+description: Use when giving a qol plugin a native gpui surface - a settings panel, toast, or other summonable window - instead of (or beside) the web auto-config page. Covers the shared qol-gpui surface/dropdown kit, contract-driven settings panels, launcher integration, daemon routing with browser fallback, and the placement/focus/dismiss invariants that make panels behave. Reference implementation: qol-shot.
+---
+
+# qol-plugin-gpui-surfaces
+
+qol plugins feel "installed" when their UI is native: summoned from the
+launcher, centered on the active monitor, keyboard-first, gone on ESC.
+The shared kit in `libs/qol-gpui` makes that a wiring job, not a
+windowing project. **Never hand-roll plugin windows; extend the kit.**
+qol-shot is the reference implementation end to end.
+
+## The shared kit (libs/qol-gpui)
+
+| Piece | File | What it owns |
+| --- | --- | --- |
+| `Surface` builder | `surface.rs` | Window creation for `SurfaceKind::Toast` (PopUp, unfocused, corner-anchored, optional timeout) and `SurfaceKind::Panel` (Normal, focused, monitor-centered) |
+| `SurfaceDismisser` | `surface.rs` | Close from anywhere (key handler, click, timer). Deferred out of event dispatch - see invariants |
+| `Dropdown` + `DropdownStyle` | `dropdown.rs` | Keyboard option picker built on `ScrollList`; caller decorates labels (e.g. `[x]` marks for multi-select) and paints it via `deferred(anchored(...))` so it overlays later rows |
+| `ScrollList` | `scroll_list.rs` | Selection + scroll-window state shared with launcher/removeapp |
+
+`Surface::show_focused` is for interactive panels (`Render + Focusable`),
+`Surface::show` for passive toasts. Both hand the view a
+`SurfaceDismisser`.
+
+## Settings panel = contract, not new UI truth
+
+A plugin's gpui settings panel derives everything from the existing
+`qol-config.toml` contract - the same single source the web auto-config
+renders. No parallel schema, no new persistence:
+
+1. `qol_config::contract::parse_spec_str(contract)` →
+   `resolve_config(spec, values)` with values loaded from the plugin's
+   `config.json` (`plugin_config_paths_from_env`).
+2. Map `ResolvedField` kinds to row controls: boolean → toggle (space),
+   select → dropdown (enter), string_array with `options` →
+   multi-select dropdown, number → typed edit with min/max clamp,
+   string/string_array → text edit. Skip kinds the panel doesn't
+   support; the web page still shows them.
+3. Query-backed selects (`query = "..."` on a select) resolve options
+   **in-process** - the panel runs inside the plugin, so it calls the
+   same provider the daemon uses for the tray query, no socket hop.
+4. Every change writes through to `config.json` immediately
+   (`set_config_value` dotted-key set + save). No apply button.
+
+Contract field capabilities (options on string_array, query-backed
+selects) are documented in `qol-project:qol-shared-libs`.
+
+## Wiring checklist for a plugin
+
+1. **Settings action** in `plugin.toml` (`kind = "settings"`). qol-tray
+   auto-exports a launcher entry (`<Name> Settings`) for every installed
+   plugin with one - no per-plugin launcher code.
+2. **Daemon routes the action** to the panel: single-binary daemons
+   receive every action on the socket, so the settings branch calls
+   `settings_panel::open(tracker, cx)` via `cx.update`, and **falls back
+   to the browser settings URL on error** - a headless or broken gpui
+   context must not strand the user.
+3. **Queries the contract references** are declared in
+   `qol-runtime.toml` and answered by the daemon
+   (`ReadResult::HandledWithData(json)`), so the web UI gets the same
+   dynamic data over `GET /api/plugins/<id>/queries/<name>`.
+4. **Keyboard-first**: up/down navigate, space toggles, enter activates
+   (opens dropdowns / begins edits / commits), typing a digit starts a
+   number edit directly, ESC closes innermost-first (edit → dropdown →
+   panel). Mouse is secondary.
+
+## Invariants (violations are bugs)
+
+- **Panels pick the runtime-owned active monitor** -
+  `MonitorTracker::snapshot_monitor()`, which consumes qol-tray's
+  `pick_active_monitor` decision. Never re-derive from raw focus or
+  cursor indices (`snapshot_monitor_focus_first` pins panels to the
+  last-focused window's monitor). Toasts use `snapshot_cursor` corners.
+- **Panels reveal only after placement settles.** Muffin places
+  WM-managed Normal windows itself; `Surface` maps the window painting
+  nothing, asserts the origin, then reveals. Don't bypass the gate -
+  a visible map-then-jump is the failure mode it exists to kill.
+- **Interactive surfaces are `WindowKind::Normal`** on Linux; PopUp maps
+  to a non-focusable NOTIFICATION and keystrokes leak to the terminal.
+- **Window closes are deferred.** `SurfaceDismisser::dismiss` runs the
+  close via `cx.defer`; a re-entrant `WindowHandle::update` from inside
+  that window's own event dispatch fails silently.
+- **State colors come from the theme** (`state_on`/`state_off` etc. in
+  the palette structs). No literal colors in surface code - a qol-theme
+  test enforces this.
+
+## Verifying
+
+`cargo test -p <plugin>` covers the pure row/intent/merge logic
+(table-driven). Visual and focus behavior needs a live compositor:
+Recompile via qol-tray, then exercise cold first-show, ESC, and
+multi-monitor centering. Runtime repros belong in a guest VM
+(`qol-project:qol-dev-environments`); interactive panel clicking is not
+CLI-automatable today, so keyboard flows are the testable surface.
+
+## gpui specifics
+
+Framework-level patterns and gotchas (focus, key handling, deferred
+elements, testing) live in `qol-langs:gpui-conventions`.
