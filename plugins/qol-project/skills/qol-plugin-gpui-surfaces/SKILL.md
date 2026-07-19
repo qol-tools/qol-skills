@@ -127,13 +127,15 @@ selects) are documented in `qol-project:qol-shared-libs`.
   cursor indices (`snapshot_monitor_focus_first` pins panels to the
   last-focused window's monitor). Toasts use `snapshot_cursor` corners.
 - **Panels reveal only after placement settles.** Muffin places
-  WM-managed Normal windows itself; `Surface` maps the window painting
-  nothing, asserts the origin, then reveals (plus a short post-reveal
-  reassert). Don't bypass the gate - a visible map-then-jump is the
-  failure mode it exists to kill. The kit suffixes every window title
-  with a per-open sequence number because the origin assert looks
-  windows up by title: a reused title can match a lingering previous
-  window and leave the new one wherever the WM dumped it.
+  WM-managed Normal windows itself; `Surface` draws the real view behind
+  a native visibility gate, asserts the origin, then reveals (plus a short
+  post-reveal reassert). Don't bypass the gate - a visible map-then-jump and
+  a transparent placeholder are both failure modes it exists to kill. The
+  GPUI-specific implementation constraint is canonical in
+  `qol-langs:gpui-conventions`. The kit suffixes every window title with a
+  per-open sequence number because the origin assert looks windows up by
+  title: a reused title can match a lingering previous window and leave the
+  new one wherever the WM dumped it.
 - **Interactive surfaces are `WindowKind::Normal`** on Linux; PopUp maps
   to a non-focusable NOTIFICATION and keystrokes leak to the terminal.
 - **Window closes are deferred.** `SurfaceDismisser::dismiss` runs the

@@ -394,9 +394,14 @@ anchored keeps it inside the window (`snap_to_window_with_margin`).
 
 Muffin ignores requested origins for `WindowKind::Normal` windows and
 places them itself; moving after map produces a visible jump. Either use
-per-monitor pre-created ghosts (launcher/alt-tab) or map the window
-painting nothing, assert the origin via X11, and reveal once the move
-lands (qol-gpui `Surface` panels).
+per-monitor pre-created ghosts (launcher/alt-tab) or use qol-gpui `Surface`,
+which draws the real root before revealing the native window and asserts the
+origin while it is hidden. Never gate reveal by omitting the root from a
+transparent mapped window: the compositor exposes whatever is underneath as
+false first-frame content. GPUI 0.2.2 honors `WindowOptions::show` on macOS and
+Windows but ignores it on Linux, so the shared Linux path must synchronously
+apply native invisibility before yielding to the event loop. Verified against
+the installed GPUI 0.2.2 source on 2026-07-19.
 
 ### Multi-monitor is broken on Linux
 
