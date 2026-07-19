@@ -361,9 +361,10 @@ not hand-roll windows per plugin. Wiring, invariants, and the qol-shot
 reference implementation: `qol-project:qol-plugin-gpui-surfaces`.
 
 GPUI 0.2.2 has native animation primitives but no `Spinner` widget. Use the
-shared `qol_gpui::Spinner`, which wraps a repeating `AnimationExt` SVG
-rotation. Never drive spinners with view-owned timers or plugin-local frame
-state. Verified against the installed GPUI source on 2026-07-19.
+shared `qol_gpui::Spinner`, which wraps a repeating `AnimationExt` canvas
+animation. Never drive spinners with view-owned timers or plugin-local frame
+state. This keeps the component independent of the host's asset source.
+Verified against the installed GPUI source on 2026-07-19.
 
 ## Gotchas (learned the hard way)
 
