@@ -74,9 +74,14 @@ extend `settings_panel.rs` instead. What the kit module guarantees:
 5. List row actions use `row_action` / `row_actions` in contract order. The
    first action whose `when` field is truthy is the primary action; Enter on an
    active list row dispatches it, interpolates its `input` from the row, and
-   shows the shared spinner until the query refreshes. Wire payload-bearing
-   adapters with `SettingsRuntime::with_input_action`; never decode row data in
-   plugin-specific GPUI code.
+   shows the shared spinner until the query refreshes. When multiple actions
+   are visible, Space, Right, or the row action affordance opens the shared
+   `Dropdown`; Up/Down select, Enter dispatches, and Escape/Left returns to the
+   list. This mirrors the web `SearchableActionList` primary-action plus
+   `ActionMenu` contract. Wire payload-bearing adapters with
+   `SettingsRuntime::with_input_action`; never decode row data or build action
+   menus in plugin-specific GPUI code. Verified against both renderers on
+   2026-07-19.
 6. Every change saves immediately by PUTting **row values merged over
    the loaded config** to `PUT /api/plugins/{id}/config`. No apply
    button. Merging (not rebuilding from rows) is load-bearing: fields
