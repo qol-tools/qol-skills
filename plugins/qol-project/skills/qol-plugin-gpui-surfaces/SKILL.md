@@ -1,6 +1,6 @@
 ---
 name: qol-plugin-gpui-surfaces
-description: "Use when giving a qol plugin a native gpui surface - a settings panel, toast, or other summonable window - instead of (or beside) the web auto-config page. Covers the shared qol-gpui surface/dropdown kit, contract-driven settings panels, launcher integration, daemon routing with browser fallback, and the placement/focus/dismiss invariants that make panels behave. Reference implementation: qol-shot."
+description: "Use when giving a qol plugin a native gpui surface - a contract-driven settings panel, toast, picker, or other summonable window - instead of or beside the web auto-config page. Covers the tray-owned singleton settings host, the shared qol-gpui surface kit, capability routing and fallbacks, runtime queries/actions, and placement/focus/dismiss invariants."
 ---
 
 # qol-plugin-gpui-surfaces
@@ -9,7 +9,8 @@ qol plugins feel "installed" when their UI is native: summoned from the
 launcher, centered on the active monitor, keyboard-first, gone on ESC.
 The shared kit in `libs/qol-gpui` makes that a wiring job, not a
 windowing project. **Never hand-roll plugin windows; extend the kit.**
-qol-shot is the reference implementation end to end.
+Contract-driven settings are hosted by qol-tray; custom pickers, overlays,
+and toasts remain plugin-owned.
 
 ## The shared kit (libs/qol-gpui)
 
@@ -17,7 +18,9 @@ qol-shot is the reference implementation end to end.
 | --- | --- | --- |
 | `Surface` builder | `surface.rs` | Window creation for `SurfaceKind::Toast` (PopUp, unfocused, corner-anchored, optional timeout) and `SurfaceKind::Panel` (Normal, focused, monitor-centered) |
 | `SurfaceDismisser` | `surface.rs` | Close from anywhere (key handler, click, timer). Deferred out of event dispatch - see invariants |
-| `settings_panel::open` | `settings_panel.rs` | The complete contract-driven settings panel: row mapping, keyboard flow, tray-API persistence, runtime queries/actions, `SettingsPanelPalette` styling. Plugins pass `SettingsPanel { plugin_id, contract, heading }` plus a shared runtime adapter - nothing else |
+| `SettingsWindowHost` | `settings_panel/` | Retains exactly one settings window and implements open, focus-same-plugin, replace-with-another-plugin, and reopen-after-close |
+| `SettingsRuntime::tray` | `settings_panel/` | Routes hosted runtime queries and actions through qol-tray's existing HTTP API |
+| `settings_panel::open` / `run_standalone` | `settings_panel/` | Plugin-owned fallback entrypoints for code already running GPUI or starting a standalone GPUI app |
 | `Dropdown` + `DropdownStyle` | `dropdown.rs` | Keyboard option picker built on `ScrollList`; caller decorates labels (e.g. `[x]` marks for multi-select) and paints it via `deferred(anchored(...))` so it overlays later rows |
 | `ScrollList` | `scroll_list.rs` | Selection + scroll-window state shared with launcher/removeapp |
 
@@ -25,28 +28,52 @@ qol-shot is the reference implementation end to end.
 `Surface::show` for passive toasts. Both hand the view a
 `SurfaceDismisser`.
 
+## Contract settings are host-owned
+
+On Linux and macOS, qol-tray intercepts an action before normal plugin
+dispatch when all three conditions hold:
+
+1. The selected action has `kind = "settings"`.
+2. The plugin has `qol-config.toml`.
+3. `[capabilities] gpui = true` is present in `plugin.toml`.
+
+The first eligible request starts qol-tray's hidden settings-surface process.
+Later requests go to that process over its singleton socket. One GPUI
+`Application` and one `SettingsWindowHost` own the visible window:
+
+- The same plugin request focuses the retained window.
+- A different plugin request replaces the root view in that window.
+- Closing the window retains the host; the next request opens one fresh window.
+- qol-tray stops the host during orderly shutdown and before restarting GPUI
+  processes after an accent change.
+- The shared daemon listener arms the host-death watchdog, so a tray crash or
+  orphaned child cannot leave the settings host resident.
+
+Do not add a plugin ID switch to the host. It loads the manifest and contracts
+from the resolved plugin root, derives the heading from the manifest, and uses
+the minimum declared query poll interval. A new contract-driven panel opts in
+through metadata and contracts only.
+
+Windows and host-start failures continue through the plugin's normal
+daemon/runtime settings target. A host that starts but cannot load or render a
+panel opens the web settings URL. Keep that fallback path working; native
+settings must never strand a headless or unsupported environment.
+
 ## Settings panel = contract, not new UI truth
 
 A plugin's gpui settings panel derives everything from the existing
 `qol-config.toml` contract - the same single source the web auto-config
-renders. The entire panel lives in the kit
-(`qol_gpui::settings_panel`); a plugin wires it in one call:
+renders. The host builds `SettingsPanel { plugin_id, contract, heading }`
+and `SettingsRuntime::tray(plugin_id)`; plugins do not wire a second normal
+settings window.
 
-```rust
-qol_gpui::settings_panel::open_from_async(
-    SettingsPanel { plugin_id, contract, heading: "Alt Tab Settings" },
-    tracker.clone(),
-    SettingsRuntime::new(|query| ...),
-    &cx,           // AsyncApp; wraps cx.update and flattens both Results
-)
-```
-
-From a daemon command loop use `open_from_async` (one `Result` to match
-for the browser fallback); `open(panel, &tracker, &provider, cx)` is the
-same entry for code already holding `&mut App`.
+Use `run_standalone` only for a native runtime fallback that owns its own GPUI
+application. From an existing plugin GPUI daemon, use `open_from_async` and
+retain a browser fallback on `Err`. These are fallbacks or direct plugin entry
+points, not the normal tray settings route.
 
 Do not re-implement rows, key handling, or persistence per plugin -
-extend `settings_panel.rs` instead. What the kit module guarantees:
+extend `settings_panel/` instead. What the kit module guarantees:
 
 1. Values load via `GET /api/plugins/{id}/config` on the tray
    (127.0.0.1:42700), falling back to the plugin's `config.json` only
@@ -59,18 +86,19 @@ extend `settings_panel.rs` instead. What the kit module guarantees:
    swatch, action → dispatchable row, and list → query-backed live rows.
    Unsupported kinds (object maps, ...) are skipped; the web page still shows
    them.
-3. All query-backed controls use the shared `SettingsRuntime`. If a daemon owns
-   mutable runtime state (discovery, pairing, connection health), the adapter
-   MUST query and act through that daemon instead of re-running hardware logic
-   in the GPUI process. Poll with GPUI's executor timer and run blocking IPC on
-   the background executor (`gpui` 0.2.2 `Executor::timer`, verified
-   2026-07-19); entity updates return to the UI executor. Static in-process
-   providers remain appropriate for immutable option discovery.
+3. All query-backed controls use the shared `SettingsRuntime`. Hosted panel
+   persistence uses the tray config endpoint, while `SettingsRuntime::tray`
+   sends queries and actions through the existing HTTP and action paths. If a
+   daemon owns mutable runtime state (discovery, pairing, connection health),
+   it remains the only hardware owner. A plugin-owned fallback adapter must
+   call that daemon rather than re-running hardware logic in the GPUI process.
+   Poll with GPUI's executor timer and run blocking IPC on the background
+   executor; entity updates return to the UI executor.
 4. Runtime activity presentation belongs in the contract, never plugin UI.
    Action and list fields reuse `active_query`, `active_value_from`, and
    `active_label`; shared renderers own polling and presentation. GPUI uses the
    shared `qol_gpui::StatusIndicator`, and plugins add no local animation or
-   polling state. Verified against both settings renderers on 2026-07-19.
+   polling state.
 5. List row actions use `row_action` / `row_actions` in contract order. The
    first action whose `when` field is truthy is the primary action; Enter on an
    active list row dispatches it, interpolates its `input` from the row, and
@@ -80,8 +108,7 @@ extend `settings_panel.rs` instead. What the kit module guarantees:
    list. This mirrors the web `SearchableActionList` primary-action plus
    `ActionMenu` contract. Wire payload-bearing adapters with
    `SettingsRuntime::with_input_action`; never decode row data or build action
-   menus in plugin-specific GPUI code. Verified against both renderers on
-   2026-07-19.
+   menus in plugin-specific GPUI code.
 6. Every change saves immediately by PUTting **row values merged over
    the loaded config** to `PUT /api/plugins/{id}/config`. No apply
    button. Merging (not rebuilding from rows) is load-bearing: fields
@@ -110,22 +137,33 @@ selects) are documented in `qol-project:qol-shared-libs`.
 1. **Settings action** in `plugin.toml` (`kind = "settings"`). qol-tray
    auto-exports a launcher entry (`<Name> Settings`) for every installed
    plugin with one - no per-plugin launcher code.
-2. **Daemon routes the action** to the panel: single-binary daemons
-   receive every action on the socket, so the settings branch calls
-   `settings_panel::open_from_async(panel, tracker, provider, &cx)` and
-   **falls back to the browser settings URL on `Err`** - a headless or
-   broken gpui context must not strand the user.
-3. **Queries the contract references** are declared in
+2. **Native opt-in** via `[capabilities] gpui = true`. This capability covers
+   hosted contract settings as well as the existing GPUI lifecycle behavior.
+3. **Config contract** in `qol-config.toml`; do not create a second settings
+   schema or plugin-local renderer.
+4. **Queries the contract references** are declared in
    `qol-runtime.toml` and answered by the daemon
    (`ReadResult::HandledWithData(json)`), so the web UI gets the same
-   dynamic data over `GET /api/plugins/<id>/queries/<name>`.
-4. **Keyboard-first**: up/down navigate, space toggles, enter activates
+   dynamic data over `GET /api/plugins/<id>/queries/<name>` and the hosted
+   panel reaches it through `SettingsRuntime::tray`.
+5. **Fallback target** remains valid for unsupported platforms or host-start
+   failure. It may open the web settings URL or use the shared standalone
+   panel; never silently do nothing.
+6. **Keyboard-first**: up/down navigate, space toggles, enter activates
    (opens dropdowns / begins edits / commits), typing a digit starts a
    number edit directly, ESC closes innermost-first (edit → dropdown →
    panel). Mouse is secondary.
 
 ## Invariants (violations are bugs)
 
+- **At most one hosted settings window is visible.** Never create a second
+  `Application`, host process, or window per plugin. Same-plugin activation
+  focuses; cross-plugin activation replaces; a stale closed handle reopens.
+- **The host is generic.** Eligibility comes from action kind, the config
+  contract, and the GPUI capability. Rendering comes from `qol-gpui`; runtime
+  work comes from existing tray routes. No per-plugin host branches.
+- **Only contract settings are host-owned.** Custom pickers, transient
+  overlays, and toasts keep their plugin-owned lifecycle.
 - **Panels pick the runtime-owned active monitor** -
   `MonitorTracker::snapshot_monitor()`, which consumes qol-tray's
   `pick_active_monitor` decision. Never re-derive from raw focus or
@@ -152,12 +190,20 @@ selects) are documented in `qol-project:qol-shared-libs`.
 
 ## Verifying
 
-`cargo test -p <plugin>` covers the pure row/intent/merge logic
-(table-driven). Visual and focus behavior needs a live compositor:
-Recompile via qol-tray, then exercise cold first-show, ESC, and
-multi-monitor centering. Runtime repros belong in a guest VM
-(`qol-project:qol-dev-environments`); interactive panel clicking is not
-CLI-automatable today, so keyboard flows are the testable surface.
+`cargo test -p qol-gpui` covers row, activation-decision, intent, and merge
+logic. qol-tray action-executor tests cover eligibility and fallback routing.
+Visual, focus, and singleton behavior need a live compositor. In an isolated
+guest VM (`qol-project:qol-dev-environments`), exercise this sequence:
+
+1. Open one eligible plugin and record the visible window ID.
+2. Open it again and require a `focused` activation.
+3. Open another eligible plugin and require `replaced` with the same window ID.
+4. Close the window, open another plugin, and require `opened` with exactly one
+   visible settings window.
+
+Use `qol trace --grep SURFACE_ACTIVATION --replay` for route, dispatch, host,
+activation, fallback, and stop evidence. Exercise cold first-show, ESC, and
+multi-monitor centering too; a headless test cannot prove compositor behavior.
 
 ## gpui specifics
 

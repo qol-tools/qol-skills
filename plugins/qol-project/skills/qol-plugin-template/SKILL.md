@@ -54,7 +54,13 @@ When forking the template into a new plugin, change:
 4. **Platform support**: trim `src/platform/` if your plugin's settings action doesn't differ by OS. Add stubs (returning typed `Err`) for any OS you don't support — see the `qol-arch-code` skill.
 5. **Versioning**: keep `Cargo.toml` and `plugin.toml` versions in sync. The monorepo version workflow validates this.
 6. **Daemon**: not in the template. Add `[daemon]` to `plugin.toml` and a daemon socket loop only if the plugin needs a long-running process.
-7. **Settings**: add `qol-config.toml` when you need editable settings. Auto-config in qol-tray will render them. If your contract references actions/queries by name, also add `qol-runtime.toml`.
+7. **Settings**: add `qol-config.toml` when you need editable settings. The web
+   auto-config renderer will render it. To opt the settings action into the
+   tray-owned native GPUI panel on supported platforms, add
+   `[capabilities] gpui = true`; do not build a second plugin-local settings
+   renderer. Keep the mapped platform/browser settings target as fallback. If
+   the contract references actions or queries by name, also add
+   `qol-runtime.toml`. See `qol-plugin-gpui-surfaces`.
 
 ## Contract Notes
 
@@ -102,4 +108,6 @@ None at template baseline. Add `qol-plugin-api`, `qol-config`, etc. as the custo
 - `qol-arch-cicd` — CI/release workflow contract: matrix builds derived from `plugin.toml` `platforms`, `RUSTFLAGS=-D warnings` everywhere, sibling-checkout parity for path-deps.
 - Releases: every plugin under `plugins/*` with a `plugin.toml` is a release unit covered by `qol-tray-release-flow`; no per-plugin release skill is needed.
 - `qol-shared-libs` — what belongs in shared libs vs the plugin itself.
+- `qol-plugin-gpui-surfaces` — contract-driven native settings ownership,
+  capability routing, shared components, and fallbacks.
 - `coding-general` — universal guidelines that apply to plugin code.

@@ -73,7 +73,8 @@ Plugins remain separate executables loaded by the host at runtime; they are neve
 | CI / release workflows | `qol-cicd` |
 | Release tagging (host or any plugin) | `qol-tray-release-flow` |
 | Rust plugin patterns | `rust-conventions` |
-| GPUI plugins (launcher, alt-tab internals) | `gpui-conventions` |
+| GPUI custom windows (pickers, toasts, window internals) | `gpui-conventions` |
+| Contract-driven native plugin settings | `qol-plugin-gpui-surfaces` |
 | Tests for apps and plugins | `qol-apps-testing` |
 | Any code, universal | `coding-general` |
 | Worktree workflow | `git-trees` |

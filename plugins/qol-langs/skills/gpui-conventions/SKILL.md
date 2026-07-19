@@ -356,9 +356,11 @@ cargo test --test integration_tests  # Integration test file
 ## Shared plugin surfaces
 
 Toasts, settings panels, and dropdowns for qol plugins come from the shared
-kit in `libs/qol-gpui` (`surface.rs`, `dropdown.rs`, `scroll_list.rs`) - do
-not hand-roll windows per plugin. Wiring, invariants, and the qol-shot
-reference implementation: `qol-project:qol-plugin-gpui-surfaces`.
+kit in `libs/qol-gpui` - do not hand-roll windows per plugin. Normal
+contract-driven settings actions are hosted by qol-tray through one retained
+`SettingsWindowHost`; plugin-owned GPUI applications are for custom surfaces
+and explicit fallbacks. Ownership, routing, and verification live in
+`qol-project:qol-plugin-gpui-surfaces`.
 
 GPUI 0.2.2 has native animation primitives but no `Spinner` widget. Use the
 shared `qol_gpui::Spinner`, which wraps a repeating `AnimationExt` glyph

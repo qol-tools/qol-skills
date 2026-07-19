@@ -1,6 +1,6 @@
 ---
 name: qol-tray-rust
-description: Use when working on qol-tray's Rust backend — plugin system, daemon supervision, IPC/runtime endpoints, feature modules, shared qol-* crate placement, cross-platform strategy pattern, tokio concurrency and thiserror/anyhow error handling. Use when modifying files under src/plugins/, src/daemon/, src/runtime/, src/features/, src/sync/, src/menu/, src/tray/, src/app/, src/updates/, or src/profile/, or when adding socket/HTTP endpoints, wiring a new feature module, touching Cargo.toml dependencies, deciding whether logic belongs in qol-tray or a shared qol-* crate (qol-plugin-api, qol-platform, qol-config, qol-runtime, qol-search, qol-frecency, qol-color, qol-fx, qol-wasm), or reviewing Rust concurrency and error-handling patterns in qol-tray.
+description: Use when working on qol-tray's Rust backend — plugin system, daemon supervision, hosted settings surfaces, IPC/runtime endpoints, feature modules, shared qol-* crate placement, cross-platform strategy pattern, tokio concurrency and thiserror/anyhow error handling. Use when modifying files under src/plugins/, src/settings_surface/, src/daemon/, src/runtime/, src/features/, src/sync/, src/menu/, src/tray/, src/app/, src/updates/, or src/profile/, or when adding socket/HTTP endpoints, wiring a new feature module, touching Cargo.toml dependencies, deciding whether logic belongs in qol-tray or a shared qol-* crate, or reviewing Rust concurrency and error-handling patterns in qol-tray.
 ---
 
 # qol-tray Rust Backend Reference
@@ -17,6 +17,7 @@ Pairs with the `qol-tray-core` (cross-platform overview + make commands) and `qo
 - `menu/` — menu building and action dispatch.
 - `features/`, `hotkeys/`, `shortcuts/`, `logs/`, `profile/`, `sync/`, `updates/` — cross-cutting features.
 - `runtime/` — IPC endpoints consumed by the UI (`/api/*`).
+- `settings_surface/` — hidden tray-owned GPUI settings process, singleton activation, and platform fallback routing.
 - `installer/`, `doctor/`, `dev/` — companion binaries.
 - `build.rs` — compile-time asset embedding and version stamping only, no runtime logic in disguise.
 
@@ -40,9 +41,11 @@ Before adding new functionality directly into qol-tray, check whether it belongs
 
 | Concern | Crate |
 |---|---|
-| Plugin-facing API / used by >1 plugin | `qol-plugin-api` |
+| Plugin manifest, capability, and restore contracts | `qol-plugin-api` |
+| Resident daemon socket and host-death lifecycle | `qol-plugin-daemon` |
 | OS / platform (filesystem, process, window, input) | `qol-platform` |
 | Config schema, validation, migration | `qol-config` |
+| Native surfaces and contract settings rendering | `qol-gpui` |
 | Runtime primitives (scheduler, cache, shared state) | `qol-runtime` |
 | Fuzzy search | `qol-search` |
 | Frecency ranking | `qol-frecency` |
@@ -135,6 +138,16 @@ There is not one IPC path — there are three, with distinct roles. Don't confla
 1. **axum HTTP** (`127.0.0.1:42700`) — the dashboard, the `qol-tray exec` CLI, and the plugin-store API. The CLI does *not* speak a plugin's socket directly; it POSTs to axum, which dispatches onward.
 2. **desktop-state Unix socket** (Unix only) — a one-way feed of monitor/cursor/focus state that plugin daemons and external tools *read*. Never used for action dispatch.
 3. **per-plugin Unix socket** (path from each `plugin.toml` `daemon.socket`) — the actual plugin RPC; tray + axum dispatch actions here.
+
+The native settings host's singleton socket is internal qtray process control,
+not a fourth host/plugin channel. It only asks the retained GPUI host to
+activate a plugin contract. Panel persistence uses the existing config route;
+`SettingsRuntime::tray` sends queries and actions through axum and the existing
+plugin dispatcher. The hidden host subcommand returns before normal tray boot;
+the normal tray stops it during shutdown, while `qol-plugin-daemon` supplies
+the abnormal host-death watchdog. See
+`qol-project:qol-plugin-gpui-surfaces` for the one-window and fallback
+invariants.
 
 **EventBus is broadcast, not a dispatch path.** `EventBus` is a `tokio::sync::broadcast` of `DaemonEvent`s — *outbound* state-change notifications from the daemon to subscribers (tray menu, dashboard SSE). Tray clicks never publish to it. A click flows on the request side (native menu callback → menu router → action executor → one-shot subprocess or plugin socket); the bus only appears on the response side, e.g. the tray re-subscribes to rebuild its menu on `PluginsChanged`. When wiring a feature, ask "is this an outbound state change (bus) or a request dispatch (router/socket)?" — they are never the same edge.
 

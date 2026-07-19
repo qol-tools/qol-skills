@@ -67,7 +67,7 @@ qol-plugin-api.workspace = true
 | `src/capture/platform/macos.rs` | macOS preview capture via `CGWindowListCreateImage` |
 | `src/capture/platform/linux.rs` | Linux preview capture via x11rb Composite `GetImage` |
 | `src/actions/platform/` | Window actions (activate, close, quit, minimize) per platform |
-| `ui/` | Settings HTML/JS/CSS served by qol-tray |
+| `qol-config.toml` | Renderer-neutral settings contract used by web auto-config and the shared native panel |
 
 ## Daemon Architecture
 
@@ -108,11 +108,18 @@ Key fields:
 
 2. **Wayland**: Linux support uses x11rb only. Wayland support is not implemented.
 
-## Settings UI (`ui/`)
+## Settings UI
 
-The settings page is served by qol-tray at `/plugins/plugin-alt-tab/`. It reads and writes config via:
+The normal Linux/macOS settings action is intercepted by qol-tray because the
+plugin declares a settings action, `qol-config.toml`, and
+`[capabilities] gpui = true`. It renders in the tray-owned singleton settings
+window; it does not create another window inside the Alt Tab daemon.
 
-- `GET /api/plugins/plugin-alt-tab/config` — load current config
-- `PUT /api/plugins/plugin-alt-tab/config` — save updated config (body: JSON)
+The daemon's `dispatch_settings()` remains a fallback: it opens the shared
+`qol-gpui` panel in the daemon's existing GPUI application and opens the web
+settings URL if that fails. Direct `--settings` opens the web URL. Both the web
+and hosted native renderers read and write through qol-tray's config API.
 
-The `--settings` runtime action opens this URL in the default browser.
+The shared ownership and fallback contract lives in
+`qol-project:qol-plugin-gpui-surfaces`; do not special-case Alt Tab in the
+tray-owned host.

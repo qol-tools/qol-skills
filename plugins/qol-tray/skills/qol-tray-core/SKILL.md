@@ -23,6 +23,7 @@ Adjacent durable knowledge lives in dedicated skills - do not duplicate it here:
 | Topic | Skill |
 |---|---|
 | Rust internals, the three IPC channels, boot phases, concurrency | `qol-tray-rust` |
+| Host-owned native plugin settings | `qol-plugin-gpui-surfaces` |
 | Generic workspace Rust style (error handling, graceful shutdown, idle-cost loops) | `rust-conventions` |
 | Cross-platform compartmentalization methodology | `qol-arch-code` |
 | UI components, Surface system, keyboard nav, styling | `qol-tray-ui-systems` |
@@ -39,7 +40,9 @@ when a newer version is available, then `Quit`. There are no per-plugin tray ite
 
 - Plugins live in `~/.config/qol-tray/plugins/`, external to this codebase. Each has a `plugin.toml` manifest, binary entrypoints, and an optional `config.json`.
 - Loading scans the plugin dir, parses + validates each manifest, and resolves a source per plugin.
-- Execution is manifest-driven: **daemon-socket dispatch first, runtime-binary fallback.**
+- Execution is manifest-driven: eligible native settings route to the
+  tray-owned settings host first; all other actions use **daemon-socket
+  dispatch first, runtime-binary fallback.**
 - Source resolution unifies installed, dev-linked, and worktree-linked plugins through the registry (`src/plugins/registry/` + `resolver.rs`). The `SlotSource` variants and the per-slot fallback are defined there - read the enum, never memorize a list. Dev-link/worktree resolution is `#[cfg(feature = "dev")]`-gated; prod resolves installed plugins only.
 - A plugin's id derives from its directory name.
 - **When a `SlotSource` variant is added, audit every `matches!(source, ...)` branch** - the autostart guard, the execution-contract binary search, and the profile-sync-lock filter each special-case the source. A missed branch silently mis-handles the new kind.
@@ -81,7 +84,8 @@ pattern = "plugin-binary-{os}-{arch}"
 ```
 
 Action types: `run` (daemon socket or runtime binary), `toggle-config` (flip a
-boolean in `config.json` at `config_key`), `settings` (mapped runtime action).
+boolean in `config.json` at `config_key`), `settings` (hosted contract panel
+when eligible, otherwise the mapped daemon/runtime action).
 
 ## Plugin contracts (two-file pattern)
 
@@ -144,12 +148,18 @@ HTTP surface for the contracts:
 - `POST /api/plugins/<id>/actions/<action_name>` - dispatches via the action executor.
 - `GET  /api/plugins/<id>/queries/<query_name>` - validates the query exists, dispatches, returns the JSON payload.
 
-## Auto-config rendering
+## Contract-driven settings rendering
 
-Plugins are rendered by qol-tray's auto-config frontend (`ui/views/plugin-config/`)
-directly from their `qol-config.toml` fields. **This is the only rendering path** -
-there is no per-plugin iframe / custom-UI path. New plugins express their UI through
-field kinds; expand the kind catalog if a field kind is missing.
+The web auto-config frontend and the shared native GPUI panel both render
+directly from `qol-config.toml`; neither owns a second schema. On Linux and
+macOS, a settings action with `capabilities.gpui = true` and a config contract
+is intercepted by one tray-owned native settings host. Other platforms and
+failed host starts continue through the plugin's mapped settings target.
+
+There is no per-plugin iframe/custom-UI path. New settings express their UI
+through field kinds; expand the shared contract and both renderers if a kind is
+missing. The host lifecycle, one-window rule, and fallback contract live in
+`qol-project:qol-plugin-gpui-surfaces`.
 
 ## Contract and delivery rules
 
