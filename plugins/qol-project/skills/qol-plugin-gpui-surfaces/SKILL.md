@@ -66,7 +66,12 @@ extend `settings_panel.rs` instead. What the kit module guarantees:
    the background executor (`gpui` 0.2.2 `Executor::timer`, verified
    2026-07-19); entity updates return to the UI executor. Static in-process
    providers remain appropriate for immutable option discovery.
-4. Every change saves immediately by PUTting **row values merged over
+4. Runtime activity presentation belongs in the contract, never plugin UI.
+   Action and list fields reuse `active_query`, `active_value_from`, and
+   `active_label`; shared renderers own polling and presentation. GPUI uses the
+   shared `qol_gpui::StatusIndicator`, and plugins add no local animation or
+   polling state. Verified against both settings renderers on 2026-07-19.
+5. Every change saves immediately by PUTting **row values merged over
    the loaded config** to `PUT /api/plugins/{id}/config`. No apply
    button. Merging (not rebuilding from rows) is load-bearing: fields
    the panel skips (object maps, ...) must survive a save, while row
@@ -77,13 +82,13 @@ extend `settings_panel.rs` instead. What the kit module guarantees:
    installs root shadows the whole canonical config, because
    first-readable-wins). File write is the offline fallback only; the
    boot-time config drain merges it back into the store.
-5. Whole numbers serialize as JSON integers, and `qol-config`
+6. Whole numbers serialize as JSON integers, and `qol-config`
    canonicalizes whole floats at load as the backstop - a `6.0` in a
    stored config once made a `usize`-typed plugin config fail to parse
    ENTIRELY, silently reverting every setting to compiled defaults.
-6. Rows scroll when the contract is taller than the monitor; selection
+7. Rows scroll when the contract is taller than the monitor; selection
    stays visible, so keyboard-first holds on any screen size.
-7. Colors come from `qol-theme`'s `SettingsPanelPalette`
+8. Colors come from `qol-theme`'s `SettingsPanelPalette`
    (`settings_panel_runtime()`) - every plugin panel looks the same.
 
 Contract field capabilities (options on string_array, query-backed
