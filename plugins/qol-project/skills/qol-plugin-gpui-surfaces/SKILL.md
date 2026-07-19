@@ -92,8 +92,10 @@ extend `settings_panel/` instead. What the kit module guarantees:
    daemon owns mutable runtime state (discovery, pairing, connection health),
    it remains the only hardware owner. A plugin-owned fallback adapter must
    call that daemon rather than re-running hardware logic in the GPUI process.
-   Poll with GPUI's executor timer and run blocking IPC on the background
-   executor; entity updates return to the UI executor.
+   Contract seeds and stored values render immediately; live options and rows
+   merge through the runtime poll after the first frame. Slow IPC never runs in
+   first-frame construction or occupies GPUI executor workers. The executor
+   boundary is canonical in `qol-langs:gpui-conventions`.
 4. Runtime activity presentation belongs in the contract, never plugin UI.
    Action and list fields reuse `active_query`, `active_value_from`, and
    `active_label`; shared renderers own polling and presentation. GPUI uses the
@@ -204,9 +206,12 @@ guest VM (`qol-project:qol-dev-environments`), exercise this sequence:
 4. Close the window, open another plugin, and require `opened` with exactly one
    visible settings window.
 
-Use `qol trace --grep SURFACE_ACTIVATION --replay` for route, dispatch, host,
-activation, fallback, and stop evidence. Exercise cold first-show, ESC, and
-multi-monitor centering too; a headless test cannot prove compositor behavior.
+Use `qol trace --grep SURFACE_ACTIVATION --replay` for route, dispatch, command
+receipt, preparation, activation, fallback, and stop evidence. For open
+latency, compare dispatch to `SURFACE_REVEAL phase=revealed`; command receipt
+and preparation distinguish executor starvation from construction cost.
+Exercise cold first-show, ESC, and multi-monitor centering too; a headless test
+cannot prove compositor behavior.
 
 ## gpui specifics
 

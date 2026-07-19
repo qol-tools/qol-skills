@@ -467,6 +467,10 @@ This is about your OWN window. To foreground ANOTHER app's window on macOS (alt-
 
 Beyond "set full size at creation": a pre-created / ghost window can have `window.window_bounds()` return a stale tiny size (e.g. 720x321) during the warmup render *before* a programmatic resize lands. Never feed `window_bounds()` into layout math on the first frames — use your intended size, not the reported one.
 
+### Blocking work must not occupy GPUI executor workers
+
+GPUI 0.2 has a bounded background executor. Never park its workers on `std::sync::mpsc::Receiver::recv` or slow runtime I/O: one blocked query can starve a socket activation for seconds. Bridge resident blocking receivers from a dedicated idle-blocking thread into an async channel, and load live option/query data after the first frame. Keep first-frame construction limited to cached, contract, and local state.
+
 ### Backing scale drifts across monitors
 
 GPUI caches a window's backing scale factor. When the window moves to a monitor with a different DPI the cache drifts (blurry / mis-scaled render). Query the real `NSWindow.backingScaleFactor` and re-sync when a reposition crosses monitors.
