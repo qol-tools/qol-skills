@@ -84,7 +84,7 @@ Cross-validation runs at three layers:
 
 **Field kinds have richer shapes than their base types** - model the real value space instead of falling back to free text:
 
-- `string_array` accepts `options` + `option_labels`: values are then validated as members and UIs render a multi-select instead of a comma text field (e.g. qol-shot `audio.inputs`).
+- `string_array` accepts `options` + `option_labels`: static options validate membership and the gpui renderer uses the shared multi-select (e.g. qol-shot `audio.inputs`). It also accepts `query = "<name>"` for machine-specific options; dynamic arrays skip membership validation, preserve unavailable stored values, and use the same `[{ "value", "label" }]` query rows as dynamic selects.
 - `select` accepts `query = "<name>"` for machine-specific options (e.g. PulseAudio devices): `options` may be omitted, membership validation is skipped, `option_labels` keys seed always-available well-known values (like `default`), and the query name is cross-validated against `qol-runtime.toml`. Query rows are `[{ "value", "label" }]`; UIs merge them with the labeled seeds and keep an unknown stored value selectable. The web SelectField polls the query; a gpui panel calls the provider in-process (`qol-project:qol-plugin-gpui-surfaces`).
 - `number` accepts `variant = "slider"` for bounded knobs (web renders a slider; 0..1 ranges slider automatically).
 

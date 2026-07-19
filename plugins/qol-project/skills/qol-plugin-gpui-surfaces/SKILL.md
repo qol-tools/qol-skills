@@ -53,13 +53,13 @@ extend `settings_panel.rs` instead. What the kit module guarantees:
    when the tray is unreachable; `resolve_config` merges them over the
    contract.
 2. `ResolvedField` kinds map to row controls: boolean → toggle (space),
-   select → dropdown (enter), string_array with `options` →
+   select → dropdown (enter), string_array with `options` or `query` →
    multi-select dropdown, number → typed edit with min/max clamp,
    string/string_array → text edit, color → hex text edit with a live
    swatch (6-digit hex, optional `#`, invalid input rejected on
    commit). Unsupported kinds (object maps, ...) are skipped; the web
    page still shows them.
-3. Query-backed selects (`query = "..."` on a select) resolve options
+3. Query-backed selects and string arrays resolve options
    **in-process** through the provider closure - the panel runs inside
    the plugin, so it calls the same provider the daemon uses for the
    tray query, no socket hop.
