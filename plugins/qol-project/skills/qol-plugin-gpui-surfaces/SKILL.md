@@ -1,6 +1,6 @@
 ---
 name: qol-plugin-gpui-surfaces
-description: Use when giving a qol plugin a native gpui surface - a settings panel, toast, or other summonable window - instead of (or beside) the web auto-config page. Covers the shared qol-gpui surface/dropdown kit, contract-driven settings panels, launcher integration, daemon routing with browser fallback, and the placement/focus/dismiss invariants that make panels behave. Reference implementation: qol-shot.
+description: "Use when giving a qol plugin a native gpui surface - a settings panel, toast, or other summonable window - instead of (or beside) the web auto-config page. Covers the shared qol-gpui surface/dropdown kit, contract-driven settings panels, launcher integration, daemon routing with browser fallback, and the placement/focus/dismiss invariants that make panels behave. Reference implementation: qol-shot."
 ---
 
 # qol-plugin-gpui-surfaces
@@ -71,7 +71,13 @@ extend `settings_panel.rs` instead. What the kit module guarantees:
    `active_label`; shared renderers own polling and presentation. GPUI uses the
    shared `qol_gpui::StatusIndicator`, and plugins add no local animation or
    polling state. Verified against both settings renderers on 2026-07-19.
-5. Every change saves immediately by PUTting **row values merged over
+5. List row actions use `row_action` / `row_actions` in contract order. The
+   first action whose `when` field is truthy is the primary action; Enter on an
+   active list row dispatches it, interpolates its `input` from the row, and
+   shows the shared spinner until the query refreshes. Wire payload-bearing
+   adapters with `SettingsRuntime::with_input_action`; never decode row data in
+   plugin-specific GPUI code.
+6. Every change saves immediately by PUTting **row values merged over
    the loaded config** to `PUT /api/plugins/{id}/config`. No apply
    button. Merging (not rebuilding from rows) is load-bearing: fields
    the panel skips (object maps, ...) must survive a save, while row
@@ -82,13 +88,13 @@ extend `settings_panel.rs` instead. What the kit module guarantees:
    installs root shadows the whole canonical config, because
    first-readable-wins). File write is the offline fallback only; the
    boot-time config drain merges it back into the store.
-6. Whole numbers serialize as JSON integers, and `qol-config`
+7. Whole numbers serialize as JSON integers, and `qol-config`
    canonicalizes whole floats at load as the backstop - a `6.0` in a
    stored config once made a `usize`-typed plugin config fail to parse
    ENTIRELY, silently reverting every setting to compiled defaults.
-7. Rows scroll when the contract is taller than the monitor; selection
+8. Rows scroll when the contract is taller than the monitor; selection
    stays visible, so keyboard-first holds on any screen size.
-8. Colors come from `qol-theme`'s `SettingsPanelPalette`
+9. Colors come from `qol-theme`'s `SettingsPanelPalette`
    (`settings_panel_runtime()`) - every plugin panel looks the same.
 
 Contract field capabilities (options on string_array, query-backed
