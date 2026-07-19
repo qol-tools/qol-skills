@@ -18,7 +18,7 @@ and toasts remain plugin-owned.
 | --- | --- | --- |
 | `Surface` builder | `surface.rs` | Window creation for `SurfaceKind::Toast` (PopUp, unfocused, corner-anchored, optional timeout) and `SurfaceKind::Panel` (Normal, focused, monitor-centered) |
 | `SurfaceDismisser` | `surface.rs` | Close from anywhere (key handler, click, timer). Deferred out of event dispatch - see invariants |
-| `SettingsWindowHost` | `settings_panel/` | Retains exactly one settings window and implements open, focus-same-plugin, replace-with-another-plugin, and reopen-after-close |
+| `SettingsWindowHost` | `settings_panel/` | Retains exactly one settings window and implements open, focus-same-plugin, replace-with-another-plugin, and park/reveal across Escape |
 | `SettingsRuntime::tray` | `settings_panel/` | Routes hosted runtime queries and actions through qol-tray's existing HTTP API |
 | `settings_panel::open` / `run_standalone` | `settings_panel/` | Plugin-owned fallback entrypoints for code already running GPUI or starting a standalone GPUI app |
 | `Dropdown` + `DropdownStyle` | `dropdown.rs` | Keyboard option picker built on `ScrollList`; caller decorates labels (e.g. `[x]` marks for multi-select) and paints it via `deferred(anchored(...))` so it overlays later rows |
@@ -43,7 +43,8 @@ Later requests go to that process over its singleton socket. One GPUI
 
 - The same plugin request focuses the retained window.
 - A different plugin request replaces the root view in that window.
-- Closing the window retains the host; the next request opens one fresh window.
+- Escape parks the native window unmapped and pauses live queries; the next
+  request recenters and reveals that same window before resuming queries.
 - qol-tray stops the host during orderly shutdown and before restarting GPUI
   processes after an accent change.
 - The shared daemon listener arms the host-death watchdog, so a tray crash or
@@ -163,7 +164,9 @@ selects) are documented in `qol-project:qol-shared-libs`.
 
 - **At most one hosted settings window is visible.** Never create a second
   `Application`, host process, or window per plugin. Same-plugin activation
-  focuses; cross-plugin activation replaces; a stale closed handle reopens.
+  focuses; cross-plugin activation replaces; Escape parks the retained native
+  window. Remove and recreate only when retention is unsupported or the native
+  park operation fails.
 - **The host is generic.** Eligibility comes from action kind, the config
   contract, and the GPUI capability. Rendering comes from `qol-gpui`; runtime
   work comes from existing tray routes. No per-plugin host branches.
@@ -186,9 +189,10 @@ selects) are documented in `qol-project:qol-shared-libs`.
   new one wherever the WM dumped it.
 - **Interactive surfaces are `WindowKind::Normal`** on Linux; PopUp maps
   to a non-focusable NOTIFICATION and keystrokes leak to the terminal.
-- **Window closes are deferred.** `SurfaceDismisser::dismiss` runs the
-  close via `cx.defer`; a re-entrant `WindowHandle::update` from inside
-  that window's own event dispatch fails silently.
+- **Window dismissals are deferred.** `SurfaceDismisser::dismiss` runs via
+  `cx.defer`; a re-entrant `WindowHandle::update` from inside that window's own
+  event dispatch fails silently. Destructive dismissals are one-shot. Retained
+  settings dismissals stay reusable across every park/reveal cycle.
 - **State colors come from the theme** (`state_on`/`state_off` etc. in
   the palette structs). No literal colors in surface code - a qol-theme
   test enforces this.
@@ -203,13 +207,17 @@ guest VM (`qol-project:qol-dev-environments`), exercise this sequence:
 1. Open one eligible plugin and record the visible window ID.
 2. Open it again and require a `focused` activation.
 3. Open another eligible plugin and require `replaced` with the same window ID.
-4. Close the window, open another plugin, and require `opened` with exactly one
-   visible settings window.
+4. Press Escape and require the window ID to disappear from the mapped window
+   list. Reopen the same plugin and require `focused`, the same window ID,
+   compositor visibility, and keyboard focus.
+5. Repeat the Escape/reopen cycle; a retained dismisser must not become
+   one-shot after the first close.
 
 Use `qol trace --grep SURFACE_ACTIVATION --replay` for route, dispatch, command
 receipt, preparation, activation, fallback, and stop evidence. For open
-latency, compare dispatch to `SURFACE_REVEAL phase=revealed`; command receipt
-and preparation distinguish executor starvation from construction cost.
+latency, compare dispatch to `SURFACE_REVEAL phase=revealed`, then require
+`phase=ready focus=true`; command receipt and preparation distinguish executor
+starvation from construction cost.
 Exercise cold first-show, ESC, and multi-monitor centering too; a headless test
 cannot prove compositor behavior.
 
