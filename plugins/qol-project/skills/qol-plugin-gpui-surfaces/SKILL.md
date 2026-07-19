@@ -98,7 +98,10 @@ extend `settings_panel/` instead. What the kit module guarantees:
    Action and list fields reuse `active_query`, `active_value_from`, and
    `active_label`; shared renderers own polling and presentation. GPUI uses the
    shared `qol_gpui::StatusIndicator`, and plugins add no local animation or
-   polling state.
+   polling state. Set `variant = "toggle"` when an action's active query is a
+   stable on/off state; shared renderers then show the colored binary state
+   without presenting it as ongoing work. Reserve the default active spinner
+   for operations that are actually in progress.
 5. List row actions use `row_action` / `row_actions` in contract order. The
    first action whose `when` field is truthy is the primary action; Enter on an
    active list row dispatches it, interpolates its `input` from the row, and
