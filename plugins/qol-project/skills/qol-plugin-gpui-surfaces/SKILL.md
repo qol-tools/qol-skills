@@ -17,7 +17,7 @@ qol-shot is the reference implementation end to end.
 | --- | --- | --- |
 | `Surface` builder | `surface.rs` | Window creation for `SurfaceKind::Toast` (PopUp, unfocused, corner-anchored, optional timeout) and `SurfaceKind::Panel` (Normal, focused, monitor-centered) |
 | `SurfaceDismisser` | `surface.rs` | Close from anywhere (key handler, click, timer). Deferred out of event dispatch - see invariants |
-| `settings_panel::open` | `settings_panel.rs` | The complete contract-driven settings panel: row mapping, keyboard flow, tray-API persistence, `SettingsPanelPalette` styling. Plugins pass `SettingsPanel { plugin_id, contract, heading }` plus an in-process query provider - nothing else |
+| `settings_panel::open` | `settings_panel.rs` | The complete contract-driven settings panel: row mapping, keyboard flow, tray-API persistence, runtime queries/actions, `SettingsPanelPalette` styling. Plugins pass `SettingsPanel { plugin_id, contract, heading }` plus a shared runtime adapter - nothing else |
 | `Dropdown` + `DropdownStyle` | `dropdown.rs` | Keyboard option picker built on `ScrollList`; caller decorates labels (e.g. `[x]` marks for multi-select) and paints it via `deferred(anchored(...))` so it overlays later rows |
 | `ScrollList` | `scroll_list.rs` | Selection + scroll-window state shared with launcher/removeapp |
 
@@ -36,7 +36,7 @@ renders. The entire panel lives in the kit
 qol_gpui::settings_panel::open_from_async(
     SettingsPanel { plugin_id, contract, heading: "Alt Tab Settings" },
     tracker.clone(),
-    |query| ...,   // in-process query provider; |_| Vec::new() if none
+    SettingsRuntime::new(|query| ...),
     &cx,           // AsyncApp; wraps cx.update and flattens both Results
 )
 ```
@@ -56,13 +56,16 @@ extend `settings_panel.rs` instead. What the kit module guarantees:
    select → dropdown (enter), string_array with `options` or `query` →
    multi-select dropdown, number → typed edit with min/max clamp,
    string/string_array → text edit, color → hex text edit with a live
-   swatch (6-digit hex, optional `#`, invalid input rejected on
-   commit). Unsupported kinds (object maps, ...) are skipped; the web
-   page still shows them.
-3. Query-backed selects and string arrays resolve options
-   **in-process** through the provider closure - the panel runs inside
-   the plugin, so it calls the same provider the daemon uses for the
-   tray query, no socket hop.
+   swatch, action → dispatchable row, and list → query-backed live rows.
+   Unsupported kinds (object maps, ...) are skipped; the web page still shows
+   them.
+3. All query-backed controls use the shared `SettingsRuntime`. If a daemon owns
+   mutable runtime state (discovery, pairing, connection health), the adapter
+   MUST query and act through that daemon instead of re-running hardware logic
+   in the GPUI process. Poll with GPUI's executor timer and run blocking IPC on
+   the background executor (`gpui` 0.2.2 `Executor::timer`, verified
+   2026-07-19); entity updates return to the UI executor. Static in-process
+   providers remain appropriate for immutable option discovery.
 4. Every change saves immediately by PUTting **row values merged over
    the loaded config** to `PUT /api/plugins/{id}/config`. No apply
    button. Merging (not rebuilding from rows) is load-bearing: fields
