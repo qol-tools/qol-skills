@@ -177,16 +177,18 @@ selects) are documented in `qol-project:qol-shared-libs`.
   `pick_active_monitor` decision. Never re-derive from raw focus or
   cursor indices (`snapshot_monitor_focus_first` pins panels to the
   last-focused window's monitor). Toasts use `snapshot_cursor` corners.
-- **Panels reveal only after placement settles.** Muffin places
-  WM-managed Normal windows itself; `Surface` draws the real view behind
-  a native visibility gate, asserts the origin, then reveals (plus a short
-  post-reveal reassert). Don't bypass the gate - a visible map-then-jump and
-  a transparent placeholder are both failure modes it exists to kill. The
-  GPUI-specific implementation constraint is canonical in
-  `qol-langs:gpui-conventions`. The kit suffixes every window title with a
-  per-open sequence number because the origin assert looks windows up by
-  title: a reused title can match a lingering previous window and leave the
-  new one wherever the WM dumped it.
+- **Panels reveal only after placement and fresh content settle.** Muffin
+  places WM-managed Normal windows itself; `Surface` maps the real view behind
+  a zero-opacity/input-passthrough native gate, asserts the origin, invalidates
+  the root and inner view, and waits for both a new root render epoch and a
+  later GPUI frame callback. It then restores native visibility and explicitly
+  requests another repaint. Don't bypass either repaint boundary - a visible
+  map-then-jump, a transparent placeholder, and a compositor-cached image from
+  the previously focused app are all real failure modes. The GPUI-specific
+  implementation constraint is canonical in `qol-langs:gpui-conventions`.
+  Every live native window title must be unique because placement and focus
+  helpers resolve by title; retained activations intentionally keep the same
+  title and native window ID.
 - **Interactive surfaces are `WindowKind::Normal`** on Linux; PopUp maps
   to a non-focusable NOTIFICATION and keystrokes leak to the terminal.
 - **Window dismissals are deferred.** `SurfaceDismisser::dismiss` runs via
@@ -216,6 +218,8 @@ guest VM (`qol-project:qol-dev-environments`), exercise this sequence:
 Use `qol trace --grep SURFACE_ACTIVATION --replay` for route, dispatch, command
 receipt, preparation, activation, fallback, and stop evidence. For open
 latency, compare dispatch to `SURFACE_REVEAL phase=revealed`, then require
+`phase=frame-ready moved=true fresh_frame=true content_rendered=true`,
+`phase=revealed shown=true repaint_requested=true`, and finally
 `phase=ready focus=true`; command receipt and preparation distinguish executor
 starvation from construction cost.
 Exercise cold first-show, ESC, and multi-monitor centering too; a headless test

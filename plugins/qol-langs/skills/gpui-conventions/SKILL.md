@@ -397,13 +397,23 @@ anchored keeps it inside the window (`snap_to_window_with_margin`).
 Muffin ignores requested origins for `WindowKind::Normal` windows and
 places them itself; moving after map produces a visible jump. Either use
 per-monitor pre-created ghosts (launcher/alt-tab) or use qol-gpui `Surface`,
-which draws the real root before revealing the native window and asserts the
-origin while it is hidden. Never gate reveal by omitting the root from a
-transparent mapped window: the compositor exposes whatever is underneath as
-false first-frame content. GPUI 0.2.2 honors `WindowOptions::show` on macOS and
-Windows but ignores it on Linux, so the shared Linux path must synchronously
-apply native invisibility before yielding to the event loop. Verified against
-the installed GPUI 0.2.2 source on 2026-07-19.
+which draws the real root and asserts the origin behind a native visibility
+gate. Never gate reveal by omitting the root from a transparent mapped window:
+the compositor exposes whatever is underneath as false first-frame content.
+GPUI 0.2.2 honors `WindowOptions::show` on macOS and Windows but ignores it on
+Linux, so the shared Linux path must synchronously map the native window with
+zero opacity and input passthrough before yielding to the event loop.
+
+Do not treat an `on_next_frame` callback alone as proof that new content was
+painted. A retained window can complete a cached transparent frame without
+rendering its replaced root. The shared reveal path must invalidate both the
+root and inner view, observe the root render epoch and a later frame callback,
+then restore native opacity. After restoring opacity, invalidate and refresh
+again: Muffin can otherwise retain the transparent or stale backing texture
+until an unrelated runtime update. Verify `SURFACE_REVEAL phase=frame-ready`
+reports `moved=true fresh_frame=true content_rendered=true`, followed by
+`phase=revealed shown=true repaint_requested=true`. Verified in Linux Mint
+Cinnamon against the installed GPUI 0.2.2 source on 2026-07-20.
 
 ### Multi-monitor is broken on Linux
 
