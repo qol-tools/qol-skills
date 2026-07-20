@@ -179,13 +179,14 @@ selects) are documented in `qol-project:qol-shared-libs`.
   last-focused window's monitor). Toasts use `snapshot_cursor` corners.
 - **Panels reveal only after placement and fresh content settle.** Muffin
   places WM-managed Normal windows itself; `Surface` maps the real view behind
-  a zero-opacity/input-passthrough native gate, asserts the origin, invalidates
-  the root and inner view, and waits for both a new root render epoch and a
-  later GPUI frame callback. It then restores native visibility and explicitly
-  requests another repaint. Don't bypass either repaint boundary - a visible
-  map-then-jump, a transparent placeholder, and a compositor-cached image from
-  the previously focused app are all real failure modes. The GPUI-specific
-  implementation constraint is canonical in `qol-langs:gpui-conventions`.
+  a zero-opacity/input-passthrough native gate and asserts the origin. On Linux
+  it then waits for GPUI to process a new native bounds event, render the target
+  viewport at that layout epoch, and present a frame covering that render
+  before restoring opacity. A render callback or requested repaint without
+  the bounds/viewport proof is insufficient: X11 may still have the old
+  drawable, leaving the compositor to show the previously focused app until
+  the user moves the window. The GPUI-specific implementation constraint is
+  canonical in `qol-langs:gpui-conventions`.
   Every live native window title must be unique because placement and focus
   helpers resolve by title; retained activations intentionally keep the same
   title and native window ID.
@@ -218,12 +219,15 @@ guest VM (`qol-project:qol-dev-environments`), exercise this sequence:
 Use `qol trace --grep SURFACE_ACTIVATION --replay` for route, dispatch, command
 receipt, preparation, activation, fallback, and stop evidence. For open
 latency, compare dispatch to `SURFACE_REVEAL phase=revealed`, then require
-`phase=frame-ready moved=true fresh_frame=true content_rendered=true`,
-`phase=revealed shown=true repaint_requested=true`, and finally
-`phase=ready focus=true`; command receipt and preparation distinguish executor
-starvation from construction cost.
-Exercise cold first-show, ESC, and multi-monitor centering too; a headless test
-cannot prove compositor behavior.
+`phase=frame-ready moved=true layout_confirmed=true viewport_ready=true
+fresh_frame=true content_rendered=true`, matching `expected`, `observed`, and
+`rendered` sizes, `phase=revealed shown=true`, and finally `phase=ready
+focus=true`. `repaint_requested=true` says only that GPUI accepted a refresh
+request; it does not prove presentation. Command receipt and preparation
+distinguish executor starvation from construction cost. Exercise cold
+first-show, ESC/reopen, cross-plugin size changes, and multi-monitor centering
+in the isolated Mint guest; never drive the developer's desktop. A headless
+test cannot prove compositor behavior.
 
 ## gpui specifics
 

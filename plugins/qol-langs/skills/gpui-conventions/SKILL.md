@@ -404,16 +404,26 @@ GPUI 0.2.2 honors `WindowOptions::show` on macOS and Windows but ignores it on
 Linux, so the shared Linux path must synchronously map the native window with
 zero opacity and input passthrough before yielding to the event loop.
 
-Do not treat an `on_next_frame` callback alone as proof that new content was
-painted. A retained window can complete a cached transparent frame without
-rendering its replaced root. The shared reveal path must invalidate both the
-root and inner view, observe the root render epoch and a later frame callback,
-then restore native opacity. After restoring opacity, invalidate and refresh
-again: Muffin can otherwise retain the transparent or stale backing texture
-until an unrelated runtime update. Verify `SURFACE_REVEAL phase=frame-ready`
-reports `moved=true fresh_frame=true content_rendered=true`, followed by
-`phase=revealed shown=true repaint_requested=true`. Verified in Linux Mint
-Cinnamon against the installed GPUI 0.2.2 source on 2026-07-20.
+Do not treat an `on_next_frame` callback or `refresh()` request as proof that
+new content was presented. On X11, `Window::resize` only sends
+`ConfigureWindow`; GPUI updates the renderer's drawable size later when it
+processes `ConfigureNotify`. A retained window can therefore report a root
+render and frame callback for the old drawable while Muffin keeps showing a
+transparent texture. Moving the window repairs this by triggering the missing
+configure path.
+
+The shared Linux reveal path must observe a new GPUI bounds epoch, require the
+observed and rendered viewport to match the target size, render the root at
+that bounds epoch, and observe an `on_next_frame` marker covering that render
+before restoring native opacity. Keep requesting frames while waiting for
+those states; keep the wait bounded and fail closed. A post-reveal repaint is
+useful but is not readiness evidence. Verify `SURFACE_REVEAL
+phase=frame-ready` reports `layout_confirmed=true viewport_ready=true
+fresh_frame=true content_rendered=true` and matching `expected`, `observed`,
+and `rendered` sizes before `phase=revealed shown=true`. Exercise cold,
+retained, and cross-plugin resize paths only in the compositor-backed Mint VM,
+never by driving the developer's desktop. Verified against GPUI 0.2.2's X11
+`ConfigureNotify` path and Linux Mint Cinnamon on 2026-07-20.
 
 ### Multi-monitor is broken on Linux
 
