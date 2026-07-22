@@ -26,8 +26,22 @@ function fixtureRepo(relativePath, content) {
     const root = path.join(temp, 'qol-monorepo');
     const file = path.join(root, relativePath);
     fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, content);
+    if (content !== undefined) fs.writeFileSync(file, content);
     return { root, file };
+}
+
+function fixtureCratePath(relativePath, content, packageName = 'qol-library') {
+    const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'qol-hook-'));
+    const root = path.join(temp, 'qol-monorepo');
+    const crateRoot = path.join(root, 'libs', packageName);
+    const file = path.join(crateRoot, relativePath);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(
+        path.join(crateRoot, 'Cargo.toml'),
+        `[package]\nname = "${packageName}"\nversion = "0.1.0"\n`,
+    );
+    if (content !== undefined) fs.writeFileSync(file, content);
+    return { root, crateRoot, file };
 }
 
 function fixturePluginPath(relativePath, content) {
@@ -37,6 +51,10 @@ function fixturePluginPath(relativePath, content) {
     const file = path.join(pluginRoot, relativePath);
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(path.join(pluginRoot, 'plugin.toml'), '[plugin]\nid = "fixture"\n');
+    fs.writeFileSync(
+        path.join(pluginRoot, 'Cargo.toml'),
+        '[package]\nname = "plugin-fixture"\nversion = "0.1.0"\n',
+    );
     if (content !== undefined) fs.writeFileSync(file, content);
     return { root, pluginRoot, file };
 }
@@ -141,6 +159,69 @@ test('passes edits inside a grandfathered file-directory module hybrid', () => {
         },
     });
     assert.equal(r.exitCode, 0, r.stderr);
+});
+
+test('blocks new module hybrids in non-plugin Rust crates', () => {
+    const { crateRoot, file } = fixtureCratePath('src/capture/worker.rs');
+    fs.writeFileSync(path.join(crateRoot, 'src', 'capture.rs'), 'mod worker;\n');
+    const r = run({
+        tool_name: 'Write',
+        tool_input: { file_path: file, content: 'pub fn run() {}\n' },
+    });
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /both .*capture\.rs.*sibling directory/s);
+});
+
+test('blocks new catch-all source directories in non-plugin Rust crates', () => {
+    const { file } = fixtureCratePath('src/utils/paths.rs');
+    const r = run({
+        tool_name: 'Write',
+        tool_input: { file_path: file, content: 'pub fn expand() {}\n' },
+    });
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /catch-all/);
+});
+
+test('blocks new implementation modules at the qol-tray source root', () => {
+    const { file } = fixtureCratePath('src/service.rs', undefined, 'qol-tray');
+    const r = run({
+        tool_name: 'Write',
+        tool_input: { file_path: file, content: 'pub fn run() {}\n' },
+    });
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /qol-tray's `src\/` root/);
+});
+
+test('allows source-root facades in ordinary libraries', () => {
+    const { file } = fixtureCratePath('src/service.rs');
+    const r = run({
+        tool_name: 'Write',
+        tool_input: { file_path: file, content: 'pub fn run() {}\n' },
+    });
+    assert.equal(r.exitCode, 0, r.stderr);
+});
+
+test('blocks mixed flat and directory OS module forms', () => {
+    const flatAfterDirectory = fixtureCratePath('src/platform/macos.rs');
+    fs.mkdirSync(path.join(flatAfterDirectory.crateRoot, 'src', 'platform', 'linux'), { recursive: true });
+    let r = run({
+        tool_name: 'Write',
+        tool_input: { file_path: flatAfterDirectory.file, content: 'pub struct Platform;\n' },
+    });
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /cannot mix flat OS modules/);
+
+    const directoryAfterFlat = fixtureCratePath('src/platform/macos/mod.rs');
+    fs.writeFileSync(
+        path.join(directoryAfterFlat.crateRoot, 'src', 'platform', 'linux.rs'),
+        'pub struct Platform;\n',
+    );
+    r = run({
+        tool_name: 'Write',
+        tool_input: { file_path: directoryAfterFlat.file, content: 'pub struct Platform;\n' },
+    });
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /cannot mix flat OS modules/);
 });
 
 test('blocks new files in catch-all plugin source directories', () => {

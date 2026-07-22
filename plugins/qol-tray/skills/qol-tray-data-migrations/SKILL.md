@@ -16,8 +16,8 @@ description: >-
 - Crate: `libs/qol-migrations/` in the qol-monorepo.
 - Root workspace dependency: `Cargo.toml` has `qol-migrations = { path = "libs/qol-migrations" }`.
 - Host dependency: `apps/qol-tray/Cargo.toml` uses `qol-migrations.workspace = true`.
-- PreFlight call site: `apps/qol-tray/src/main.rs`.
-- PostAuth call sites: `apps/qol-tray/src/main.rs`, `apps/qol-tray/src/migrations_startup.rs`, and `apps/qol-tray/src/features/github_auth/service.rs`.
+- Host boot orchestration: `apps/qol-tray/src/app/`.
+- Host post-auth facade: `apps/qol-tray/src/migrations/`; auth/session owners call this facade after credentials become available.
 - Standalone binary: `apps/qol-tray/src/migrate/main.rs`.
 
 ## Cargo dependency form (read this before touching Cargo.toml)
@@ -46,7 +46,7 @@ Two phases, two runtime contracts.
 Call shape in qol-tray:
 
 ```rust
-// pre-flight (sync, in main.rs before housekeeping)
+// pre-flight (sync, in app boot before housekeeping)
 qol_migrations::run_pre_flight(&config_dir, env!("CARGO_PKG_VERSION"))?;
 
 // post-auth (async, after github_auth loads)

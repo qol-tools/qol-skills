@@ -62,7 +62,19 @@ feature logic -> plugin action ids / tray settings / env contract
 
 This keeps the tool useful from a terminal, script, test, or future host while still letting qol-tray consume the same API.
 
-## Plugin directory hygiene
+## Rust module and directory hygiene
+
+Every crate's `src/` root is a composition layer. Keep public facades and required entrypoints there; place implementation beneath the capability, adapter, or presentation boundary that owns it. The host has the strictest application root: `apps/qol-tray/src/` contains only `main.rs` and `lib.rs`. Plugins allow only `main.rs`, `lib.rs`, and optional `cli.rs` at their source root. Ordinary libraries may keep stable public facade modules at the root, but implementation growth moves behind owned directories.
+
+Rules for every Rust crate:
+
+- A module with children uses `name/mod.rs`. Do not combine `name.rs` with a sibling `name/` directory.
+- Within one `platform/` directory, use either flat OS modules or directory-backed OS modules uniformly. Never mix the two forms.
+- Do not create catch-all `common/`, `helper(s)/`, or `util(s)/` source directories. Name the capability or architecture boundary that owns the code.
+- Make ownership refactors path-only first. Repair module wiring and stable facade re-exports, verify behavior, and review semantic changes separately.
+- Before moving code, derive the inventory from the source tree and module declarations. Do not copy a file list or count into a skill as maintained truth.
+
+## Plugin-specific directory hygiene
 
 The plugin `src/` root is a composition layer, not a dumping ground. New Rust files directly under it are limited to `main.rs`, `lib.rs`, and optional `cli.rs`. Put implementation code under the capability, adapter, or presentation boundary that owns it.
 
@@ -70,11 +82,9 @@ Rules:
 
 - `ui/` at the plugin root is host-served web content: HTML, JavaScript, CSS, and related browser assets discovered by qol-tray.
 - `src/ui/` is compiled Rust presentation: GPUI windows, views, panels, toasts, and presentation state. Never swap these two roots.
-- A module with children uses `name/mod.rs`. Do not combine `name.rs` with a sibling `name/` directory.
 - Keep feature-specific OS code in `src/<capability>/platform/`. Use `src/platform/` only for an OS service genuinely shared by multiple capabilities.
-- Do not create catch-all `common/`, `helper(s)/`, or `util(s)/` directories. Name the capability or boundary that owns the code.
 - Keep dependency direction inward: entrypoint/adapter -> capability -> platform facade. Presentation may consume capability state; domain code must not depend on GPUI or qol-tray action ids.
-- Make layout refactors path-only. Move modules and repair imports first; review behavior changes separately. Preserve stable public paths with facade re-exports when callers depend on them.
+- Preserve stable public paths with facade re-exports when callers depend on them.
 
 Before changing a grown plugin, inventory direct `src/*.rs` files, native and web UI roots, platform directories, and every `name.rs` + `name/` hybrid. Classify each file by ownership before moving it. The canonical monorepo reference is `docs/plugin-layout.md`.
 
@@ -416,6 +426,7 @@ The `<os>.rs` source files use these unconditionally — the cfg gate at the man
 ## Hard rules
 
 - ❌ **Never add implementation modules directly under a plugin's `src/` root.** New root Rust files are limited to `main.rs`, `lib.rs`, and optional `cli.rs`.
+- ❌ **Never add implementation modules directly under qol-tray's `src/` root.** Only `main.rs` and `lib.rs` belong there.
 - ❌ **Never represent one Rust module as both `name.rs` and `name/`.** Once it has children, use `name/mod.rs`.
 - ❌ **Never mix the two UI roots.** Plugin-root `ui/` is browser content; `src/ui/` is Rust/GPUI presentation.
 - ❌ **Never create catch-all source directories** named `common`, `helper(s)`, or `util(s)`. Assign explicit ownership.
@@ -547,8 +558,10 @@ All three should be replaced with the trait+impls pattern above.
 This skill ships with a Claude Code PreToolUse hook (`bin/check-qol-arch-code.cjs`) that blocks Edit/Write/MultiEdit/NotebookEdit operations introducing the violations listed above. Cross-platform checks are active on `*.rs` files under a `qol-*` repo path; plugin-layout checks activate when the nearest crate root contains `plugin.toml`. Specifically blocks:
 
 - New Rust implementation modules directly under a plugin's `src/` root. Only `main.rs`, `lib.rs`, and optional `cli.rs` may be introduced there.
-- New `name.rs` + `name/` module hybrids. Modules with children use `name/mod.rs`.
-- New files under catch-all plugin source directories named `common`, `helper(s)`, or `util(s)`.
+- New `name.rs` + `name/` module hybrids in any Rust crate. Modules with children use `name/mod.rs`.
+- Mixed flat and directory-backed OS module forms within one `platform/` directory.
+- New files under catch-all Rust source directories named `common`, `helper(s)`, or `util(s)`.
+- New Rust implementation modules at the qol-tray source root; only `main.rs` and `lib.rs` are accepted.
 - Rust files under plugin-root `ui/`, and browser assets under `src/ui/`.
 - `compile_error!(...)` — anywhere.
 - `#[cfg(target_os = ...)]` (including `all/any/not(target_os = ...)`) outside the canonical mod.rs re-export pattern (`#[cfg(target_os = "X")] mod X;` or `#[cfg(target_os = "X")] pub use X::Platform;`).

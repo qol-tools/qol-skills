@@ -7,19 +7,19 @@ description: Use when working on qol-tray's Rust backend — plugin system, daem
 
 Pairs with the `qol-tray-core` (cross-platform overview + make commands) and `qol-world-canvas` (UI side of dive targets) skills. This skill focuses on the Rust internals: plugin system, daemon supervision, IPC, feature modules, concurrency and error-handling idioms, and shared-crate placement.
 
-## Layout (`src/`)
+## Layout discovery and invariants
 
-- `main.rs`, `lib.rs` — three binaries (`qol-tray`, `qol-tray-install`, `qol-tray-doctor`) share a library facade.
-- `app/` — app bootstrap, config resolution, lifecycle orchestration.
-- `plugins/` — plugin discovery, loading, contract wiring. Consumes `qol-plugin-api`.
-- `daemon/` — per-plugin daemon process management and hot-reload.
-- `tray/` — tray icon and menu chrome. Platform-abstracted via `src/tray/platform/{linux,macos,windows}.rs`.
-- `menu/` — menu building and action dispatch.
-- `features/`, `hotkeys/`, `shortcuts/`, `logs/`, `profile/`, `sync/`, `updates/` — cross-cutting features.
-- `runtime/` — IPC endpoints consumed by the UI (`/api/*`).
-- `settings_surface/` — hidden tray-owned GPUI settings process, singleton activation, and platform fallback routing.
-- `installer/`, `doctor/`, `dev/` — companion binaries.
-- `build.rs` — compile-time asset embedding and version stamping only, no runtime logic in disguise.
+Derive the maintained module inventory from `src/lib.rs`, binary declarations in `Cargo.toml`, and the source tree. Do not use this skill as a snapshot of which feature directories happen to exist.
+
+Before changing layout, inspect direct root files, module declarations, file/directory hybrids, platform-module shapes, and stable public re-exports. Then apply these invariants:
+
+- Keep the source root limited to `main.rs` and `lib.rs`. Put every implementation beneath its owning capability directory.
+- Preserve existing public imports with explicit `lib.rs` re-exports when moving a public module; do not force consumers to follow physical layout churn.
+- Never combine `foo.rs` with `foo/`. A module with children uses `foo/mod.rs`.
+- Within one `platform/` directory, use one OS module form consistently: all files or all directories. Non-OS helpers such as `common.rs` may remain flat.
+- Keep target selection in the owning `platform/mod.rs`; do not introduce new target gates in business modules.
+- Do not create `shared/`, `common/`, or `utils/` dumping grounds. Route code to the capability that owns its state and invariants.
+- Keep `build.rs` compile-time only; runtime behavior belongs under its owning source capability.
 
 ## Plugin system
 
@@ -57,11 +57,9 @@ If code belongs in a shared lib, put it there. qol-tray should not become a dump
 
 ## Cross-platform strategy pattern
 
-Platform-specific behavior lives behind trait-based strategies. Reference: `src/tray/platform/{linux,macos,windows}.rs`.
+Platform-specific behavior lives behind feature-owned strategies. Inspect the affected feature's `platform/mod.rs` and its uniformly shaped OS modules before extending that boundary.
 
 Rule for new code: do **not** scatter `#[cfg(target_os = "...")]` across feature modules. If a feature needs platform-specific behavior, extract a trait, put adapters in a `platform/` sub-module, and call the trait from the feature.
-
-Existing `#[cfg]` in `main.rs` (macOS lifecycle) is pragmatic legacy — leave it. Target new additions.
 
 ## Error handling
 
@@ -116,8 +114,8 @@ boot path:
 - Any HTTP/socket call without a hard short timeout
 
 Wrap remote work in `tokio::spawn` so the daemon comes up immediately and
-the network call completes in the background. Reference: `pull_on_launch`
-in `src/main.rs` is dispatched via `tokio::spawn` for exactly this reason.
+the network call completes in the background. Verify the current launch-sync
+dispatch under `src/app/` before changing this boundary.
 
 A 15s blocked launch behind a single failing remote call is unacceptable.
 If a feature truly cannot proceed without a network result, surface that

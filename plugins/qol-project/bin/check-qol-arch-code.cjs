@@ -12,8 +12,9 @@
  *   3. Runtime platform decision signals outside an architecture boundary
  *      (runtime OS constants, OS API imports, OS command dispatch, OS-keyed
  *      storage/path routing, platform manifest branching).
- *   4. New plugin source-root implementation modules, file/directory module
- *      hybrids, catch-all source directories, and mixed web/native UI roots.
+ *   4. New source-layout debt: qtray/plugin root implementation modules,
+ *      file/directory module hybrids, catch-all source directories, mixed
+ *      platform module forms, and mixed web/native plugin UI roots.
  *
  * Allowed:
  *   - cfg(target_os) on `mod {linux,macos,windows};` or `pub use
@@ -42,7 +43,9 @@ const QOL_TOOLS_PATH_RE = /[\\/]qol-[^\\/]+[\\/]/;
 const TESTS_PATH_RE = /[\\/]tests[\\/]/;
 const EXAMPLES_PATH_RE = /[\\/]examples[\\/]/;
 const PLUGIN_ROOT_RUST_FILES = new Set(['main.rs', 'lib.rs', 'cli.rs']);
+const QOL_TRAY_ROOT_RUST_FILES = new Set(['main.rs', 'lib.rs']);
 const CATCH_ALL_SOURCE_DIRS = new Set(['common', 'helper', 'helpers', 'util', 'utils']);
+const OS_MODULE_NAMES = new Set(['linux', 'macos', 'windows']);
 const WEB_ASSET_EXTENSIONS = new Set([
     '.css',
     '.htm',
@@ -94,6 +97,42 @@ function findPluginContext(filePath) {
     return null;
 }
 
+function packageName(manifestPath) {
+    try {
+        const manifest = fs.readFileSync(manifestPath, 'utf8');
+        const header = /^\[package\]\s*$/m.exec(manifest);
+        if (!header) return null;
+        const afterHeader = manifest.slice(header.index + header[0].length);
+        const nextSection = /^\[/m.exec(afterHeader);
+        const section = nextSection ? afterHeader.slice(0, nextSection.index) : afterHeader;
+        return section.match(/^\s*name\s*=\s*"([^"]+)"\s*$/m)?.[1] || null;
+    } catch {
+        return null;
+    }
+}
+
+function findRustSourceContext(filePath) {
+    let dir = path.dirname(filePath);
+    for (let i = 0; i < 32; i++) {
+        const manifestPath = path.join(dir, 'Cargo.toml');
+        if (fs.existsSync(manifestPath)) {
+            const relative = path.relative(dir, filePath);
+            const parts = relative.split(path.sep);
+            if (parts[0] !== 'src' || parts.length < 2) return null;
+            return {
+                crateRoot: dir,
+                packageName: packageName(manifestPath),
+                parts: parts.slice(1),
+                sourceRoot: path.join(dir, 'src'),
+            };
+        }
+        const parent = path.dirname(dir);
+        if (parent === dir) break;
+        dir = parent;
+    }
+    return null;
+}
+
 function findModuleHybrid(filePath, sourceRoot) {
     if (path.extname(filePath) !== '.rs') return null;
 
@@ -123,6 +162,55 @@ function findModuleHybrid(filePath, sourceRoot) {
     return null;
 }
 
+function findMixedPlatformShape(filePath, sourceRoot) {
+    const relative = path.relative(sourceRoot, filePath);
+    if (relative.startsWith('..') || path.isAbsolute(relative)) return null;
+    const parts = relative.split(path.sep);
+    const platformIndex = parts.lastIndexOf('platform');
+    if (platformIndex < 0 || parts.length <= platformIndex + 1) return null;
+
+    const platformDir = path.join(sourceRoot, ...parts.slice(0, platformIndex + 1));
+    const child = parts[platformIndex + 1];
+    const flatName = path.extname(child) === '.rs' ? path.basename(child, '.rs') : null;
+    const shape = flatName && OS_MODULE_NAMES.has(flatName)
+        ? 'flat'
+        : OS_MODULE_NAMES.has(child)
+            ? 'directory'
+            : null;
+    if (!shape) return null;
+
+    const conflicts = [...OS_MODULE_NAMES]
+        .map(name => shape === 'flat' ? path.join(platformDir, name) : path.join(platformDir, `${name}.rs`))
+        .filter(candidate => isDirectory(candidate) || fs.existsSync(candidate));
+    if (conflicts.length === 0) return null;
+    return { kind: 'mixed-platform-shape', conflicts, platformDir };
+}
+
+function findSourceLayoutViolation(filePath) {
+    const context = findRustSourceContext(filePath);
+    if (!context || path.extname(filePath) !== '.rs' || fs.existsSync(filePath)) return null;
+
+    const hybrid = findModuleHybrid(filePath, context.sourceRoot);
+    if (hybrid) return { kind: 'module-hybrid', ...hybrid };
+
+    const mixedPlatform = findMixedPlatformShape(filePath, context.sourceRoot);
+    if (mixedPlatform) return mixedPlatform;
+
+    if (context.parts.slice(0, -1).some(part => CATCH_ALL_SOURCE_DIRS.has(part))) {
+        return { kind: 'catch-all-directory' };
+    }
+
+    if (
+        context.packageName === 'qol-tray' &&
+        context.parts.length === 1 &&
+        !QOL_TRAY_ROOT_RUST_FILES.has(context.parts[0])
+    ) {
+        return { kind: 'qol-tray-source-root-module' };
+    }
+
+    return null;
+}
+
 function findPluginLayoutViolation(filePath) {
     const context = findPluginContext(filePath);
     if (!context) return null;
@@ -143,11 +231,6 @@ function findPluginLayoutViolation(filePath) {
         return { kind: 'web-in-native-ui' };
     }
 
-    if (context.area === 'src' && isNewPath && extension === '.rs') {
-        const hybrid = findModuleHybrid(filePath, context.sourceRoot);
-        if (hybrid) return { kind: 'module-hybrid', ...hybrid };
-    }
-
     if (
         context.area === 'src' &&
         isNewPath &&
@@ -156,14 +239,6 @@ function findPluginLayoutViolation(filePath) {
         !PLUGIN_ROOT_RUST_FILES.has(context.parts[0])
     ) {
         return { kind: 'source-root-module' };
-    }
-
-    if (
-        context.area === 'src' &&
-        isNewPath &&
-        context.parts.slice(0, -1).some(part => CATCH_ALL_SOURCE_DIRS.has(part))
-    ) {
-        return { kind: 'catch-all-directory' };
     }
 
     return null;
@@ -392,7 +467,7 @@ Bypass for this edit only:
 `);
 }
 
-function blockPluginLayout(filePath, violation) {
+function blockSourceLayout(filePath, violation) {
     let problem;
     let fix;
 
@@ -401,13 +476,21 @@ function blockPluginLayout(filePath, violation) {
             problem = `New Rust implementation modules may not be created directly under a plugin's \`src/\` root.`;
             fix = `Keep only \`main.rs\`, \`lib.rs\`, and optional \`cli.rs\` there. Move this code to \`src/<capability>/mod.rs\` and wire it from the crate facade.`;
             break;
+        case 'qol-tray-source-root-module':
+            problem = `New Rust implementation modules may not be created directly under qol-tray's \`src/\` root.`;
+            fix = `Keep only \`main.rs\` and \`lib.rs\` there. Move this code beneath the subsystem that owns it and preserve any stable import through a facade re-export.`;
+            break;
         case 'module-hybrid':
             problem = `A Rust module cannot use both \`${violation.file}\` and the sibling directory \`${violation.directory}/\`.`;
             fix = `Represent a module with children as \`<module>/mod.rs\`; do not combine \`<module>.rs\` with \`<module>/\`.`;
             break;
         case 'catch-all-directory':
-            problem = `New plugin code may not be added under a catch-all \`common\`, \`helper(s)\`, or \`util(s)\` directory.`;
+            problem = `New Rust code may not be added under a catch-all \`common\`, \`helper(s)\`, or \`util(s)\` directory.`;
             fix = `Name the capability or boundary that owns the code and place it there.`;
+            break;
+        case 'mixed-platform-shape':
+            problem = `One \`platform/\` directory cannot mix flat OS modules with OS directory modules. Conflicting paths: ${violation.conflicts.join(', ')}.`;
+            fix = `Use either \`platform/{linux,macos,windows}.rs\` or \`platform/{linux,macos,windows}/mod.rs\` uniformly within ${violation.platformDir}.`;
             break;
         case 'rust-in-web-ui':
             problem = `Rust UI code does not belong in the plugin-root \`ui/\` directory.`;
@@ -418,7 +501,7 @@ function blockPluginLayout(filePath, violation) {
             fix = `Move host-served HTML, JavaScript, and CSS to the plugin-root \`ui/\` directory. \`src/ui/\` is reserved for compiled Rust/GPUI presentation code.`;
             break;
         default:
-            problem = 'The plugin source layout violates the canonical directory structure.';
+            problem = 'The Rust source layout violates the canonical directory structure.';
             fix = 'Move the file beneath the capability or adapter that owns it.';
     }
 
@@ -555,10 +638,10 @@ function main() {
     const basename = crossPlatformBasename(filePath);
     const parentDir = crossPlatformBasename(crossPlatformDirname(filePath));
 
-    const layoutViolation = findPluginLayoutViolation(filePath);
+    const layoutViolation = findSourceLayoutViolation(filePath) || findPluginLayoutViolation(filePath);
     if (layoutViolation) {
         if (consumeBypass(cwd, filePath, basename)) return 0;
-        blockPluginLayout(filePath, layoutViolation);
+        blockSourceLayout(filePath, layoutViolation);
         return 2;
     }
 
