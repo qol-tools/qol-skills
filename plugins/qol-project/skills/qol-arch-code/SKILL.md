@@ -1,9 +1,9 @@
 ---
 name: qol-arch-code
-description: Use when designing or refactoring Rust plugins/libs that need cross-platform support, capability-specific backend splits, or headless-first CLI/plugin contracts. Defines strategy-pattern compartmentalization (platform/ subfolders, trait + per-OS impls), capability-local backend boundaries for display/windowing, service managers, hardware/protocol adapters, and rendering/capture paths, headless binary layering, mandatory help/doctor commands, and plugin doctor output contracts. Triggers on platform-specific code, multi-OS support, plugin platform modules, OS-named files, Linux X11/Wayland/compositor splits, DBus/systemd/protocol backend splits, headless CLI design, plugin runtime action design, doctor commands, or any time you see #[cfg(target_os)] sprawl. For symbol/import hygiene that prevents dead_code warnings under `-D warnings`, see `qol-arch-cross-platform`. For CI/release workflow contracts that enforce cross-platform builds, see `qol-arch-cicd`.
+description: Use when designing or refactoring Rust plugins/libs that need clean source ownership, cross-platform support, capability-specific backend splits, native GPUI or web UI placement, or headless-first CLI/plugin contracts. Defines plugin source-root hygiene, the ui/ versus src/ui/ boundary, Rust module directory form, strategy-pattern compartmentalization (platform/ subfolders, trait + per-OS impls), capability-local backend boundaries, headless binary layering, mandatory help/doctor commands, and plugin doctor output contracts. Triggers on plugin directory structure, loose files under src/, module file-plus-folder hybrids, native or web UI placement, platform-specific code, multi-OS support, OS-named files, Linux X11/Wayland/compositor splits, headless CLI design, plugin runtime action design, doctor commands, or any time you see #[cfg(target_os)] sprawl. For symbol/import hygiene that prevents dead_code warnings under `-D warnings`, see `qol-arch-cross-platform`. For CI/release workflow contracts that enforce cross-platform builds, see `qol-arch-cicd`.
 ---
 
-# qol-arch-code: Cross-Platform Strategy Pattern (Code Layout)
+# qol-arch-code: Plugin and Cross-Platform Code Layout
 
 ## Principle
 
@@ -23,12 +23,19 @@ Prefer applications and plugins that work as standalone headless tools first. Th
 Layer Rust plugins like this:
 
 ```
-src/
-  lib.rs             # public feature API and module wiring
-  main.rs            # tiny CLI entrypoint
-  cli.rs             # argument parsing and command UX
-  <feature>.rs       # headless domain flow; no qol-tray assumptions
-  platform/          # OS-specific implementation boundary
+plugin-name/
+  ui/                    # optional host-served HTML, JavaScript, and CSS
+  src/
+    main.rs              # tiny binary entrypoint
+    lib.rs               # crate composition and public facade
+    cli.rs               # optional argument parsing and command UX
+    app/                 # long-running orchestration and daemon transport
+    config/              # config model and config-specific actions
+    ui/                  # native Rust/GPUI presentation
+    <capability>/         # headless domain behavior owned by one capability
+      mod.rs
+      platform/          # OS strategy owned by that capability
+    platform/            # only OS services shared across capabilities
 ```
 
 The headless layer owns useful behavior: lifecycle, validation, state machines, file planning, domain errors, and testable pure helpers. Adapters own context: CLI args, plugin action ids, host-injected config, tray settings URLs, and user-facing presentation.
@@ -54,6 +61,22 @@ feature logic -> plugin action ids / tray settings / env contract
 ```
 
 This keeps the tool useful from a terminal, script, test, or future host while still letting qol-tray consume the same API.
+
+## Plugin directory hygiene
+
+The plugin `src/` root is a composition layer, not a dumping ground. New Rust files directly under it are limited to `main.rs`, `lib.rs`, and optional `cli.rs`. Put implementation code under the capability, adapter, or presentation boundary that owns it.
+
+Rules:
+
+- `ui/` at the plugin root is host-served web content: HTML, JavaScript, CSS, and related browser assets discovered by qol-tray.
+- `src/ui/` is compiled Rust presentation: GPUI windows, views, panels, toasts, and presentation state. Never swap these two roots.
+- A module with children uses `name/mod.rs`. Do not combine `name.rs` with a sibling `name/` directory.
+- Keep feature-specific OS code in `src/<capability>/platform/`. Use `src/platform/` only for an OS service genuinely shared by multiple capabilities.
+- Do not create catch-all `common/`, `helper(s)/`, or `util(s)/` directories. Name the capability or boundary that owns the code.
+- Keep dependency direction inward: entrypoint/adapter -> capability -> platform facade. Presentation may consume capability state; domain code must not depend on GPUI or qol-tray action ids.
+- Make layout refactors path-only. Move modules and repair imports first; review behavior changes separately. Preserve stable public paths with facade re-exports when callers depend on them.
+
+Before changing a grown plugin, inventory direct `src/*.rs` files, native and web UI roots, platform directories, and every `name.rs` + `name/` hybrid. Classify each file by ownership before moving it. The canonical monorepo reference is `docs/plugin-layout.md`.
 
 ## Headless CLI contract
 
@@ -392,6 +415,10 @@ The `<os>.rs` source files use these unconditionally — the cfg gate at the man
 
 ## Hard rules
 
+- ❌ **Never add implementation modules directly under a plugin's `src/` root.** New root Rust files are limited to `main.rs`, `lib.rs`, and optional `cli.rs`.
+- ❌ **Never represent one Rust module as both `name.rs` and `name/`.** Once it has children, use `name/mod.rs`.
+- ❌ **Never mix the two UI roots.** Plugin-root `ui/` is browser content; `src/ui/` is Rust/GPUI presentation.
+- ❌ **Never create catch-all source directories** named `common`, `helper(s)`, or `util(s)`. Assign explicit ownership.
 - ❌ **Never `compile_error!("only X is supported")`** at module top.
 - ❌ **Never sprinkle `#[cfg(target_os = "...")]` in business logic.** If you see more than one cfg per file outside `platform/mod.rs`, refactor.
 - ❌ **Never mix platform module forms** in one `platform/` directory. Choose all flat OS files or all OS directory modules.
@@ -450,7 +477,15 @@ Each `<os>.rs` exports the same set of public symbols. If they drift, you'll get
 
 ## Refactoring an existing plugin
 
-Step-by-step migration from cfg-sprawl to strategy pattern:
+First repair ownership without changing behavior:
+
+1. Inventory every direct `src/*.rs` file, both possible UI roots, every `platform/` directory, and every `name.rs` + `name/` hybrid.
+2. Classify each implementation file as app orchestration, config, native UI, a named domain capability, or a genuinely shared platform service.
+3. Move files into those ownership directories and repair module paths. Convert parent modules with children to `name/mod.rs`.
+4. Preserve stable public imports with deliberate re-exports from `lib.rs`; update internal callers to the ownership path.
+5. Format, compile, lint, and test the move-only patch before making behavior changes.
+
+Then migrate cfg-sprawl to the strategy pattern:
 
 1. **Identify the platform surface and capability boundary.** Grep for `#[cfg(target_os` and `compile_error!`. List every function/method that has platform-specific behavior, then ask whether the real boundary is OS, a feature capability, a display/windowing substrate, a service/session API, a hardware protocol, or a rendering/capture path.
 2. **Group by feature first.** Cursor/input, window management, preview capture, theme detection, service control, protocol bridge, etc. Each feature gets a `src/<feature>/` module with `platform/` inside, OR a single top-level `src/platform/` if the surface is small. If one capability has multiple incompatible substrates, put backends under that capability and let the capability facade or OS adapter select the backend.
@@ -509,14 +544,20 @@ All three should be replaced with the trait+impls pattern above.
 
 ## Enforcement: PreToolUse hook
 
-This skill ships with a Claude Code PreToolUse hook (`bin/check-qol-arch-code.cjs`) that blocks Edit/Write/MultiEdit/NotebookEdit operations introducing the violations listed above. Active on any `*.rs` file under a `qol-*` repo path. Specifically blocks:
+This skill ships with a Claude Code PreToolUse hook (`bin/check-qol-arch-code.cjs`) that blocks Edit/Write/MultiEdit/NotebookEdit operations introducing the violations listed above. Cross-platform checks are active on `*.rs` files under a `qol-*` repo path; plugin-layout checks activate when the nearest crate root contains `plugin.toml`. Specifically blocks:
 
+- New Rust implementation modules directly under a plugin's `src/` root. Only `main.rs`, `lib.rs`, and optional `cli.rs` may be introduced there.
+- New `name.rs` + `name/` module hybrids. Modules with children use `name/mod.rs`.
+- New files under catch-all plugin source directories named `common`, `helper(s)`, or `util(s)`.
+- Rust files under plugin-root `ui/`, and browser assets under `src/ui/`.
 - `compile_error!(...)` — anywhere.
 - `#[cfg(target_os = ...)]` (including `all/any/not(target_os = ...)`) outside the canonical mod.rs re-export pattern (`#[cfg(target_os = "X")] mod X;` or `#[cfg(target_os = "X")] pub use X::Platform;`).
 - OS-named files (`linux.rs`, `macos.rs`, `windows.rs`) placed outside a `platform/` directory — these must always live under `platform/` (per-feature or top-level).
 - Platform decision signals outside an architecture boundary: `cfg!(target_os)`, `std::env::consts::OS`, OS API imports, OS command dispatch, platform-token branching, or platform-token storage/path routing.
 
 Allowed without challenge:
+- Existing legacy root modules and hybrids remain editable so the guard does not freeze plugins awaiting migration. New layout debt is blocked; existing debt should be removed during the next ownership refactor.
+- Host-served browser assets under plugin-root `ui/`, and Rust/GPUI code under `src/ui/`.
 - OS-named files inside any `platform/` directory — those *are* the OS impl, cfg inside is redundant but harmless.
 - Files under `tests/` and `examples/`, or named `*_test.rs` / `*_tests.rs` — cross-platform tests legitimately need cfg gates.
 - Main-session and subagent edits are checked the same way.

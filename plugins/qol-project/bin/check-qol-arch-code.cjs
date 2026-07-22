@@ -2,8 +2,8 @@
 /*
  * qol-arch-code PreToolUse hook.
  *
- * Blocks Rust file Writes/Edits that violate the qol-arch-code skill's
- * cross-platform strategy pattern:
+ * Blocks file Writes/Edits that violate the qol-arch-code skill's
+ * cross-platform strategy pattern and plugin source-layout contract:
  *
  *   1. compile_error! macros — break cross-compilation.
  *   2. #[cfg(target_os = "...")] attributes outside the canonical mod.rs
@@ -12,6 +12,8 @@
  *   3. Runtime platform decision signals outside an architecture boundary
  *      (runtime OS constants, OS API imports, OS command dispatch, OS-keyed
  *      storage/path routing, platform manifest branching).
+ *   4. New plugin source-root implementation modules, file/directory module
+ *      hybrids, catch-all source directories, and mixed web/native UI roots.
  *
  * Allowed:
  *   - cfg(target_os) on `mod {linux,macos,windows};` or `pub use
@@ -39,6 +41,18 @@ const OS_BASENAMES = new Set(['linux.rs', 'macos.rs', 'windows.rs']);
 const QOL_TOOLS_PATH_RE = /[\\/]qol-[^\\/]+[\\/]/;
 const TESTS_PATH_RE = /[\\/]tests[\\/]/;
 const EXAMPLES_PATH_RE = /[\\/]examples[\\/]/;
+const PLUGIN_ROOT_RUST_FILES = new Set(['main.rs', 'lib.rs', 'cli.rs']);
+const CATCH_ALL_SOURCE_DIRS = new Set(['common', 'helper', 'helpers', 'util', 'utils']);
+const WEB_ASSET_EXTENSIONS = new Set([
+    '.css',
+    '.htm',
+    '.html',
+    '.js',
+    '.jsx',
+    '.mjs',
+    '.ts',
+    '.tsx',
+]);
 
 function crossPlatformBasename(p) {
     const parts = p.split(/[\\/]/);
@@ -49,6 +63,110 @@ function crossPlatformDirname(p) {
     const parts = p.split(/[\\/]/);
     parts.pop();
     return parts.join('/');
+}
+
+function isDirectory(p) {
+    try {
+        return fs.statSync(p).isDirectory();
+    } catch {
+        return false;
+    }
+}
+
+function findPluginContext(filePath) {
+    let dir = path.dirname(filePath);
+    for (let i = 0; i < 32; i++) {
+        if (fs.existsSync(path.join(dir, 'plugin.toml'))) {
+            const relative = path.relative(dir, filePath);
+            const parts = relative.split(path.sep);
+            const area = parts.shift();
+            if ((area !== 'src' && area !== 'ui') || parts.length === 0) return null;
+            return {
+                area,
+                parts,
+                sourceRoot: path.join(dir, 'src'),
+            };
+        }
+        const parent = path.dirname(dir);
+        if (parent === dir) break;
+        dir = parent;
+    }
+    return null;
+}
+
+function findModuleHybrid(filePath, sourceRoot) {
+    if (path.extname(filePath) !== '.rs') return null;
+
+    const basename = path.basename(filePath);
+    if (basename !== 'mod.rs') {
+        const siblingDirectory = path.join(
+            path.dirname(filePath),
+            basename.slice(0, -'.rs'.length),
+        );
+        if (isDirectory(siblingDirectory)) {
+            return { file: filePath, directory: siblingDirectory };
+        }
+    }
+
+    let dir = path.dirname(filePath);
+    while (dir !== sourceRoot) {
+        const relative = path.relative(sourceRoot, dir);
+        if (relative.startsWith('..') || path.isAbsolute(relative)) break;
+        const siblingFile = `${dir}.rs`;
+        if (fs.existsSync(siblingFile)) {
+            return { file: siblingFile, directory: dir };
+        }
+        const parent = path.dirname(dir);
+        if (parent === dir) break;
+        dir = parent;
+    }
+    return null;
+}
+
+function findPluginLayoutViolation(filePath) {
+    const context = findPluginContext(filePath);
+    if (!context) return null;
+
+    const extension = path.extname(filePath).toLowerCase();
+    const isNewPath = !fs.existsSync(filePath);
+
+    if (context.area === 'ui' && isNewPath && extension === '.rs') {
+        return { kind: 'rust-in-web-ui' };
+    }
+
+    if (
+        context.area === 'src' &&
+        isNewPath &&
+        context.parts[0] === 'ui' &&
+        WEB_ASSET_EXTENSIONS.has(extension)
+    ) {
+        return { kind: 'web-in-native-ui' };
+    }
+
+    if (context.area === 'src' && isNewPath && extension === '.rs') {
+        const hybrid = findModuleHybrid(filePath, context.sourceRoot);
+        if (hybrid) return { kind: 'module-hybrid', ...hybrid };
+    }
+
+    if (
+        context.area === 'src' &&
+        isNewPath &&
+        context.parts.length === 1 &&
+        extension === '.rs' &&
+        !PLUGIN_ROOT_RUST_FILES.has(context.parts[0])
+    ) {
+        return { kind: 'source-root-module' };
+    }
+
+    if (
+        context.area === 'src' &&
+        isNewPath &&
+        context.parts.slice(0, -1).some(part => CATCH_ALL_SOURCE_DIRS.has(part))
+    ) {
+        return { kind: 'catch-all-directory' };
+    }
+
+    return null;
 }
 
 const CANONICAL_TARGET = /^\s*(mod (linux|macos|windows);|pub(?:\([^)]*\))?\s+use (linux|macos|windows)::)/;
@@ -274,6 +392,51 @@ Bypass for this edit only:
 `);
 }
 
+function blockPluginLayout(filePath, violation) {
+    let problem;
+    let fix;
+
+    switch (violation.kind) {
+        case 'source-root-module':
+            problem = `New Rust implementation modules may not be created directly under a plugin's \`src/\` root.`;
+            fix = `Keep only \`main.rs\`, \`lib.rs\`, and optional \`cli.rs\` there. Move this code to \`src/<capability>/mod.rs\` and wire it from the crate facade.`;
+            break;
+        case 'module-hybrid':
+            problem = `A Rust module cannot use both \`${violation.file}\` and the sibling directory \`${violation.directory}/\`.`;
+            fix = `Represent a module with children as \`<module>/mod.rs\`; do not combine \`<module>.rs\` with \`<module>/\`.`;
+            break;
+        case 'catch-all-directory':
+            problem = `New plugin code may not be added under a catch-all \`common\`, \`helper(s)\`, or \`util(s)\` directory.`;
+            fix = `Name the capability or boundary that owns the code and place it there.`;
+            break;
+        case 'rust-in-web-ui':
+            problem = `Rust UI code does not belong in the plugin-root \`ui/\` directory.`;
+            fix = `Move native GPUI code to \`src/ui/\`. Plugin-root \`ui/\` is reserved for host-served HTML, JavaScript, and CSS.`;
+            break;
+        case 'web-in-native-ui':
+            problem = `Browser assets do not belong in \`src/ui/\`.`;
+            fix = `Move host-served HTML, JavaScript, and CSS to the plugin-root \`ui/\` directory. \`src/ui/\` is reserved for compiled Rust/GPUI presentation code.`;
+            break;
+        default:
+            problem = 'The plugin source layout violates the canonical directory structure.';
+            fix = 'Move the file beneath the capability or adapter that owns it.';
+    }
+
+    process.stderr.write(`qol-arch-code violation in ${filePath}.
+
+${problem}
+
+Fix:
+  ${fix}
+
+The guard is prospective: existing legacy files remain editable, but new
+layout debt is blocked. See the qol-project:qol-arch-code skill.
+
+Bypass for this edit only:
+  touch .claude/bypass-qol-arch-code
+`);
+}
+
 function blockCfgViolations(filePath, violations) {
     const detail = violations
         .flatMap(v => [
@@ -296,7 +459,7 @@ The skill requires:
         #[cfg(target_os = "linux")]    mod linux;
         #[cfg(target_os = "linux")]    pub use linux::Platform;
 
-  - Each platform impl lives in src/<feature>/{linux,macos,windows}.rs.
+  - Each platform impl lives in src/<feature>/platform/{linux,macos,windows}.rs.
     Those files are the only place OS-specific code may live. Inside them
     cfg(target_os) is unnecessary because the file itself is OS-gated.
 
@@ -304,12 +467,13 @@ The skill requires:
     no cfg-gated pub fns/structs, no cfg sprawl in business code.
 
 Refactor steps:
-  1. Move OS-specific code into linux.rs / macos.rs / windows.rs siblings.
+  1. Move OS-specific code into platform/linux.rs, platform/macos.rs, and
+     platform/windows.rs siblings.
   2. Define a trait in mod.rs.
   3. Each <os>.rs has \`pub(crate) struct Platform; impl Trait for Platform\`.
   4. Replace business-code cfg blocks with calls to \`Platform.method(...)\`.
 
-Reference: qol-dev-conventions:qol-arch-code skill.
+Reference: qol-project:qol-arch-code skill.
 
 Bypass for this edit only:
   touch .claude/bypass-qol-arch-code
@@ -358,6 +522,13 @@ function consumeBypassMarker(marker, basename) {
     return true;
 }
 
+function consumeBypass(cwd, filePath, basename) {
+    for (const marker of markerPaths(cwd, filePath)) {
+        if (consumeBypassMarker(marker, basename)) return true;
+    }
+    return false;
+}
+
 function main() {
     const raw = readStdin().trim();
     if (!raw) return 0;
@@ -373,13 +544,25 @@ function main() {
     if (!INSPECTED_TOOLS.has(tool)) return 0;
 
     const input = payload.tool_input || {};
-    const filePath = input.file_path || input.notebook_path || '';
-    if (!filePath || !filePath.endsWith('.rs')) return 0;
+    const inputPath = input.file_path || input.notebook_path || '';
+    if (!inputPath) return 0;
+
+    const cwd = payload.cwd || process.cwd();
+    const filePath = path.isAbsolute(inputPath) ? inputPath : path.resolve(cwd, inputPath);
 
     if (!QOL_TOOLS_PATH_RE.test(filePath)) return 0;
 
     const basename = crossPlatformBasename(filePath);
     const parentDir = crossPlatformBasename(crossPlatformDirname(filePath));
+
+    const layoutViolation = findPluginLayoutViolation(filePath);
+    if (layoutViolation) {
+        if (consumeBypass(cwd, filePath, basename)) return 0;
+        blockPluginLayout(filePath, layoutViolation);
+        return 2;
+    }
+
+    if (!filePath.endsWith('.rs')) return 0;
 
     if (
         TESTS_PATH_RE.test(filePath) ||
@@ -398,14 +581,9 @@ function main() {
         return 0;
     }
 
-    const cwd = payload.cwd || process.cwd();
-    for (const marker of markerPaths(cwd, filePath)) {
-        if (consumeBypassMarker(marker, basename)) {
-            return 0;
-        }
-    }
+    if (consumeBypass(cwd, filePath, basename)) return 0;
 
-    const newContent = extractNewContent(tool, input);
+    const newContent = extractNewContent(tool, { ...input, file_path: filePath });
     if (!newContent) return 0;
 
     if (COMPILE_ERROR.test(newContent)) {

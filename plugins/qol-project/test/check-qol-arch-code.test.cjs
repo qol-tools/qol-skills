@@ -30,6 +30,186 @@ function fixtureRepo(relativePath, content) {
     return { root, file };
 }
 
+function fixturePluginPath(relativePath, content) {
+    const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'qol-hook-'));
+    const root = path.join(temp, 'qol-monorepo');
+    const pluginRoot = path.join(root, 'plugins', 'plugin-fixture');
+    const file = path.join(pluginRoot, relativePath);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(path.join(pluginRoot, 'plugin.toml'), '[plugin]\nid = "fixture"\n');
+    if (content !== undefined) fs.writeFileSync(file, content);
+    return { root, pluginRoot, file };
+}
+
+test('blocks new Rust implementation modules at a plugin src root', () => {
+    const { file } = fixturePluginPath('src/recording.rs');
+    const r = run({
+        tool_name: 'Write',
+        tool_input: {
+            file_path: file,
+            content: 'pub fn start() {}\n',
+        },
+    });
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /directly under a plugin's `src\/` root/);
+});
+
+test('passes canonical plugin src root entrypoints and facades', () => {
+    for (const basename of ['main.rs', 'lib.rs', 'cli.rs']) {
+        const { file } = fixturePluginPath(`src/${basename}`);
+        const r = run({
+            tool_name: 'Write',
+            tool_input: {
+                file_path: file,
+                content: 'pub fn run() {}\n',
+            },
+        });
+        assert.equal(r.exitCode, 0, `${basename}: ${r.stderr}`);
+    }
+});
+
+test('passes edits to grandfathered plugin src root modules', () => {
+    const { file } = fixturePluginPath('src/config.rs', 'pub struct Config;\n');
+    const r = run({
+        tool_name: 'Edit',
+        tool_input: {
+            file_path: file,
+            old_string: 'pub struct Config;',
+            new_string: 'pub(crate) struct Config;',
+        },
+    });
+    assert.equal(r.exitCode, 0, r.stderr);
+});
+
+test('layout violations honor the single-edit bypass marker', () => {
+    const { root, file } = fixturePluginPath('src/recording.rs');
+    const marker = path.join(root, '.claude', 'bypass-qol-arch-code');
+    fs.mkdirSync(path.dirname(marker), { recursive: true });
+    fs.writeFileSync(marker, '');
+    const r = run({
+        cwd: os.tmpdir(),
+        tool_name: 'Write',
+        tool_input: {
+            file_path: file,
+            content: 'pub fn start() {}\n',
+        },
+    });
+    assert.equal(r.exitCode, 0, r.stderr);
+    assert.equal(fs.existsSync(marker), false);
+});
+
+test('blocks a new child beneath a sibling file module', () => {
+    const { pluginRoot, file } = fixturePluginPath('src/capture/worker.rs');
+    fs.writeFileSync(path.join(pluginRoot, 'src', 'capture.rs'), 'mod worker;\n');
+    const r = run({
+        tool_name: 'Write',
+        tool_input: {
+            file_path: file,
+            content: 'pub fn run() {}\n',
+        },
+    });
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /both .*capture\.rs.*sibling directory/s);
+});
+
+test('blocks a new sibling file module when its directory exists', () => {
+    const { pluginRoot, file } = fixturePluginPath('src/capture.rs');
+    fs.mkdirSync(path.join(pluginRoot, 'src', 'capture'), { recursive: true });
+    const r = run({
+        tool_name: 'Write',
+        tool_input: {
+            file_path: file,
+            content: 'mod worker;\n',
+        },
+    });
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /`<module>\/mod\.rs`/);
+});
+
+test('passes edits inside a grandfathered file-directory module hybrid', () => {
+    const { pluginRoot, file } = fixturePluginPath(
+        'src/capture/worker.rs',
+        'pub fn run() {}\n',
+    );
+    fs.writeFileSync(path.join(pluginRoot, 'src', 'capture.rs'), 'mod worker;\n');
+    const r = run({
+        tool_name: 'Edit',
+        tool_input: {
+            file_path: file,
+            old_string: 'pub fn run() {}',
+            new_string: 'pub fn run() { tracing::info!("run"); }',
+        },
+    });
+    assert.equal(r.exitCode, 0, r.stderr);
+});
+
+test('blocks new files in catch-all plugin source directories', () => {
+    const { file } = fixturePluginPath('src/utils/paths.rs');
+    const r = run({
+        tool_name: 'Write',
+        tool_input: {
+            file_path: file,
+            content: 'pub fn expand() {}\n',
+        },
+    });
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /catch-all/);
+});
+
+test('blocks Rust code in host-served plugin ui', () => {
+    const { file } = fixturePluginPath('ui/panel.rs');
+    const r = run({
+        tool_name: 'Write',
+        tool_input: {
+            file_path: file,
+            content: 'pub struct Panel;\n',
+        },
+    });
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /Rust UI code.*plugin-root `ui\/`/s);
+});
+
+test('blocks browser assets in native Rust ui', () => {
+    const { file } = fixturePluginPath('src/ui/panel.html');
+    const r = run({
+        tool_name: 'Write',
+        tool_input: {
+            file_path: file,
+            content: '<main>settings</main>\n',
+        },
+    });
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /Browser assets do not belong in `src\/ui\/`/);
+});
+
+test('passes web assets in plugin ui and Rust code in src ui', () => {
+    const cases = [
+        ['ui/index.html', '<main>settings</main>\n'],
+        ['src/ui/panel.rs', 'pub struct Panel;\n'],
+    ];
+    for (const [relativePath, content] of cases) {
+        const { file } = fixturePluginPath(relativePath);
+        const r = run({
+            tool_name: 'Write',
+            tool_input: { file_path: file, content },
+        });
+        assert.equal(r.exitCode, 0, `${relativePath}: ${r.stderr}`);
+    }
+});
+
+test('does not impose plugin root rules on non-plugin crates', () => {
+    const { file } = fixtureRepo('apps/example/src/service.rs', 'pub fn run() {}\n');
+    const r = run({
+        tool_name: 'Edit',
+        tool_input: {
+            file_path: file,
+            old_string: 'pub fn run() {}',
+            new_string: 'pub fn run() { tracing::info!("run"); }',
+        },
+    });
+    assert.equal(r.exitCode, 0, r.stderr);
+});
+
 test('blocks cfg(all(target_os, feature)) gating non-OS module', () => {
     const r = run({
         tool_name: 'Write',
