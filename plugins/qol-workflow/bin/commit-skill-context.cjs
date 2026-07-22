@@ -78,7 +78,7 @@ function main() {
     const body = stripFrontmatter(skillContent).trim();
     if (!body) return 0;
 
-    const context = `REMINDER from pre-commit hook (plugin:qol-host:commit skill):
+    const context = `REMINDER from pre-commit hook (plugin:qol-workflow:commit skill):
 
 ${body}
 

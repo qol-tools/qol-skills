@@ -61,13 +61,13 @@ function findOffendingPattern(haystack) {
 
 function emitBlockMessage() {
     process.stderr.write(
-        `git commit BLOCKED by qol-host:commit-deny-coauthor hook.
+        `git commit BLOCKED by qol-workflow:commit-deny-coauthor hook.
 
 The commit message contains AI / Claude / Anthropic attribution
 (Co-Authored-By, "Generated with Claude Code", noreply@anthropic.com,
 \u{1F916} Generated, etc.).
 
-qol-tools rule (plugin:qol-host:commit skill):
+qol-tools rule (plugin:qol-workflow:commit skill):
   NEVER add Co-Authored-By or any Anthropic attribution to commits.
   This has been stated repeatedly by the author. It is not negotiable.
 

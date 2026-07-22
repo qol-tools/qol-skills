@@ -13,7 +13,7 @@ Never run `git push` or another remote-affecting git command unless the user exp
 
 An explicit combined request such as "commit and push" authorizes both operations in the same turn. Keep them as separate commands and verify the commit before pushing; do not require another user round trip between them.
 
-This applies to every repo in the qol-tools workspace: qol-tray, qol-cicd, qol-skills, qol-host, plugin repos, etc.
+This applies to every repository in the qol-tools workspace.
 
 ## Mandatory Rule
 

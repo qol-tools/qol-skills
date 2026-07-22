@@ -77,6 +77,8 @@ test('end-to-end: blocks inline -m commit with attribution', () => {
     });
     assert.equal(r.exitCode, 2);
     assert.match(r.stderr, /BLOCKED/);
+    assert.match(r.stderr, /qol-workflow:commit/);
+    assert.doesNotMatch(r.stderr, /qol-host/);
 });
 
 test('end-to-end: passes clean inline commit', () => {

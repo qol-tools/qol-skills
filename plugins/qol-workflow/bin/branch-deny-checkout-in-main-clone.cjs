@@ -10,7 +10,7 @@
  * branch, and the next `qol dev` runs out of date.
  *
  * Bypass: append ` # intentional` to the command (matches the convention used
- * by other qol-host hooks).
+ * by other qol-workflow hooks).
  */
 
 'use strict';

@@ -60,7 +60,10 @@ test('emits additionalContext for git commit', () => {
         assert.equal(r.exitCode, 0);
         const payload = JSON.parse(r.stdout);
         assert.equal(payload.hookSpecificOutput.hookEventName, 'PreToolUse');
-        assert.match(payload.hookSpecificOutput.additionalContext, /Be brief\. No coauthors\./);
+        const context = payload.hookSpecificOutput.additionalContext;
+        assert.match(context, /plugin:qol-workflow:commit skill/);
+        assert.match(context, /Be brief\. No coauthors\./);
+        assert.doesNotMatch(context, /qol-host/);
     } finally {
         fs.rmSync(root, { recursive: true, force: true });
     }
