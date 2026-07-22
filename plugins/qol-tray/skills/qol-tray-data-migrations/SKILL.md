@@ -63,7 +63,7 @@ Both phases share the same journal, lock, and registry machinery. A migration de
 ## Sliding-window release migrations
 
 - One migration per breaking release. Folder-per-migration.
-- Supported window: previous N releases (default 3). Older = refuse-to-start with "upgrade to vX first".
+- The supported window is owned by `OLDEST_SUPPORTED` and the registered chain. Installs below it refuse to start with an upgrade-first error; never copy the window length into prose.
 - Aged-out migrations are deleted in the same commit that introduces a new one. No amassing.
 
 ## Pitfall guards (encoded in the crate, do not bypass)
@@ -76,26 +76,14 @@ Both phases share the same journal, lock, and registry machinery. A migration de
 - **Backend abstraction (`trait GistStore`).** `MemoryGistStore` for tests, `GitHubGistStore` for production. Never mock at the HTTP layer; swap the backend. HTTP-layer mocks let bugs in JSON shape, pagination and error mapping leak past tests.
 - **Cross-OS portability helpers.** NFC profile-name normalize, `.gitattributes` LF enforcement, path separator normalisation. Without these, the same name encoded two ways on two OSes produces two profiles, and a CRLF auto-convert on Windows produces a sync loop.
 
-## Folder layout (current)
+## Folder ownership
 
-```
-src/
-  lib.rs                         trait + Phase + Registries + runners + OLDEST_SUPPORTED
-  fs_util.rs                     archive helpers
-  journal.rs                     .done markers
-  lock.rs                        fs4 wrapper
-  sentinel.rs                    install-id MarkerFile
-  cloud/gist_store/              {mod,memory,github}.rs - GistStore trait + impls
-  transforms/gist_v1_to_layout.rs  pure gist JSON -> {path -> bytes} map
-  portability/                   unicode.rs, paths.rs, gitattributes.rs
-  v3_15_to_v3_16/                file migration (PreFlight)
-  v3_15_to_v3_16_gist_to_repo/   cloud migration (PostAuth)
-  v3_16_to_v3_17_device_to_os/   file migration (PreFlight)
-  v3_17_to_v3_18_plugin_configs_by_os/  file migration (PreFlight)
-  v3_18_to_v3_19_declared_plugin_id/    file migration (PreFlight)
-  v3_19_to_v3_20_plugin_uid/            file migration (PreFlight)
-fixtures/<future migration>/before/, after/  (recommended for big migrations)
-```
+The crate root owns traits, phase registries, runners, and the support gate.
+Shared journal/lock/sentinel/portability helpers live in named capability
+modules. Each registered migration owns a versioned feature directory; discover
+the maintained migration set from the registries rather than a tree copied into
+this skill. Large migrations may own paired before/after fixtures under the
+fixture root.
 
 ## Adding a new migration
 

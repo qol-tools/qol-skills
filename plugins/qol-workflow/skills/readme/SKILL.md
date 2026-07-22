@@ -9,7 +9,7 @@ Every qol-tools README has the same skeleton, and it never says anything that go
 
 ## Rules
 
-1. **Timeless content only.** No "currently does X", no "planned for vNext", no roadmap, no status sections. If a sentence will need editing as the project evolves, it does not belong in the README.
+1. **Timeless content only.** No `currently does X`, no `planned for vNext`, no roadmap, no status sections. If a sentence will need editing as the project evolves, it does not belong in the README.
 2. **No duplication of canonical content.** Folder layout (GitHub already shows it), `Cargo.toml` deps, release notes, changelog, issue tracker, blog. Link out instead.
 3. **Current-state info goes to GitHub's dynamic surfaces, not the prose.** Platform support → workflow matrix + repo topics. Build health → `tests` and `lint` badges under the H1. Open work → issue tracker. The README never says "supported on X" or "Windows is tracked"; the GitHub UI around the README handles it dynamically.
 
@@ -120,7 +120,7 @@ If a section in the README is about any of these, it's almost certainly duplicat
 
 ## Anti-patterns (delete on sight)
 
-- "Features" lists describing what the project does today — current-state, churns. Fold the relevant identity bits into the tagline.
+- "Features" lists describing a time-bound project inventory — they churn. Fold the relevant identity bits into the tagline.
 - `## Roadmap` / "What is planned" — explicit rule 1 violation.
 - `## Platform support` table with per-OS status rows — rule 3, replaced by CI matrix + topics.
 - `## Status` / `Project status` describing the project as `experimental` / `WIP` / `early days` — version number, last commit date, and CI badge already say this.

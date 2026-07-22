@@ -372,7 +372,7 @@ Backend names should describe the real boundary (`x11_snapshot`, `wayland_portal
 
 ## Stubs for unsupported OSes
 
-When a feature genuinely cannot work on an OS today (e.g., screen-recorder Linux-only, pointz cursor input), **do not** use `compile_error!` — that breaks cross-compilation, blocks dev on other hosts, and breaks CI matrix builds.
+When a feature genuinely cannot work on an OS, **do not** use `compile_error!` — that breaks cross-compilation, blocks dev on other hosts, and breaks CI matrix builds.
 
 Provide a stub impl that returns a typed error at runtime:
 
@@ -491,7 +491,7 @@ Then migrate cfg-sprawl to the strategy pattern:
 2. **Group by feature first.** Cursor/input, window management, preview capture, theme detection, service control, protocol bridge, etc. Each feature gets a `src/<feature>/` module with `platform/` inside, OR a single top-level `src/platform/` if the surface is small. If one capability has multiple incompatible substrates, put backends under that capability and let the capability facade or OS adapter select the backend.
 3. **Define the trait.** Look at the linux impl (usually the most complete) and write a trait that captures its public methods. Use `Result` for fallible operations.
 4. **Move existing OS code into `<os>.rs` files.** Each implements the trait via `impl Trait for Platform`.
-5. **Stub the missing OSes.** If linux-only today, add `macos.rs` and `windows.rs` with stub `Platform` structs returning typed errors.
+5. **Stub the missing OSes.** For a Linux-only capability, add `macos.rs` and `windows.rs` with stub `Platform` structs returning typed errors.
 6. **Replace cfg gates in business code.** Import `Platform` from the platform module; call methods. Delete inline cfg blocks.
 7. **Verify.** Run `cargo fmt --check`, `cargo clippy --all-targets --all-features --keep-going -- -D warnings`, `cargo build`, `cargo test` on the host you're on. The plugin must now compile on macOS, Linux, and Windows.
 8. **Update `plugin.toml` if needed.** If the manifest declares `platforms = ["linux"]`, decide whether that's still correct (the binary now compiles cross-platform but may be runtime-stub on other OSes — keep `platforms = ["linux"]` so the host doesn't offer it where it's non-functional).
@@ -582,4 +582,4 @@ This skill covers code *layout*. Two sibling skills ship in the same plugin and 
 - **`qol-arch-cross-platform`** — symbol/import hygiene that catches dead_code-on-other-platform errors under `-D warnings`. The ones that compile on Linux, fail on macOS, and waste a roundtrip in CI to learn about. Hook bans `#[allow(dead_code)]`/`#[allow(unused_mut)]` outside `platform/` (forces honest cfg-gating instead of hiding the symptom) and `#[cfg(target_os)]` on `use` statements (almost always a refactor leftover that becomes `unused_imports`).
 - **`qol-arch-cicd`** — the CI/release workflow contract. `RUSTFLAGS=-D warnings` everywhere, plugin CI matrix derived from `plugin.toml` `platforms`, qol-config sibling-checkout-and-rewrite parity between ci.yml and release.yml, conditional deps belong in `[target.'cfg(target_os = ...)'.dependencies]`. Hook lints workflow YAML and Cargo.toml at edit time.
 
-The three skills together cover the loop: prevent it in code (this skill), prevent it from sneaking through symbol-hygiene cracks (`qol-arch-cross-platform`), catch it in CI on every platform when it does (`qol-arch-cicd`).
+Together, this skill prevents layout drift, `qol-arch-cross-platform` catches symbol-hygiene cracks, and `qol-arch-cicd` catches platform failures in CI.

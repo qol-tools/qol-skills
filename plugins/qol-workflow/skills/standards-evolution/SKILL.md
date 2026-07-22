@@ -1,6 +1,6 @@
 ---
 name: standards-evolution
-description: Use when you discover a practice, library, pattern, tool, or workflow that improves on the current workspace standard, BEFORE applying it. Encodes the rule that improvements must be written into the appropriate skill or CLAUDE.md FIRST so that the next session starts from the new baseline. Triggers on phrases like "I noticed", "this is better than", "we should be using X", "modern best practice", "10x engineers do", or any time you would otherwise apply a one-off improvement that should become a standard.
+description: Use when you discover a practice, library, pattern, tool, or workflow that improves an existing workspace standard, BEFORE applying it. Encodes the rule that improvements must be written into the appropriate skill or CLAUDE.md FIRST so that the next session starts from the new baseline. Triggers on phrases like "I noticed", "this is better than", "we should be using X", "modern best practice", "10x engineers do", or any time you would otherwise apply a one-off improvement that should become a standard.
 ---
 
 # standards-evolution
@@ -9,7 +9,7 @@ The hard rule: **encode improvements before applying them.** Standards drift if 
 
 ## When this fires
 
-Any time you find yourself thinking, suggesting, or about to apply something that is better than what the workspace currently does. Examples:
+Any time you find yourself thinking, suggesting, or about to apply something that improves the existing workspace standard. Examples:
 
 - "I should use `insta` snapshots here instead of inline JSON asserts" - encode in `qol-tray:qol-apps-testing` first.
 - "This is a cleaner Rust idiom than what's in the repo" - encode in `qol-langs:rust-conventions` first.
@@ -18,7 +18,7 @@ Any time you find yourself thinking, suggesting, or about to apply something tha
 
 ## The procedure
 
-1. **Source-check** the claim. Use context7 for library docs, web search for practice claims. Cite versions and dates. Don't encode hearsay.
+1. **Source-check** the claim. Use primary library docs/source for dependency behavior and primary references for practice claims. Anchor mutable versions to the owning manifest/lockfile and state the revalidation trigger. Use a date only when it identifies a stable specification or incident that the reader must retrieve. Don't encode hearsay.
 2. **Pick the owning skill or doc.** Each area has exactly one home:
 
    | Area | Home |

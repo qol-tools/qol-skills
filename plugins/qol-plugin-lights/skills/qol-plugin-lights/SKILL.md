@@ -1,82 +1,67 @@
 ---
 name: qol-plugin-lights
-description: Use when working on the qol-tray lights plugin. Covers backend adapters (Zigbee2MQTT first), main-target action wiring, daemon entrypoint, and the auto-config-rendered settings UI.
+description: Use when working on the qol-tray lights plugin. Covers backend adapters, Zigbee coordinator control, live color transport, daemon lifecycle, contract wiring, and native settings integration.
 ---
 
 # qol-plugin-lights
 
-Lights domain plugin for qol-tray. Daemon-driven, backend-adapter shaped, with stable v1 action IDs so hotkeys and launcher integration stay compatible across backend swaps.
+Lights is a daemon-driven plugin with transport-independent light commands and backend-specific device control. Treat the checked-out source as authoritative; do not infer backend readiness, action availability, or platform support from this skill.
 
-## Plugin Contract
+## Contract sources
 
-`plugin.toml`:
+- `plugin.toml` owns the runtime command, public action IDs, daemon endpoints, platform availability, capabilities, and release artifact metadata.
+- `qol-config.toml` owns settings fields and every action, query, or stream reference rendered by the host.
+- `qol-runtime.toml` owns the runnable action/query/stream contract.
+- `Cargo.toml` owns dependencies and target scoping.
 
-- `runtime.command = "plugin-lights"`
-- 18 named runtime actions covering toggle/on/off/brighter/dimmer/warmer/cooler, eight presets, set-color/brightness/colortemp, plus `settings` and `pair`. Every menu action has a runtime mapping.
-- `[capabilities] serial = true` — declares the plugin needs serial-port access (Zigbee coordinator).
-- `[daemon] enabled = true`, `socket = "/tmp/plugin-lights.sock"`, command shares the runtime binary.
-- Platforms: `linux`, `macos`
-- Binary download source: see `[[dependencies.binaries]]` in `plugin.toml`.
+Change referenced names across all contract files and their Rust dispatchers in one patch. Run the plugin contract tests and `qol check`; never copy a manifest inventory into prose.
 
-`qol-config.toml`:
+## Source ownership
 
-- `[section.connection]`: `backend.serial_port` (auto or `/dev/...`), `backend.channel` (11–26), `backend.network_key` (auto or fixed)
-- `[section.target]`: `main_target_type` (`device`|`group`), `main_target_id`
-- The connection section's actions list `["settings", "pair"]` — both are referenced from `runtime.actions`. `qol-runtime.toml` is not present today; if cross-validation tightens to require declared actions, add it.
-
-## Architecture
-
-Every entry to the plugin goes through `plugin_lights::runtime::entrypoint(args)` — `src/main.rs` is just a thin wrapper.
-
-| File / Dir | Purpose |
+| Path | Responsibility |
 |---|---|
-| `src/lib.rs` | Public crate root, exports `runtime`, `daemon`, `service`, `backend`, `domain`, `config`, `platform` |
-| `src/runtime/` | Action dispatcher: parses the action name, talks to the daemon over the socket if it's running, otherwise short-circuits. |
-| `src/daemon/` | Long-running socket daemon. Owns the backend connection, applies actions to lights. |
-| `src/service/` | Orchestration boundary between runtime/daemon and backend transports. Keeps backend-specific noise out of action dispatch. |
-| `src/backend/` | Pluggable backend implementations. **Zigbee2MQTT is the first target** and is currently a stub. |
-| `src/znp/` | Zigbee Network Processor (serial-protocol) primitives — coordinator framing, request/response. |
-| `src/domain/` | Transport-agnostic light types (target, color, color temp, brightness curves). |
-| `src/config/` | Plugin configuration shape, validation, loading via `qol_config`. |
-| `src/platform/` | OS-specific settings launch behavior. |
-| `ui/index.html` + `ui/app.js` + `ui/components/` | Auto-config shell so settings work on older qol-tray builds. New builds render the contract directly via auto-config. |
+| `src/main.rs`, `src/lib.rs` | Thin executable boundary and crate exports. |
+| `src/runtime/` | Public action dispatch and client-side daemon communication. |
+| `src/daemon/` | Long-lived process state, socket handling, live transport, and query responses. |
+| `src/service/` | Orchestration between public light commands and a selected backend. |
+| `src/backend/` | `LightBackend` plus concrete backend adapters. Adapter availability comes from implementations and tests under this directory. |
+| `src/znp/` | Zigbee Network Processor framing, coordinator lifecycle, device discovery, and cluster commands. |
+| `src/domain/` | Transport-independent targets, capabilities, state, colors, and commands. |
+| `src/config/` | Config model, validation, persistence, and source-contract translation. |
+| `src/platform/` | OS-specific settings or device-discovery behavior selected at one cfg wiring boundary. |
+| `ui/` | Compatibility web surface; contract-driven host settings remain canonical. |
 
-## Backend Status
+Do not move backend or protocol details into runtime dispatch. A new adapter implements the backend trait and is selected by service/config wiring; public action identities remain independent of the adapter.
 
-- **Zigbee2MQTT**: first target, **still a stub**.
-- The end-to-end goal is: connect → discover the main RGB+CCT target → toggle → brightness → color → color temp → preset slot 1.
+## Contract stability
 
-When implementing, keep the backend behind a trait so adding a future Hue Bridge / LIFX / WLED backend doesn't require touching the action dispatcher.
+Every action ID declared by `plugin.toml` is an external contract consumed by hotkeys, launcher entries, settings fields, or automation. Rename one only with an intentional contract migration.
 
-## Action Stability
+For an action referenced by `qol-config.toml`, require a matching runnable declaration and dispatcher. For a query or stream, require both the runtime declaration and a daemon response path. Payload-carrying actions must use the daemon transport rather than smuggling values through action names.
 
-The 18 v1 action IDs in `plugin.toml` are intentionally stable. Hotkeys, the launcher, and (eventually) third-party tray menus bind to these names. Don't rename without bumping the plugin's contract version.
+The live color boundary is owned by `src/daemon/` and the corresponding runtime stream. Keep throttling, latest-value coalescing, inherited-listener adoption, and daemon handoff behavior together.
 
-Notes on specific actions:
-- `pair` triggers backend pair-mode. UI feedback comes from the auto-config status field once the live `[query]` plumbing lands; for now the action body should at least log success/failure.
-- `set-color-main` / `set-brightness-main` / `set-colortemp-main` are designed to accept a payload via socket message body. Today's runtime dispatcher passes the action name only — extend the daemon protocol when adding payload-carrying actions.
+## Common changes
 
-## Common Tasks
+**Add a backend:** implement `LightBackend` under `src/backend/`, add explicit configuration and selection, preserve transport-independent domain commands, and test backend errors without hardware where possible.
 
-**Wire a backend method**: implement the trait in `src/backend/<vendor>/`, update `service` to dispatch to it, and verify `runtime` exposes the action name. If the action takes a payload, extend the daemon command parser.
+**Add a public action:** declare it in `plugin.toml` and `qol-runtime.toml`, dispatch it through `src/runtime/`, implement it through service/backend layers, and add any settings reference only after the runnable path exists.
 
-**Add a config field**: add it to `qol-config.toml`, mirror the type in `src/config/`, and ensure validation rejects bad values. Auto-config renders the field in qol-tray.
+**Add a query or stream:** define it in `qol-runtime.toml`, reference it from `qol-config.toml`, and implement the daemon response with the exact declared shape.
 
-**Add a preset**: presets 1–8 are pre-declared in `plugin.toml` so hotkeys can bind them. Extend the preset table in `service` (or wherever preset bodies live) to map a preset slot to a backend payload.
+**Change Zigbee behavior:** keep serial framing and cluster protocol inside `src/znp/`; expose device-level behavior through the backend rather than leaking coordinator primitives into service code.
 
-## Gotchas
+**Change configuration:** update the TOML contract, Rust model, validation, and persistence together. The contract defaults are authoritative; do not restate them here.
 
-- **No `qol-plugin-api` dep.** Lights does its own daemon socket without using the shared helpers. If you find yourself reimplementing daemon protocol pieces, switch to `qol_plugin_api::daemon` like the other plugins.
-- **`getrandom`** is a direct dep — used for network-key generation. Don't accidentally pull a different random source into a backend; reuse the existing helper.
-- **`tungstenite` 0.26** is in the deps for a future MQTT-over-WS transport. Currently unused. Don't remove it without checking the Zigbee2MQTT plan.
-- **Serial port enumeration on macOS** uses different device-name conventions than Linux (`/dev/tty.usbserial-*` vs `/dev/ttyUSB*`). The `auto` value in `backend.serial_port` should DTRT on both.
+## Invariants
 
-## Shared library usage
+- Runtime dispatch depends on domain/service abstractions, not a concrete coordinator implementation.
+- Backend health and device discovery failures are visible through declared queries or clear errors.
+- Serial and other platform-only dependencies stay target-scoped in `Cargo.toml`.
+- Dependencies are justified by live source references. Remove an unused dependency instead of preserving it for a prose roadmap.
+- Settings work through the host contract without requiring the compatibility web surface.
+- Daemon start, reload, and reconnect paths remain idempotent.
 
-- `qol-config` for config loading and contract definition.
-- No `qol-plugin-api` (yet — see Gotchas).
+## Verification
 
-## Build / Dev
-
-- Standard plugin: `cargo test` runs the contract validation. Release flow is tag-driven via `qol-cicd`.
-- The `ui/index.html` shell can be ignored on modern qol-tray; the auto-config path takes over.
+Run format, build, Clippy with warnings denied, plugin tests, and `cargo run -q -p qol -- check`. Exercise hardware-independent protocol/config tests on every change; hardware claims require live coordinator evidence.

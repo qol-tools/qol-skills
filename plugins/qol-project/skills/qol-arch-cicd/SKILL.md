@@ -1,7 +1,7 @@
 ---
 name: qol-arch-cicd
 description: >
-  Use when authoring or modifying CI / release workflows (`.github/workflows/*.yml`) or `Cargo.toml` files in the qol-monorepo. Encodes the cross-platform infrastructure contract that prevents the "compiles on CI today, breaks on release tomorrow" class of failure: platform matrices derived from `plugin.toml` `platforms`, warning parity between CI and release builds, conditional dependencies expressed as `[target.'cfg(target_os = ...)'.dependencies]` rather than as cfg gates in source. Triggers on edits to workflow YAML, on changes to `Cargo.toml` `[dependencies]` / `[target...]` sections, on the words "release pipeline", "plugin CI", "matrix build", "RUSTFLAGS". For the code patterns the matrix exists to catch, see `qol-arch-code` and `qol-arch-cross-platform`.
+  Use when authoring or modifying CI / release workflows (`.github/workflows/*.yml`) or `Cargo.toml` files in the qol-monorepo. Encodes the cross-platform infrastructure contract that prevents CI/release parity failures: platform matrices derived from `plugin.toml` `platforms`, warning parity between CI and release builds, conditional dependencies expressed as `[target.'cfg(target_os = ...)'.dependencies]` rather than as cfg gates in source. Triggers on edits to workflow YAML, on changes to `Cargo.toml` `[dependencies]` / `[target...]` sections, on the words "release pipeline", "plugin CI", "matrix build", "RUSTFLAGS". For the code patterns the matrix exists to catch, see `qol-arch-code` and `qol-arch-cross-platform`.
 ---
 
 # qol-arch-cicd: Cross-Platform CI/CD Infrastructure Contract
@@ -66,10 +66,13 @@ A change to a workflow or `Cargo.toml` passes when:
 - The new/edited workflow keeps warning parity with the existing ones (clippy `-D warnings` in CI, `RUSTFLAGS: -D warnings` in release builds).
 - Platform-only deps live in `[target.'cfg(target_os = ...)'.dependencies]`, not `[dependencies]`.
 
-## Enforcement: PreToolUse hook (currently dormant)
+## Enforcement source
 
-`bin/check-qol-arch-cicd.cjs` ships with this skill but its workflow checks encode the pre-monorepo layout (sibling checkout-and-rewrite), so it is not active and must not be re-enabled as-is.
-The `Cargo.toml` platform-dep check is the part worth reviving; the workflow checks need a redesign against the current pipeline before the gate is re-pointed at `qol-*` paths.
+Hook activation is defined by the plugin hook manifest, not by the presence of
+`bin/check-qol-arch-cicd.cjs`. Before enabling or changing that checker, compare
+its assumptions with the workflow and workspace layout in the checked-out
+monorepo and require fixtures for every enforced shape. Never re-enable a
+layout-sensitive check merely because the script exists.
 
 ## `make ci-local`: developer-side parity
 

@@ -19,14 +19,12 @@ Isolated slices, independently revisable. **P0** = founding (changes what qol-to
 
 ### V1: Multi-OS, multi-injection portability
 
-**Status:** aspirational (Linux runs, macOS WIP, Windows not yet started)
 **Priority:** P0
 
 The full dream: walk up to **any** computer - Windows, macOS, any Linux distro - and inject qol-tray however is convenient. USB stick. Phone over USB or AirDrop-style wireless. Network share. SSH push. Fresh install. The host OS does not matter, the injection method does not matter. Within seconds the machine carries your bespoke flavor: your plugins, your keybindings, your sync, your colors, your habits. Pull the medium, walk away, the host is exactly as you found it.
 
 ### V2: Browsers are another portability axis
 
-**Status:** aspirational (today: hand-rolled Firefox extension + `?__reuse_tab=1` query params)
 **Priority:** P1
 
 A large fraction of the user's shortcuts ultimately drive a browser: open a URL, focus an existing tab, navigate within a single-page app. The browser is a host in its own right, and qol-tray should treat it the way it treats the operating system. One mission-level concept, per-browser adapters underneath.
@@ -40,7 +38,7 @@ A large fraction of the user's shortcuts ultimately drive a browser: open a URL,
 
 **Shortcuts are authored against the concept, not the browser.** When the user switches from Firefox to Brave, their shortcuts keep working; qol-tray routes to whichever adapter is reachable, zero-install tier first, extension tier as the power upgrade.
 
-The six non-negotiables extend cleanly: user never configures the browser by hand (1); qol-tray owns its contract even when the browser has competing primitives (2); browser is left as found, adapters disabled or uninstalled on profile teardown (3); adapters bundle whatever they need (5); a missing or broken adapter surfaces immediately, not as a silently-not-firing shortcut (6).
+Every non-negotiable below applies to browser adapters: no manual host configuration, qol-tray owns the contract, teardown restores prior state, dependencies are bundled, and failures are visible.
 
 ## Non-negotiables
 
@@ -72,11 +70,11 @@ If qol-tray needs a runtime, library, or daemon, it ships with qol-tray. It does
 
 If qol-tray can't do something the user expects (a plugin failed to start, a hotkey couldn't be claimed, a sync conflict happened), the user sees it immediately and clearly — in the tray, in a notification, in the UI. Silent failures are bugs.
 
-## Roadmap (deferred extractions / structural moves)
+## Extraction decision rules
 
-Items that are conceptually right but blocked by "premature abstraction" — revisit when concrete signal accumulates.
+Structural splits require concrete signal rather than a status timeline.
 
-- **`qol-sdk` package** — extract dev-experience features (gh account routing UI, lock-bot triggers, worktree manager, ADR navigator, sync drift dashboard, kickoff hotkeys, etc.) out of qol-tray once 3+ dev-only surfaces have shipped behind `qol-tray`'s `--features dev` flag. Today: dev features live in qol-tray gated behind `dev`. Trigger to extract: clear pattern across surfaces (shared dev-only auth/path conventions, separate release cadence, contributors wanting "dev SDK on this machine" without running the full daemon). Cost of waiting: low. Cost of premature split: a whole new repo + release pipeline for one feature.
+- **`qol-sdk` package** — extract dev-experience features from qol-tray only after multiple dev-only surfaces establish shared auth/path conventions, need an independent release cadence, and must run without the full daemon. Before that trigger, keep them behind the host's dev feature boundary. Cost of waiting is low; premature extraction creates a repository and release pipeline without a proven shared contract.
 
 ## How to use this in design discussions
 

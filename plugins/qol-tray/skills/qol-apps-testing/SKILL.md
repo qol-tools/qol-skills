@@ -42,7 +42,7 @@ Also: read `paths.rs` (or whatever owns config/data path resolution) end-to-end.
 | Unit tests (`#[cfg(test)]`) | `paths::push_test_path_root(&Path) -> TestPathRootGuard` (thread_local) | tests inside `src/` | `src/paths.rs:33-38` |
 | Integration tests (`tests/*.rs`) | `QOL_TRAY_TEST_PATH_ROOT` env var | external test crate, debug builds | `src/paths.rs:10, 47-55` |
 
-Both routes redirect every `paths::*` call (`legacy_config_dir`, `base_data_dir`, etc.) under the override. So a service whose I/O goes through `crate::paths::*` is e2e-testable from `tests/<feature>_e2e.rs` today, no signature change required, even when the function appears to take "no path parameter".
+Both routes redirect every `paths::*` call (`legacy_config_dir`, `base_data_dir`, etc.) under the override. A service whose I/O goes through `crate::paths::*` is therefore e2e-testable from `tests/<feature>_e2e.rs` without a signature change, even when the function appears to take "no path parameter". Verify the path seam in source because names and locations may move.
 
 **Recorded miss (2026-05, profile sync survey):** Claimed `SyncService` needed a `config_root` injection refactor before it could be e2e-tested because `ensure_sync_dirs`/`save_state_file`/`load_state_file` take no path arg. Wrong. The env-var override had been wired the whole time (`paths.rs:47-50`) and the unit tests at `src/features/profile/sync/service.rs:861` already used the thread_local twin. The "wall" was a survey shortfall, not an architectural gap. Lesson: a no-arg signature is not evidence of global coupling.
 

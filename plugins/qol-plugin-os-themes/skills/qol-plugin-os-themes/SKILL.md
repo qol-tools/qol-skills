@@ -1,83 +1,55 @@
 ---
 name: qol-plugin-os-themes
-description: Use when working on the qol-tray OS themes plugin. Covers the shake-to-grow cursor effect, X11 cursor manipulation via xfixes, daemon lifecycle, and the broader (largely unimplemented) GTK/Qt/icon/cursor theming roadmap.
+description: Use when working on the qol-tray OS themes plugin. Covers cursor effects, native theme control, daemon lifecycle, target-specific adapters, config contracts, and settings integration.
 ---
 
 # qol-plugin-os-themes
 
-OS-wide theming plugin for qol-tray. Linux-only today. The shipped feature is **shake-to-grow cursor**: detect rapid cursor movement, scale the cursor up, smoothly animate back to normal.
+OS Themes owns reversible desktop appearance behavior and cursor effects. Feature and platform availability comes from the checked-out manifest, adapters, and tests; do not maintain a roadmap or support table in this skill.
 
-The broader plan (GTK theme switching, Qt, icon themes, cursor themes, Wayland) is incremental and largely unimplemented. Keep that in mind when scoping work.
+## Contract sources
 
-## Plugin Contract
+- `plugin.toml` owns actions, daemon metadata, platform availability, and release artifacts.
+- `qol-config.toml` owns settings sections, fields, defaults, and action references.
+- `qol-runtime.toml` owns the runnable contract referenced by settings.
+- `Cargo.toml` owns target-specific native dependencies.
 
-`plugin.toml`:
+Update referenced action names across the manifest, runtime contract, config contract, and dispatcher together. Run contract validation rather than copying those values here.
 
-- `runtime.command = "plugin-os-themes"`
-- `runtime.actions = { run = ["run"], settings = ["settings"] }`
-- `[daemon] enabled = true`, `socket = "/tmp/qol-os-themes.sock"`
-- Menu: `Cursor Grow` (action `run`) + `Settings`
-- Platforms: `linux` only
-- Binary download source: see `[[dependencies.binaries]]` in `plugin.toml`.
+## Source ownership
 
-`qol-config.toml`:
-
-- `[section.thresholds]`: `velocity_threshold` (default 4500.0), `shakiness_threshold` (75.0), `regrow_velocity_threshold` (1500.0), `regrow_shakiness_threshold` (3.0), `post_trigger_threshold` (1000.0)
-- `[section.animation]`: `scale_factor` (4), `calm_duration_ms` (650), `restore_steps` (18), `enable_shape_preserving_growth` (false)
-
-No `qol-runtime.toml` (no named action/query references in the config contract).
-
-## Architecture
-
-| File / Dir | Purpose |
+| Path | Responsibility |
 |---|---|
-| `src/main.rs` | Entry. Parses single action arg, dispatches to `app::run(action)`. |
-| `src/app/` | Action router and daemon orchestration. |
-| `src/config.rs` | TOML config loading via `qol_config`. |
-| `src/daemon.rs` | Socket daemon helper. |
-| `src/cursor/` | Cursor manipulation: `control.rs` is the trait, `platform/` holds the X11 impl using `xfixes` to set/restore cursor images. |
-| `src/theme/` | Theme switching seam (placeholder for GTK/Qt/icon work). |
-| `ui/index.html` | Auto-config shell. |
+| `src/main.rs` | Thin action entrypoint. |
+| `src/app/` | Action routing and daemon orchestration. |
+| `src/daemon.rs` | Shared daemon lifecycle and socket boundary. |
+| `src/config.rs` | Config loading and typed values. |
+| `src/cursor/control.rs` | Platform-neutral cursor capability contract. |
+| `src/cursor/platform/` | Target-selected cursor implementations and typed-error fallbacks. |
+| `src/theme/` | Platform-neutral theme actions. |
+| `src/theme/platform/` | Target-selected desktop theme adapters and typed-error fallbacks. |
 
-Linux deps in `Cargo.toml`: `x11` with `xlib`, `xcursor`, `xfixes` features. `libc` for low-level interaction.
+Keep cfg selection in each capability's `platform/mod.rs`. App/config code must call the capability boundary without target gates.
 
-## Shake Detection Tuning
+## Common changes
 
-The thresholds above describe a small state machine:
+**Add a cursor effect:** define platform-neutral behavior under `src/cursor/`, implement each supported adapter under `cursor/platform/`, expose settings through `qol-config.toml`, and keep unsupported targets as typed errors.
 
-1. **Idle** → cursor is normal size.
-2. Velocity exceeds `velocity_threshold` AND direction changes accumulate past `shakiness_threshold` → **Grown**: cursor scales by `scale_factor`.
-3. Cursor stays grown until movement stays below `post_trigger_threshold` for `calm_duration_ms`.
-4. **Shrink** animates over `restore_steps` frames.
-5. **Regrow short-circuit**: if velocity exceeds `regrow_velocity_threshold` and shakiness exceeds `regrow_shakiness_threshold` while still grown, reset the calm timer (don't shrink mid-shake).
+**Add a theme action:** add the action contract first, implement the capability in `src/theme/`, and preserve the host desktop state needed to reverse the change when the daemon exits.
 
-`enable_shape_preserving_growth = false` keeps the simpler scaling path. Enabling it preserves the cursor's hotspot/aspect; the implementation cost is more X11 round-trips.
+**Change detection or animation tuning:** edit the config contract and typed config together. Defaults and ranges belong only in `qol-config.toml`; tests should consume or validate that source.
 
-## Common Tasks
+**Expand platform support:** add a real adapter, target-scoped dependencies, and platform verification before changing `plugin.toml`. A compiling stub is not user-facing support.
 
-**Tune the shake**: adjust the thresholds in `qol-config.toml` defaults. Real users iterate through the qol-tray settings UI.
+## Invariants
 
-**Add a new cursor effect**: define a new variant in `cursor/control.rs`, implement it in the X11 platform module, and wire a runtime action. Update `qol-config.toml` if the effect needs settings.
+- Every host mutation is reversible and cleanup runs on normal exit and error paths.
+- Native implementations stay behind cursor/theme capability boundaries.
+- Unsupported operations return typed errors; never use `compile_error!` or `unimplemented!()`.
+- Platform availability is declared only after runtime behavior is verified on that platform.
+- Missing permissions or desktop APIs surface as actionable errors.
+- Settings are host-rendered from the contract; no plugin-local native settings window.
 
-**Start the GTK theme work**: the seam is `src/theme/`. Add a new module with a trait, implement it via gsettings/dconf, and add a runtime action. Update the contract.
+## Verification
 
-**Wayland support**: not started. xfixes is an X11 protocol — Wayland needs compositor-specific protocols (`wp-cursor-shape`) or per-compositor IPC. Treat as a multi-week task.
-
-## Gotchas
-
-- **Linux-only** at the manifest level. The cargo target gates ensure the binary still compiles on macOS/Windows (per the `qol-arch-code` strategy pattern), but the manifest declares `platforms = ["linux"]` so qol-tray won't offer it elsewhere.
-- **Cursor manipulation requires an X server**. Wayland sessions have no X server unless XWayland is running, and even then xfixes effects only apply to X11 windows. The daemon will start but be a no-op under pure Wayland.
-- **`scale_factor`** is an integer in the config but represents a multiplier. Default 4 means 4x. Don't accidentally treat it as a percentage.
-- **`calm_duration_ms`** uses a real-time clock via `qol-runtime`'s monitor utilities. It's not tied to frame rate, so changing it doesn't shift the regrow detection window.
-
-## Shared library usage
-
-- `qol-plugin-api` for daemon/socket helpers.
-- `qol-config` for config + auto-config rendering.
-- No `qol-platform` use (the plugin is Linux-only and inlines its X11 deps directly).
-
-## Build / Dev
-
-- `make dev` builds and installs to the plugin root.
-- `make release` produces an optimized build.
-- Standard `validate_plugin_contract` test in `src/main.rs`.
+Run format, build, Clippy with warnings denied, tests, and `cargo run -q -p qol -- check`. Compile every manifest-declared target. Runtime appearance claims require evidence from the actual desktop adapter, including cleanup after exit.

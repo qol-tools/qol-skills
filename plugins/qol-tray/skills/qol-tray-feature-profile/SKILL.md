@@ -58,25 +58,26 @@ Resolution priority chain (used by reads, writes, and the migration; do not vary
 
 For a single-platform plugin, the OS bucket is the **declared** platform, never `current_os`. A Linux machine writing a Mac-only plugin's config still lands in `os/macos/`. This is the cross-machine recovery property.
 
-Read semantics (`load_plugin_config_merged`): the loader reads all three scopes and merges them in the order **core → os/current → device**, with later scopes winning on key collision. A field declared `Device` overrides the same key in `core`. An empty slice file is skipped, not treated as `{}` overlay.
+Read semantics (`load_plugin_config_merged`): the loader reads every scope
+defined by `ConfigScope` and merges according to the precedence function, with
+later scopes winning on key collision. A `Device` field therefore overrides the
+same key in a lower-precedence slice. An empty slice file is skipped, not
+treated as an empty overlay.
 
-Write semantics (`save_plugin_config_split`): split via `split_by_declarations`, write each non-empty slice to its respective path. An empty slice's file is removed so storage stays tidy. The write only touches the plugin's own three files; never touches another plugin's slice files in any scope.
+Write semantics (`save_plugin_config_split`): split via declarations and write
+each non-empty slice to the path resolved for that plugin/scope. Remove an empty
+slice file so storage stays tidy. The write never touches another plugin's slice
+path.
 
 ## Sync clone must promote an allowlist, never wipe
 
 `SyncService::connect` never wipes the profile directory before cloning the remote. The wipe pattern deleted gitignored per-machine data (`device/`, `sync/state.json`, `sync/toggles.json`, the active marker, any unrelated local file) in one swing, which is the incident that motivated this section.
 
-The current pattern: clone the remote into a sibling staging directory, then promote allowlisted paths into the live profile. The `.git` directory is moved separately so subsequent git operations work against the fresh remote.
-
-Allowlist (in `features/profile/sync/promote.rs`):
-
-```
-.gitignore
-<profile>/manifest.json
-<profile>/core/<file>...
-<profile>/os/<bucket>/<file>...
-<profile>/sync/backups/<file>...
-```
+Clone the remote into a sibling staging directory, then promote only paths
+accepted by `features/profile/sync/promote.rs`. Move repository metadata through
+its explicit branch so subsequent git operations use the fresh remote. The
+allowlist implementation and its tests own the accepted path set; do not copy
+that inventory into this skill.
 
 The promote contract has two halves:
 
@@ -97,15 +98,12 @@ This policy applies to every file migration that moves existing user data; see t
 
 ## Sync conflict backups are cross-machine recovery, not local-only
 
-Backups under `<profile>/sync/backups/*.json` are intentionally tracked by the synced profile repo. The repo's `.gitignore` (written by `ensure_gitignore`) is:
-
-```
-/active
-/sync.json
-*/device/
-```
-
-Notably it does **not** include `*/sync/backups/`. That is on purpose. Conflict snapshots committed on machine A become available to machine B via the normal sync pull, which is the mechanism that lets a wiped machine recover by pulling a backup another machine pushed. If you "tidy up" by moving backups under `device/` or by adding them to the gitignore, you remove the cross-machine recovery property.
+Conflict backups are intentionally tracked by the synced profile repository so
+a different machine can recover them through normal sync. `ensure_gitignore`
+and its tests own the exact ignore patterns: device-local state, active markers,
+and sync runtime state stay untracked, while backup artifacts remain eligible
+for sync. If you move backups into a device-local path or ignore them, you
+remove the cross-machine recovery property.
 
 Two concerns that DO exist and that this design knowingly accepts:
 

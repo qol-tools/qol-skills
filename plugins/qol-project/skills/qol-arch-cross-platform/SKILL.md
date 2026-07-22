@@ -30,7 +30,7 @@ If a symbol is dead on macOS or Windows, the answer is **not** `#[allow(dead_cod
 
 - **Move it.** Relocate the symbol into the platform module that actually consumes it (the `d797294` move).
 - **Gate it.** Add `#[cfg(target_os = "linux")]` to the symbol so it doesn't exist on the OSes where it has no consumer. The hook permits this on `mod`/`pub use` re-export lines (the canonical pattern from `qol-arch-code`); for non-mod cfg gates you must restructure (see "Refactor recipe" below).
-- **Use it.** If the symbol *should* be cross-platform but currently only Linux uses it, add the macOS/Windows consumer.
+- **Use it.** If the symbol should be cross-platform but has consumers only under one target adapter, add the missing target consumers.
 
 `#[allow(dead_code)]` says "I know this is dead on some platform but I refuse to fix it." That permission slip outlives the situation that justified it and re-rots into mystery code two refactors later. **The hook blocks it in non-`platform/` files.**
 

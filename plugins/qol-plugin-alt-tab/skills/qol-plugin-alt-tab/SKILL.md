@@ -1,125 +1,70 @@
 ---
 name: qol-plugin-alt-tab
-description: Use when working on the qol-tray alt-tab plugin, including GPUI window list, X11 preview capture, config loading, and settings UI.
+description: Use when working on the qol-tray alt-tab plugin, including its retained GPUI picker, OS window discovery, preview capture, window actions, daemon lifecycle, config, and shared settings surface.
 ---
 
-Better Alt+Tab experience for qol-tray (Linux and macOS). Shows a GPUI window list with live previews. Replaces the native OS Alt+Tab switcher by grabbing the key via qol-tray's hotkey system.
+# qol-plugin-alt-tab
 
-## Contract
+Alt Tab replaces the host switcher with a retained GPUI picker. Exact actions, daemon metadata, platform availability, and artifact names come from `plugin.toml`; settings fields come from `qol-config.toml`.
 
-- Runtime command: `alt-tab`
-- Runtime actions map:
-  - `open -> ["--show"]`
-  - `open-reverse -> ["--show-reverse"]`
-  - `settings -> ["--settings"]`
-- Daemon: **enabled**. Socket: `/tmp/qol-alt-tab.sock`. Command: `alt-tab` (no args → starts daemon).
-- Menu: `Alt Tab (Open/Next)` (action `run`), `Alt Tab (Previous)` (action `run`, id `open-reverse`), separator, `Settings` (action `settings`).
-- Platforms: `linux`, `macos`
+## Contract ownership
 
-## Contract Validation Test
+- `plugin.toml` owns public action IDs, command arguments, daemon endpoints, menu entries, capabilities, platforms, and release artifacts.
+- `qol-config.toml` owns renderer-neutral settings and defaults.
+- `Cargo.toml` owns platform dependencies and the package binary name.
+- Contract validation is executable through the plugin tests and `qol check`.
 
-```rust
-#[cfg(test)]
-mod tests {
-    use qol_tray::plugins::manifest::PluginManifest;
+Change a public action across the manifest, host binding, daemon parser, and tests together. Never copy the action/platform inventory into this skill.
 
-    #[test]
-    fn validate_plugin_contract() {
-        let manifest_str =
-            std::fs::read_to_string("plugin.toml").expect("Failed to read plugin.toml");
-        let manifest: PluginManifest =
-            toml::from_str(&manifest_str).expect("Failed to parse plugin.toml");
-        manifest.validate().expect("Manifest validation failed");
-    }
-}
-```
+## Source ownership
 
-Required `Cargo.toml` dev-dependencies:
+| Path | Responsibility |
+|---|---|
+| `src/main.rs`, `src/daemon.rs` | Thin process boundary and daemon action transport. |
+| `src/picker/` | Application lifetime, show dispatch, retained-window creation/reuse, gathering, and monitor updates. |
+| `src/app/` | GPUI state, input, live-preview coordination, and rendering. |
+| `src/discovery/` | Platform-neutral window metadata plus target-selected enumeration. |
+| `src/capture/` | Preview capture capability and target-selected capture implementations. |
+| `src/preview_plane/` | Platform-specific live preview plane behavior when used. |
+| `src/actions/` | Activate, close, quit, minimize, and other host-window operations behind target adapters. |
+| `src/rendering/`, `src/shared/` | Shared preview representation, image lifetime, layout, lanes, and trace structures. |
+| `src/config.rs` | Typed settings consumed by the picker. |
 
-```toml
-[dev-dependencies]
-qol-plugin-api.workspace = true
-```
+Keep target cfg wiring inside feature-owned `platform/mod.rs` files. Picker/app code must call feature boundaries without direct OS selection.
 
-## Build and Dev Workflow
+## Retained picker invariants
 
-- No Makefile. qol-tray uses `cargo build` directly in dev mode.
-- Do **not** leave an `alt-tab` binary in the plugin root — it will shadow `target/debug/alt-tab`.
-- `qol-tray` resolves binaries in order: plugin root → `target/debug/` → `target/release/`.
-- Run `cargo test` to validate the contract before linking.
+- GPUI initializes in the long-lived daemon; show actions reuse a retained picker rather than paying cold GPU startup.
+- A keepalive surface may retain the application, but it must never appear in Alt-Tab or as an empty desktop window.
+- Every show refreshes OS window metadata and reloads config before selection/render decisions.
+- Dismissal hides/removes the picker without terminating the daemon.
+- Reuse reapplies size, monitor placement, transparency, shadow, focus, and first-frame reveal requirements.
+- Image ownership drains through the shared registry on view release; never drop the same GPUI image ID twice.
 
-## Architecture
+Follow `qol-project:qol-plugin-gpui-surfaces` and `qol-langs:gpui-conventions` for hosted settings and compositor-safe retained-window reveal.
 
-| File / Dir | Purpose |
-|------------|---------|
-| `src/main.rs` | Entry point: loads config, dispatches `--show`/`--show-reverse`/`--kill` to daemon or starts daemon via `picker::run::run_app()` |
-| `src/daemon.rs` | Unix socket daemon (show/kill/ping) via `qol_plugin_api::daemon` |
-| `src/config.rs` | TOML config loading via `qol_config::load_plugin_config()` |
-| `src/picker/run.rs` | Daemon event loop, cache management, `dispatch_show()` |
-| `src/picker/mod.rs` | Picker orchestration: `open_picker()` with cycle/reuse/create paths |
-| `src/picker/create.rs` | Window creation, `pre_create_offscreen()` for instant open |
-| `src/picker/reuse.rs` | Window reuse across opens (resize, reposition) |
-| `src/picker/gather.rs` | Window gathering from cache or live discovery |
-| `src/app/mod.rs` | `AltTabApp` GPUI component, focus + blur-out handling, centralized `dismiss()`, one-shot tap-too-fast Alt-release fallback |
-| `src/app/render.rs` | UI rendering: grid layout, transparency, card styling, `on_modifiers_changed` → dismiss when Alt drops in `HoldToSwitch` mode |
-| `src/discovery/platform/macos/` | macOS window enumeration via CoreGraphics (z-order = MRU) |
-| `src/discovery/platform/linux.rs` | Linux window enumeration via x11rb `_NET_CLIENT_LIST_STACKING` |
-| `src/capture/platform/macos.rs` | macOS preview capture via `CGWindowListCreateImage` |
-| `src/capture/platform/linux.rs` | Linux preview capture via x11rb Composite `GetImage` |
-| `src/actions/platform/` | Window actions (activate, close, quit, minimize) per platform |
-| `qol-config.toml` | Renderer-neutral settings contract used by web auto-config and the shared native panel |
+## Discovery and capture
 
-## Daemon Architecture
+Discovery returns stable window identity and ordering; capture returns preview content for that identity. Do not merge them merely because a platform API supplies both.
 
-The plugin runs as a long-lived daemon because GPUI's GPU initialization is slow on cold start. The picker window is pre-created offscreen at boot for instant open.
+Platform availability is real only when discovery, activation, preview capture or an explicit fallback, retained reveal, and runtime tests all work on that target. A compiling stub is not support.
 
-**Startup flow:**
-1. qol-tray starts the daemon at boot (because `daemon.enabled = true`)
-2. Daemon binds `/tmp/qol-alt-tab.sock`, initializes GPUI, pre-creates picker window offscreen
-3. Each subsequent `--show` invocation writes `"show"` to the socket (<5ms)
-4. Daemon refreshes window cache (fresh MRU from OS), reloads config, reuses existing picker window with new data
+For blank or stale previews, determine whether the limitation is the compositor/windowing substrate, the chosen capture API, image-lifetime handling, or stale discovery identity. Record evidence from the actual adapter; do not add a timeless “known issues” list.
 
-**Key invariants:**
-- Picker window is pre-created at boot and reused across opens (not destroyed/recreated)
-- A hidden `KeepAlive` PopUp window via `qol_plugin_api::keepalive` prevents GPUI from quitting when picker is dismissed
-- Window cache is refreshed synchronously on each show (`refresh_cache_for_show`) so MRU order is always current
-- Config is reloaded on each show so settings changes take effect without restart
-- Transparency changes are applied via `window.set_background_appearance()` + `disable_window_shadow()` on reuse
+## Settings ownership
 
-## Config System
+The settings action is hosted by qol-tray when the manifest/config capability contract selects native GPUI settings. The daemon may keep a shared-panel or browser fallback, but it must not create a second bespoke settings implementation. Every renderer reads and writes through the same config API.
 
-Config is loaded via `qol_config::load_plugin_config(["plugin-alt-tab", "alt-tab"])` from `qol-config.toml`.
+## Common changes
 
-Key fields:
-- `display.max_columns` — max grid columns
-- `display.transparent_background` — transparent window background (requires shadow disable on macOS)
-- `display.card_background_color` / `card_background_opacity` — card styling
-- `display.show_minimized` — include minimized windows in list
-- `display.show_hotkey_hints` — header bar with keybindings
-- `display.show_debug_overlay` — debug header
-- `action_mode` — `hold_to_switch` (release Alt to confirm) or `sticky` (press Enter)
-- `reset_selection_on_open` — reset selection to index 0 each open
-- `open_behavior` — `cycle_once` or `show_list`
-- `label.*` — label font size, show app name, show window title
+**Add a window action:** extend the platform-neutral action boundary and implement every target adapter, returning typed errors for unsupported behavior.
 
-## Known Issues / TODO
+**Change preview behavior:** update capture, shared preview representation, image lifetime, and reuse tests together. Verify cold and retained paths.
 
-1. **Preview accuracy (Linux)**: X11 `GetImage` captures the off-screen buffer; minimised or occluded windows may return stale/blank pixels.
+**Change selection/input:** keep modifier release, explicit confirmation, blur dismissal, and fast-tap fallback within one state machine. Add transition tests before GPUI event glue.
 
-2. **Wayland**: Linux support uses x11rb only. Wayland support is not implemented.
+**Change contract/config:** edit owning TOML and typed consumers together, then run contract validation.
 
-## Settings UI
+## Verification
 
-The normal Linux/macOS settings action is intercepted by qol-tray because the
-plugin declares a settings action, `qol-config.toml`, and
-`[capabilities] gpui = true`. It renders in the tray-owned singleton settings
-window; it does not create another window inside the Alt Tab daemon.
-
-The daemon's `dispatch_settings()` remains a fallback: it opens the shared
-`qol-gpui` panel in the daemon's existing GPUI application and opens the web
-settings URL if that fails. Direct `--settings` opens the web URL. Both the web
-and hosted native renderers read and write through qol-tray's config API.
-
-The shared ownership and fallback contract lives in
-`qol-project:qol-plugin-gpui-surfaces`; do not special-case Alt Tab in the
-tray-owned host.
+Run format, build, Clippy with warnings denied, plugin tests, and `cargo run -q -p qol -- check`. Compile every manifest-declared target. Visual/reveal claims require compositor-backed tests, not the developer desktop.

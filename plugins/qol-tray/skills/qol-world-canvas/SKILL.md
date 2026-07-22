@@ -13,9 +13,11 @@ Each divable element declares a **DiveTarget** (source selector, claim rect, pag
 
 Design spec: `docs/superpowers/specs/2026-04-15-divable-traits-design.md`.
 
-## Trait Registry
+## Trait registry
 
-Three traits ship today. Future traits compose on the same surface.
+The trait map carried by `DiveTarget` is the extension surface. Discover
+recognized traits from their consumers and the design spec; do not treat the
+named semantics below as an exhaustive registry.
 
 | Trait | Config | Effect |
 |---|---|---|
@@ -23,7 +25,7 @@ Three traits ship today. Future traits compose on the same surface.
 | `peripheral-preview` | `{ neighbors: int }` | Renders ±N sibling miniatures at viewport edges. Non-interactive. |
 | `atmosphere` | `{ preset, background, tint, audio }` | Paints a backdrop inside the confined region. Preset-driven with per-divable overrides. |
 
-A DiveTarget with no `traits` field gets defaulted to `{ confined: {} }` by `addDiveTarget`. Existing non-traited targets keep current behavior by construction.
+A DiveTarget with no `traits` field gets defaulted to `{ confined: {} }` by `addDiveTarget`. Non-traited targets preserve default behavior by construction.
 
 ## Files
 
@@ -35,10 +37,8 @@ A DiveTarget with no `traits` field gets defaulted to `{ confined: {} }` by `add
 
 ### Contract flow (plugin → DiveTarget)
 
-- `ui/components/App.js`:
-  - `fetchPluginContract(pluginId)` reads `/api/plugins/:id/config-form`, returns `{ sections, traits }`. Backend currently only sends `sections` — `traits` falls back to `null`.
-  - `registerPluginDiveTarget(registry, plugin, sections, traits, pluginsEntry, pluginIndex)` applies `pluginTraitOverride(plugin.id)` when backend returns no traits. Pilot shortcut; remove once backend wires contracts.
-- `ui/lib/plugin-trait-overrides.js` — per-plugin-id fallback trait map. Pilot only.
+- `ui/components/App.js` owns contract fetch and DiveTarget registration. Trace the response shape from the backend handler before changing trait flow.
+- `ui/lib/plugin-trait-overrides.js` is a compatibility fallback only. Contract traits win whenever present; an override may fill only an absent contract value.
 
 ### Renderers (mounted inside `WorldViewport`)
 
@@ -49,13 +49,13 @@ A DiveTarget with no `traits` field gets defaulted to `{ confined: {} }` by `add
 
 ### Styles
 
-- `ui/styles/peripheral-preview.css` — slot positioning, scale, opacity falloff per `data-distance`. CSS transitions provide v1 smoothing (full ~240ms choreographed animation is a follow-up).
-- `ui/styles/atmosphere.css` — base `.atmosphere-layer` + four preset classes: `atmosphere-preset-{wood,parchment,terminal,spacecraft}`. Presets use layered backgrounds, no external assets.
+- `ui/styles/peripheral-preview.css` — slot positioning, scale, opacity falloff per `data-distance`, and transition behavior.
+- `ui/styles/atmosphere.css` — base `.atmosphere-layer` plus the preset selectors recognized by `ui/lib/atmosphere-presets.js`. Presets use layered backgrounds, no external assets.
 - Both imported from `ui/styles.css`.
 
 ## Declaring Traits on a Plugin
 
-Canonical (contract-driven, not yet wired end-to-end):
+Canonical contract shape:
 
 ```toml
 # qol-config.toml for a plugin
@@ -73,17 +73,22 @@ neighbors = 1
 preset = "terminal"
 ```
 
-For contract-driven traits to reach `addDiveTarget`, the backend must:
+For contract-driven traits to reach `addDiveTarget`, verify this complete path:
 
 1. qol-config side: parse `[traits]` from plugin TOML into a serializable map.
 2. qol-tray backend: include `traits` in `CombinedPluginForm` (`src/features/plugin_store/server/settings/plugin_config_handlers/form.rs`). Serde flattening or an explicit field works.
-3. Frontend `fetchPluginContract` already consumes `form.traits` if present.
+3. Frontend contract fetch passes the returned traits into DiveTarget registration.
 
-Until that lands, add a fallback entry in `ui/lib/plugin-trait-overrides.js` keyed by plugin ID. The override map is a pilot scaffold; delete once contracts ship.
+If any link is absent, prefer wiring the contract end-to-end in the same patch.
+A temporary `plugin-trait-overrides.js` entry requires an explicit deletion
+condition and must never override a contract-provided value.
 
 ## Declaring Traits on a Static Target
 
-Static dive targets (hotkeys editor, shortcuts editor, logs detail, task-runner editor) declared in `registerStaticDiveTargets` in App.js rely on `addDiveTarget`'s default traits. Pass an explicit `traits` key if a static target needs non-default behavior.
+Static dive targets declared by `registerStaticDiveTargets` rely on
+`addDiveTarget`'s default traits. Pass an explicit `traits` key when a target
+needs non-default behavior; inspect that registry for the maintained target
+inventory.
 
 ## Adding a New Preset
 
@@ -103,13 +108,13 @@ Presets are pure CSS. They intentionally do not use theme tokens — atmosphere 
 
 Traits must have a no-op default (absence = no effect). Do not couple traits to each other; they're orthogonal.
 
-## Current Gaps / Follow-ups
+## Capability acceptance criteria
 
-- **Backend contract wiring.** Plugins can only declare traits via `plugin-trait-overrides.js` today. Once qol-config's contract parser and qol-tray's `CombinedPluginForm` include `traits`, delete the override file and its consumer in `App.js`.
-- **Peripheral-preview rendering depth.** Current miniatures are label-only cards. Spec calls for real page content at reduced scale with a snapshot fallback — implement when rendering budget allows.
-- **Peripheral-preview animation.** CSS transitions only. The full choreographed ~240ms scale+fade+parallax from the spec is a follow-up.
-- **Atmosphere audio.** Trait config accepts `audio` but `AtmosphereLayer` ignores it. Audio manager with fade-in/out, nested-dive pause/resume, and global mute respect is unimplemented.
-- **Minimap pipeline share.** Peripheral-preview currently renders placeholders; minimap renders real scaled pages. Once real-content peripherals land, consider sharing the scaled-page pipeline.
+- **Contract traits:** a plugin declaration is complete only when parser, backend form, frontend fetch, and DiveTarget registration preserve it. Compatibility overrides are not proof of contract support.
+- **Peripheral content:** claim real-content preview only when the renderer displays the page or a documented snapshot fallback within the rendering budget.
+- **Animation:** timing and choreography come from the design spec; CSS or imperative implementations must preserve the same state transitions and cancellation behavior.
+- **Atmosphere audio:** if the contract accepts an audio field, either implement fade, nested-dive pause/resume, and global mute behavior or reject the field during validation. Never silently ignore declared config.
+- **Shared projection:** reuse the minimap projection pipeline only when peripheral-preview and minimap share scaling, clipping, and lifecycle semantics. Similar visuals alone are not a shared abstraction.
 
 ## Key Invariants
 

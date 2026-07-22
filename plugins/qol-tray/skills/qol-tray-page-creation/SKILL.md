@@ -9,7 +9,7 @@ description: Use when adding a qol-tray world-canvas page, dive target, sub-page
 
 Pages are entries in the world registry at integer `layer` values:
 
-- `layer: 0`: top-level views (the seven sidebar pages plus `dev`)
+- `layer: 0`: top-level views declared by `WORLD_PAGES`
 - `layer: -1`: sub-pages (editors, detail panels, plugin sections, gallery showcases)
 - `layer: -2, -3, ...`: deeper dives (rare; reserved)
 
@@ -288,8 +288,8 @@ beyond what `data-dive-source` already does).
 List views show a `<KeyLegend>` strip next to the page subtitle so users
 don't have to guess what `a`, `Enter`, `r` do. Bindings come from a single
 defaults table (`ui/lib/view-bindings.js`) keyed by `viewId`, read via
-`useViewBindings(viewId)`. The same source feeds the keyboard handler in
-the future; for now defaults are baked.
+`useViewBindings(viewId)`. Both the legend and keyboard handler must consume
+that source; if the handler does not, treat the duplication as a wiring defect.
 
 ```js
 // in the view

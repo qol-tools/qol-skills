@@ -1,146 +1,57 @@
 ---
 name: pointz-client
-description: Use when working on the PointZ Flutter mobile client for discovery, gesture handling, and UDP command transport.
+description: Use when working on the PointZ Flutter mobile client for discovery, gesture handling, settings, and UDP command transport. Pair with qol-plugin-pointz for desktop protocol changes.
 ---
 
-## Current State
+# PointZ mobile client
 
-PointZ v0.4.0 - Flutter mobile client for remote PC control. Connects to PointZerver (Rust server) running on desktop.
+The Flutter client discovers a PointZ desktop server and translates touch or keyboard input into the shared wire protocol. The active client checkout placed in task scope is authoritative; do not choose between similarly named historical checkouts from prose.
 
-**Platforms:** Android, iOS
+## Source of truth
 
-### Recent Changes (Jan 2026)
-- Fix: Client-side throttling (16ms sample rate) to reduce UDP packet flooding
-- Architecture: Multi-interface discovery for hotspot support
-- Fix: Synced local repo with remote
-- Fix: Restored ADB pairing scripts (adb-autoconnect.sh, adb-pair-wireless.sh)
+- `pubspec.yaml` owns package identity, SDK constraints, dependencies, and app version.
+- Flutter target directories plus build configuration own supported client platforms.
+- `lib/services/discovery_service.dart` owns discovery transport and response parsing.
+- `lib/services/command_service.dart` owns command transport, pacing, and connection state.
+- `lib/features/gesture/` owns touch recognition and command intent.
+- `lib/features/keyboard/` owns hardware-key translation when that module exists.
+- `lib/services/settings_service.dart` and the settings screen own persisted client preferences.
+- `test/` owns executable behavior claims.
 
-### What Works
-- UDP-based server discovery (broadcast on port 45454)
-- UDP command sending (mouse, keyboard on port 45455)
-- Touch gesture recognition and conversion to mouse commands
-- Multi-finger gestures (2-finger right-click, 3-finger middle-click)
-- Tap-and-hold drag mode
-- Hardware keyboard capture and forwarding
-- Settings: sensitivity, acceleration, scroll speed
-- Wireless ADB pairing and auto-connect
+Inspect those paths before stating a capability, setting default, throttle interval, port, or platform. If a path has moved, follow imports from `lib/main.dart` rather than reconstructing an old tree.
 
-### Architecture
+## Desktop protocol boundary
 
-```
-lib/
-├── main.dart                     # App entry point
-├── domain/models/                # Data models
-│   ├── gesture_event.dart
-│   └── touch_action.dart
-├── features/
-│   ├── gesture/                  # Touch gesture recognition
-│   │   ├── gesture_detector.dart # Flutter event → TouchAction
-│   │   ├── gesture_handler.dart  # TouchAction → Commands
-│   │   ├── handlers/
-│   │   │   ├── move_handler.dart # Mouse movement with acceleration
-│   │   │   ├── down_handler.dart
-│   │   │   ├── up_handler.dart
-│   │   │   └── pointer_handler.dart
-│   │   ├── config/
-│   │   │   └── gesture_config.dart
-│   │   └── state/
-│   │       └── gesture_state.dart
-│   ├── keyboard/                 # Hardware keyboard capture
-│   │   ├── keyboard_handler.dart
-│   │   └── implementations/
-│   │       └── command_service_keyboard_executor.dart
-│   └── mouse_control/            # Mouse command execution
-│       └── implementations/
-│           └── command_service_executor.dart
-├── screens/                      # UI Screens
-│   ├── discovery_screen.dart    # Server discovery UI
-│   ├── control_screen.dart      # Main control interface
-│   └── settings_screen.dart     # App settings
-└── services/                     # Core services
-    ├── discovery_service.dart   # UDP server discovery
-    ├── command_service.dart     # UDP command sending (16ms throttle)
-    └── settings_service.dart    # App preferences
-```
+Discovery ports and messages must match the desktop plugin's `src/config/mod.rs` and `src/discovery/model.rs`. Command JSON must match `src/command/model.rs`.
 
-### Protocol
+Change client and server protocol definitions together. Preserve tolerant decoding when adding optional fields; require an intentional compatibility decision for renamed commands, changed enum spelling, or port changes.
 
-**Discovery (UDP port 45454):**
-```
-Client → Broadcast: "DISCOVER"
-Server → Response: {"hostname": "my-computer"}
-```
+Do not duplicate protocol examples in this skill. Generate fixtures from the model or keep paired tests on both sides so the executable sources reveal drift.
 
-**Commands (UDP port 45455):**
-```json
-{"type": "MouseMove", "x": 10.5, "y": 20.5}
-{"type": "MouseClick", "button": 1}
-{"type": "KeyPress", "key": "a", "modifiers": {"ctrl": true}}
-```
+## Gesture ownership
 
-### Settings
+Flutter pointer events become gesture-domain events before they become network commands. Keep recognition, gesture state, sensitivity/acceleration math, and transport separate so each can be tested without a device or socket.
 
-**Client Settings:**
-- `mouseSensitivity` - Default 2.5
-- `minAcceleration` - Default 1.0
-- `maxAcceleration` - Default 1.8
-- `accelerationThreshold` - Default 25.0
-- `scrollSpeed` - Default 0.2
+When adding a gesture:
 
-### Development Workflow
+1. Define the gesture-domain transition and cancellation behavior.
+2. Map it to an existing command or extend the paired protocol model.
+3. Test competing pointer sequences, interruption, and reset behavior.
+4. Verify on a physical device before claiming interaction quality.
 
-**Running on Device:**
-```bash
-make pair              # Pair phone via wireless ADB
-make run               # Run on connected device
-```
+## Settings ownership
 
-**Building APK:**
-```bash
-flutter build apk --release
-```
+Defaults and persistence keys live in the settings source, not this skill. A UI control, stored value, and consumer must change together. Clamp or validate user-controlled sensitivity, acceleration, scroll, and timing values before using them in gesture math.
 
-**Testing:**
-```bash
-flutter test
-```
+## Development workflow
 
-### Key Components
+Use the commands exposed by the active client's `Makefile` or Flutter tooling. Run `flutter test` for deterministic logic and a device build for platform integration. ADB helper availability comes from the checkout's scripts directory; do not assume a named helper exists.
 
-**discovery_service.dart:**
-- Listens for UDP broadcasts on port 45454
-- Parses server responses (JSON with hostname)
-- Supports multi-interface discovery for hotspot connections
+## Invariants
 
-**command_service.dart:**
-- Sends mouse/keyboard commands via UDP to port 45455
-- 16ms throttling to prevent packet flooding
-- Handles connection state and error recovery
-
-**gesture_detector.dart:**
-- Converts Flutter touch events to TouchAction domain model
-- Handles single/multi-finger gestures
-- Manages tap-and-hold drag mode
-
-**move_handler.dart:**
-- Applies mouse sensitivity and acceleration
-- Converts touch deltas to cursor movement
-- Configurable acceleration curve
-
-### Known Issues / TODO
-
-1. **Gradle build errors** - `flutter run` sometimes fails with truncated error message
-   - Workaround: Use `flutter build apk` then `adb install -r app-release.apk`
-
-### File Locations
-
-**APK Output:**
-- `build/app/outputs/flutter-apk/app-release.apk`
-
-**Source:**
-- `lib/` - Main source code
-- `test/` - Flutter tests
-
-**Scripts:**
-- `scripts/adb-pair-wireless.sh` - Auto-detect and pair phone
-- `scripts/adb-autoconnect.sh` - Auto-connect to paired phone
+- Discovery is independent from command delivery and can recover from interface changes.
+- High-frequency movement is paced or coalesced before UDP send.
+- Gesture state resets after cancellation, disconnect, and lifecycle interruption.
+- The client never invents command variants absent from the desktop model.
+- Settings are persisted through one service and consumed as typed values.
+- Build or runtime limitations belong in tracked issues or executable checks, not a skill status section.

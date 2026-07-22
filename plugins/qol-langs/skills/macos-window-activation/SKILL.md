@@ -16,7 +16,7 @@ Foregrounding another process's window on macOS is not `NSRunningApplication.act
 deprecated in macOS 14 and will have no effect.
 ```
 
-It still **returns `true`** — so a `let ok = app.activate(...)` check is worthless; it reports success while doing nothing forceful. Measured on macOS 26: a plugin relying on it foregrounded the target ~87% of the time but **failed ~13% cross-app**, and failed reliably against an app that re-asserts frontmost (Microsoft Teams while screen-sharing kept stealing front). Two failure shapes:
+It can still **return `true`** while doing nothing forceful, so a `let ok = app.activate(...)` check is not success evidence. Reproduce against an app that re-asserts frontmost and classify failures by these durable shapes:
 
 - **Mode A** — target app never comes forward (the user's "selected app didn't focus").
 - **Mode B** — right app, wrong window (a floating window like Teams' "Sharing Indicator" wins).
@@ -66,7 +66,7 @@ unsafe fn force_front(set_front: SetFrontFn, post: PostEventFn, pid: i32, wid: u
 }
 ```
 
-`set_front` foregrounds the **process** and is necessary, but it is **not sufficient on its own**. Measured on macOS 26: `_SLPSSetFrontProcessWithOptions` returns `0` (accepted) yet is **silently ignored** when an actively-front Regular app holds front (Firefox, PowerPoint, Teams) - the front never moves, not even 5ms after the call, no matter how many times you re-issue it. The authoritative foregrounder against a fighting app is the target **application's `kAXFrontmost` attribute** (next section). The synthetic events are best-effort (a malformed record is ignored, so they layer safely on top). Keep `NSRunningApplication.activate` only as a fallback when SkyLight fails to `dlopen`.
+`set_front` foregrounds the **process** and is necessary, but it is **not sufficient on its own**. `_SLPSSetFrontProcessWithOptions` may return `0` (accepted) while an actively-front Regular app keeps focus. The authoritative foregrounder against a fighting app is the target **application's `kAXFrontmost` attribute** (next section). The synthetic events are best-effort (a malformed record is ignored, so they layer safely on top). Keep `NSRunningApplication.activate` only as a fallback when SkyLight fails to `dlopen`.
 
 ## `kAXFrontmost` on the app is the authoritative foregrounder
 
@@ -89,11 +89,11 @@ Full order: unminimize → AXRaise (window) → `set_front` + synthetic key even
 
 ## Re-assert until it sticks (the teardown race)
 
-A one-shot activation still loses ~5-10%, even with `set_front` + `AXFrontmost`. Root cause: the picker is a key-holding window owned by an Accessory daemon; on commit the daemon deactivates and the WindowServer **restores the previously-active app** (the source), clobbering the activation. Re-assert on a short, generation-guarded background loop until the target is actually frontmost:
+A one-shot activation can still lose even with `set_front` + `AXFrontmost`. Root cause: the picker is a key-holding window owned by an Accessory daemon; on commit the daemon deactivates and the WindowServer **restores the previously-active app** (the source), clobbering the activation. Re-assert on a short, generation-guarded background loop until the target is actually frontmost:
 
-- Poll the CG-frontmost pid at ~16/40/80/140/240/390ms; while it isn't the target, re-issue `set_front` + `ax_app_frontmost`.
+- Poll the CG-frontmost pid on the bounded retry schedule owned by the activation helper; while it is not the target, re-issue `set_front` + `ax_app_frontmost`.
 - Guard with an `AtomicU64` generation bumped on every `activate_window`; a stale loop bails the instant a newer commit supersedes it, so it never fights the user's next pick.
-- Verified: drops the cross-app failure rate to 0 across heterogeneous sources/targets including PowerPoint, Teams, and Firefox.
+- Verify with heterogeneous sources/targets, including an app that re-asserts frontmost, and require the target to remain frontmost after picker teardown.
 
 ## Reading the TRUE frontmost window (telemetry / verification)
 
@@ -128,7 +128,7 @@ A focus bug is "sometimes" by nature. Make it deterministic:
 1. Instrument the activation to log the CG-frontmost window (pid + window id) at three checkpoints: **BEFORE**, **AFTER-SYNC** (same tick), **AFTER-250ms** (background thread). Write to a **file sink**, not stderr, so logging survives whoever owns the process (the daemon is supervised by qol-tray).
 2. Drive real switches, then **isolate clean reads**: discard any commit whose 250ms read overlaps the next commit (timestamp filter) — fast spamming pollutes deferred reads.
 3. Classify each clean commit: `app_match=false` → Mode A; `app_match=true, win_match=false` → Mode B; capture `ax_found` and the activate return to refute alternative theories (e.g. an AX-timeout hypothesis dies the moment `ax_found=true` on every failure).
-4. Verify the fix by the same probe: cross-app failure rate should drop to ~0, including against a known focus-fighter (screen-sharing Teams).
+4. Verify the fix by the same probe: every clean commit must reach the requested app/window and remain there after teardown, including against a known focus-fighter.
 
 ## See also
 

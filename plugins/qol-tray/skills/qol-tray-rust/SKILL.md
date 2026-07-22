@@ -133,7 +133,8 @@ UI ↔ backend communication lives in `src/runtime/`. When adding an endpoint:
 
 ## The three communication channels
 
-There is not one IPC path — there are three, with distinct roles. Don't conflate them:
+IPC mechanisms have distinct roles. Discover the maintained set from the host
+routers/listeners and do not conflate their contracts:
 
 1. **axum HTTP** (`127.0.0.1:42700`) — the dashboard, the `qol-tray exec` CLI, and the plugin-store API. The CLI does *not* speak a plugin's socket directly; it POSTs to axum, which dispatches onward.
 2. **desktop-state Unix socket** (Unix only) — a one-way feed of monitor/cursor/focus state that plugin daemons and external tools *read*. Never used for action dispatch.

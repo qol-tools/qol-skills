@@ -1,6 +1,6 @@
 ---
 name: gpui-conventions
-description: Use when writing gpui UI code in this workspace. Verified patterns and gotchas for gpui 0.2 + gpui-component, built through hands-on exploration — NOT a generic gpui reference. For canonical gpui docs, use context7 (though coverage is limited; this skill is the better source for real-world patterns). Covers views, input, lists, focus, window management, testing.
+description: Use when writing gpui UI code in this workspace. Verified workspace patterns and gotchas for the GPUI dependencies selected by Cargo, built through hands-on exploration — NOT a generic gpui reference. Covers views, input, lists, focus, window management, testing, and source-checking version-sensitive behavior.
 ---
 
 # GPUI Knowledge Base
@@ -12,16 +12,14 @@ Bespoke documentation for gpui, built through hands-on exploration.
 - [gpui.rs](https://www.gpui.rs/) - Official site
 - [docs.rs/gpui](https://docs.rs/gpui) - API docs
 - [Zed gpui crate](https://github.com/zed-industries/zed/tree/main/crates/gpui) - Source of truth
-- [gpui-component](https://github.com/longbridge/gpui-component) - 60+ ready-made components (recommended)
+- [gpui-component](https://github.com/longbridge/gpui-component) - component library
 - [WindowOptions docs](https://docs.rs/gpui/latest/gpui/struct.WindowOptions.html)
 
 ## Project Setup
 
-```toml
-[dependencies]
-gpui = "0.2"
-gpui-component = "0.5.0"
-```
+Copy the GPUI dependency declarations from the nearest maintained workspace
+consumer, preferably `libs/qol-gpui/Cargo.toml`. `Cargo.toml` and `Cargo.lock`
+own the selected versions; do not pin a second copy in this skill.
 
 Requires: Rust stable, macOS or Linux.
 
@@ -255,13 +253,9 @@ self.list_state.update(cx, |state, cx| {
 
 ### Setup
 
-```toml
-[dependencies]
-gpui = { version = "0.2", features = ["test-support"] }
-
-[dev-dependencies]
-proptest = "1.0"
-```
+Enable GPUI's test-support feature using the version selected by the workspace,
+and copy the property-test dependency declaration from a maintained workspace
+consumer. `Cargo.toml` and `Cargo.lock` own versions.
 
 ### Property-Based Testing (Primary Approach)
 
@@ -362,11 +356,12 @@ contract-driven settings actions are hosted by qol-tray through one retained
 and explicit fallbacks. Ownership, routing, and verification live in
 `qol-project:qol-plugin-gpui-surfaces`.
 
-GPUI 0.2.2 has native animation primitives but no `Spinner` widget. Use the
-shared `qol_gpui::Spinner`, which wraps a repeating `AnimationExt` glyph
-sequence. Never draw plugin-local spinners or drive them with view-owned timers
-and frame state. This keeps the component independent of host assets and
-rendering backends. Verified against the installed GPUI source on 2026-07-19.
+Use the shared `qol_gpui::Spinner` rather than depending directly on the
+spinner or animation surface of the selected GPUI version. Never draw
+plugin-local spinners or drive them with view-owned timers and frame state.
+This keeps plugin code independent of dependency churn, host assets, and
+rendering backends. Source-check the selected crate before changing the shared
+wrapper.
 
 ## Gotchas (learned the hard way)
 
@@ -400,9 +395,9 @@ per-monitor pre-created ghosts (launcher/alt-tab) or use qol-gpui `Surface`,
 which draws the real root and asserts the origin behind a native visibility
 gate. Never gate reveal by omitting the root from a transparent mapped window:
 the compositor exposes whatever is underneath as false first-frame content.
-GPUI 0.2.2 honors `WindowOptions::show` on macOS and Windows but ignores it on
-Linux, so the shared Linux path must synchronously map the native window with
-zero opacity and input passthrough before yielding to the event loop.
+Treat `WindowOptions::show` as a non-portable visibility hint. The shared Linux
+path must synchronously map the native window with zero opacity and input
+passthrough before yielding to the event loop.
 
 Do not treat an `on_next_frame` callback or `refresh()` request as proof that
 new content was presented. On X11, `Window::resize` only sends
@@ -422,8 +417,9 @@ phase=frame-ready` reports `layout_confirmed=true viewport_ready=true
 fresh_frame=true content_rendered=true` and matching `expected`, `observed`,
 and `rendered` sizes before `phase=revealed shown=true`. Exercise cold,
 retained, and cross-plugin resize paths only in the compositor-backed Mint VM,
-never by driving the developer's desktop. Verified against GPUI 0.2.2's X11
-`ConfigureNotify` path and Linux Mint Cinnamon on 2026-07-20.
+never by driving the developer's desktop. Whenever the selected GPUI revision
+changes, source-check its X11 `ConfigureNotify` path and repeat the
+compositor-backed verification before trusting reveal behavior.
 
 ### Multi-monitor is broken on Linux
 
@@ -489,7 +485,7 @@ Beyond "set full size at creation": a pre-created / ghost window can have `windo
 
 ### Blocking work must not occupy GPUI executor workers
 
-GPUI 0.2 has a bounded background executor. Never park its workers on `std::sync::mpsc::Receiver::recv` or slow runtime I/O: one blocked query can starve a socket activation for seconds. Bridge resident blocking receivers from a dedicated idle-blocking thread into an async channel, and load live option/query data after the first frame. Keep first-frame construction limited to cached, contract, and local state.
+Treat GPUI's background executor as bounded. Never park its workers on `std::sync::mpsc::Receiver::recv` or slow runtime I/O: one blocked query can starve a socket activation for seconds. Bridge resident blocking receivers from a dedicated idle-blocking thread into an async channel, and load live option/query data after the first frame. Keep first-frame construction limited to cached, contract, and local state. Source-check the selected executor implementation before relying on capacity or scheduling details.
 
 ### Backing scale drifts across monitors
 

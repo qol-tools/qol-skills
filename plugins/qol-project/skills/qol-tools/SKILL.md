@@ -7,11 +7,12 @@ description: Use when working anywhere in the qol-tools world - the qol-monorepo
 
 ## Scope and audience
 
-`qol-tools` is a GitHub org with a single human contributor (kmrh47), and all product code is consolidated into one repo: `qol-monorepo`.
-AI assistants are the second author in practice.
-Licensed under **PolyForm-Noncommercial 1.0.0** across every crate and plugin.
-Not a public-facing community project today; third-party plugin authorship is planned (plugin-template exists) but there is no external user base yet.
-Treat decisions with that framing: aggressive refactors are fine, breaking changes to unpublished internals are fine, and docs speak to future-Daisy + future-agent rather than to an outside community.
+The product workspace is `qol-monorepo`; use the repository root, workspace
+manifest, and release-unit manifests to discover its maintained scope.
+The `LICENSE` file owns licensing. Contribution authority and delivery flow are
+owned by `qol-workflow:git-trees` and repository instructions. Do not
+infer a public compatibility promise or an external audience without an
+explicit source in the checked-out repositories.
 
 ## Workspace layout
 
@@ -101,15 +102,15 @@ Any prose written into the qol-tools world (CLAUDE.md, SKILL.md, README, commit 
 
 | Snapshot (wrong) | Invariant (right) |
 |---|---|
-| "the 9 plugins in the monorepo" | "every directory matching `plugins/*` with a `plugin.toml`" |
-| "plugin-alt-tab, plugin-launcher, plugin-lights, ..." | "each release unit under `plugins/*`" |
-| "qol-config + qol-plugin-api + qol-runtime" | "workspace members under `libs/`" |
-| "the 3 file migrations: v3.15->v3.16, v3.16->v3.17, v3.17->v3.18" | "every migration registered in `PreFlightRegistry::current()`" |
-| "`OLDEST_SUPPORTED = 3.15.0`" | "below `OLDEST_SUPPORTED` (slides per release)" |
-| "active branch is `world-canvas-overhaul`" | omit, or point at `docs/superpowers/` for current state |
-| "as of qol-config 1.3.0" | omit, or "the current qol-config API" |
-| "754 lib tests" | "the full lib test suite" |
-| "the May 2026 wipe incident" | "the wipe-then-clone incident that motivated this section" (date only if it anchors a specific commit a reader needs to find) |
+| `the 9 plugins in the monorepo` | "every directory matching `plugins/*` with a `plugin.toml`" |
+| `plugin-alt-tab, plugin-launcher, plugin-lights, ...` | "each release unit under `plugins/*`" |
+| `qol-config + qol-plugin-api + qol-runtime` | "workspace members under `libs/`" |
+| `the 3 file migrations: v3.15->v3.16, v3.16->v3.17, v3.17->v3.18` | "every migration registered in `PreFlightRegistry::current()`" |
+| `` `OLDEST_SUPPORTED = 3.15.0` `` | "below `OLDEST_SUPPORTED` (slides per release)" |
+| ``active branch is `world-canvas-overhaul` `` | omit, or point at `docs/superpowers/` for live state |
+| `as of qol-config 1.3.0` | omit, or "the API selected by the workspace" |
+| `754 lib tests` | "the full lib test suite" |
+| `the May 2026 wipe incident` | "the wipe-then-clone incident that motivated this section" (date only if it anchors a specific commit a reader needs to find) |
 
 If the count or list is genuinely essential (rare), generate it from source at read time (`ls plugins/`, `cargo metadata`, `git log`, the runtime API), and say so, rather than restating it.
 
@@ -118,4 +119,8 @@ Two corollaries:
 - A commit message that says "the May 2026 incident" is preferable to "the X = 0.1.0 stamp bug from 2026-05-22" because the date appears once in git history naturally. Restating it in prose creates a second moving part.
 - A skill that enumerates "siblings" or "neighboring features" must say what makes a thing a sibling, not list the current siblings. The enumeration belongs in the description or a path glob.
 
-This rule applies to every skill in `qol-skills/`. When you author or extend one, audit your draft for "as of", "current", "the N <things>", "the X, Y, Z <things>", and "in version V" - those are the lexical fingerprints of snapshot drift.
+This rule applies to every skill in `qol-skills/`. The deterministic audit is
+`node scripts/check-skill-invariants.cjs --check`. It catches temporal status,
+fixed inventories, copied manifest fields, dated verification, and mutable
+component versions outside code examples. Treat any failure as a prompt to
+point at an owning source or express a durable condition.
