@@ -26,17 +26,18 @@ actions, daemon configuration, and which actions are continuous.
 
 | Concern | Source |
 |---|---|
-| CLI and daemon entry | `src/main.rs` |
-| Request parsing and continuous runtime state | `src/daemon.rs` |
-| Direction and phase types | `src/movement.rs` |
-| Platform selection | `src/platform/mod.rs` |
-| Minimize/restore rules | `src/restore.rs` |
-| Persisted minimized-window stack | `src/state_store.rs` |
-| Linux action routing | `src/platform/linux/mod.rs` |
-| Cinnamon glide controller | `src/platform/linux/glide.rs` |
-| Cinnamon geometry scripts | `src/platform/linux/scripts.rs` |
-| X11 discovery and activation | `src/platform/linux/system.rs` |
-| macOS Accessibility backend | `src/platform/macos/` |
+| Binary composition | `src/main.rs` |
+| Daemon lifecycle and request handling | `src/app/` |
+| Typed settings | `src/config/` |
+| Continuous-action model | `src/glide/` |
+| Minimize/restore rules and state | `src/restore/` |
+| Action diagnostics | `src/diagnostics/` |
+| Platform selection and OS backends | `src/platform/` |
+
+Keep Cinnamon action routing, geometry, glide control, and X11 integration
+under the Linux platform backend. Keep Accessibility behavior under the macOS
+platform backend. Discover their internal modules from those ownership roots
+instead of relying on a copied file inventory.
 
 Follow the platform declaration in `plugin.toml`; the presence of a compiled
 module does not by itself make that platform supported.
@@ -48,7 +49,7 @@ The end-to-end flow crosses qol-tray and the plugin:
 1. `plugin.toml` marks each glide action as continuous.
 2. qol-tray registers the hotkey and emits structured `start`, `heartbeat`, and
    `stop` phases.
-3. `src/daemon.rs` parses the phase and keeps one `GlideController` alive for
+3. `src/app/` parses the phase and keeps one `GlideController` alive for
    the active session.
 4. The platform controller owns active directions and updates window motion.
 
