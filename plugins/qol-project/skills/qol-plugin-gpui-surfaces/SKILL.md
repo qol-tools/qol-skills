@@ -16,7 +16,7 @@ and toasts remain plugin-owned.
 
 | Piece | File | What it owns |
 | --- | --- | --- |
-| `Surface` builder | `surface.rs` | Window creation for `SurfaceKind::Toast` (PopUp, unfocused, corner-anchored, optional timeout) and `SurfaceKind::Panel` (Normal, focused, monitor-centered) |
+| `Surface` builder | `surface.rs` | Window creation for `SurfaceKind::Toast` (PopUp, unfocused, corner-anchored, optional timeout) and `SurfaceKind::Panel` (Normal, focused, monitor-centered, designed-size locked) |
 | `SurfaceDismisser` | `surface.rs` | Close from anywhere (key handler, click, timer). Deferred out of event dispatch - see invariants |
 | `SettingsWindowHost` | `settings_panel/` | Retains exactly one settings window and implements open, focus-same-plugin, replace-with-another-plugin, and park/reveal across Escape |
 | `SettingsRuntime::tray` | `settings_panel/` | Routes hosted runtime queries and actions through qol-tray's existing HTTP API |
@@ -27,6 +27,15 @@ and toasts remain plugin-owned.
 `Surface::show_focused` is for interactive panels (`Render + Focusable`),
 `Surface::show` for passive toasts. Both hand the view a
 `SurfaceDismisser`.
+
+`SurfaceKind::Panel` is the single window-behavior contract for ordinary QoL
+GPUI panels: the declared size is fixed against user resize/maximize, the
+window is centered on the active monitor, and it remains a normal movable
+task-switcher window. Mark only non-interactive top chrome with the shared
+`PanelDragArea::panel_drag_area`; never put a drag listener on the whole root,
+where child clicks would start window moves. Retained settings panels may
+change their declared size programmatically when replacing content; the shared
+surface layer must update the native size constraint with that change.
 
 ## Contract settings are host-owned
 
