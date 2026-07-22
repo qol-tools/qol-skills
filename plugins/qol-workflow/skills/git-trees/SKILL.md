@@ -1,6 +1,6 @@
 ---
 name: git-trees
-description: Use whenever modifying files, creating commits, or creating, switching, or branching in the qol-monorepo or qol-skills repo. Defines completion-as-commit, the branch-based worktree workflow, the direct-vs-PR route, and final squash delivery.
+description: Use whenever modifying files, creating commits, or creating, switching, or branching in the qol-monorepo or qol-skills repo. Defines completion-as-commit, the mandatory Cargo.lock merge driver, the branch-based worktree workflow, the direct-vs-PR route, and final squash delivery.
 ---
 
 # git-trees
@@ -24,6 +24,32 @@ If the change is direct-to-main, stay on `main` in the main clone.
 The branch-switch ban is enforced by the `branch-deny-checkout-in-main-clone` PreToolUse hook.
 It exists to keep the main clone on `main` so `qol sync` and `qol dev` see fresh code.
 Direct-to-main work happens on `main` without switching branches.
+
+## Cargo.lock uses a mandatory merge driver
+
+In `qol-monorepo`, never resolve a root `Cargo.lock` conflict by hand, choose
+ours/theirs, or discard one side. The lockfile is derived from the workspace
+manifests and has a repository-owned auto-resolution contract:
+
+- `.gitattributes` assigns `/Cargo.lock` to `merge=cargo-lock`.
+- `qol setup` registers `merge.cargo-lock.driver` as
+  `.githooks/cargo-lock-merge %O %A %B %P` in the clone's Git config.
+- The driver keeps a candidate lockfile and asks Cargo to reconcile it against
+  the already-merged workspace manifests.
+
+Before a pull, rebase, merge, or cherry-pick that can touch `Cargo.lock`, verify
+the contract rather than assuming another agent or clone configured it:
+
+```bash
+git check-attr merge -- Cargo.lock
+git config --get merge.cargo-lock.driver
+```
+
+The first command must report `Cargo.lock: merge: cargo-lock`; the second must
+report `.githooks/cargo-lock-merge %O %A %B %P`. If the config is absent or
+different, run `qol setup` from the monorepo checkout before starting the Git
+operation. After the driver runs, use the repository verification workflow to
+prove the regenerated lockfile matches the merged manifests.
 
 ## Completion means committed
 

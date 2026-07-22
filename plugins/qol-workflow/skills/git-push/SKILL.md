@@ -23,6 +23,10 @@ Because of that, always run `git pull --rebase` before `git push`.
 
 Do not assume `origin/<branch>` is unchanged, even if the local repo looked current a moment ago.
 
+In `qol-monorepo`, apply the mandatory `Cargo.lock` merge-driver contract from
+`qol-workflow:git-trees` before the pull/rebase. Never replace the configured
+driver with a manual lockfile conflict resolution.
+
 ## Match the checkout to the branch
 
 - Direct-to-`main` work belongs in the main clone and may be pushed from there when requested.
