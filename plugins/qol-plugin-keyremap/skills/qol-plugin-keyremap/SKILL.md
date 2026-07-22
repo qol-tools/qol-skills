@@ -18,16 +18,24 @@ Key Remap converts declarative config rules into native input-event transformati
 
 | Path | Responsibility |
 |---|---|
-| `src/main.rs`, `src/daemon.rs` | Process action routing and reload/kill lifecycle. |
-| `src/config.rs` | Raw contract-backed configuration. |
-| `src/remap.rs` | Validation/resolution into callback-friendly immutable rules and semantic diffs. |
-| `src/keycode.rs` | Key name/code translation. |
+| `src/main.rs` | Thin process entrypoint; collect arguments and delegate to the selected platform adapter. |
 | `src/platform/mod.rs` | Single target-selection boundary. |
-| `src/platform/macos/` | CGEventTap handling and frontmost-app tracking. |
-| `src/platform/non_macos.rs` | Typed unsupported-target behavior needed for cross-compilation. |
+| `src/platform/macos/app/` | Process actions, daemon lifecycle, contract-backed config, rule resolution, and semantic diffs for the supported adapter. |
+| `src/platform/macos/app_tracker.rs` | Live frontmost-application tracking. |
+| `src/platform/macos/tap.rs` | CGEventTap ownership and native event transformation. |
+| `src/platform/linux/`, `src/platform/windows/` | Explicit unsupported-target launch behavior needed for cross-compilation. |
+| `qol-hotkeys::macos_keycode` | Shared key name/code translation; do not recreate a plugin-local forwarding module. |
 | `ui/` | Rule editor, schemas, hooks, and persistence. |
 
 Keep native callbacks allocation-light and independent of TOML/UI shapes. Resolve and validate before atomically swapping callback state.
+
+## Directory invariants
+
+- Keep `src/` limited to `main.rs` plus owned module directories; do not add root-level feature helpers.
+- Keep all three OS adapters in directory form: `platform/<os>/mod.rs`. Never add `platform/macos.rs`, a mixed file/directory module, or a catch-all `non_macos` module.
+- Keep target selection gates only in `platform/mod.rs`. Put adapter-local helpers beneath the owning OS directory.
+- Keep the browser editor in top-level `ui/`; do not move web assets beneath Rust `src/`.
+- Because the manifest is macOS-only, keep the remap engine beside the macOS adapter until another real native adapter shares its semantics. When platform support expands, first extract the genuinely shared engine behind an adapter contract; do not duplicate it.
 
 ## Daemon lifecycle
 
