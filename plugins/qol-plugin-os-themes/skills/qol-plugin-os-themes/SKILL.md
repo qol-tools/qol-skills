@@ -21,15 +21,14 @@ Update referenced action names across the manifest, runtime contract, config con
 | Path | Responsibility |
 |---|---|
 | `src/main.rs` | Thin action entrypoint. |
-| `src/app/` | Action routing and daemon orchestration. |
-| `src/daemon.rs` | Shared daemon lifecycle and socket boundary. |
-| `src/config.rs` | Config loading and typed values. |
+| `src/app/` | Action routing, daemon orchestration, and the socket lifecycle boundary. |
+| `src/config/` | Config loading and typed values. |
 | `src/cursor/control.rs` | Platform-neutral cursor capability contract. |
 | `src/cursor/platform/` | Target-selected cursor implementations and typed-error fallbacks. |
 | `src/theme/` | Platform-neutral theme actions. |
 | `src/theme/platform/` | Target-selected desktop theme adapters and typed-error fallbacks. |
 
-Keep cfg selection in each capability's `platform/mod.rs`. App/config code must call the capability boundary without target gates.
+Keep cfg selection in each capability's `platform/mod.rs`. Use directory-form modules for every OS implementation because supported adapters own private children. App/config code must call the capability boundary without target gates.
 
 ## Common changes
 
