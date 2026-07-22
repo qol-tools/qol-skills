@@ -20,11 +20,12 @@ When tracing activation, follow the manifest action into qol-tray's action execu
 
 | Path | Responsibility |
 |---|---|
-| `src/main.rs`, `src/lib.rs`, `src/daemon.rs` | Process boundary, public modules, and daemon IPC. |
+| `src/main.rs`, `src/lib.rs` | Process boundary and public composition. |
+| `src/app/` | Daemon IPC and retained-process command lifecycle. |
+| `src/config/` | Typed launcher settings. |
 | `src/discovery/` | Entry discovery, indexing/cache, search/ranking, and platform application sources. |
 | `src/launch/` | Target-selected execution of a chosen entry. |
 | `src/ui/` | GPUI state machine, input, layout, render, retained window host, click-away behavior, keepalive, and trace events. |
-| `src/config.rs` | Typed launcher settings. |
 | `tests/` | Executable properties for search, navigation, ranking, layout, caches, modifiers, and other pure behavior. |
 
 Keep platform differences inside feature-owned `platform/` modules. Keep ranking/navigation/layout deterministic and testable without GPUI or OS processes.
