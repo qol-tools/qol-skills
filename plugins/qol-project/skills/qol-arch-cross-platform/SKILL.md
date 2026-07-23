@@ -64,6 +64,14 @@ The hook blocks `#[cfg(target_os = ...)] use ...;` outside `platform/`. Inside `
 
 If `WindowOps::move_to_monitor` exists in `platform/mod.rs`'s trait, then `linux.rs`, `macos.rs`, and `windows.rs` must all `impl WindowOps` with `move_to_monitor`. Stub the unsupported OSes with a typed `Err` return — never `unimplemented!()`, never delete the method from the trait "because only Linux needs it". The trait *is* the contract. Stubs honor the contract.
 
+### 5. No adapter-exclusive helpers in the shared parent
+
+Shared domain types and genuinely shared behavior may be consumed by platform
+adapters. A callable whose only non-test consumer is one OS adapter belongs in
+that adapter, together with its tests. Do not export a Linux parser or command
+helper from the feature `mod.rs` merely so `platform/linux.rs` can import it.
+The repository-aware hook checks this parent-to-single-adapter leak.
+
 The compiler enforces this for traits. The skill calls it out so you don't reach for the easy escape ("I'll just gate the trait method on Linux") which produces exactly the dead-code-on-other-OS class this skill exists to prevent.
 
 ## Refactor recipe: relocating a leaky shared symbol

@@ -384,6 +384,12 @@ Backend names should describe the real boundary (`x11_snapshot`, `wayland_portal
 
 When a feature genuinely cannot work on an OS, **do not** use `compile_error!` — that breaks cross-compilation, blocks dev on other hosts, and breaks CI matrix builds.
 
+Cover Linux, macOS, and Windows in the target-selection facade. Use either a
+dedicated OS adapter or an explicitly selected `fallback` / `unsupported`
+adapter. Every selected adapter exposes the same callable surface; adding a
+callable to one adapter requires adding its real implementation or typed-error
+stub to the others before adding the consumer.
+
 Provide a stub impl that returns a typed error at runtime:
 
 ```rust
@@ -438,7 +444,8 @@ The `<os>.rs` source files use these unconditionally — the cfg gate at the man
 - ❌ **Never have a trait method that exists only on one OS via cfg.** Add it to the trait, stub it on others.
 - ❌ **Never return `unimplemented!()` from a stub** — it panics. Return a typed `Err` so the caller can handle it.
 - ✅ **Name the backend by capability/substrate** (`x11_snapshot`, `systemd_user`, `dbus_session`, `mqtt_bridge`) when that is the real boundary.
-- ✅ **Always provide a stub for every OS,** even if the stub just returns `Err("not supported")`. Code must compile on Linux, macOS, and Windows.
+- ✅ **Always cover every OS in the facade,** with a dedicated adapter or an explicitly selected fallback. Code must compile on Linux, macOS, and Windows.
+- ✅ **Keep facade parity,** so each selected adapter exposes the same callable surface. Adapter-private helpers do not belong in the facade; follow `qol-arch-cross-platform` for consumer locality.
 
 ## Facade decision points
 
@@ -566,6 +573,7 @@ This skill ships with a Claude Code PreToolUse hook (`bin/check-qol-arch-code.cj
 - `compile_error!(...)` — anywhere.
 - `#[cfg(target_os = ...)]` (including `all/any/not(target_os = ...)`) outside the canonical mod.rs re-export pattern (`#[cfg(target_os = "X")] mod X;` or `#[cfg(target_os = "X")] pub use X::Platform;`).
 - OS-named files (`linux.rs`, `macos.rs`, `windows.rs`) placed outside a `platform/` directory — these must always live under `platform/` (per-feature or top-level).
+- New target-selection facades that omit Linux, macOS, or Windows without selecting an explicit fallback, and callable-surface drift between complete OS adapter sets.
 - Platform decision signals outside an architecture boundary: `cfg!(target_os)`, `std::env::consts::OS`, OS API imports, OS command dispatch, platform-token branching, or platform-token storage/path routing.
 
 Allowed without challenge:
