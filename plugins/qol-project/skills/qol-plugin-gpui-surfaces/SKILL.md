@@ -120,8 +120,13 @@ extend `settings_panel/` instead. What the kit module guarantees:
    stable on/off state; shared renderers then show the colored binary state
    without presenting it as ongoing work. Reserve the default active spinner
    for operations that are actually in progress. A successful action refreshes
-   its `active_query` immediately; periodic polling remains the external-change
-   backstop.
+   its `active_query` immediately. The daemon must acknowledge only after the
+   mutation completes. When that acknowledgement carries a boolean at
+   `active_value_from`, the tray preserves the payload and the shared renderer
+   applies it directly; otherwise it queries immediately. Periodic polling is
+   only the external-change backstop. Rearm that backstop from action
+   completion so a pre-action or propagation-stale read cannot overwrite the
+   authoritative result.
 5. List row actions use `row_action` / `row_actions` in contract order. The
    first action whose `when` field is truthy is the primary action; Enter on an
    active list row dispatches it, interpolates its `input` from the row, and
