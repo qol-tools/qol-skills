@@ -66,17 +66,205 @@ function log(msg) {
     process.stderr.write(`[qol-arch-cross-platform] ${msg}\n`);
 }
 
+function consumeBypass(marker, basename) {
+    if (!fs.existsSync(marker) || !fs.statSync(marker).isFile()) return false;
+    try {
+        const raw = fs.readFileSync(marker, 'utf8').trim();
+        const count = /^\d+$/.test(raw) ? Number(raw) : 1;
+        if (count > 1) {
+            fs.writeFileSync(marker, String(count - 1));
+            log(`bypass consumed (${count - 1} remaining) — ${basename}`);
+        } else {
+            fs.unlinkSync(marker);
+            log(`bypass consumed (marker removed) — ${basename}`);
+        }
+    } catch {
+        return false;
+    }
+    return true;
+}
+
 function extractNewContent(tool, input) {
     if (!input) return '';
     if (tool === 'Write') return input.content || '';
-    if (tool === 'Edit') return input.new_string || '';
+    if (tool === 'Edit') {
+        const existing = readExistingFile(input.file_path);
+        if (existing === null || !input.old_string) return input.new_string || '';
+        if (input.replace_all) {
+            return existing.split(input.old_string).join(input.new_string || '');
+        }
+        const index = existing.indexOf(input.old_string);
+        if (index < 0) return input.new_string || '';
+        return existing.slice(0, index)
+            + (input.new_string || '')
+            + existing.slice(index + input.old_string.length);
+    }
     if (tool === 'MultiEdit') {
-        return (input.edits || [])
-            .map(e => e.new_string || '')
-            .join('\n\n');
+        let existing = readExistingFile(input.file_path);
+        if (existing === null) {
+            return (input.edits || []).map(edit => edit.new_string || '').join('\n\n');
+        }
+        for (const edit of input.edits || []) {
+            if (!edit.old_string || !existing.includes(edit.old_string)) {
+                return (input.edits || []).map(item => item.new_string || '').join('\n\n');
+            }
+            existing = edit.replace_all
+                ? existing.split(edit.old_string).join(edit.new_string || '')
+                : existing.replace(edit.old_string, edit.new_string || '');
+        }
+        return existing;
     }
     if (tool === 'NotebookEdit') return input.new_source || '';
     return '';
+}
+
+function readExistingFile(filePath) {
+    try {
+        return fs.readFileSync(filePath, 'utf8');
+    } catch {
+        return null;
+    }
+}
+
+function isDirectory(filePath) {
+    try {
+        return fs.statSync(filePath).isDirectory();
+    } catch {
+        return false;
+    }
+}
+
+function platformDirectory(filePath) {
+    const resolved = path.resolve(filePath);
+    const parts = resolved.split(path.sep);
+    const platformIndex = parts.lastIndexOf('platform');
+    if (platformIndex >= 0) {
+        return parts.slice(0, platformIndex + 1).join(path.sep) || path.sep;
+    }
+    if (path.basename(resolved) !== 'mod.rs') return null;
+    const sibling = path.join(path.dirname(resolved), 'platform');
+    return isDirectory(sibling) ? sibling : null;
+}
+
+function rustFiles(root, excludedDirectory, prospectiveFile) {
+    const files = [];
+    const visit = directory => {
+        let entries;
+        try {
+            entries = fs.readdirSync(directory, { withFileTypes: true });
+        } catch {
+            return;
+        }
+        for (const entry of entries) {
+            const file = path.join(directory, entry.name);
+            if (path.resolve(file) === path.resolve(excludedDirectory)) continue;
+            if (entry.isDirectory()) {
+                if (entry.name === 'tests' || entry.name === 'examples') continue;
+                visit(file);
+                continue;
+            }
+            if (entry.isFile() && file.endsWith('.rs')) files.push(file);
+        }
+    };
+    visit(root);
+    if (
+        prospectiveFile.endsWith('.rs') &&
+        prospectiveFile.startsWith(`${path.resolve(root)}${path.sep}`) &&
+        !prospectiveFile.startsWith(`${path.resolve(excludedDirectory)}${path.sep}`) &&
+        !files.some(file => path.resolve(file) === path.resolve(prospectiveFile))
+    ) {
+        files.push(prospectiveFile);
+    }
+    return files;
+}
+
+function productionContent(content) {
+    return content.split(/\n\s*#\[cfg\(test\)\]\s*\n\s*mod\s+tests\s*\{/)[0];
+}
+
+function prospectiveFileContent(candidate, filePath, newContent) {
+    if (path.resolve(candidate) === path.resolve(filePath)) return newContent;
+    return readExistingFile(candidate) || '';
+}
+
+function internalCallables(content) {
+    return [...content.matchAll(
+        /\bpub\s*\(\s*(?:crate|super|in\s+[^)]+)\s*\)\s+(?:async\s+)?fn\s+([A-Za-z_]\w*)/g,
+    )].map(match => match[1]);
+}
+
+function wordCount(content, name) {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return [...content.matchAll(new RegExp(`\\b${escaped}\\b`, 'g'))].length;
+}
+
+function adapterContent(platformDir, target, filePath, newContent) {
+    const flat = path.join(platformDir, `${target}.rs`);
+    const directory = path.join(platformDir, target);
+    if (fs.existsSync(flat) || path.resolve(flat) === path.resolve(filePath)) {
+        return prospectiveFileContent(flat, filePath, newContent);
+    }
+    if (!isDirectory(directory)) return '';
+    return rustFiles(directory, '', filePath)
+        .map(file => prospectiveFileContent(file, filePath, newContent))
+        .join('\n');
+}
+
+function findAdapterExclusiveHelpers(filePath, newContent) {
+    const platformDir = platformDirectory(filePath);
+    if (!platformDir) return [];
+    const featureDir = path.dirname(platformDir);
+    const parentFile = path.join(featureDir, 'mod.rs');
+    const parentContent = productionContent(
+        prospectiveFileContent(parentFile, filePath, newContent),
+    );
+    if (!parentContent) return [];
+
+    const sharedFiles = rustFiles(featureDir, platformDir, filePath);
+    const sharedContent = sharedFiles
+        .map(file => productionContent(prospectiveFileContent(file, filePath, newContent)))
+        .join('\n');
+    const adapters = new Map(
+        ['linux', 'macos', 'windows'].map(target => [
+            target,
+            adapterContent(platformDir, target, filePath, newContent),
+        ]),
+    );
+
+    return internalCallables(parentContent).flatMap(name => {
+        if (wordCount(sharedContent, name) > 1) return [];
+        const consumers = [...adapters]
+            .filter(([, content]) => wordCount(content, name) > 0)
+            .map(([target]) => target);
+        return consumers.length === 1 ? [{ name, target: consumers[0] }] : [];
+    });
+}
+
+function findNewAdapterExclusiveHelpers(filePath, newContent) {
+    const before = new Set(
+        findAdapterExclusiveHelpers(filePath, readExistingFile(filePath) || '')
+            .map(({ name, target }) => `${name}:${target}`),
+    );
+    return findAdapterExclusiveHelpers(filePath, newContent)
+        .filter(({ name, target }) => !before.has(`${name}:${target}`));
+}
+
+function blockAdapterExclusiveHelpers(filePath, violations) {
+    process.stderr.write(`qol-arch-cross-platform violation in ${filePath}.
+
+Found an adapter-exclusive shared helper:
+
+${violations.map(({ name, target }) => `  - ${name}: consumed only by ${target}`).join('\n')}
+
+A callable whose only non-test consumer is one OS adapter belongs inside that
+adapter, together with its tests. Shared parent modules contain only behavior
+used by shared production code or multiple adapters.
+
+Reference: qol-project:qol-arch-cross-platform skill.
+
+Bypass for this edit only:
+  touch .claude/bypass-qol-arch-cross-platform
+`);
 }
 
 function isExempt(filePath) {
@@ -221,29 +409,21 @@ function main() {
     const filePath = input.file_path || input.notebook_path || '';
     if (!filePath || !filePath.endsWith('.rs')) return 0;
     if (!QOL_TOOLS_PATH_RE.test(filePath)) return 0;
-    if (isExempt(filePath)) return 0;
-
     const cwd = payload.cwd || process.cwd();
     const marker = path.join(cwd, '.claude', 'bypass-qol-arch-cross-platform');
-    if (fs.existsSync(marker) && fs.statSync(marker).isFile()) {
-        try {
-            const raw = fs.readFileSync(marker, 'utf8').trim();
-            const count = /^\d+$/.test(raw) ? Number(raw) : 1;
-            if (count > 1) {
-                fs.writeFileSync(marker, String(count - 1));
-                log(`bypass consumed (${count - 1} remaining) — ${crossPlatformBasename(filePath)}`);
-            } else {
-                fs.unlinkSync(marker);
-                log(`bypass consumed (marker removed) — ${crossPlatformBasename(filePath)}`);
-            }
-        } catch {
-            // ignore — never block on bypass-marker IO failure
-        }
-        return 0;
+    const newContent = extractNewContent(tool, { ...input, file_path: filePath });
+    if (!newContent) return 0;
+
+    const adapterExclusive = findNewAdapterExclusiveHelpers(filePath, newContent);
+    if (adapterExclusive.length > 0) {
+        if (consumeBypass(marker, crossPlatformBasename(filePath))) return 0;
+        blockAdapterExclusiveHelpers(filePath, adapterExclusive);
+        return 2;
     }
 
-    const newContent = extractNewContent(tool, input);
-    if (!newContent) return 0;
+    if (isExempt(filePath)) return 0;
+
+    if (consumeBypass(marker, crossPlatformBasename(filePath))) return 0;
 
     const allowViolations = findAllowViolations(newContent);
     if (allowViolations.length > 0) {

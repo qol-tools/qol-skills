@@ -2,6 +2,8 @@
 
 const test = require('node:test');
 const assert = require('node:assert');
+const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
@@ -13,6 +15,21 @@ function run(payload) {
         encoding: 'utf8',
     });
     return { exitCode: result.status, stderr: result.stderr };
+}
+
+function fixtureFeature(parentContent, adapters) {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'qol-cross-platform-'));
+    const featureDir = path.join(root, 'qol-monorepo', 'libs', 'fixture', 'src', 'feature');
+    const platformDir = path.join(featureDir, 'platform');
+    fs.mkdirSync(platformDir, { recursive: true });
+    const parent = path.join(featureDir, 'mod.rs');
+    fs.writeFileSync(parent, parentContent);
+    for (const [relativePath, content] of Object.entries(adapters)) {
+        const file = path.join(platformDir, relativePath);
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        fs.writeFileSync(file, content);
+    }
+    return { parent, platformDir };
 }
 
 test('blocks #[allow(dead_code)] in non-platform shared file', () => {
@@ -116,6 +133,116 @@ test('passes cfg-on-use inside platform/', () => {
         },
     });
     assert.equal(r.exitCode, 0);
+});
+
+test('blocks helper whose only production consumer is one OS adapter', () => {
+    const { platformDir } = fixtureFeature(
+        [
+            'mod platform;',
+            '',
+            'pub(crate) fn parse_proc_version(text: &str) -> Option<String> {',
+            '    Some(text.to_string())',
+            '}',
+            '',
+            '#[cfg(test)]',
+            'mod tests {',
+            '    use super::parse_proc_version;',
+            '}',
+            '',
+        ].join('\n'),
+        {
+            'linux.rs': '',
+            'macos.rs': '',
+            'windows.rs': '',
+        },
+    );
+    const linux = path.join(platformDir, 'linux.rs');
+    const content = [
+        'use super::super::parse_proc_version;',
+        'pub(crate) fn loaded(text: &str) -> Option<String> { parse_proc_version(text) }',
+        '',
+    ].join('\n');
+    const r = run({
+        tool_name: 'Write',
+        tool_input: { file_path: linux, content },
+    });
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /adapter-exclusive shared helper/);
+    assert.match(r.stderr, /parse_proc_version.*linux/);
+});
+
+test('passes shared helper with a non-platform production consumer', () => {
+    const { platformDir } = fixtureFeature(
+        [
+            'mod platform;',
+            'pub(crate) fn normalize(text: &str) -> String { text.to_string() }',
+            'pub(crate) fn load(text: &str) -> String { normalize(text) }',
+            '',
+        ].join('\n'),
+        {
+            'linux.rs': '',
+            'macos.rs': '',
+            'windows.rs': '',
+        },
+    );
+    const linux = path.join(platformDir, 'linux.rs');
+    const content = [
+        'use super::super::normalize;',
+        'pub(crate) fn loaded(text: &str) -> String { normalize(text) }',
+        '',
+    ].join('\n');
+    const r = run({
+        tool_name: 'Write',
+        tool_input: { file_path: linux, content },
+    });
+    assert.equal(r.exitCode, 0, r.stderr);
+});
+
+test('blocks parent edit that creates a single-adapter helper leak', () => {
+    const { parent } = fixtureFeature(
+        'mod platform;\n',
+        {
+            'linux.rs': 'use super::super::parse_proc_version;\n',
+            'macos.rs': '',
+            'windows.rs': '',
+        },
+    );
+    const r = run({
+        tool_name: 'Edit',
+        tool_input: {
+            file_path: parent,
+            old_string: 'mod platform;\n',
+            new_string:
+                'mod platform;\npub(crate) fn parse_proc_version(text: &str) -> String { text.to_string() }\n',
+        },
+    });
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /parse_proc_version.*linux/);
+});
+
+test('does not block an unchanged legacy adapter-exclusive helper', () => {
+    const parentContent = [
+        'mod platform;',
+        'pub(crate) fn parse_proc_version(text: &str) -> String { text.to_string() }',
+        '',
+    ].join('\n');
+    const { parent } = fixtureFeature(
+        parentContent,
+        {
+            'linux.rs': 'use super::super::parse_proc_version;\n',
+            'macos.rs': '',
+            'windows.rs': '',
+        },
+    );
+    const r = run({
+        tool_name: 'Edit',
+        tool_input: {
+            file_path: parent,
+            old_string: 'mod platform;',
+            new_string: 'mod platform;',
+        },
+    });
+    assert.equal(r.exitCode, 0, r.stderr);
 });
 
 test('passes cfg-on-mod (canonical pattern, not on use)', () => {

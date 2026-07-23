@@ -59,6 +59,21 @@ function fixturePluginPath(relativePath, content) {
     return { root, pluginRoot, file };
 }
 
+function fixturePlatform(files) {
+    const { crateRoot } = fixtureCratePath('src/lib.rs', '');
+    const platformDir = path.join(crateRoot, 'src', 'feature', 'platform');
+    fs.mkdirSync(platformDir, { recursive: true });
+    for (const [relativePath, content] of Object.entries(files)) {
+        const file = path.join(platformDir, relativePath);
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        fs.writeFileSync(file, content);
+    }
+    return {
+        modFile: path.join(platformDir, 'mod.rs'),
+        platformDir,
+    };
+}
+
 test('blocks new Rust implementation modules at a plugin src root', () => {
     const { file } = fixturePluginPath('src/recording.rs');
     const r = run({
@@ -304,22 +319,31 @@ test('blocks cfg(all(target_os, feature)) gating non-OS module', () => {
 });
 
 test('passes canonical multi-line cfg + mod re-export pattern', () => {
+    const { modFile } = fixturePlatform({
+        'linux.rs': 'pub struct Platform;\n',
+        'macos.rs': 'pub struct Platform;\n',
+        'windows.rs': 'pub struct Platform;\n',
+    });
     const r = run({
         tool_name: 'Write',
         tool_input: {
-            file_path: '/x/Git/qol-monorepo/src/platform/mod.rs',
+            file_path: modFile,
             content:
-                '#[cfg(target_os = "linux")]\nmod linux;\n#[cfg(target_os = "linux")]\npub use linux::Platform;\n',
+                '#[cfg(target_os = "linux")]\npub use linux::Platform;\n#[cfg(target_os = "macos")]\npub use macos::Platform;\n#[cfg(target_os = "windows")]\npub use windows::Platform;\n',
         },
     });
-    assert.equal(r.exitCode, 0);
+    assert.equal(r.exitCode, 0, r.stderr);
 });
 
 test('passes edit fragment containing only a canonical cfg attr when full file is valid', () => {
-    const file = fixtureFile(
-        'foo/src/hotkeys/capture/platform/mod.rs',
-        '#[cfg(target_os = "linux")]\nmod linux;\n#[cfg(target_os = "linux")]\npub(crate) use linux::install;\n',
-    );
+    const content =
+        '#[cfg(target_os = "linux")]\npub(crate) use linux::install;\n#[cfg(target_os = "macos")]\npub(crate) use macos::install;\n#[cfg(target_os = "windows")]\npub(crate) use windows::install;\n';
+    const { modFile: file } = fixturePlatform({
+        'mod.rs': content,
+        'linux.rs': 'pub(crate) fn install() {}\n',
+        'macos.rs': 'pub(crate) fn install() {}\n',
+        'windows.rs': 'pub(crate) fn install() {}\n',
+    });
     const r = run({
         tool_name: 'Edit',
         tool_input: {
@@ -444,6 +468,164 @@ test('passes per-feature platform/ directory', () => {
         },
     });
     assert.equal(r.exitCode, 0);
+});
+
+test('blocks target-selection facade that omits an unsupported OS shim', () => {
+    const { modFile } = fixturePlatform({
+        'linux.rs': 'pub(super) fn run() {}\n',
+        'macos.rs': 'pub(super) fn run() {}\n',
+    });
+    const content = [
+        '#[cfg(target_os = "linux")]',
+        'pub(super) use linux::run;',
+        '#[cfg(target_os = "macos")]',
+        'pub(super) use macos::run;',
+        '',
+    ].join('\n');
+    const r = run({
+        tool_name: 'Write',
+        tool_input: { file_path: modFile, content },
+    });
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /missing target coverage: windows/);
+});
+
+test('passes explicit fallback shim for an unsupported OS', () => {
+    const { modFile } = fixturePlatform({
+        'linux.rs': 'pub(super) fn run() {}\n',
+        'macos.rs': 'pub(super) fn run() {}\n',
+        'unsupported.rs': 'pub(super) fn run() {}\n',
+    });
+    const content = [
+        '#[cfg(target_os = "linux")]',
+        'use linux as imp;',
+        '#[cfg(target_os = "macos")]',
+        'use macos as imp;',
+        '#[cfg(target_os = "windows")]',
+        'use unsupported as imp;',
+        '',
+        'pub(super) fn run() { imp::run() }',
+        '',
+    ].join('\n');
+    const r = run({
+        tool_name: 'Write',
+        tool_input: { file_path: modFile, content },
+    });
+    assert.equal(r.exitCode, 0, r.stderr);
+});
+
+test('blocks direct re-export surface drift between OS adapters', () => {
+    const { modFile } = fixturePlatform({
+        'linux.rs': 'pub(super) fn run() {}\npub(super) fn notify() {}\n',
+        'macos.rs': 'pub(super) fn run() {}\npub(super) fn notify() {}\n',
+        'windows.rs': 'pub(super) fn run() {}\npub(super) fn notify() {}\n',
+    });
+    const content = [
+        '#[cfg(target_os = "linux")]',
+        'pub(super) use linux::{notify, run};',
+        '#[cfg(target_os = "macos")]',
+        'pub(super) use macos::{notify, run};',
+        '#[cfg(target_os = "windows")]',
+        'pub(super) use windows::run;',
+        '',
+    ].join('\n');
+    const r = run({
+        tool_name: 'Write',
+        tool_input: { file_path: modFile, content },
+    });
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /callable surface differs/);
+    assert.match(r.stderr, /windows.*run/);
+});
+
+test('blocks fallback adapter that does not implement a facade consumer', () => {
+    const { modFile } = fixturePlatform({
+        'linux.rs': 'pub(super) fn run() {}\n',
+        'macos.rs': 'pub(super) fn run() {}\n',
+        'unsupported.rs': 'pub(super) fn unavailable() {}\n',
+    });
+    const content = [
+        '#[cfg(target_os = "linux")]',
+        'use linux as imp;',
+        '#[cfg(target_os = "macos")]',
+        'use macos as imp;',
+        '#[cfg(target_os = "windows")]',
+        'use unsupported as imp;',
+        '',
+        'pub(super) fn run() { imp::run() }',
+        '',
+    ].join('\n');
+    const r = run({
+        tool_name: 'Write',
+        tool_input: { file_path: modFile, content },
+    });
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /unsupported.*missing.*run/);
+});
+
+test('blocks adapter that omits a required trait method', () => {
+    const complete = [
+        'pub struct Platform;',
+        'impl super::WindowOps for Platform {',
+        '    fn run(&self) {}',
+        '    fn stop(&self) {}',
+        '}',
+        '',
+    ].join('\n');
+    const { modFile } = fixturePlatform({
+        'linux.rs': complete,
+        'macos.rs': complete,
+        'windows.rs': [
+            'pub struct Platform;',
+            'impl super::WindowOps for Platform {',
+            '    fn run(&self) {}',
+            '}',
+            '',
+        ].join('\n'),
+    });
+    const content = [
+        'pub trait WindowOps {',
+        '    fn run(&self);',
+        '    fn stop(&self);',
+        '}',
+        '#[cfg(target_os = "linux")]',
+        'pub use linux::Platform;',
+        '#[cfg(target_os = "macos")]',
+        'pub use macos::Platform;',
+        '#[cfg(target_os = "windows")]',
+        'pub use windows::Platform;',
+        '',
+    ].join('\n');
+    const r = run({
+        tool_name: 'Write',
+        tool_input: { file_path: modFile, content },
+    });
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /windows.*WindowOps::stop/);
+});
+
+test('does not block an unchanged legacy facade violation', () => {
+    const content = [
+        '#[cfg(target_os = "linux")]',
+        'pub(super) use linux::run;',
+        '#[cfg(target_os = "macos")]',
+        'pub(super) use macos::run;',
+        '',
+    ].join('\n');
+    const { modFile } = fixturePlatform({
+        'mod.rs': content,
+        'linux.rs': 'pub(super) fn run() {}\n',
+        'macos.rs': 'pub(super) fn run() {}\n',
+    });
+    const r = run({
+        tool_name: 'Edit',
+        tool_input: {
+            file_path: modFile,
+            old_string: 'pub(super) use linux::run;',
+            new_string: 'pub(super) use linux::run;',
+        },
+    });
+    assert.equal(r.exitCode, 0, r.stderr);
 });
 
 test('blocks OS-named files placed outside a platform/ directory', () => {

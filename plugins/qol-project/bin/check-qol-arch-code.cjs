@@ -46,6 +46,7 @@ const PLUGIN_ROOT_RUST_FILES = new Set(['main.rs', 'lib.rs', 'cli.rs']);
 const QOL_TRAY_ROOT_RUST_FILES = new Set(['main.rs', 'lib.rs']);
 const CATCH_ALL_SOURCE_DIRS = new Set(['common', 'helper', 'helpers', 'util', 'utils']);
 const OS_MODULE_NAMES = new Set(['linux', 'macos', 'windows']);
+const TARGET_OS_NAMES = ['linux', 'macos', 'windows'];
 const WEB_ASSET_EXTENSIONS = new Set([
     '.css',
     '.htm',
@@ -245,6 +246,7 @@ function findPluginLayoutViolation(filePath) {
 }
 
 const CANONICAL_TARGET = /^\s*(mod (linux|macos|windows);|pub(?:\([^)]*\))?\s+use (linux|macos|windows)::)/;
+const TARGET_ADAPTER_ALIAS = /^\s*(?:pub(?:\([^)]*\))?\s+)?use\s+[A-Za-z_]\w*\s+as\s+imp\s*;/;
 const ATTRIBUTE_LINE = /^\s*#\[/;
 const CFG_TARGET_OS = /#\[cfg\((not\(|all\(|any\()?target_os\s*=/;
 const SAMELINE_CANONICAL = /\]\s*(mod (linux|macos|windows);|pub(?:\([^)]*\))?\s+use (linux|macos|windows)::)/;
@@ -333,7 +335,7 @@ function applyMultiEdit(filePath, edits) {
     return current;
 }
 
-function findCfgViolations(content) {
+function findCfgViolations(content, allowTargetAdapterAlias = false) {
     const lines = content.split(/\r?\n/);
     const violations = [];
     let pending = null; // { lineno, text }
@@ -345,7 +347,10 @@ function findCfgViolations(content) {
             if (ATTRIBUTE_LINE.test(line)) {
                 continue; // stacked attributes — keep waiting
             }
-            if (CANONICAL_TARGET.test(line)) {
+            if (
+                CANONICAL_TARGET.test(line) ||
+                (allowTargetAdapterAlias && TARGET_ADAPTER_ALIAS.test(line))
+            ) {
                 pending = null;
                 continue;
             }
@@ -372,6 +377,261 @@ function findCfgViolations(content) {
         });
     }
     return violations;
+}
+
+function platformContext(filePath) {
+    const parts = path.resolve(filePath).split(path.sep);
+    const platformIndex = parts.lastIndexOf('platform');
+    if (platformIndex < 0) return null;
+    const platformDir = parts.slice(0, platformIndex + 1).join(path.sep) || path.sep;
+    const relativeParts = parts.slice(platformIndex + 1);
+    const target = OS_MODULE_NAMES.has(relativeParts[0]?.replace(/\.rs$/, ''))
+        ? relativeParts[0].replace(/\.rs$/, '')
+        : null;
+    return {
+        platformDir,
+        relativeParts,
+        target,
+        facade: relativeParts.length === 1 && relativeParts[0] === 'mod.rs',
+    };
+}
+
+function isOsAdapterFile(filePath) {
+    const context = platformContext(filePath);
+    return context !== null && context.target !== null;
+}
+
+function targetScopedUses(content) {
+    const lines = content.split(/\r?\n/);
+    const selections = new Map();
+    for (let i = 0; i < lines.length; i++) {
+        const cfg = lines[i];
+        if (!cfg.includes('target_os') || cfg.includes('not(')) continue;
+        const targets = [...cfg.matchAll(/target_os\s*=\s*"(linux|macos|windows)"/g)]
+            .map(match => match[1]);
+        if (targets.length === 0) continue;
+
+        let itemIndex = i + 1;
+        while (itemIndex < lines.length && /^\s*#\[/.test(lines[itemIndex])) itemIndex++;
+        const itemLines = [];
+        while (itemIndex < lines.length) {
+            itemLines.push(lines[itemIndex]);
+            if (lines[itemIndex].includes(';')) break;
+            itemIndex++;
+        }
+        const item = itemLines.join('\n');
+        const match = item.match(
+            /^\s*(?:pub(?:\([^)]*\))?\s+)?use\s+([A-Za-z_]\w*)(?:(::(?:\*|[A-Za-z_]\w*|\{[\s\S]*\}))|\s+as\s+([A-Za-z_]\w*))\s*;/,
+        );
+        if (!match) continue;
+        const moduleName = match[1];
+        const alias = match[3] || null;
+        const exports = exportedNames(match[2]);
+        for (const target of targets) {
+            const selection = selections.get(target) || {
+                moduleName,
+                alias,
+                exports: new Set(),
+            };
+            if (selection.moduleName !== moduleName) continue;
+            for (const name of exports) selection.exports.add(name);
+            if (alias) selection.alias = alias;
+            selections.set(target, selection);
+        }
+    }
+    return selections;
+}
+
+function exportedNames(pathSuffix) {
+    if (!pathSuffix) return [];
+    if (pathSuffix === '::*') return ['*'];
+    if (!pathSuffix.startsWith('::{')) return [pathSuffix.slice(2)];
+    return pathSuffix
+        .slice(3, -1)
+        .split(',')
+        .map(name => name.trim().split(/\s+as\s+/)[0])
+        .filter(Boolean);
+}
+
+function adapterSourcePath(platformDir, moduleName) {
+    const candidates = [
+        path.join(platformDir, `${moduleName}.rs`),
+        path.join(platformDir, moduleName, 'mod.rs'),
+    ];
+    return candidates.find(candidate => fs.existsSync(candidate)) || candidates[0];
+}
+
+function prospectiveContent(sourcePath, filePath, newContent) {
+    if (path.resolve(sourcePath) === path.resolve(filePath)) return newContent;
+    return readExistingFile(sourcePath);
+}
+
+function facadeConsumers(content) {
+    return new Set([...content.matchAll(/\bimp::([A-Za-z_]\w*)/g)].map(match => match[1]));
+}
+
+function sourceExposes(content, name) {
+    if (!content) return false;
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const declaration = new RegExp(
+        `\\bpub(?:\\([^)]*\\))?\\s+(?:(?:async|unsafe)\\s+)*(?:fn|struct|enum|type|const|static)\\s+${escaped}\\b`,
+    );
+    const reexport = new RegExp(`\\bpub(?:\\([^)]*\\))?\\s+use\\s+[^;]*\\b${escaped}\\b`);
+    return declaration.test(content) || reexport.test(content);
+}
+
+function bracedBody(content, openingBrace) {
+    let depth = 0;
+    for (let index = openingBrace; index < content.length; index++) {
+        if (content[index] === '{') depth++;
+        if (content[index] !== '}') continue;
+        depth--;
+        if (depth === 0) return content.slice(openingBrace + 1, index);
+    }
+    return null;
+}
+
+function traitRequirements(content) {
+    const requirements = new Map();
+    const declaration = /\btrait\s+([A-Za-z_]\w*)[^{]*\{/g;
+    for (const match of content.matchAll(declaration)) {
+        const openingBrace = match.index + match[0].lastIndexOf('{');
+        const body = bracedBody(content, openingBrace);
+        if (body === null) continue;
+        const methods = new Set();
+        const method = /\bfn\s+([A-Za-z_]\w*)\s*(?:<[^>{}]*>)?\s*\([^)]*\)[^{;]*(;|\{)/g;
+        for (const methodMatch of body.matchAll(method)) {
+            if (methodMatch[2] === ';') methods.add(methodMatch[1]);
+        }
+        if (methods.size > 0) requirements.set(match[1], methods);
+    }
+    return requirements;
+}
+
+function traitImplementationMethods(content, traitName) {
+    const escaped = traitName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const implementation = new RegExp(
+        `\\bimpl(?:\\s*<[^>{}]*>)?\\s+(?:(?:[A-Za-z_]\\w*)::)*${escaped}(?:\\s*<[^>{}]*>)?\\s+for\\b[^{}]*\\{`,
+        'g',
+    );
+    const methods = new Set();
+    let found = false;
+    for (const match of content.matchAll(implementation)) {
+        found = true;
+        const openingBrace = match.index + match[0].lastIndexOf('{');
+        const body = bracedBody(content, openingBrace);
+        if (body === null) continue;
+        for (const method of body.matchAll(/\bfn\s+([A-Za-z_]\w*)\b/g)) {
+            methods.add(method[1]);
+        }
+    }
+    return found ? methods : null;
+}
+
+function findPlatformFacadeViolations(filePath, newContent) {
+    const context = platformContext(filePath);
+    if (!context) return [];
+    const modFile = path.join(context.platformDir, 'mod.rs');
+    const modContent = prospectiveContent(modFile, filePath, newContent);
+    if (!modContent) return [];
+    const selections = targetScopedUses(modContent);
+    if (selections.size === 0) return [];
+
+    const violations = [];
+    const missingTargets = TARGET_OS_NAMES.filter(target => !selections.has(target));
+    if (missingTargets.length > 0) {
+        violations.push(`missing target coverage: ${missingTargets.join(', ')}`);
+        return violations;
+    }
+
+    const directSurfaces = TARGET_OS_NAMES.map(target => {
+        const selection = selections.get(target);
+        return [...selection.exports].sort().join(',');
+    });
+    if (
+        directSurfaces.some(surface => surface.length > 0) &&
+        new Set(directSurfaces).size > 1
+    ) {
+        violations.push(
+            `callable surface differs: ${TARGET_OS_NAMES
+                .map((target, index) => `${target}=[${directSurfaces[index]}]`)
+                .join(' ')}`,
+        );
+    }
+
+    const consumers = facadeConsumers(modContent);
+    const adapterSources = new Map();
+    for (const target of TARGET_OS_NAMES) {
+        const selection = selections.get(target);
+        const sourcePath = adapterSourcePath(context.platformDir, selection.moduleName);
+        const source = prospectiveContent(sourcePath, filePath, newContent);
+        adapterSources.set(target, { selection, source });
+        if (!source) {
+            violations.push(`${selection.moduleName} adapter is missing for ${target}`);
+            continue;
+        }
+        const required = new Set([
+            ...[...selection.exports].filter(name => name !== '*'),
+            ...(selection.alias === 'imp' ? consumers : []),
+        ]);
+        for (const name of required) {
+            if (!sourceExposes(source, name)) {
+                violations.push(`${selection.moduleName} adapter is missing ${name} for ${target}`);
+            }
+        }
+    }
+
+    for (const [traitName, requiredMethods] of traitRequirements(modContent)) {
+        const implementations = new Map(
+            [...adapterSources].map(([target, { source }]) => [
+                target,
+                source ? traitImplementationMethods(source, traitName) : null,
+            ]),
+        );
+        if (![...implementations.values()].some(methods => methods !== null)) continue;
+        for (const target of TARGET_OS_NAMES) {
+            const methods = implementations.get(target);
+            for (const method of requiredMethods) {
+                if (!methods?.has(method)) {
+                    violations.push(`${target} adapter is missing ${traitName}::${method}`);
+                }
+            }
+        }
+    }
+    return violations;
+}
+
+function platformViolationKind(violation) {
+    if (violation.startsWith('missing target coverage:')) return 'missing target coverage';
+    if (violation.startsWith('callable surface differs:')) return 'callable surface differs';
+    return violation;
+}
+
+function findNewPlatformFacadeViolations(filePath, newContent) {
+    const beforeContent = readExistingFile(filePath) || '';
+    const before = new Set(
+        findPlatformFacadeViolations(filePath, beforeContent).map(platformViolationKind),
+    );
+    return findPlatformFacadeViolations(filePath, newContent)
+        .filter(violation => !before.has(platformViolationKind(violation)));
+}
+
+function blockPlatformFacade(filePath, violations) {
+    process.stderr.write(`qol-arch-code violation in ${filePath}.
+
+The platform facade is incomplete:
+
+${violations.map(violation => `  - ${violation}`).join('\n')}
+
+Every target-selection facade must cover Linux, macOS, and Windows with a
+real adapter or an explicitly selected fallback. Every selected adapter must
+provide the same callable surface before a shared consumer is added.
+
+Reference: qol-project:qol-arch-code skill.
+
+Bypass for this edit only:
+  touch .claude/bypass-qol-arch-code
+`);
 }
 
 function isArchitectureBoundary(filePath, content) {
@@ -657,11 +917,10 @@ function main() {
     }
 
     if (OS_BASENAMES.has(basename)) {
-        if (parentDir !== 'platform') {
+        if (parentDir !== 'platform' && !isOsAdapterFile(filePath)) {
             blockOsFileOutsidePlatform(filePath);
             return 2;
         }
-        return 0;
     }
 
     if (consumeBypass(cwd, filePath, basename)) return 0;
@@ -669,12 +928,20 @@ function main() {
     const newContent = extractNewContent(tool, { ...input, file_path: filePath });
     if (!newContent) return 0;
 
+    const platformViolations = findNewPlatformFacadeViolations(filePath, newContent);
+    if (platformViolations.length > 0) {
+        blockPlatformFacade(filePath, platformViolations);
+        return 2;
+    }
+
+    if (isOsAdapterFile(filePath)) return 0;
+
     if (COMPILE_ERROR.test(newContent)) {
         blockCompileError(filePath);
         return 2;
     }
 
-    const violations = findCfgViolations(newContent);
+    const violations = findCfgViolations(newContent, platformContext(filePath)?.facade === true);
     if (violations.length > 0) {
         blockCfgViolations(filePath, violations);
         return 2;
