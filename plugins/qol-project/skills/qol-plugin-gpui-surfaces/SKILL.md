@@ -93,7 +93,11 @@ extend `settings_panel/` instead. What the kit module guarantees:
    select → dropdown (enter), string_array with `options` or `query` →
    multi-select dropdown, number → typed edit with min/max clamp,
    string/string_array → text edit, color → hex text edit with a live
-   swatch, action → dispatchable row, and list → query-backed live rows.
+   swatch, status → query-backed shared `StatusIndicator`, action →
+   dispatchable row, and list → query-backed live rows. Query-less actions
+   render as commands, never as a false `[off]` state. Query-backed actions
+   may use `label_map` keys `true` and `false` for semantic state labels;
+   semantic states stay neutral instead of inheriting boolean on/off colors.
    Unsupported kinds (object maps, ...) are skipped; the web page still shows
    them. `show_when` is evaluated from the current controller value by the
    shared row model; hidden rows leave both rendering and keyboard navigation
@@ -115,7 +119,9 @@ extend `settings_panel/` instead. What the kit module guarantees:
    polling state. Set `variant = "toggle"` when an action's active query is a
    stable on/off state; shared renderers then show the colored binary state
    without presenting it as ongoing work. Reserve the default active spinner
-   for operations that are actually in progress.
+   for operations that are actually in progress. A successful action refreshes
+   its `active_query` immediately; periodic polling remains the external-change
+   backstop.
 5. List row actions use `row_action` / `row_actions` in contract order. The
    first action whose `when` field is truthy is the primary action; Enter on an
    active list row dispatches it, interpolates its `input` from the row, and
@@ -145,6 +151,10 @@ extend `settings_panel/` instead. What the kit module guarantees:
    stays visible, so keyboard-first holds on any screen size.
 9. Colors come from `qol-theme`'s `SettingsPanelPalette`
    (`settings_panel_runtime()`) - every plugin panel looks the same.
+10. Multiple contract sections open through one shared section menu. Section
+    labels and descriptions come from the contract; Enter opens a section,
+    Escape returns to the section menu, and Escape there dismisses the panel.
+    Plugins do not create local category cards or navigation state.
 
 Contract field capabilities (options on string_array, query-backed
 selects) are documented in `qol-project:qol-shared-libs`.
