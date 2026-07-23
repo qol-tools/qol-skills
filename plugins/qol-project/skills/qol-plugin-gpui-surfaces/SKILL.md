@@ -152,9 +152,12 @@ extend `settings_panel/` instead. What the kit module guarantees:
 9. Colors come from `qol-theme`'s `SettingsPanelPalette`
    (`settings_panel_runtime()`) - every plugin panel looks the same.
 10. Multiple contract sections open through one shared section menu. Section
-    labels and descriptions come from the contract; Enter opens a section,
-    Escape returns to the section menu, and Escape there dismisses the panel.
-    Plugins do not create local category cards or navigation state.
+    labels and descriptions come from the contract; Enter or Right opens a
+    section. Inside a section, Left returns to the section menu unless the
+    selected control owns horizontal adjustment: number and select rows keep
+    Left/Right for their values. Escape is the universal back action, and
+    Escape from the section menu dismisses the panel. Plugins do not create
+    local category cards or navigation state.
 
 Contract field capabilities (options on string_array, query-backed
 selects) are documented in `qol-project:qol-shared-libs`.
