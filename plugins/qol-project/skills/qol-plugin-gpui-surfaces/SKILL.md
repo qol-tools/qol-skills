@@ -95,7 +95,9 @@ extend `settings_panel/` instead. What the kit module guarantees:
    string/string_array → text edit, color → hex text edit with a live
    swatch, action → dispatchable row, and list → query-backed live rows.
    Unsupported kinds (object maps, ...) are skipped; the web page still shows
-   them.
+   them. `show_when` is evaluated from the current controller value by the
+   shared row model; hidden rows leave both rendering and keyboard navigation
+   immediately when that value changes.
 3. All query-backed controls use the shared `SettingsRuntime`. Hosted panel
    persistence uses the tray config endpoint, while `SettingsRuntime::tray`
    sends queries and actions through the existing HTTP and action paths. If a
