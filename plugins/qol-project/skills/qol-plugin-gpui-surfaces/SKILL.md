@@ -101,7 +101,10 @@ extend `settings_panel/` instead. What the kit module guarantees:
    Unsupported kinds (object maps, ...) are skipped; the web page still shows
    them. `show_when` is evaluated from the current controller value by the
    shared row model; hidden rows leave both rendering and keyboard navigation
-   immediately when that value changes.
+   immediately when that value changes. Query-backed option objects may carry
+   an optional RGB `accent`; shared renderers preserve that generic decoration,
+   while the producing domain owns its meaning. Never teach `qol-gpui` about
+   provider, device, session, or tool identities.
 3. All query-backed controls use the shared `SettingsRuntime`. Hosted panel
    persistence uses the tray config endpoint, while `SettingsRuntime::tray`
    sends queries and actions through the existing HTTP and action paths. If a

@@ -43,9 +43,12 @@ If no owner exists, name the capability and its expected consumers before creati
 - Scope platform-only dependencies under target-specific Cargo tables.
 - Reuse workspace dependency declarations when the root manifest owns a shared version.
 - Do not add a dependency merely because another plugin happens to use it; confirm the same purpose and boundary.
+- Keep plugins independent: a plugin must not depend on or query another plugin for reusable domain facts or operations. Put the neutral capability contract in `libs/`, make each plugin consume it directly, and keep each plugin's selection, lifecycle, presentation, and product policy local.
 - Remove unused dependencies rather than preserving future intent in prose.
 
 Shared libraries and consumers land atomically in the monorepo. Do not invent a publish/push sequence for workspace path dependencies.
+
+`qol-terminal-sessions` owns backend-neutral live terminal identity, discovery, screen reading, focus, text input, and extensible CLI-session interpretation. Interpretation must have a generic fallback and registered tool-specific enrichers so consumers do not branch independently on Codex, Claude, or future CLI tools. When a tool exposes a stable metadata event source, its strategy must also expose changes through a shared subscription; consumers must not add independent polling loops. Generic sessions may remain query-only when no stable event source exists. Terminal dashboard/attention policy remains local to CLI Sessions; recognition, routing, and conversation policy remain local to Voice. Neither plugin may become the other's runtime broker.
 
 ## Plugin contract ownership
 
