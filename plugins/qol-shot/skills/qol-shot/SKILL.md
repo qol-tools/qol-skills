@@ -33,6 +33,7 @@ Keep OS implementation files under `platform/<os>/`; keep cross-platform capture
 ## Capture lifecycle invariants
 
 - Screenshot and recording actions are idempotent and serialize ownership of native capture resources.
+- The daemon record action remains a toggle during its visible countdown. A second invocation aborts the countdown before capture state, processes, or output exist, then reports cancellation through the shared capture-status surface.
 - Cancellation, failure, daemon shutdown, and normal completion all remove overlays, release input grabs, and restore desktop state.
 - Selection geometry is converted through explicit coordinate spaces; never mix logical, physical, desktop, and display-local coordinates implicitly.
 - Output paths are validated and created atomically; clipboard/toast failures do not corrupt a successful capture.
