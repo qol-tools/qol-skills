@@ -18,6 +18,7 @@ and toasts remain plugin-owned.
 | --- | --- | --- |
 | `Surface` builder | `surface.rs` | Window creation for `SurfaceKind::Toast` (PopUp, unfocused, corner-anchored, optional timeout) and `SurfaceKind::Panel` (Normal, focused, monitor-centered, designed-size locked) |
 | `SurfaceDismisser` | `surface.rs` | Close from anywhere (key handler, click, timer). Deferred out of event dispatch - see invariants |
+| `Toast` + `ToastHost` | `toast.rs` | Theme-backed passive messages with semantic tones, timed or persistent lifetime, optional activation, replacement, and dismissal |
 | `SettingsWindowHost` | `settings_panel/` | Retains exactly one settings window and implements open, focus-same-plugin, replace-with-another-plugin, and park/reveal across Escape |
 | `SettingsRuntime::tray` | `settings_panel/` | Routes hosted runtime queries and actions through qol-tray's existing HTTP API |
 | `settings_panel::open` / `run_standalone` | `settings_panel/` | Plugin-owned fallback entrypoints for code already running GPUI or starting a standalone GPUI app |
@@ -27,6 +28,15 @@ and toasts remain plugin-owned.
 `Surface::show_focused` is for interactive panels (`Render + Focusable`),
 `Surface::show` for passive toasts. Both hand the view a
 `SurfaceDismisser`.
+
+Use `Toast` to describe passive feedback and retain a `ToastHost` for
+presentation. `ToastHost` owns window identity, in-place content replacement,
+timeouts, dismissal, and the hidden-window barrier needed before capture.
+Plugins own only message content, semantic tone, activation behavior, and
+domain trace context. A shared-toast extraction is incomplete while a consumer
+still owns a parallel status renderer, timeout generation, or window adapter.
+Headless plugins request a host-owned toast route instead of starting a GPUI
+application solely for feedback.
 
 `SurfaceKind::Panel` is the single window-behavior contract for ordinary QoL
 GPUI panels: the declared size is fixed against user resize/maximize, the

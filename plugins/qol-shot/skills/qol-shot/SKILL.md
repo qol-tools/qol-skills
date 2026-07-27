@@ -24,9 +24,9 @@ Never keep a second action/platform/tool inventory in this skill.
 | `src/app/` | Daemon/action orchestration. |
 | `src/capture/` | Platform-neutral capture lifecycle, geometry, output, recording/screenshot operations, frozen-frame flow, and completion. |
 | `src/config/` | Contract-backed capture settings. |
-| `src/platform/` | Target-selected native capture, display, clipboard, selector, conversion, status, and system integration. |
+| `src/platform/` | Target-selected native capture, display, clipboard, selector, conversion, and system integration. |
 | `src/platform/macos_swift/` | Swift implementation compiled as part of the macOS adapter. |
-| `src/ui/` | GPUI selector, preview, pinned image, status, toast, settings fallback, and shortcuts. |
+| `src/ui/` | GPUI selector, preview, pinned image, capture-status adapter, settings fallback, and shortcuts. Shared transient-surface rendering lives in `qol-gpui`. |
 
 Keep OS implementation files under `platform/<os>/`; keep cross-platform capture policy in `capture/` and UI behavior in `ui/`.
 
@@ -41,7 +41,18 @@ Keep OS implementation files under `platform/<os>/`; keep cross-platform capture
 
 ## GPUI surface rules
 
-Preview, pinned, selector, status, and toast surfaces share the qol-gpui surface boundary. A retained or keepalive window must be compositor-safe, non-focusable when hidden, absent from Alt-Tab, and never appear as an empty black/transparent desktop window.
+Preview, pinned, and selector surfaces share the qol-gpui surface boundary.
+Capture and recording status messages use the shared `Toast` and `ToastHost`;
+qol-shot owns only stage policy, semantic tone, safety-barrier invocation, and
+trace context. A retained or keepalive window must be compositor-safe,
+non-focusable when hidden, absent from Alt-Tab, and never appear as an empty
+black/transparent desktop window.
+
+Selector viewport bounds and physical monitor bounds are distinct coordinate
+spaces. Every monitor-relative transient uses the shared `qol-gpui` placement
+contract with physical monitor bounds, then converts the result to window-local
+coordinates when rendering inside an overlay. A spanning selector viewport is
+never a monitor.
 
 Use `qol-project:qol-plugin-gpui-surfaces` and `qol-langs:gpui-conventions`; verify cold and retained reveal in the compositor-backed environment.
 
