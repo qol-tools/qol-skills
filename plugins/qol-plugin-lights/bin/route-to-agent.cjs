@@ -1,8 +1,12 @@
 #!/usr/bin/env node
 /*
- * PreToolUse hook: force edits inside the plugin-lights repo through the
- * specialist subagent. Mirrors qol-host's route-to-agent, but scoped to
- * plugin-lights paths only.
+ * PreToolUse hook: force edits to the plugin-lights source through the
+ * specialist subagent. Mirrors qol-host's route-to-agent, but scoped to the
+ * plugin that declares this id.
+ *
+ * Scope is resolved from the nearest ancestor `plugin.toml` and its declared
+ * `[plugin] id`, never from a directory name: manifests own plugin identity
+ * independently of the source directory they sit in.
  *
  * Bypass:
  *   touch .claude/bypass-agent-routing
@@ -17,6 +21,9 @@ const path = require('node:path');
 const INSPECTED_TOOLS = new Set(['Edit', 'Write', 'NotebookEdit']);
 const HOOK_OWNED_SUFFIXES = ['/MEMORY.md', '/.reflect-last.log', '/README.md', '/CHANGELOG.md'];
 const SCOPED_TOML_BASENAMES = new Set(['plugin.toml', 'qol-config.toml', 'qol-runtime.toml', 'Cargo.toml']);
+const SCOPED_SUBDIRS = new Set(['src', 'ui', 'tests']);
+const MANIFEST = 'plugin.toml';
+const PLUGIN_ID = 'plugin-lights';
 const AGENT = 'qol-plugin-lights:plugin-lights';
 
 function readStdin() {
@@ -31,12 +38,45 @@ function log(msg) {
     process.stderr.write(`[plugin-lights/route-to-agent] ${msg}\n`);
 }
 
+function manifestDir(filePath) {
+    let dir = path.dirname(path.resolve(filePath));
+    for (;;) {
+        if (fs.existsSync(path.join(dir, MANIFEST))) return dir;
+        const parent = path.dirname(dir);
+        if (parent === dir) return null;
+        dir = parent;
+    }
+}
+
+function declaredId(manifestPath) {
+    let raw;
+    try {
+        raw = fs.readFileSync(manifestPath, 'utf8');
+    } catch {
+        return null;
+    }
+    let inPluginSection = false;
+    for (const line of raw.split(/\r?\n/)) {
+        const header = line.match(/^\s*\[([^\]]+)\]/);
+        if (header) {
+            inPluginSection = header[1].trim() === 'plugin';
+            continue;
+        }
+        if (!inPluginSection) continue;
+        const declared = line.match(/^\s*id\s*=\s*["']([^"']+)["']/);
+        if (declared) return declared[1];
+    }
+    return null;
+}
+
 function inScope(filePath) {
-    if (!filePath.includes('/plugin-lights/')) return false;
-    if (filePath.includes('/plugin-lights/src/')) return true;
-    if (filePath.includes('/plugin-lights/ui/')) return true;
-    if (filePath.includes('/plugin-lights/tests/')) return true;
-    return SCOPED_TOML_BASENAMES.has(path.basename(filePath));
+    const root = manifestDir(filePath);
+    if (!root) return false;
+    if (declaredId(path.join(root, MANIFEST)) !== PLUGIN_ID) return false;
+    const rel = path.relative(root, path.resolve(filePath));
+    if (!rel || rel.startsWith('..')) return false;
+    if (SCOPED_TOML_BASENAMES.has(path.basename(rel))) return true;
+    return SCOPED_SUBDIRS.has(rel.split(path.sep)[0]);
 }
 
 function consumeBypass(marker) {

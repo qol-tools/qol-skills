@@ -1,8 +1,12 @@
 #!/usr/bin/env node
 /*
- * PreToolUse hook: force edits inside the plugin-alt-tab repo through the
- * specialist subagent. Mirrors qol-host's route-to-agent, but scoped to
- * plugin-alt-tab paths only.
+ * PreToolUse hook: force edits to the plugin-alt-tab source through the
+ * specialist subagent. Mirrors qol-host's route-to-agent, but scoped to the
+ * plugin that declares this id.
+ *
+ * Scope is resolved from the nearest ancestor `plugin.toml` and its declared
+ * `[plugin] id`, never from a directory name: manifests own plugin identity
+ * independently of the source directory they sit in.
  *
  * Bypass:
  *   touch .claude/bypass-agent-routing          # single Edit pass
@@ -16,6 +20,10 @@ const path = require('node:path');
 
 const INSPECTED_TOOLS = new Set(['Edit', 'Write', 'NotebookEdit']);
 const HOOK_OWNED_SUFFIXES = ['/MEMORY.md', '/.reflect-last.log', '/README.md', '/CHANGELOG.md'];
+const SCOPED_TOML_BASENAMES = new Set(['plugin.toml', 'Cargo.toml']);
+const SCOPED_SUBDIRS = new Set(['src', 'ui', 'tests']);
+const MANIFEST = 'plugin.toml';
+const PLUGIN_ID = 'plugin-alt-tab';
 const AGENT = 'qol-plugin-alt-tab:plugin-alt-tab';
 
 function readStdin() {
@@ -30,15 +38,45 @@ function log(msg) {
     process.stderr.write(`[plugin-alt-tab/route-to-agent] ${msg}\n`);
 }
 
+function manifestDir(filePath) {
+    let dir = path.dirname(path.resolve(filePath));
+    for (;;) {
+        if (fs.existsSync(path.join(dir, MANIFEST))) return dir;
+        const parent = path.dirname(dir);
+        if (parent === dir) return null;
+        dir = parent;
+    }
+}
+
+function declaredId(manifestPath) {
+    let raw;
+    try {
+        raw = fs.readFileSync(manifestPath, 'utf8');
+    } catch {
+        return null;
+    }
+    let inPluginSection = false;
+    for (const line of raw.split(/\r?\n/)) {
+        const header = line.match(/^\s*\[([^\]]+)\]/);
+        if (header) {
+            inPluginSection = header[1].trim() === 'plugin';
+            continue;
+        }
+        if (!inPluginSection) continue;
+        const declared = line.match(/^\s*id\s*=\s*["']([^"']+)["']/);
+        if (declared) return declared[1];
+    }
+    return null;
+}
+
 function inScope(filePath) {
-    if (!filePath.includes('/plugin-alt-tab/')) return false;
-    return (
-        filePath.includes('/plugin-alt-tab/src/') ||
-        filePath.includes('/plugin-alt-tab/ui/') ||
-        filePath.includes('/plugin-alt-tab/tests/') ||
-        filePath.endsWith('/plugin.toml') ||
-        filePath.endsWith('/Cargo.toml')
-    );
+    const root = manifestDir(filePath);
+    if (!root) return false;
+    if (declaredId(path.join(root, MANIFEST)) !== PLUGIN_ID) return false;
+    const rel = path.relative(root, path.resolve(filePath));
+    if (!rel || rel.startsWith('..')) return false;
+    if (SCOPED_TOML_BASENAMES.has(path.basename(rel))) return true;
+    return SCOPED_SUBDIRS.has(rel.split(path.sep)[0]);
 }
 
 function consumeBypass(marker) {
