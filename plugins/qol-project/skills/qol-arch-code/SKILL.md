@@ -115,6 +115,7 @@ Rules:
 - `--json` is valid only for commands that explicitly register a structured JSON interface.
 - Reject `--json` before running a command that does not support structured output.
 - `doctor` must support JSON because host doctor aggregation depends on it.
+- A plugin that ships `doctor` declares it in its manifest capabilities; that declaration is what makes the host aggregate the plugin. Manifest validation rejects the declaration unless the plugin also declares a standalone `[runtime]` command to invoke.
 - Normal human output goes to stdout; diagnostics, progress, and logs go to stderr.
 - JSON mode prints parseable JSON to stdout and nothing else to stdout.
 - Successful user cancellation (for example pressing Esc during selection) exits `0`; operational failures exit non-zero with an actionable message.
@@ -193,7 +194,10 @@ runtime_dirs
 external_services
 ```
 
-Use this JSON shape for host aggregation:
+`qol-headless` owns the serialized doctor contract - the report, per-check,
+per-plugin, and aggregate types plus the status enum. Serialize those types
+rather than hand-rolling the payload, and read that module for the
+authoritative field set; the shape below only illustrates it:
 
 ```json
 {
@@ -210,7 +214,7 @@ Use this JSON shape for host aggregation:
 }
 ```
 
-`qol-tray doctor` should be able to invoke each installed plugin's `doctor --json` command and render per-plugin results without hardcoding plugin-specific diagnostic logic in the host.
+`qol-tray doctor` invokes each installed plugin's `doctor --json` command and renders per-plugin results without hardcoding plugin-specific diagnostic logic in the host. The `qol` CLI's `doctor` command is a front door onto that same host aggregate, not a second implementation - keep new diagnostics in the host or the owning plugin so both entry points inherit them.
 
 ## Required structure
 
