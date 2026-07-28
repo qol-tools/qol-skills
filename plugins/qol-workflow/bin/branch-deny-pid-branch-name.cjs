@@ -3,13 +3,13 @@
  * PreToolUse hook (Bash matcher): block creation of a PID-prefixed git branch
  * name inside a qol-tools repo.
  *
- * Rule: coordinated work across qol-tray and one or more plugin repos must
- * share a single topic-led branch name (e.g. `wasm`, `theming`). qol-tray's
- * Active Worktree Branch picker (Settings -> dev) applies one branch name to
- * every dev-linked plugin repo at runtime, falling back to `main` when a
- * given plugin has no matching worktree. A PID-prefixed branch name
- * (`tray-32-foo`, `alttab-2-bar`) cannot serve this role because the PID is
- * qol-tray-specific and no plugin repo will ever carry a matching branch.
+ * Rule: coordinated work must share a single topic-led branch name (e.g.
+ * `wasm`, `theming`). qol-tray's Active Worktree Branch picker (Settings ->
+ * dev) applies one branch name to every dev-linked path at runtime, remapping
+ * each to the git worktree that carries that branch and falling back to the
+ * link's own checkout when none does. A PID-prefixed branch name
+ * (`tray-32-foo`, `alttab-2-bar`) cannot serve this role: the PID belongs to
+ * one session, so no shared worktree will ever carry a matching branch.
  *
  * Detected creation forms:
  *   - `git checkout -b/-B <NAME>`
