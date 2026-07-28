@@ -69,6 +69,22 @@
     {
       "id": "qol-plugin-controllers",
       "source": "./plugins/qol-plugin-controllers"
+    },
+    {
+      "id": "qol-plugin-bluetooth",
+      "source": "./plugins/qol-plugin-bluetooth"
+    },
+    {
+      "id": "qol-plugin-cli-sessions",
+      "source": "./plugins/qol-plugin-cli-sessions"
+    },
+    {
+      "id": "qol-plugin-removeapp",
+      "source": "./plugins/qol-plugin-removeapp"
+    },
+    {
+      "id": "qol-voice",
+      "source": "./plugins/qol-voice"
     }
   ]
 }

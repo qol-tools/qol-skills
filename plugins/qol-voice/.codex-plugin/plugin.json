@@ -1,0 +1,9 @@
+{
+  "name": "qol-voice",
+  "description": "Skills for the qol-voice plugin: speech capture, engine-neutral transcription, turn coordination, and routing to terminal sessions.",
+  "version": "0.1.0",
+  "author": {
+    "name": "KMRH47"
+  },
+  "skills": "./skills/"
+}

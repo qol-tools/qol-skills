@@ -207,6 +207,54 @@
         "authentication": "ON_INSTALL"
       },
       "category": "Productivity"
+    },
+    {
+      "name": "qol-plugin-bluetooth",
+      "source": {
+        "source": "local",
+        "path": "./plugins/qol-plugin-bluetooth"
+      },
+      "policy": {
+        "installation": "INSTALLED_BY_DEFAULT",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "qol-plugin-cli-sessions",
+      "source": {
+        "source": "local",
+        "path": "./plugins/qol-plugin-cli-sessions"
+      },
+      "policy": {
+        "installation": "INSTALLED_BY_DEFAULT",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "qol-plugin-removeapp",
+      "source": {
+        "source": "local",
+        "path": "./plugins/qol-plugin-removeapp"
+      },
+      "policy": {
+        "installation": "INSTALLED_BY_DEFAULT",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "qol-voice",
+      "source": {
+        "source": "local",
+        "path": "./plugins/qol-voice"
+      },
+      "policy": {
+        "installation": "INSTALLED_BY_DEFAULT",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
     }
   ]
 }
