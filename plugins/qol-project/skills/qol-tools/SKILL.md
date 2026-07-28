@@ -85,7 +85,7 @@ Plugins remain separate executables loaded by the host at runtime; they are neve
 
 - **No comments in code** unless a comment explains a non-obvious WHY (see `coding-general`). Rare.
 - **No emojis in code or commits** unless explicitly requested.
-- **No builds or tests unless asked.** Do not run `cargo build`, `cargo test`, `make`, etc. — they're expensive, and user has their own workflow.
+- **Verify before reporting done.** The workspace `CLAUDE.md` owns the build/test/fmt/clippy rule; follow it there and show real command output instead of assuming a result.
 - **No automatic pushing.** Commit locally. Push when asked.
 - **Keyboard-first UI.** Every interaction must work via keyboard before mouse is considered.
 - **Deep modules over shallow.** Hide complexity behind clean APIs; max ~50 lines per function as guidance.
@@ -106,6 +106,7 @@ Any prose written into the qol-tools world (CLAUDE.md, SKILL.md, README, commit 
 | `plugin-alt-tab, plugin-launcher, plugin-lights, ...` | "each release unit under `plugins/*`" |
 | `qol-config + qol-plugin-api + qol-runtime` | "workspace members under `libs/`" |
 | `the 3 file migrations: v3.15->v3.16, v3.16->v3.17, v3.17->v3.18` | "every migration registered in `PreFlightRegistry::current()`" |
+| a plugin's source directory, named as a literal path | "the `plugins/*` directory whose manifest declares `id = \"plugin-lights\"`" - manifests own plugin identity, directory names do not |
 | `` `OLDEST_SUPPORTED = 3.15.0` `` | "below `OLDEST_SUPPORTED` (slides per release)" |
 | ``active branch is `world-canvas-overhaul` `` | omit, or point at `docs/superpowers/` for live state |
 | `as of qol-config 1.3.0` | omit, or "the API selected by the workspace" |
@@ -121,6 +122,7 @@ Two corollaries:
 
 This rule applies to every skill in `qol-skills/`. The deterministic audit is
 `node scripts/check-skill-invariants.cjs --check`. It catches temporal status,
-fixed inventories, copied manifest fields, dated verification, and mutable
-component versions outside code examples. Treat any failure as a prompt to
-point at an owning source or express a durable condition.
+fixed inventories, copied manifest fields, dated verification, mutable
+component versions outside code examples, and plugin source directory paths.
+Treat any failure as a prompt to point at an owning source or express a
+durable condition.

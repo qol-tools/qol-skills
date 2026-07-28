@@ -17,7 +17,7 @@ This applies to every repository in the qol-tools workspace.
 
 ## Mandatory Rule
 
-The `qol-cicd` repo continuously automates all `qol-*` repos and related workspace repos.
+Each workspace repo runs its own GitHub Actions that commit and push to `main` on their own schedule - version bumps and manifest sync land as bot commits without any local session involved. Concurrent local sessions also commit to `main`.
 
 Because of that, always run `git pull --rebase` before `git push`.
 
