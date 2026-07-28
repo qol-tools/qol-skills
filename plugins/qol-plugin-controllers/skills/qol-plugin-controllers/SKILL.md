@@ -16,7 +16,7 @@ Keep the Controllers plugin's native hardware knowledge separate from qol-tray's
 
 | Area | Owner |
 | --- | --- |
-| Native detection, driver fixes, evdev supplementation, and Linux Bluetooth metadata | `plugins/plugin-controllers/` |
+| Native detection, driver fixes, evdev supplementation, and Linux Bluetooth metadata | the `plugin-controllers` plugin source |
 | Generic `type = "gamepad"` rendering, browser monitoring, profiles, haptics, and presentation | `apps/qol-tray/ui/views/plugin-config/fields/` |
 | Controller illustration geometry | `apps/qol-tray/ui/assets/gamepad-*` |
 | Gamepad styling | `apps/qol-tray/ui/styles/plugin-config.css` |

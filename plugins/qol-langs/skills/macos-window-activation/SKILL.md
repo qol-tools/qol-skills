@@ -133,4 +133,4 @@ A focus bug is "sometimes" by nature. Make it deterministic:
 ## See also
 
 - `gpui-conventions` → "Eagerly stealing OS window focus" (focusing your *own* popup: `window.focus` + `window.activate_window`), "Blur fires immediately on PopUp windows".
-- `plugin-alt-tab/CLAUDE.md` → ghost-popup placement, AX stall/cache/parallel, daemon-backed picker.
+- The `CLAUDE.md` in the `plugin-alt-tab` plugin source → ghost-popup placement, AX stall/cache/parallel, daemon-backed picker.

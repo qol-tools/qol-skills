@@ -5,7 +5,7 @@ description: Use when working on the qol-tray PointZ desktop server plugin. Cove
 
 # qol-plugin-pointz
 
-PointZ is the desktop daemon for remote mouse and keyboard control from the separate PointZ mobile client. The Rust binary is `pointzerver` and the plugin source lives under `plugins/plugin-pointz` in the monorepo.
+PointZ is the desktop daemon for remote mouse and keyboard control from the separate PointZ mobile client. The Rust binary is `pointzerver` and the plugin source is the `plugins/*` directory whose manifest declares `id = "plugin-pointz"`.
 
 ## Runtime contract
 

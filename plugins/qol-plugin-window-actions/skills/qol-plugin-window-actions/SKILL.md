@@ -5,7 +5,7 @@ description: Use when working on the qol-tray Window Actions plugin, including s
 
 # Window Actions
 
-Work in `plugins/plugin-window-actions` from the qol-monorepo root. Treat
+Work in the `plugins/*` directory whose manifest declares `id = "plugin-window-actions"`, from the qol-monorepo root. Treat
 `plugin.toml` as the source of truth for supported platforms, runtime commands,
 actions, daemon configuration, and which actions are continuous.
 

@@ -1,11 +1,11 @@
 ---
 name: qol-plugin-template
-description: Use when bootstrapping a new qol-tray plugin from plugins/plugin-template or updating the template. Covers source-driven customization, contract identity, architecture growth, shared settings, platform adapters, and verification.
+description: Use when bootstrapping a new qol-tray plugin from the template plugin or updating that template. Covers source-driven customization, contract identity, architecture growth, shared settings, platform adapters, and verification.
 ---
 
 # qol-plugin-template
 
-`plugins/plugin-template/` is the canonical scaffold. Its checked-out files are the source of truth for baseline layout, dependencies, workflows, Make targets, contract syntax, and validation; this skill must not duplicate that inventory.
+The `plugins/*` directory whose manifest declares `id = "plugin-template"` is the canonical scaffold. Its checked-out files are the source of truth for baseline layout, dependencies, workflows, Make targets, contract syntax, and validation; this skill must not duplicate that inventory.
 
 ## Bootstrap procedure
 

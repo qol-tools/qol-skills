@@ -44,7 +44,7 @@ when a newer version is available, then `Quit`. There are no per-plugin tray ite
   tray-owned settings host first; all other actions use **daemon-socket
   dispatch first, runtime-binary fallback.**
 - Source resolution unifies installed, dev-linked, and worktree-linked plugins through the registry (`src/plugins/registry/` + `resolver.rs`). The `SlotSource` variants and the per-slot fallback are defined there - read the enum, never memorize a list. Dev-link/worktree resolution is `#[cfg(feature = "dev")]`-gated; prod resolves installed plugins only.
-- A plugin's id derives from its directory name.
+- A plugin's id is whatever `[plugin].id` declares in its manifest; the manifest is the identity authority (`require_declared_id` rejects an absent or malformed id). Directory names - source or installed - carry no identity. To find a plugin, read manifests and match the declared id; never match a directory name.
 - **When a `SlotSource` variant is added, audit every `matches!(source, ...)` branch** - the autostart guard, the execution-contract binary search, and the profile-sync-lock filter each special-case the source. A missed branch silently mis-handles the new kind.
 
 ## Plugin manifest (`plugin.toml`)
