@@ -80,6 +80,14 @@ Plugins remain separate executables loaded by the host at runtime; they are neve
 | Any code, universal | `coding-general` |
 | Worktree workflow | `git-trees` |
 | Pushing | `git-push` |
+| Plugin/lib source ownership, platform splits, headless CLI and doctor contracts | `qol-arch-code` |
+| Symbol/import hygiene across target platforms | `qol-arch-cross-platform` |
+| CI/release workflow contracts for cross-platform builds | `qol-arch-cicd` |
+| Host/plugin communication channels | `qol-arch-channels` |
+| The `qol` CLI's ownership model and command sources | `qol-cli` |
+| Verifying runtime desktop behavior in a guest VM | `qol-dev-environments` |
+| Runtime trace targets and logging discipline | `qol-trace-discipline` |
+| Improving a workspace standard (encode before applying) | `standards-evolution` |
 
 ## Key conventions to remember
 
