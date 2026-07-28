@@ -69,6 +69,35 @@ test("ignores examples and constants inside code spans and fenced blocks", () =>
   assert.deepEqual(violations, []);
 });
 
+test("flags foreign plugin source directories however they are written", () => {
+  const cases = [
+    "Work in `plugins/plugin-window-actions` here.",
+    "Work in `plugins/lights/src/main.rs` here.",
+    "Bare plugins/lights/src path in prose.",
+    "See [tpl](plugins/plugin-template/README.md).",
+  ];
+
+  for (const line of cases) {
+    assert.deepEqual(
+      scanText(line, new Set(["qol-project"])).map((violation) => violation.rule),
+      ["plugin-directory-path"],
+      `line: ${line}`,
+    );
+  }
+});
+
+test("allows the plugins glob, this repo's own layout, and non-path prose", () => {
+  const violations = scanText([
+    "Each release unit under `plugins/*` carries a manifest.",
+    "Source resolution lives in `src/plugins/registry/`.",
+    "Our own skill sits at `plugins/qol-project/skills/qol-cli/SKILL.md`.",
+    "Rust plugins/libs need clean source ownership.",
+    "Plugins live under `plugins/` in the workspace.",
+  ].join("\n"), new Set(["qol-project"]));
+
+  assert.deepEqual(violations, []);
+});
+
 test("audits every maintained skill and emits relative paths", () => {
   const root = makeSkillRoot("---\nname: alpha\ndescription: Alpha.\n---\n\nThere are three plugins.\n");
   const report = audit(root);

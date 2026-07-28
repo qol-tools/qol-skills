@@ -72,6 +72,20 @@ const RULES = [
   },
 ];
 
+// Plugin manifests own plugin identity; a source directory name does not.
+// Naming a foreign `plugins/<dir>/` path freezes a rename into prose, so point
+// at the declared `[plugin].id` (or the `plugins/*` glob) instead. Directories
+// that exist in this repo are its own layout and stay addressable by path.
+// A code span or link target that *is* a plugin path, e.g. `plugins/lights/src`.
+const PLUGIN_DIR_SPAN = /^plugins\/([A-Za-z0-9][A-Za-z0-9._-]*)(?:\/|$)/;
+// Bare prose needs the trailing slash to read as a path rather than an
+// "and" shorthand such as "Rust plugins/libs".
+const PLUGIN_DIR_PROSE = /(?:^|[^\w/])plugins\/([A-Za-z0-9][A-Za-z0-9._-]*)\//g;
+const FOREIGN_PLUGIN_DIR_RULE = {
+  id: "plugin-directory-path",
+  message: "Identify a plugin by its declared manifest id or the plugins/* glob; source directory names carry no identity.",
+};
+
 function parseArgs(argv) {
   const options = {
     root: path.resolve(__dirname, ".."),
@@ -158,11 +172,31 @@ function proseLines(text) {
         .replace(/`[^`]*`/g, " ")
         .replace(/https?:\/\/\S+/g, " ")
         .replace(/\[[^\]]*\]\([^)]*\)/g, " "),
+      // Paths are usually written as code spans or link targets, which the
+      // prose `searchable` form deliberately strips.
+      paths: [
+        ...[...line.matchAll(/`([^`]*)`/g)].map((match) => match[1]),
+        ...[...line.matchAll(/\[[^\]]*\]\(([^)]*)\)/g)].map((match) => match[1]),
+      ],
     };
   }).filter(Boolean);
 }
 
-function scanText(text) {
+function localPluginDirs(root) {
+  const pluginsDir = path.join(root, "plugins");
+
+  if (!fs.existsSync(pluginsDir)) {
+    return new Set();
+  }
+
+  return new Set(
+    fs.readdirSync(pluginsDir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name),
+  );
+}
+
+function scanText(text, localDirs = new Set()) {
   const violations = [];
 
   for (const entry of proseLines(text)) {
@@ -176,6 +210,20 @@ function scanText(text) {
         });
       }
     }
+
+    const referenced = [
+      ...entry.paths.map((span) => span.match(PLUGIN_DIR_SPAN)?.[1]),
+      ...[...entry.searchable.matchAll(PLUGIN_DIR_PROSE)].map((match) => match[1]),
+    ].filter((name) => name && !localDirs.has(name));
+
+    if (referenced.length > 0) {
+      violations.push({
+        rule: FOREIGN_PLUGIN_DIR_RULE.id,
+        line: entry.line,
+        excerpt: entry.original,
+        message: FOREIGN_PLUGIN_DIR_RULE.message,
+      });
+    }
   }
 
   return violations;
@@ -187,7 +235,8 @@ function relative(root, file) {
 
 function audit(root) {
   const files = skillFiles(root);
-  const violations = files.flatMap((file) => scanText(fs.readFileSync(file, "utf8"))
+  const localDirs = localPluginDirs(root);
+  const violations = files.flatMap((file) => scanText(fs.readFileSync(file, "utf8"), localDirs)
     .map((violation) => ({ file: relative(root, file), ...violation })));
 
   if (files.length === 0) {
