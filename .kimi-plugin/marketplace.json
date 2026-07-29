@@ -85,6 +85,11 @@
     {
       "id": "qol-voice",
       "source": "./plugins/qol-voice"
+    },
+    {
+      "id": "adversarial-test",
+      "source": "./plugins/adversarial-test",
+      "displayName": "Adversarial Test Storm"
     }
   ]
 }
