@@ -15,6 +15,10 @@
  *   4. New source-layout debt: qtray/plugin root implementation modules,
  *      file/directory module hybrids, catch-all source directories, mixed
  *      platform module forms, and mixed web/native plugin UI roots.
+ *   5. Family-merge conversions: edits that remove existing per-OS module
+ *      slots from a platform/mod.rs facade in favor of cfg(unix)/windows/
+ *      target_family aliases. Identical per-OS files are reserved slots,
+ *      not duplicates; authoring a new facade family-first stays allowed.
  *
  * Allowed:
  *   - cfg(target_os) on `mod {linux,macos,windows};` or `pub use
@@ -601,6 +605,54 @@ function findPlatformFacadeViolations(filePath, newContent) {
     return violations;
 }
 
+const OS_MOD_ALIAS = /^\s*(?:pub(?:\([^)]*\))?\s+)?mod (linux|macos|windows);\s*$/;
+const FAMILY_CFG = /#\[cfg\((?:not\()?(?:unix\b|windows\b|target_family\s*=)/;
+
+function osModAliases(content) {
+    const names = new Set();
+    for (const line of content.split(/\r?\n/)) {
+        const match = line.match(OS_MOD_ALIAS);
+        if (match) names.add(match[1]);
+    }
+    return names;
+}
+
+function findFamilyMergeViolation(filePath, newContent) {
+    const context = platformContext(filePath);
+    if (!context || !context.facade) return null;
+    const before = readExistingFile(filePath);
+    if (!before) return null;
+    const after = osModAliases(newContent);
+    const removed = [...osModAliases(before)].filter(name => !after.has(name));
+    if (removed.length === 0 || !FAMILY_CFG.test(newContent)) return null;
+    return removed;
+}
+
+function blockFamilyMerge(filePath, removed) {
+    process.stderr.write(`qol-arch-code violation in ${filePath}.
+
+This edit removes per-OS platform module slots (${removed.join(', ')}) and
+replaces them with a cfg(unix)/cfg(windows)/target_family alias.
+
+Identical per-OS files under platform/ are NOT duplicate code. They are
+reserved OS slots the architecture expects to diverge (a macOS impl moving
+off shell-outs, a real Windows impl replacing a stub). Merging them deletes
+those slots and hides ownership.
+
+Family-cfg facades (cfg(unix) mod unix;) are allowed only when a module is
+AUTHORED that way from the start for genuinely family-shared code. Converting
+an existing per-OS facade into one is what this guard blocks.
+
+If the bodies are identical today, leave them identical - or extract a shared
+helper that each per-OS file calls.
+
+Reference: qol-project:qol-arch-code skill.
+
+Bypass for this edit only:
+  touch .claude/bypass-qol-arch-code
+`);
+}
+
 function platformViolationKind(violation) {
     if (violation.startsWith('missing target coverage:')) return 'missing target coverage';
     if (violation.startsWith('callable surface differs:')) return 'callable surface differs';
@@ -931,6 +983,12 @@ function main() {
     const platformViolations = findNewPlatformFacadeViolations(filePath, newContent);
     if (platformViolations.length > 0) {
         blockPlatformFacade(filePath, platformViolations);
+        return 2;
+    }
+
+    const familyMerge = findFamilyMergeViolation(filePath, newContent);
+    if (familyMerge) {
+        blockFamilyMerge(filePath, familyMerge);
         return 2;
     }
 
