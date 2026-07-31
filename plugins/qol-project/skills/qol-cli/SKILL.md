@@ -42,6 +42,14 @@ any future one) reports progress through one shared surface: the centered
   (`fixing`), leaving step and elapsed to the sign.
 - Full rule set: `tools/qol-cli/CLAUDE.md`, "Dev console design rules".
 
+## Dev console list selection
+
+Browsable list pages mark the selected row with the shared
+`render_util::caret(selected)` span and window with `cursor_window_start`
+against a per-view cursor. Never hand-roll a `"▸ "` span, and never give one
+page both a cursor and a `scroll_offset`; the offset belongs to stream pages
+(logs, trace, endpoints) that have no selection.
+
 ## Behavioral notes
 
 - Unknown command shape returns a usage error and appended help text.
