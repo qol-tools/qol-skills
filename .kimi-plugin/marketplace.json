@@ -3,92 +3,92 @@
   "plugins": [
     {
       "id": "code-review",
-      "source": "./plugins/code-review",
+      "source": "../plugins/code-review",
       "displayName": "Code Review"
     },
     {
       "id": "qol-plugin-alt-tab",
-      "source": "./plugins/qol-plugin-alt-tab"
+      "source": "../plugins/qol-plugin-alt-tab"
     },
     {
       "id": "qol-plugin-launcher",
-      "source": "./plugins/qol-plugin-launcher"
+      "source": "../plugins/qol-plugin-launcher"
     },
     {
       "id": "qol-plugin-pointz",
-      "source": "./plugins/qol-plugin-pointz"
+      "source": "../plugins/qol-plugin-pointz"
     },
     {
       "id": "qol-plugin-ide-checkout",
-      "source": "./plugins/qol-plugin-ide-checkout"
+      "source": "../plugins/qol-plugin-ide-checkout"
     },
     {
       "id": "qol-plugin-keyremap",
-      "source": "./plugins/qol-plugin-keyremap"
+      "source": "../plugins/qol-plugin-keyremap"
     },
     {
       "id": "qol-plugin-lights",
-      "source": "./plugins/qol-plugin-lights"
+      "source": "../plugins/qol-plugin-lights"
     },
     {
       "id": "qol-plugin-os-themes",
-      "source": "./plugins/qol-plugin-os-themes"
+      "source": "../plugins/qol-plugin-os-themes"
     },
     {
       "id": "qol-shot",
-      "source": "./plugins/qol-shot"
+      "source": "../plugins/qol-shot"
     },
     {
       "id": "qol-plugin-window-actions",
-      "source": "./plugins/qol-plugin-window-actions"
+      "source": "../plugins/qol-plugin-window-actions"
     },
     {
       "id": "qol-tray",
-      "source": "./plugins/qol-tray"
+      "source": "../plugins/qol-tray"
     },
     {
       "id": "qol-workflow",
-      "source": "./plugins/qol-workflow"
+      "source": "../plugins/qol-workflow"
     },
     {
       "id": "qol-langs",
-      "source": "./plugins/qol-langs"
+      "source": "../plugins/qol-langs"
     },
     {
       "id": "qol-project",
-      "source": "./plugins/qol-project"
+      "source": "../plugins/qol-project"
     },
     {
       "id": "qol-trace-discipline",
-      "source": "./plugins/qol-trace-discipline"
+      "source": "../plugins/qol-trace-discipline"
     },
     {
       "id": "workflow-nodes",
-      "source": "./plugins/workflow-nodes"
+      "source": "../plugins/workflow-nodes"
     },
     {
       "id": "qol-plugin-controllers",
-      "source": "./plugins/qol-plugin-controllers"
+      "source": "../plugins/qol-plugin-controllers"
     },
     {
       "id": "qol-plugin-bluetooth",
-      "source": "./plugins/qol-plugin-bluetooth"
+      "source": "../plugins/qol-plugin-bluetooth"
     },
     {
       "id": "qol-plugin-cli-sessions",
-      "source": "./plugins/qol-plugin-cli-sessions"
+      "source": "../plugins/qol-plugin-cli-sessions"
     },
     {
       "id": "qol-plugin-removeapp",
-      "source": "./plugins/qol-plugin-removeapp"
+      "source": "../plugins/qol-plugin-removeapp"
     },
     {
       "id": "qol-voice",
-      "source": "./plugins/qol-voice"
+      "source": "../plugins/qol-voice"
     },
     {
       "id": "adversarial-test",
-      "source": "./plugins/adversarial-test",
+      "source": "../plugins/adversarial-test",
       "displayName": "Adversarial Test Storm"
     }
   ]

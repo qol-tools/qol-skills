@@ -600,11 +600,11 @@ test("generates the kimi marketplace catalog", () => {
     plugins: [
       {
         id: "stale",
-        source: "./plugins/stale",
+        source: "../plugins/stale",
       },
       {
         id: "beta",
-        source: "./plugins/beta",
+        source: "../plugins/beta",
         displayName: "Beta Custom",
         trust: "curated",
       },
@@ -622,7 +622,7 @@ test("generates the kimi marketplace catalog", () => {
   );
   assert.deepEqual(
     marketplace.plugins.map((entry) => entry.source),
-    ["./plugins/alpha", "./plugins/beta", "./plugins/gamma"],
+    ["../plugins/alpha", "../plugins/beta", "../plugins/gamma"],
   );
   assert.equal(marketplace.plugins[0].displayName, undefined);
   assert.equal(marketplace.plugins[1].displayName, "Beta Custom");

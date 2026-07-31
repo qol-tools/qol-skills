@@ -672,7 +672,7 @@ function syncKimiMarketplace(root, plugins, options, changes) {
       const entry = {
         ...existing,
         id: pluginName,
-        source: `./plugins/${pluginName}`,
+        source: `../plugins/${pluginName}`,
       };
       const displayName = existing.displayName ?? plugin.codex?.interface?.displayName;
 
