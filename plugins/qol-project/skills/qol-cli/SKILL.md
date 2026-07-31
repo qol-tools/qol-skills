@@ -29,6 +29,19 @@ Do not treat this skill as a command database. A `qol-project` SessionStart hook
 - `qol dev` dashboard rows are CLI-owned status/action panes, not tray launcher commands.
 - `qol-tray` exported launcher commands live separately in `apps/qol-tray/src/commands/mod.rs`.
 
+## Dev console activity reporting
+
+Every long-running job `qol dev` starts (reload prebuild, doctor check/fix, and
+any future one) reports progress through one shared surface: the centered
+`Activity` sign box at the bottom of the console, above the branch sign.
+
+- Build an `activity::Activity` (`title`, `phase`, `detail`, `elapsed`) from the
+  job's own progress state; `Dash::activity` picks which one renders.
+- Never add a second live progress surface for the same job. The page body keeps
+  showing the last result, and a dashboard row carries at most the one-word state
+  (`fixing`), leaving step and elapsed to the sign.
+- Full rule set: `tools/qol-cli/CLAUDE.md`, "Dev console design rules".
+
 ## Behavioral notes
 
 - Unknown command shape returns a usage error and appended help text.
