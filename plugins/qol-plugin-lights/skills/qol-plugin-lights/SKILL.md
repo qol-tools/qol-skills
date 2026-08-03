@@ -25,7 +25,7 @@ Change referenced names across all contract files and their Rust dispatchers in 
 | `src/daemon/` | Long-lived process state, socket handling, live transport, and query responses. |
 | `src/service/` | Orchestration between public light commands and a selected backend. |
 | `src/backend/` | `LightBackend` plus concrete backend adapters. Adapter availability comes from implementations and tests under this directory. |
-| `src/znp/` | Zigbee Network Processor framing, coordinator lifecycle, device discovery, and cluster commands. |
+| `libs/qol-zigbee` | Zigbee Network Processor framing, coordinator lifecycle, device discovery, and cluster commands; `src/znp/` re-exports the shared API for the plugin. |
 | `src/domain/` | Transport-independent targets, capabilities, state, colors, and commands. |
 | `src/config/` | Config model, validation, persistence, and source-contract translation. |
 | `src/platform/` | OS-specific settings or device-discovery behavior selected at one cfg wiring boundary. |
@@ -49,7 +49,7 @@ The live color boundary is owned by `src/daemon/` and the corresponding runtime 
 
 **Add a query or stream:** define it in `qol-runtime.toml`, reference it from `qol-config.toml`, and implement the daemon response with the exact declared shape.
 
-**Change Zigbee behavior:** keep serial framing and cluster protocol inside `src/znp/`; expose device-level behavior through the backend rather than leaking coordinator primitives into service code.
+**Change Zigbee behavior:** keep serial framing and cluster protocol inside the shared `libs/qol-zigbee` crate; expose device-level behavior through the backend rather than leaking coordinator primitives into service code.
 
 **Change configuration:** update the TOML contract, Rust model, validation, and persistence together. The contract defaults are authoritative; do not restate them here.
 
