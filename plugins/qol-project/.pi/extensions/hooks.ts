@@ -41,19 +41,38 @@ function runHook(script, input) {
   if (stdout) {
     try {
       const parsed = JSON.parse(stdout);
-      context = parsed?.hookSpecificOutput?.additionalContext;
+      const decision = parsed?.hookSpecificOutput;
+
+      if (decision?.permissionDecision === "deny") {
+        return {
+          blocked: true,
+          reason: decision.permissionDecisionReason || `Blocked by ${script}`,
+        };
+      }
+
+      context = decision?.additionalContext;
     } catch (_ignored) {}
   }
 
   return { blocked: false, context };
 }
 
+function matchedToolName(matcher, toolName) {
+  return matcher
+    .split("|")
+    .map((name) => name.trim())
+    .find((name) => name.toLowerCase() === toolName.toLowerCase());
+}
+
 export default function (pi: ExtensionAPI) {
   if (PRE_TOOL_USE_HOOKS.length > 0) {
     pi.on("tool_call", async (event, _ctx) => {
+      if (!event.toolName) {
+        return;
+      }
+
       const hook = PRE_TOOL_USE_HOOKS.find(
-        (h) => h.matcher && event.toolName &&
-          h.matcher.toLowerCase() === event.toolName.toLowerCase()
+        (h) => h.matcher && matchedToolName(h.matcher, event.toolName)
       );
 
       if (!hook) {
@@ -61,8 +80,8 @@ export default function (pi: ExtensionAPI) {
       }
 
       const input = JSON.stringify({
-        tool_name: "Bash",
-        tool_input: { command: event.input?.command ?? "" },
+        tool_name: matchedToolName(hook.matcher, event.toolName),
+        tool_input: event.input ?? {},
       });
       const result = runHook(hook.script, input);
 

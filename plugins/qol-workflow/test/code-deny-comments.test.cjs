@@ -181,6 +181,38 @@ test('the bypass marker allows one edit and is consumed', (t) => {
     assert.equal(decisionOf(run(payload)).permissionDecision, 'deny');
 });
 
+test('accepts the pi edit shape (path + edits[].oldText/newText)', () => {
+    const decision = decisionOf(
+        run({
+            tool_name: 'Edit',
+            tool_input: {
+                path: qolPath('src/lib.rs'),
+                edits: [
+                    { oldText: 'let a = 1;', newText: 'let a = 2;' },
+                    { oldText: 'let b = 1;', newText: '// why\nlet b = 2;' },
+                ],
+            },
+        })
+    );
+    assert.equal(decision.permissionDecision, 'deny');
+    assert.match(decision.permissionDecisionReason, /why/);
+});
+
+test('accepts the pi write shape (path + content)', (t) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qol-monorepo-'));
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const file = path.join(dir, 'lib.rs');
+    fs.writeFileSync(file, 'let a = 1;\n');
+
+    const decision = decisionOf(
+        run({
+            tool_name: 'Write',
+            tool_input: { path: file, content: '// new\nlet a = 1;\n' },
+        })
+    );
+    assert.equal(decision.permissionDecision, 'deny');
+});
+
 test('MultiEdit denies when any edit adds a comment', () => {
     const decision = decisionOf(
         run({

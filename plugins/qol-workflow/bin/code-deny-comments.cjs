@@ -198,18 +198,22 @@ function readIfPresent(filePath) {
     }
 }
 
-function editPairs(toolName, toolInput) {
-    if (toolName === 'Write') {
-        return [[readIfPresent(toolInput.file_path), toolInput.content ?? '']];
-    }
-    if (toolName === 'Edit') {
-        return [[toolInput.old_string ?? '', toolInput.new_string ?? '']];
-    }
-    if (toolName === 'MultiEdit') {
-        return (toolInput.edits ?? []).map((edit) => [
-            edit.old_string ?? '',
-            edit.new_string ?? '',
+function targetPath(toolInput) {
+    return toolInput.file_path ?? toolInput.path ?? null;
+}
+
+function editPairs(toolInput) {
+    if (Array.isArray(toolInput.edits)) {
+        return toolInput.edits.map((edit) => [
+            edit.old_string ?? edit.oldText ?? '',
+            edit.new_string ?? edit.newText ?? '',
         ]);
+    }
+    if (typeof toolInput.content === 'string') {
+        return [[readIfPresent(targetPath(toolInput)), toolInput.content]];
+    }
+    if (typeof toolInput.new_string === 'string') {
+        return [[toolInput.old_string ?? '', toolInput.new_string]];
     }
     return [];
 }
@@ -263,16 +267,15 @@ function main() {
         return;
     }
 
-    const toolName = payload.tool_name ?? '';
     const toolInput = payload.tool_input ?? {};
-    const filePath = toolInput.file_path;
+    const filePath = targetPath(toolInput);
     if (!filePath) return;
     if (!inQolRepo(filePath)) return;
 
     const language = languageFor(filePath);
     if (!language) return;
 
-    for (const [before, after] of editPairs(toolName, toolInput)) {
+    for (const [before, after] of editPairs(toolInput)) {
         const added = addedComments(before, after, language);
         if (added.length === 0) continue;
         if (consumeBypass(filePath)) return;
@@ -288,4 +291,5 @@ module.exports = {
     extractComments,
     inQolRepo,
     languageFor,
+    targetPath,
 };

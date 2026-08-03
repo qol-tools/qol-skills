@@ -705,3 +705,57 @@ test("root kimi manifest drops skills and hooks that no longer exist", () => {
   assert.equal(rootManifest.skills.includes("./plugins/deleted/skills/"), false);
   assert.equal(rootManifest.hooks, undefined, "no fixture plugin ships hooks");
 });
+
+function generatedPiExtension(root, matcher) {
+  writeAlphaHooks(root, {
+    hooks: {
+      PreToolUse: [
+        {
+          matcher,
+          hooks: [
+            { type: "command", command: "node -e 'const fs=require(\"node:fs\");' alpha bin/one.cjs" },
+          ],
+        },
+      ],
+    },
+  });
+
+  execFileSync("node", [script, "--root", root], { stdio: "pipe" });
+
+  return fs.readFileSync(
+    path.join(root, "plugins", "alpha", ".pi", "extensions", "hooks.ts"),
+    "utf8",
+  );
+}
+
+function evalMatchedToolName(source) {
+  const fn = source.match(/function matchedToolName\([^]*?\n}\n/);
+  assert.ok(fn, "generated extension defines matchedToolName");
+  return new Function(`${fn[0]}\nreturn matchedToolName;`)();
+}
+
+test("pi extension matches every tool name in an alternation matcher", () => {
+  const source = generatedPiExtension(makeRepo(), "Edit|Write|MultiEdit");
+  const matchedToolName = evalMatchedToolName(source);
+
+  assert.equal(matchedToolName("Edit|Write|MultiEdit", "edit"), "Edit");
+  assert.equal(matchedToolName("Edit|Write|MultiEdit", "write"), "Write");
+  assert.equal(matchedToolName("Edit|Write|MultiEdit", "MultiEdit"), "MultiEdit");
+  assert.equal(matchedToolName("Edit|Write|MultiEdit", "bash"), undefined);
+  assert.equal(matchedToolName("Bash", "bash"), "Bash");
+});
+
+test("pi extension forwards the real tool name and input", () => {
+  const source = generatedPiExtension(makeRepo(), "Edit|Write|MultiEdit");
+
+  assert.match(source, /tool_name: matchedToolName\(hook\.matcher, event\.toolName\)/);
+  assert.match(source, /tool_input: event\.input \?\? \{\}/);
+  assert.doesNotMatch(source, /tool_name: "Bash"/);
+});
+
+test("pi extension blocks on a JSON permission denial", () => {
+  const source = generatedPiExtension(makeRepo(), "Edit");
+
+  assert.match(source, /permissionDecision === "deny"/);
+  assert.match(source, /reason: decision\.permissionDecisionReason/);
+});
