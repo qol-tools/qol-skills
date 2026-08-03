@@ -6,7 +6,7 @@ description: >
 
 # qol-arch-cross-platform: Cross-Platform Symbol Hygiene
 
-> Brief always-loaded summary: `qol-tray/CLAUDE.md` ("Cross-platform: warnings are errors"). Full symbol-hygiene patterns and triggers stay here.
+> Cross-platform warnings are errors: code that compiles green on Linux breaks macOS/Windows under `-D warnings` because `dead_code`, `unused_imports`, and `unused_mut` differ per backend. CI runs `RUSTFLAGS=-D warnings` on every target; this gate is not optional. Full symbol-hygiene patterns and triggers follow.
 
 ## Why this skill exists
 

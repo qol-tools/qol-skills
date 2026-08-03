@@ -1,6 +1,6 @@
 ---
 name: standards-evolution
-description: Use when you discover a practice, library, pattern, tool, or workflow that improves an existing workspace standard, BEFORE applying it. Encodes the rule that improvements must be written into the appropriate skill or CLAUDE.md FIRST so that the next session starts from the new baseline. Triggers on phrases like "I noticed", "this is better than", "we should be using X", "modern best practice", "10x engineers do", or any time you would otherwise apply a one-off improvement that should become a standard.
+description: Use when you discover a practice, library, pattern, tool, or workflow that improves an existing workspace standard, BEFORE applying it. Encodes the rule that improvements must be written into the appropriate skill FIRST so that the next session starts from the new baseline. Triggers on phrases like "I noticed", "this is better than", "we should be using X", "modern best practice", "10x engineers do", or any time you would otherwise apply a one-off improvement that should become a standard.
 ---
 
 # standards-evolution
@@ -30,8 +30,9 @@ Any time you find yourself thinking, suggesting, or about to apply something tha
    | Branch / worktree / PR ceremony | `qol-workflow:git-trees` |
    | Commit format | `qol-workflow:commit` |
    | Push / pull / rebase rules | `qol-workflow:git-push` |
-   | Universal coding + brevity | `qol-workflow:coding-general` |
-   | Cross-cutting principles, code style invariants | top-level workspace `CLAUDE.md` |
+   | Universal coding, brevity, cross-cutting style invariants | `qol-workflow:coding-general` |
+   | Rules that must fire on EVERY prompt, with no trigger | `qol-workflow:qol-monorepo-rules` (hook-injected) |
+   | Artifact identity, build/install/execution handoffs | `qol-project:qol-artifact-identity` |
 
    If two skills could plausibly own it, the more specific one wins. If none does, ask the user where it should live - do not invent a new skill silently.
 
@@ -55,9 +56,10 @@ Skills load on description-match. The cost: every loaded skill burns tokens whet
 
 - **One trigger area per skill.** If a skill's description tries to cover two areas, split it.
 - **Use specific trigger phrases in the description**, not vague terms. "Use when writing tests" beats "Use for code quality".
-- **CLAUDE.md is for always-on rules**. Anything you want loaded *every* session goes there - but kept SHORT (under 200 lines per CLAUDE.md, per docs.claude.com).
+- **The qol-monorepo carries no `CLAUDE.md` and no `AGENTS.md`.** The repository stays code. Every rule lives in a skill here, because skills are portable across Claude Code, Codex, and Kimi while `CLAUDE.md` is read by Claude Code alone. Do not reintroduce either file to carry a rule.
+- **Always-on rules go in `qol-workflow:qol-monorepo-rules`**, which a `UserPromptSubmit` hook injects unconditionally. A skill fires on description match; a hook fires every time. If a rule genuinely must never be missed, it belongs in the hook-injected skill, and keep that skill SHORT.
 - **Skills are for on-demand expansion**. A skill is the right home when the rule is detailed enough that always-loading it would waste tokens for sessions that don't touch the area.
-- **No content duplication between CLAUDE.md and a skill.** CLAUDE.md states the rule briefly and points to the skill for the workflow. Skill states the workflow without restating the rule.
+- **No content duplication between the always-on skill and a topic skill.** The always-on skill states the rule briefly and points to the topic skill for the workflow. The topic skill states the workflow without restating the rule.
 
 ## What this skill is NOT
 

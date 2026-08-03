@@ -15,6 +15,29 @@ Platform-specific code should be isolated in dedicated modules:
 - For symbol/import hygiene that prevents `dead_code`/`unused_imports` errors on the OSes you don't usually develop on, see `qol-arch-cross-platform`
 - For the CI/release workflow contract that catches what the static checks miss, see `qol-arch-cicd`
 
+## Type Safety
+
+- **Newtypes for domain concepts** - `struct PluginId(String)`, not raw `String`.
+- **Make invalid states unrepresentable** - model state machines with enums, not
+  a bool flag plus an optional field that only means something when the flag is set.
+- **Parse, don't validate** - parse into validated types at the boundary and use
+  those types internally, instead of re-checking a raw value at every call site.
+- **Exhaustive matching** - match all enum variants explicitly. No `_ =>` arm, so
+  the compiler catches every new variant.
+  - A wildcard is not a style preference: it converts a compile error into a
+    silent runtime default. Enumerating the remaining variants by name
+    (`View::Logs | View::Trace | ... => ...`) costs one line and keeps the guard.
+  - This applies to helper functions extracted out of a match just as much as to
+    the match itself. Refactoring a `match` into a function is the most common
+    way a wildcard sneaks in and a guard is lost.
+
+## Debug probes type-check in release
+
+Probe arguments must compile without evaluating in release builds. Give
+probe-only symbols an inert release representation rather than `cfg`-gating the
+call site only, and gate probe-only locals with `#[cfg(debug_assertions)]` or a
+release build under `-D warnings` fails on the unused binding.
+
 ## Error Handling
 
 - `.expect()` is acceptable for compile-time invariants (embedded assets)

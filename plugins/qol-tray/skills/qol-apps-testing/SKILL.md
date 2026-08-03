@@ -154,6 +154,30 @@ Use dense case tables, not one-off examples. Each row should cover a distinct br
 - Prefer one strong property test over many repetitive examples.
 - If using example tests, make them table-driven unless there is only one truly unique case.
 
+## Test mechanics
+
+- **Table-driven shape.** Consolidate similar cases into one test with a cases array:
+
+  ```rust
+  let cases = [("input1", expected1), ("input2", expected2)];
+  for (input, expected) in cases {
+      assert_eq!(func(input), expected, "input: {}", input);
+  }
+  ```
+
+- **Context in assertions.** Every assertion in a loop carries the identifying
+  values, so a failed iteration is debuggable without adding a `println!` and
+  re-running. `"input: {input} width: {width}"` beats a bare `assert_eq!`.
+- **AAA comments for large tests only.** Arrange/Act/Assert comments belong in
+  long, multi-stage tests. Omit them for table-driven and one-liner tests, where
+  they are noise.
+- **Generic test data.** Use abstract paths (`/a/b/c/foo`) and names (`foo`,
+  `bar`). Never real app names or the developer's personal paths: they date the
+  test, leak the machine layout, and break on another checkout.
+- **Descriptive snake_case names** that say what is tested and what is expected:
+  `version_parsing_extracts_parts`, not `test_parse`. The name is the failure
+  report a future reader sees first.
+
 ## What to avoid
 
 - smoke tests that only assert `is_ok()`

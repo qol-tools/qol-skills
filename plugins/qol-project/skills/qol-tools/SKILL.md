@@ -93,7 +93,7 @@ Plugins remain separate executables loaded by the host at runtime; they are neve
 
 - **No comments in code** unless a comment explains a non-obvious WHY (see `coding-general`). Rare.
 - **No emojis in code or commits** unless explicitly requested.
-- **Verify before reporting done.** The workspace `CLAUDE.md` owns the build/test/fmt/clippy rule; follow it there and show real command output instead of assuming a result.
+- **Verify before reporting done.** `qol-workflow:qol-monorepo-rules` owns the build/test/fmt/clippy rule; follow it there and show real command output instead of assuming a result.
 - **No automatic pushing.** Commit locally. Push when asked.
 - **Keyboard-first UI.** Every interaction must work via keyboard before mouse is considered.
 - **Deep modules over shallow.** Hide complexity behind clean APIs; max ~50 lines per function as guidance.
@@ -102,7 +102,7 @@ Plugins remain separate executables loaded by the host at runtime; they are neve
 
 ## Use invariants, not state snapshots
 
-Any prose written into the qol-tools world (CLAUDE.md, SKILL.md, README, commit body, PR description, design spec) must reference scopes by invariant, not by enumerating current state.
+Any prose written into the qol-tools world (SKILL.md, README, commit body, PR description, design spec) must reference scopes by invariant, not by enumerating current state.
 
 **Why:** a snapshot is correct on the day it is written and silently wrong the moment state changes. Nobody updates prose to track filesystem reality. A reader trusts what they read, so stale prose is worse than no prose. The next agent acts on it as if it were current and ends up either rebuilding work that has already happened or skipping work that has not.
 

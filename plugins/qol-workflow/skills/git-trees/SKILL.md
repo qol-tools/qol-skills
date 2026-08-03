@@ -53,7 +53,7 @@ prove the regenerated lockfile matches the merged manifests.
 
 ## Completion means committed
 
-A task that modifies repository files is not complete until the changes owned by that task are committed locally. Create the scoped commit without waiting for a separate user prompt unless the user explicitly asks to leave the work uncommitted or inspect the diff first. A safe commit requires the build, test, format, and lint gate required by the repository's `CLAUDE.md` to pass with real output before committing.
+A task that modifies repository files is not complete until the changes owned by that task are committed locally. Create the scoped commit without waiting for a separate user prompt unless the user explicitly asks to leave the work uncommitted or inspect the diff first. A safe commit requires the build, test, format, and lint gate in `qol-workflow:qol-monorepo-rules` to pass with real output before committing.
 
 - Stage only the task's files or hunks; preserve unrelated dirty work.
 - When hunk-staging a shared generated file or lockfile, validate the exact index tree independently; a passing dirty worktree does not prove the commit is self-consistent.

@@ -5,7 +5,14 @@ description: Use when writing or reviewing any code in this workspace, regardles
 
 # General Coding Guidelines
 
-Consolidated from: CLAUDE.md (shared), AGENTS.md (workspace), per-project skills.
+The qol-monorepo carries no `CLAUDE.md` or `AGENTS.md`; the repository stays
+code. Every rule that used to live in those files now lives in a skill here, so
+that agents other than Claude Code get them too. Unconditional delivery rules
+are injected by hook: `qol-workflow:qol-monorepo-rules`.
+
+Rust type-safety rules (newtypes, unrepresentable states, exhaustive matching)
+live in `qol-langs:rust-conventions`. Artifact identity lives in
+`qol-project:qol-artifact-identity`.
 
 ## Response Style
 

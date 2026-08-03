@@ -42,6 +42,22 @@ optional body explaining WHY when non-obvious
   conventional commit per repo before it lands on `main` unless the user
   explicitly asks for multiple delivered commits
 
+## Atomic commits
+
+- One logical change per commit.
+- Every commit compiles and represents a working state on its own. If checking
+  out a commit alone leaves the tree broken, the split is wrong.
+- A body explaining WHY is allowed and encouraged when the reason is not
+  derivable from the diff. Subject-only is fine when it is.
+
+## Amend, don't stack a fix on a fix
+
+A flaw in a previous **unpushed** commit is fixed by amending that commit, not by
+adding a "fix the fix" commit on top. Before `--amend`, check `git log -1`:
+concurrent sessions commit to `main` mid-conversation, and amending someone
+else's HEAD rewrites their work. Commit with explicit paths
+(`git commit -m ... -- <paths>`) so foreign staged changes are never swept in.
+
 ## What to write
 
 - Why the change is needed (when not obvious from the diff)

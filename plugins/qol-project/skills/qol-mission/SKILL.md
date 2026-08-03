@@ -44,7 +44,7 @@ Every non-negotiable below applies to browser adapters: no manual host configura
 
 These are invariants. If a proposed change violates one, the change is wrong, not the mission.
 
-> Brief always-loaded summary: `qol-tray/CLAUDE.md`. The full context (vision, who it's for, why each invariant matters) stays here.
+> This skill is the only home for the mission. The full context (vision, who it's for, why each invariant matters) stays here.
 
 ### 1. The user never configures the host OS
 
