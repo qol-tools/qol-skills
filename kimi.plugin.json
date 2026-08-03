@@ -4,5 +4,134 @@
   "description": "Claude Code skills for the qol-tools ecosystem (qol-tray host app, plugins, shared libs, CI workflows, and general engineering practices) \u2014 split into fine-grained plugins for per-plugin toggling.",
   "author": {
     "name": "KMRH47"
-  }
+  },
+  "skills": [
+    "./plugins/adversarial-test/skills/",
+    "./plugins/code-review/skills/",
+    "./plugins/qol-langs/skills/",
+    "./plugins/qol-plugin-alt-tab/skills/",
+    "./plugins/qol-plugin-bluetooth/skills/",
+    "./plugins/qol-plugin-cli-sessions/skills/",
+    "./plugins/qol-plugin-controllers/skills/",
+    "./plugins/qol-plugin-ide-checkout/skills/",
+    "./plugins/qol-plugin-keyremap/skills/",
+    "./plugins/qol-plugin-launcher/skills/",
+    "./plugins/qol-plugin-lights/skills/",
+    "./plugins/qol-plugin-os-themes/skills/",
+    "./plugins/qol-plugin-pointz/skills/",
+    "./plugins/qol-plugin-removeapp/skills/",
+    "./plugins/qol-plugin-window-actions/skills/",
+    "./plugins/qol-project/skills/",
+    "./plugins/qol-shot/skills/",
+    "./plugins/qol-trace-discipline/skills/",
+    "./plugins/qol-tray/skills/",
+    "./plugins/qol-voice/skills/",
+    "./plugins/qol-workflow/skills/",
+    "./plugins/workflow-nodes/skills/"
+  ],
+  "hooks": [
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|Write|NotebookEdit",
+      "command": "node plugins/qol-plugin-alt-tab/bin/route-to-agent.cjs"
+    },
+    {
+      "event": "SubagentStop",
+      "matcher": "plugin-alt-tab|qol-plugin-alt-tab:plugin-alt-tab",
+      "command": "node plugins/qol-plugin-alt-tab/bin/reflect-agent.cjs"
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|Write|NotebookEdit",
+      "command": "node plugins/qol-plugin-lights/bin/route-to-agent.cjs"
+    },
+    {
+      "event": "SubagentStop",
+      "matcher": "plugin-lights|qol-plugin-lights:plugin-lights",
+      "command": "node plugins/qol-plugin-lights/bin/reflect-agent.cjs"
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+      "command": "node plugins/qol-project/bin/check-qol-arch-code.cjs"
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+      "command": "node plugins/qol-project/bin/check-qol-arch-cross-platform.cjs"
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+      "command": "node plugins/qol-project/bin/check-qol-arch-cicd.cjs"
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "startup|resume|clear",
+      "command": "node plugins/qol-project/bin/inject-qol-cli-context.cjs"
+    },
+    {
+      "event": "UserPromptSubmit",
+      "command": "node plugins/qol-project/bin/qol-mission-reminder.cjs"
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "startup|resume|clear",
+      "command": "node plugins/qol-tray/bin/inject-dev-recompile-context.cjs"
+    },
+    {
+      "event": "SubagentStop",
+      "matcher": "qol-tray-frontend|qol-tray-backend",
+      "command": "node plugins/qol-tray/bin/reflect-agent.cjs"
+    },
+    {
+      "event": "Stop",
+      "command": "node plugins/qol-tray/bin/stop-deny-uncited-arch-claims.cjs"
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "command": "node plugins/qol-workflow/bin/commit-skill-context.cjs"
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "command": "node plugins/qol-workflow/bin/commit-deny-coauthor.cjs"
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "command": "node plugins/qol-workflow/bin/branch-deny-checkout-in-main-clone.cjs"
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "command": "node plugins/qol-workflow/bin/branch-deny-agent-checkout.cjs"
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "command": "node plugins/qol-workflow/bin/branch-deny-pid-branch-name.cjs"
+    },
+    {
+      "event": "UserPromptSubmit",
+      "command": "node plugins/qol-workflow/bin/qol-cicd-context.cjs"
+    },
+    {
+      "event": "UserPromptSubmit",
+      "command": "node plugins/qol-workflow/bin/qol-monorepo-rules-context.cjs"
+    },
+    {
+      "event": "UserPromptSubmit",
+      "command": "node plugins/workflow-nodes/hooks/inject_workflow_nodes_reminder.mjs"
+    },
+    {
+      "event": "PreCompact",
+      "command": "node plugins/workflow-nodes/hooks/clear_workflow_nodes_sentinel.mjs"
+    },
+    {
+      "event": "SessionStart",
+      "command": "node plugins/workflow-nodes/hooks/clear_workflow_nodes_sentinel.mjs"
+    }
+  ]
 }

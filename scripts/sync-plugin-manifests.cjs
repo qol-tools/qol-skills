@@ -687,10 +687,33 @@ function syncKimiMarketplace(root, plugins, options, changes) {
   writeJson(root, file, next, options, changes);
 }
 
-function syncKimiRootPlugin(root, options, changes) {
+function kimiRootHookCommand(command, pluginName) {
+  const match = command.match(/^node (\S+)$/);
+
+  if (!match) {
+    return command;
+  }
+
+  return `node plugins/${pluginName}/${match[1]}`;
+}
+
+function syncKimiRootPlugin(root, plugins, options, changes, failures) {
   const claudeMarketplace = maybeReadJson(path.join(root, ".claude-plugin", "marketplace.json"));
   const source = claudeMarketplace ?? { name: "qol-skills", description: "Skills for the qol-tools ecosystem.", owner: AUTHOR };
   const current = maybeReadJson(path.join(root, "kimi.plugin.json")) ?? {};
+  const skills = [];
+  const hooks = [];
+
+  for (const { pluginName } of plugins) {
+    if (hasDir(root, pluginName, "skills")) {
+      skills.push(`./plugins/${pluginName}/skills/`);
+    }
+
+    for (const rule of kimiHooks(root, pluginName, failures) ?? []) {
+      hooks.push({ ...rule, command: kimiRootHookCommand(rule.command, pluginName) });
+    }
+  }
+
   const next = {
     ...current,
     name: source.name ?? current.name ?? "qol-skills",
@@ -698,6 +721,18 @@ function syncKimiRootPlugin(root, options, changes) {
     description: source.description ?? current.description ?? "Skills for the qol-tools ecosystem.",
     author: source.owner ?? current.author ?? AUTHOR,
   };
+
+  delete next.skills;
+  delete next.hooks;
+
+  if (skills.length > 0) {
+    next.skills = skills;
+  }
+
+  if (hooks.length > 0) {
+    next.hooks = hooks;
+  }
+
   writeJson(root, path.join(root, "kimi.plugin.json"), next, options, changes);
 }
 
@@ -722,7 +757,7 @@ function run() {
   syncClaudeMarketplace(options.root, plugins, options, changes);
   syncCodexMarketplace(options.root, plugins, options, changes);
   syncKimiMarketplace(options.root, plugins, options, changes);
-  syncKimiRootPlugin(options.root, options, changes);
+  syncKimiRootPlugin(options.root, plugins, options, changes, failures);
 
   if (changes.length === 0) {
     console.log("Plugin manifests and marketplaces are in sync.");

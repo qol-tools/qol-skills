@@ -648,3 +648,60 @@ test("--check lists drifted kimi files", () => {
   assert.match(result.stderr, /out of sync/);
   assert.match(result.stderr, /plugins\/beta\/\.kimi-plugin\/plugin\.json/);
 });
+
+test("root kimi manifest aggregates every plugin skills dir", () => {
+  const root = makeRepo();
+
+  execFileSync("node", [script, "--root", root], { stdio: "pipe" });
+
+  const rootManifest = readJson(path.join(root, "kimi.plugin.json"));
+
+  assert.deepEqual(rootManifest.skills, [
+    "./plugins/alpha/skills/",
+    "./plugins/beta/skills/",
+    "./plugins/gamma/skills/",
+  ]);
+
+  execFileSync("node", [script, "--root", root, "--check"], { stdio: "pipe" });
+});
+
+test("root kimi manifest prefixes hook commands with the owning plugin dir", () => {
+  const root = makeRepo();
+
+  writeAlphaHooks(root, {
+    hooks: {
+      PreToolUse: [
+        {
+          matcher: "Bash",
+          hooks: [{ type: "command", command: "node -e 'const fs=require(\"node:fs\");' alpha bin/one.cjs" }],
+        },
+      ],
+    },
+  });
+
+  execFileSync("node", [script, "--root", root], { stdio: "pipe" });
+
+  const rootManifest = readJson(path.join(root, "kimi.plugin.json"));
+
+  assert.deepEqual(rootManifest.hooks, [
+    { event: "PreToolUse", matcher: "Bash", command: "node plugins/alpha/bin/one.cjs" },
+  ]);
+});
+
+test("root kimi manifest drops skills and hooks that no longer exist", () => {
+  const root = makeRepo();
+
+  writeJson(path.join(root, "kimi.plugin.json"), {
+    name: "qol-skills",
+    version: "1.0.0",
+    skills: ["./plugins/deleted/skills/"],
+    hooks: [{ event: "PreToolUse", command: "node plugins/deleted/bin/gone.cjs" }],
+  });
+
+  execFileSync("node", [script, "--root", root], { stdio: "pipe" });
+
+  const rootManifest = readJson(path.join(root, "kimi.plugin.json"));
+
+  assert.equal(rootManifest.skills.includes("./plugins/deleted/skills/"), false);
+  assert.equal(rootManifest.hooks, undefined, "no fixture plugin ships hooks");
+});
