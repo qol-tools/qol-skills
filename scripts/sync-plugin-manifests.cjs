@@ -688,10 +688,9 @@ function syncKimiMarketplace(root, plugins, options, changes) {
 }
 
 function syncKimiRootPlugin(root, options, changes) {
-  const file = path.join(root, ".kimi-plugin", "plugin.json");
   const claudeMarketplace = maybeReadJson(path.join(root, ".claude-plugin", "marketplace.json"));
   const source = claudeMarketplace ?? { name: "qol-skills", description: "Skills for the qol-tools ecosystem.", owner: AUTHOR };
-  const current = maybeReadJson(file) ?? {};
+  const current = maybeReadJson(path.join(root, "kimi.plugin.json")) ?? {};
   const next = {
     ...current,
     name: source.name ?? current.name ?? "qol-skills",
@@ -699,7 +698,7 @@ function syncKimiRootPlugin(root, options, changes) {
     description: source.description ?? current.description ?? "Skills for the qol-tools ecosystem.",
     author: source.owner ?? current.author ?? AUTHOR,
   };
-  writeJson(root, file, next, options, changes);
+  writeJson(root, path.join(root, "kimi.plugin.json"), next, options, changes);
 }
 
 function run() {
