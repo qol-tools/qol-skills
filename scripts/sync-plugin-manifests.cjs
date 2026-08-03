@@ -383,7 +383,7 @@ function kimiManifest(root, pluginName, base, codex, existing) {
   }
 
   if (hasDir(root, pluginName, "skills")) {
-    manifest.skills = "./skills/";
+    manifest.skills = ["./skills/"];
   }
 
   const interfaceValue = kimiInterface(source, codex);

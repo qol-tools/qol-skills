@@ -5,7 +5,9 @@
   "author": {
     "name": "KMRH47"
   },
-  "skills": "./skills/",
+  "skills": [
+    "./skills/"
+  ],
   "hooks": [
     {
       "event": "UserPromptSubmit",

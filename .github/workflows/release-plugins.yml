@@ -1,0 +1,63 @@
+name: release plugins
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'plugins/**'
+      - 'scripts/plugin-release-plan.cjs'
+      - '.github/workflows/release-plugins.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-plugins-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Build release plan
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release list --limit 500 --json tagName --jq '.[].tagName' > /tmp/existing-tags.txt
+          plan=$(node scripts/plugin-release-plan.cjs --existing-tags /tmp/existing-tags.txt)
+          echo "plan=$plan" >> "$GITHUB_OUTPUT"
+          echo "$plan" | node -e 'const p=JSON.parse(require("fs").readFileSync(0,"utf8"));console.log(`${p.length} plugin(s) to release`);for(const e of p)console.log(`- ${e.tag}`)'
+      - name: Publish per-plugin zips
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PLAN: ${{ steps.plan.outputs.plan }}
+        run: |
+          set -euo pipefail
+          count=$(echo "$PLAN" | node -e 'console.log(JSON.parse(require("fs").readFileSync(0,"utf8")).length)')
+          if [ "$count" = "0" ]; then
+            echo "No plugin versions to release."
+            exit 0
+          fi
+
+          echo "$PLAN" | node -e '
+            const plan = JSON.parse(require("fs").readFileSync(0, "utf8"));
+            for (const e of plan) console.log([e.name, e.version, e.tag, e.asset].join("\t"));
+          ' > /tmp/plan.tsv
+
+          while IFS=$'\t' read -r name version tag asset; do
+            [ -n "$name" ] || continue
+            # Archive root IS the plugin root, so Kimi's detectPluginRoot finds
+            # .kimi-plugin/plugin.json without relying on the single-child rule.
+            ( cd "plugins/$name" && zip -qr "$RUNNER_TEMP/$asset" . )
+            gh release create "$tag" "$RUNNER_TEMP/$asset" \
+              --title "$name v$version" \
+              --notes "Install in Kimi Code with /plugins install <asset URL>, or in Claude Code from the qol-skills marketplace."
+          done < /tmp/plan.tsv

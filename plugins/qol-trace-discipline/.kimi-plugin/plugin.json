@@ -5,5 +5,7 @@
   "author": {
     "name": "KMRH47"
   },
-  "skills": "./skills/"
+  "skills": [
+    "./skills/"
+  ]
 }

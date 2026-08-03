@@ -424,7 +424,7 @@ test("generates kimi manifests from resolved base metadata", () => {
   assert.equal(alphaKimi.version, "0.2.0");
   assert.equal(alphaKimi.description, "Alpha plugin.");
   assert.deepEqual(alphaKimi.author, { name: "KMRH47" });
-  assert.equal(alphaKimi.skills, "./skills/");
+  assert.deepEqual(alphaKimi.skills, ["./skills/"]);
   assert.equal(alphaKimi.interface, undefined);
 
   assert.equal(betaKimi.name, "beta");
@@ -465,7 +465,7 @@ test("preserves kimi-only extras and a hand-written interface across re-sync", (
   assert.equal(kimi.version, "0.2.0");
   assert.equal(kimi.description, "Alpha plugin.");
   assert.deepEqual(kimi.author, { name: "KMRH47" });
-  assert.equal(kimi.skills, "./skills/");
+  assert.deepEqual(kimi.skills, ["./skills/"]);
   assert.deepEqual(kimi.keywords, ["alpha", "test"]);
   assert.equal(kimi.homepage, "https://example.com/alpha");
   assert.deepEqual(kimi.sessionStart, { skill: "alpha-start" });

@@ -5,7 +5,9 @@
   "author": {
     "name": "KMRH47"
   },
-  "skills": "./skills/",
+  "skills": [
+    "./skills/"
+  ],
   "interface": {
     "displayName": "Code Review",
     "shortDescription": "Review code with focused agents.",

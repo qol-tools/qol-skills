@@ -34,6 +34,16 @@ Then install plugins from the Third-party tab, or install a single plugin from a
 /plugins install /path/to/qol-skills/plugins/qol-workflow
 ```
 
+Without a checkout, install one plugin from its release asset:
+
+```bash
+/plugins install https://github.com/qol-tools/qol-skills/releases/download/qol-workflow-v0.3.0/qol-workflow-0.3.0.zip
+```
+
+The bare repository URL does not work: Kimi resolves a GitHub source to a whole
+repository and looks for a plugin manifest at its root, and this repository is a
+marketplace of many plugins rather than one plugin.
+
 Plugin changes apply after `/reload` or a new session.
 
 ## About
