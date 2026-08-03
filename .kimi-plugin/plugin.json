@@ -1,0 +1,8 @@
+{
+  "name": "qol-skills",
+  "version": "1.0.0",
+  "description": "Skills for the qol-tools ecosystem (qol-tray host app, plugins, shared libs, CI workflows, and general engineering practices) \u2014 split into fine-grained plugins for per-plugin toggling.",
+  "author": {
+    "name": "KMRH47"
+  }
+}
