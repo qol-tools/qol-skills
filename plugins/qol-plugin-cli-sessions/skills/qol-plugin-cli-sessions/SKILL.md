@@ -31,11 +31,9 @@ CLI Sessions owns an always-on-top overview of live CLI sessions and the attenti
 
 ## Interpretation strategy
 
-Interpretation is a registry, not a chain of conditionals. The strategy trait carries a working default so an unrecognized tool still produces a usable reading; tool-specific implementations override only what they genuinely know better. Adding support for a new CLI tool means adding a strategy and registering it for that tool, never branching on the tool inside shared code.
+Interpretation is a registry, not a chain of conditionals. The strategy trait carries a working default so an unrecognized tool still produces a usable reading; tool-specific implementations supply evidence hooks (`working`, `awaiting`, `turn_taken`) and never re-derive the phase order. The trait's default `read` composes the hooks through the pure `phase_for` skeleton (Busy > Blocked > Done > Idle) and applies the moving-screen invariant in exactly one place: a changing screen is a working session, so every waiting phase (Blocked, Done) requires a settled screen, and a moving screen with no evidence still reads Busy. Dropping that condition turns every busy session into a false "your turn" alert. The generic shell strategy overrides `read` because it is busy-by-default (absence of a foreground process is the idle signal), which does not fit the evidence skeleton. Adding support for a new CLI tool means adding a strategy, registering it for that tool, and covering its evidence with cases - never branching on the tool inside shared code and never writing a phase if-else ladder inside a strategy.
 
 Readings are two-stage on purpose. A strategy returns a phase plus an optional label; a separate pure transition maps the previous status and the new phase to the next status. Keep the transition pure - it is the part worth testing exhaustively, and it is where sticky states are honored so an acknowledged session does not re-alert on every poll.
-
-Blocked detection deliberately requires that the screen has *not* changed. A moving screen is a working session, not one waiting on the user; dropping that condition turns every busy session into a false alert.
 
 ## Common changes
 
