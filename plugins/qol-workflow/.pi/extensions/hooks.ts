@@ -63,7 +63,10 @@ export default function (pi: ExtensionAPI) {
         return;
       }
 
-      const input = event.input?.command ?? "";
+      const input = JSON.stringify({
+        tool_name: "Bash",
+        tool_input: { command: event.input?.command ?? "" },
+      });
       const result = runHook(hook.script, input);
 
       if (result.blocked) {
