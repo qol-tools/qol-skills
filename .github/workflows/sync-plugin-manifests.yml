@@ -45,17 +45,17 @@ jobs:
           const path = require("path");
 
           const markets = [
-            { file: ".claude-plugin/marketplace.json", manifestDir: ".claude-plugin", key: "name" },
-            { file: ".agents/plugins/marketplace.json", manifestDir: ".codex-plugin", key: "name" },
-            { file: ".kimi-plugin/marketplace.json", manifestDir: ".kimi-plugin", key: "id" },
+            { file: ".claude-plugin/marketplace.json", base: ".", manifestDir: ".claude-plugin", key: "name" },
+            { file: ".agents/plugins/marketplace.json", base: ".", manifestDir: ".codex-plugin", key: "name" },
+            { file: ".kimi-plugin/marketplace.json", base: ".kimi-plugin", manifestDir: ".kimi-plugin", key: "id" },
           ];
 
-          for (const { file, manifestDir, key } of markets) {
+          for (const { file, base, manifestDir, key } of markets) {
             const marketplace = JSON.parse(fs.readFileSync(file, "utf8"));
 
             for (const entry of marketplace.plugins) {
               const source = typeof entry.source === "string" ? entry.source : entry.source.path;
-              const manifest = JSON.parse(fs.readFileSync(path.join(source, manifestDir, "plugin.json"), "utf8"));
+              const manifest = JSON.parse(fs.readFileSync(path.join(base, source, manifestDir, "plugin.json"), "utf8"));
 
               if (manifest.name !== entry[key]) {
                 throw new Error(`${file}: ${entry[key]} does not match ${manifest.name}`);
