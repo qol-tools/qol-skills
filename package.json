@@ -1,0 +1,23 @@
+{
+  "name": "qol-skills",
+  "version": "1.0.0",
+  "description": "Skills for the qol-tools ecosystem \u2014 split into fine-grained plugins for per-plugin toggling.",
+  "author": {
+    "name": "KMRH47"
+  },
+  "keywords": [
+    "pi-package"
+  ],
+  "pi": {
+    "skills": [
+      "./plugins/*/skills"
+    ],
+    "extensions": [
+      "./plugins/qol-plugin-alt-tab/.pi/extensions",
+      "./plugins/qol-plugin-lights/.pi/extensions",
+      "./plugins/qol-project/.pi/extensions",
+      "./plugins/qol-workflow/.pi/extensions",
+      "./plugins/workflow-nodes/.pi/extensions"
+    ]
+  }
+}

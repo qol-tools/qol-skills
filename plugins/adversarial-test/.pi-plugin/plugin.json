@@ -1,0 +1,8 @@
+{
+  "name": "adversarial-test",
+  "description": "Adversarial testing discipline for real application surfaces: isolated baselines, invariant-driven attack storms, preserved failures, regression-first fixes, live verification, and machine-readable reports.",
+  "version": "0.1.0",
+  "author": {
+    "name": "KMRH47"
+  }
+}

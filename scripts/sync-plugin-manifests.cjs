@@ -461,6 +461,243 @@ function kimiHooks(root, pluginName, failures) {
   return rules.length > 0 ? rules : undefined;
 }
 
+function piHookCommand(command, pluginName) {
+  const match = command.match(/^node -e '[^']*' (\S+) (\S+)$/);
+
+  if (match && match[1] === pluginName) {
+    return match[2];
+  }
+
+  return command;
+}
+
+function piExtensionContent(root, pluginName, failures) {
+  const hooksFile = path.join(root, "plugins", pluginName, "hooks", "hooks.json");
+
+  if (!fs.existsSync(hooksFile)) {
+    return null;
+  }
+
+  let document;
+
+  try {
+    document = JSON.parse(fs.readFileSync(hooksFile, "utf8"));
+  } catch (error) {
+    failures.push(`Cannot parse hooks/hooks.json in plugins/${pluginName}: ${error.message}`);
+    return null;
+  }
+
+  const preToolUse = [];
+  const userPromptSubmit = [];
+
+  for (const [event, entries] of Object.entries(document?.hooks ?? {})) {
+    if (!Array.isArray(entries)) {
+      continue;
+    }
+
+    for (const entry of entries) {
+      for (const hook of entry?.hooks ?? []) {
+        if (hook?.type !== "command" || typeof hook.command !== "string") {
+          continue;
+        }
+
+        const script = piHookCommand(hook.command, pluginName);
+
+        if (event === "PreToolUse" && entry?.matcher) {
+          preToolUse.push({ matcher: entry.matcher, script });
+        } else if (event === "UserPromptSubmit") {
+          userPromptSubmit.push({ script });
+        }
+      }
+    }
+  }
+
+  if (preToolUse.length === 0 && userPromptSubmit.length === 0) {
+    return null;
+  }
+
+  const preToolUseEntries = preToolUse
+    .map((hook) => `    { matcher: ${JSON.stringify(hook.matcher)}, script: ${JSON.stringify(hook.script)} }`)
+    .join(",\n");
+  const userPromptEntries = userPromptSubmit
+    .map((hook) => `    { script: ${JSON.stringify(hook.script)} }`)
+    .join(",\n");
+
+  return `import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { spawnSync } from "node:child_process";
+import path from "node:path";
+
+const PLUGIN_DIR = path.resolve(__dirname, "../..");
+
+const PRE_TOOL_USE_HOOKS = [
+${preToolUseEntries}
+];
+
+const USER_PROMPT_SUBMIT_HOOKS = [
+${userPromptEntries}
+];
+
+function runHook(script, input) {
+  const scriptPath = path.join(PLUGIN_DIR, script);
+
+  let result;
+
+  try {
+    result = spawnSync(process.execPath, [scriptPath], {
+      input,
+      encoding: "utf-8",
+      timeout: 5000,
+    });
+  } catch (_error) {
+    return { blocked: false };
+  }
+
+  const stdout = (result?.stdout ?? "").trim();
+  const stderr = (result?.stderr ?? "").trim();
+
+  if (result?.status !== 0 && result?.status !== null) {
+    return { blocked: true, reason: stderr || stdout || \`Blocked by \${script}\` };
+  }
+
+  let context;
+
+  if (stdout) {
+    try {
+      const parsed = JSON.parse(stdout);
+      context = parsed?.hookSpecificOutput?.additionalContext;
+    } catch (_ignored) {}
+  }
+
+  return { blocked: false, context };
+}
+
+export default function (pi: ExtensionAPI) {
+  if (PRE_TOOL_USE_HOOKS.length > 0) {
+    pi.on("tool_call", async (event, _ctx) => {
+      const hook = PRE_TOOL_USE_HOOKS.find(
+        (h) => h.matcher && event.toolName &&
+          h.matcher.toLowerCase() === event.toolName.toLowerCase()
+      );
+
+      if (!hook) {
+        return;
+      }
+
+      const input = event.input?.command ?? "";
+      const result = runHook(hook.script, input);
+
+      if (result.blocked) {
+        return { block: true, reason: result.reason };
+      }
+    });
+  }
+
+  if (USER_PROMPT_SUBMIT_HOOKS.length > 0) {
+    pi.on("before_agent_start", async (event, _ctx) => {
+      let extraContext = "";
+
+      for (const hook of USER_PROMPT_SUBMIT_HOOKS) {
+        const cwd = event.systemPromptOptions?.cwd ?? "";
+        const input = JSON.stringify({ cwd, prompt: event.prompt });
+        const result = runHook(hook.script, input);
+
+        if (result.context) {
+          extraContext += "\\n\\n" + result.context;
+        }
+      }
+
+      if (extraContext) {
+        return { systemPrompt: (event.systemPrompt ?? "") + extraContext };
+      }
+    });
+  }
+}
+`;
+}
+
+function piManifest(base) {
+  return {
+    name: base.name,
+    description: base.description,
+    version: base.version,
+    author: base.author,
+  };
+}
+
+function syncPiPlugin(root, pluginName, base, options, changes, failures) {
+  const files = manifestPaths(root, pluginName);
+  const existing = maybeReadJson(files.pi);
+  const next = piManifest(base);
+
+  if (!sameJson(existing, next)) {
+    writeJson(root, files.pi, next, options, changes);
+  }
+
+  const extensionContent = piExtensionContent(root, pluginName, failures);
+  const extensionsDir = path.join(root, "plugins", pluginName, ".pi", "extensions");
+  const hooksTs = path.join(extensionsDir, "hooks.ts");
+
+  if (extensionContent) {
+    const current = fs.existsSync(hooksTs) ? fs.readFileSync(hooksTs, "utf8") : null;
+
+    if (current !== normalizeNewlines(extensionContent)) {
+      fs.mkdirSync(extensionsDir, { recursive: true });
+      fs.writeFileSync(hooksTs, extensionContent);
+      changes.push(relative(root, hooksTs));
+    }
+  } else if (fs.existsSync(hooksTs)) {
+    fs.unlinkSync(hooksTs);
+    changes.push(relative(root, hooksTs));
+
+    try {
+      const remaining = fs.readdirSync(extensionsDir);
+
+      if (remaining.length === 0) {
+        fs.rmdirSync(extensionsDir);
+      }
+    } catch (_ignored) {}
+  }
+}
+
+function syncPiRootPackageJson(root, plugins, options, changes) {
+  const file = path.join(root, "package.json");
+  const current = maybeReadJson(file) ?? {
+    name: "qol-skills",
+    version: "1.0.0",
+  };
+  const pluginNames = plugins.map((plugin) => plugin.pluginName);
+
+  const extensionsGlobs = [];
+
+  for (const pluginName of pluginNames) {
+    const piPluginsDir = path.join(root, "plugins", pluginName, ".pi", "extensions");
+
+    if (fs.existsSync(piPluginsDir)) {
+      extensionsGlobs.push(`./plugins/${pluginName}/.pi/extensions`);
+    }
+  }
+
+  const pi = {
+    ...(current.pi ?? {}),
+    skills: current.pi?.skills ?? ["./plugins/*/skills"],
+    extensions: extensionsGlobs.length > 0 ? extensionsGlobs : undefined,
+  };
+
+  if (!pi.extensions) {
+    delete pi.extensions;
+  }
+
+  const next = {
+    ...current,
+    name: current.name ?? "qol-skills",
+    version: current.version ?? "1.0.0",
+    keywords: current.keywords ?? ["pi-package"],
+    pi,
+  };
+
+  writeJson(root, file, next, options, changes);
+}
+
 function validateManifestName(kind, root, pluginName, manifest, failures) {
   if (!manifest) {
     return;
@@ -480,6 +717,7 @@ function manifestPaths(root, pluginName) {
     claude: path.join(pluginRoot, ".claude-plugin", "plugin.json"),
     codex: path.join(pluginRoot, ".codex-plugin", "plugin.json"),
     kimi: path.join(pluginRoot, ".kimi-plugin", "plugin.json"),
+    pi: path.join(pluginRoot, ".pi-plugin", "plugin.json"),
   };
 }
 
@@ -488,10 +726,12 @@ function syncPlugin(root, pluginName, options, changes, failures, changedFiles) 
   let claude = maybeReadJson(files.claude);
   let codex = maybeReadJson(files.codex);
   const kimi = maybeReadJson(files.kimi);
+  const pi = maybeReadJson(files.pi);
 
   validateManifestName("Claude", root, pluginName, claude, failures);
   validateManifestName("Codex", root, pluginName, codex, failures);
   validateManifestName("Kimi", root, pluginName, kimi, failures);
+  validateManifestName("Pi", root, pluginName, pi, failures);
 
   if (failures.length > 0) {
     return { pluginName, claude, codex, kimi };
@@ -538,6 +778,8 @@ function syncPlugin(root, pluginName, options, changes, failures, changedFiles) 
   if (!sameJson(kimi, nextKimi)) {
     writeJson(root, files.kimi, nextKimi, options, changes);
   }
+
+  syncPiPlugin(root, pluginName, base, options, changes, failures);
 
   return { pluginName, claude, codex, kimi: nextKimi };
 }
@@ -758,6 +1000,7 @@ function run() {
   syncCodexMarketplace(options.root, plugins, options, changes);
   syncKimiMarketplace(options.root, plugins, options, changes);
   syncKimiRootPlugin(options.root, plugins, options, changes, failures);
+  syncPiRootPackageJson(options.root, plugins, options, changes);
 
   if (changes.length === 0) {
     console.log("Plugin manifests and marketplaces are in sync.");
