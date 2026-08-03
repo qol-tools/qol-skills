@@ -687,6 +687,21 @@ function syncKimiMarketplace(root, plugins, options, changes) {
   writeJson(root, file, next, options, changes);
 }
 
+function syncKimiRootPlugin(root, options, changes) {
+  const file = path.join(root, ".kimi-plugin", "plugin.json");
+  const claudeMarketplace = maybeReadJson(path.join(root, ".claude-plugin", "marketplace.json"));
+  const source = claudeMarketplace ?? { name: "qol-skills", description: "Skills for the qol-tools ecosystem.", owner: AUTHOR };
+  const current = maybeReadJson(file) ?? {};
+  const next = {
+    ...current,
+    name: source.name ?? current.name ?? "qol-skills",
+    version: current.version ?? "1.0.0",
+    description: source.description ?? current.description ?? "Skills for the qol-tools ecosystem.",
+    author: source.owner ?? current.author ?? AUTHOR,
+  };
+  writeJson(root, file, next, options, changes);
+}
+
 function run() {
   const options = parseArgs(process.argv.slice(2));
   const pluginNames = directories(path.join(options.root, "plugins"));
@@ -708,6 +723,7 @@ function run() {
   syncClaudeMarketplace(options.root, plugins, options, changes);
   syncCodexMarketplace(options.root, plugins, options, changes);
   syncKimiMarketplace(options.root, plugins, options, changes);
+  syncKimiRootPlugin(options.root, options, changes);
 
   if (changes.length === 0) {
     console.log("Plugin manifests and marketplaces are in sync.");
