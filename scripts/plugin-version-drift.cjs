@@ -39,6 +39,16 @@ function git(root, args) {
   return execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
 }
 
+function assertFullHistory(root) {
+  if (git(root, ['rev-parse', '--is-shallow-repository']) !== 'true') return;
+
+  throw new Error(
+    'Shallow clone: the last version bump can predate the available history, ' +
+      'so drift silently under-reports. Run `git fetch --unshallow`, or check out ' +
+      'with fetch-depth: 0 in CI.',
+  );
+}
+
 function pluginNames(root) {
   const dir = path.join(root, 'plugins');
   if (!fs.existsSync(dir)) return [];
@@ -65,6 +75,8 @@ function contentCommitsSince(root, name, since) {
 }
 
 function versionDrift(root) {
+  assertFullHistory(root);
+
   const drifted = [];
   for (const name of pluginNames(root)) {
     const manifestFile = path.join(root, 'plugins', name, '.claude-plugin', 'plugin.json');
@@ -84,7 +96,15 @@ function versionDrift(root) {
 
 function main() {
   const options = parseArgs(process.argv.slice(2));
-  const drifted = versionDrift(options.root);
+
+  let drifted;
+
+  try {
+    drifted = versionDrift(options.root);
+  } catch (error) {
+    console.error(error.message);
+    return 1;
+  }
 
   if (drifted.length === 0) {
     console.log('Every plugin version covers its current content.');
@@ -101,7 +121,7 @@ function main() {
   return options.check ? 1 : 0;
 }
 
-module.exports = { versionDrift, pluginNames, NON_CONTENT_DIRS };
+module.exports = { versionDrift, pluginNames, assertFullHistory, NON_CONTENT_DIRS };
 
 if (require.main === module) {
   process.exit(main());

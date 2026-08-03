@@ -110,3 +110,19 @@ test('drift is reported per plugin, busiest first', () => {
     ],
   );
 });
+
+test('a shallow clone fails loudly instead of under-reporting', () => {
+  const origin = repo();
+  writeManifest(origin, 'alpha', '0.1.0');
+  writeSkill(origin, 'alpha', 'one');
+  commit(origin, 'add alpha');
+  writeSkill(origin, 'alpha', 'two');
+  commit(origin, 'edit alpha');
+
+  const shallow = fs.mkdtempSync(path.join(os.tmpdir(), 'qol-skills-shallow-'));
+  fs.rmSync(shallow, { recursive: true });
+  execFileSync('git', ['clone', '-q', '--depth', '1', `file://${origin}`, shallow], { stdio: 'pipe' });
+
+  assert.throws(() => versionDrift(shallow), /Shallow clone/);
+  assert.deepEqual(versionDrift(origin), [{ name: 'alpha', version: '0.1.0', commits: 1 }]);
+});
