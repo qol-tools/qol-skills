@@ -27,7 +27,7 @@
       "name": "qol-plugin-launcher",
       "description": "Skills for the qol-tray launcher plugin: GPUI launcher architecture, discovery/ranking, and release flow.",
       "source": "./plugins/qol-plugin-launcher",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "author": {
         "name": "KMRH47"
       }
@@ -36,7 +36,7 @@
       "name": "qol-plugin-pointz",
       "description": "Skills for the PointZ pair: qol-tray desktop server plugin and the Flutter mobile client (discovery, UDP transport, input injection).",
       "source": "./plugins/qol-plugin-pointz",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "author": {
         "name": "KMRH47"
       }
@@ -45,7 +45,7 @@
       "name": "qol-plugin-ide-checkout",
       "description": "Skills for the qol-tray ide-checkout (Task Runner) plugin: Rust supervisor + Python daemon internals and the task-runner HTTP API contract.",
       "source": "./plugins/qol-plugin-ide-checkout",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "author": {
         "name": "KMRH47"
       }
@@ -54,7 +54,7 @@
       "name": "qol-plugin-keyremap",
       "description": "Skills for the qol-tray key remap plugin (macOS only): CGEventTap daemon, rule kinds, per-app exclusions, and rule editor UI.",
       "source": "./plugins/qol-plugin-keyremap",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "author": {
         "name": "KMRH47"
       }
@@ -63,7 +63,7 @@
       "name": "qol-plugin-lights",
       "description": "Specialist agent and skills for the qol-tray lights plugin: backend adapters (Zigbee2MQTT first), ZNP serial stack, daemon/runtime split, auto-config settings UI, and a SubagentStop hook that auto-curates agent MEMORY.md.",
       "source": "./plugins/qol-plugin-lights",
-      "version": "0.2.1",
+      "version": "0.2.2",
       "author": {
         "name": "KMRH47"
       }
@@ -72,7 +72,7 @@
       "name": "qol-plugin-os-themes",
       "description": "Skills for the qol-tray OS themes plugin: shake-to-grow cursor effect, X11 cursor manipulation via xfixes, and the broader theming roadmap.",
       "source": "./plugins/qol-plugin-os-themes",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "author": {
         "name": "KMRH47"
       }
@@ -81,7 +81,7 @@
       "name": "qol-shot",
       "description": "Skills for the qol-shot plugin: qol-tray screenshot and screen-recording flow (ffmpeg, X11 display capture).",
       "source": "./plugins/qol-shot",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "author": {
         "name": "KMRH47"
       }
@@ -90,7 +90,7 @@
       "name": "qol-plugin-window-actions",
       "description": "Skills for Window Actions: geometry, minimize/restore, monitor movement, continuous glide, platform behavior, and diagnostics.",
       "source": "./plugins/qol-plugin-window-actions",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "author": {
         "name": "KMRH47"
       }
@@ -153,7 +153,7 @@
       "name": "qol-plugin-controllers",
       "description": "Skills for the qol-tray Controllers plugin: browser Gamepad mapping, hardware profiles, Linux evdev and Bluetooth diagnostics, signal semantics, and rumble testing.",
       "source": "./plugins/qol-plugin-controllers",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "author": {
         "name": "KMRH47"
       }
