@@ -920,15 +920,16 @@ test("accepts a tool extension matching the generator output", () => {
   expectScript(["--root", root, "--check"], { env: withPath(binDir) });
 });
 
-test("fails loudly when the tool extension generator is missing", () => {
+test("skips the tool extension drift check when the generator is missing", () => {
   const root = makeToolExtensionRepo();
   const emptyBin = path.join(root, "empty-bin");
   fs.mkdirSync(emptyBin, { recursive: true });
+  const env = withPath(emptyBin);
 
-  const result = expectScriptFailure(["--root", root], {
-    env: withPath(emptyBin),
-  });
+  expectScript(["--root", root], { env });
 
-  assert.match(result.stderr, /Cannot generate qol-sessions extensions\/hooks\.ts/);
+  const result = expectScript(["--root", root, "--check"], { env });
+
+  assert.match(result.stderr, /qol not found on PATH; skipping qol-sessions extensions\/hooks\.ts drift check \(advisory\)/);
   assert.ok(!fs.existsSync(path.join(root, "plugins", "qol-sessions", "extensions")));
 });

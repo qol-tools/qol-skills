@@ -754,6 +754,12 @@ function syncToolExtension(root, pluginName, options, changes, failures) {
       timeout: 30_000,
     });
   } catch (error) {
+    if (error.code === "ENOENT") {
+      console.warn(
+        `qol not found on PATH; skipping ${pluginName} ${source.file} drift check (advisory)`,
+      );
+      return;
+    }
     failures.push(
       `Cannot generate ${pluginName} ${source.file}: ${gitErrorMessage(error)}`,
     );
