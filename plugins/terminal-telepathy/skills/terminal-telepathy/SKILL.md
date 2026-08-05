@@ -1,6 +1,6 @@
 ---
 name: terminal-telepathy
-description: Use when relaying work between two agents' terminals on this host (pi, Claude Code, codex, kimi): handing off a task to another agent's CLI, waiting for another agent to finish its turn before sending, or coordinating turn-taking between agents. Covers the relay loop over sessions_list, session_wait_output, session_send_text, session_read_screen, and session_focus. Triggers on: relay, handoff, hand off, your turn, wait for claude/codex/kimi/pi, another terminal, ping-pong between agents.
+description: "Use when relaying work between two agents' terminals on this host (pi, Claude Code, codex, kimi): handing off a task to another agent's CLI, waiting for another agent to finish its turn before sending, or coordinating turn-taking between agents. Covers the relay loop over sessions_list, session_wait_output, session_send_text, session_read_screen, and session_focus. Triggers on: relay, handoff, hand off, your turn, wait for claude/codex/kimi/pi, another terminal, ping-pong between agents."
 ---
 
 # terminal-telepathy
