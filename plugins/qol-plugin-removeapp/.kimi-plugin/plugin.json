@@ -1,6 +1,6 @@
 {
   "name": "qol-plugin-removeapp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Skills for the plugin-removeapp plugin: leftover attribution, package-manager guards, and safe identity-checked removal.",
   "author": {
     "name": "KMRH47"

@@ -712,7 +712,7 @@ function syncPiPlugin(root, pluginName, base, options, changes, failures) {
   if (extensionContent) {
     const current = fs.existsSync(hooksTs) ? fs.readFileSync(hooksTs, "utf8") : null;
 
-    if (current !== normalizeNewlines(extensionContent)) {
+    if (current === null || normalizeNewlines(current) !== normalizeNewlines(extensionContent)) {
       fs.mkdirSync(extensionsDir, { recursive: true });
       fs.writeFileSync(hooksTs, extensionContent);
       changes.push(relative(root, hooksTs));

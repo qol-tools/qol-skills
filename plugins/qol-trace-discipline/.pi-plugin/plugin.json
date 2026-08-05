@@ -1,7 +1,7 @@
 {
   "name": "qol-trace-discipline",
   "description": "Cross-cutting qol trace discipline: reminds agents to consider new or richer qol trace targets whenever code changes touch behavior, persistence, runtime flows, tests, or bug investigations.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "author": {
     "name": "KMRH47"
   }

@@ -1,6 +1,6 @@
 {
   "name": "qol-plugin-bluetooth",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Skills for the plugin-bluetooth plugin: BlueZ adapter and device control, discovery, and reliable reconnection.",
   "author": {
     "name": "KMRH47"

@@ -1,7 +1,7 @@
 {
   "name": "qol-shot",
   "description": "Skills for the qol-shot plugin: qol-tray screenshot and screen-recording flow (ffmpeg, X11 display capture).",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "author": {
     "name": "KMRH47"
   }

@@ -1,6 +1,6 @@
 {
   "name": "qol-plugin-window-actions",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Skills for Window Actions: geometry, minimize/restore, monitor movement, continuous glide, platform behavior, and diagnostics.",
   "author": {
     "name": "KMRH47"

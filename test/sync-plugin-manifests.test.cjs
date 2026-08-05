@@ -473,6 +473,30 @@ test("accepts CRLF-normalized marketplace files from Windows checkouts", () => {
   execFileSync("node", [script, "--root", root, "--check"], { stdio: "pipe" });
 });
 
+test("accepts CRLF-normalized pi extension files from Windows checkouts", () => {
+  const root = makeRepo();
+
+  writeAlphaHooks(root, {
+    hooks: {
+      PreToolUse: [
+        {
+          matcher: "Bash",
+          hooks: [
+            {
+              type: "command",
+              command: "node -e 'const fs=require(\"node:fs\");' alpha bin/one.cjs",
+            },
+          ],
+        },
+      ],
+    },
+  });
+  execFileSync("node", [script, "--root", root], { stdio: "pipe" });
+  rewriteWithCrlf(path.join(root, "plugins", "alpha", ".pi", "extensions", "hooks.ts"));
+
+  execFileSync("node", [script, "--root", root, "--check"], { stdio: "pipe" });
+});
+
 test("generates kimi manifests from resolved base metadata", () => {
   const root = makeRepo();
 
