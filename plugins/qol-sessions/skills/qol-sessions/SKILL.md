@@ -25,7 +25,7 @@ Sessions are discovered from the shared terminal-sessions backends (kitty remote
 3. Call `session_read_screen` to observe the CLI's response.
 4. Repeat until the target CLI's screen shows the expected outcome. `sessions_list` activity hints can tell you when the session went busy and came back.
 
-This loop is exactly how one agent relays work to another agent's CLI: text in, screen out, no shared context between the two agents.
+This loop is exactly how one agent relays work to another agent's CLI: text in, screen out, no shared context between the two agents. The turn-taking *procedure* (when to wait, when to send, per-tool idle signals) lives in the `terminal-telepathy` skill; this skill stays the tool reference.
 
 ## Constraints
 
