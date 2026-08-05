@@ -23,6 +23,7 @@
     "./plugins/qol-plugin-removeapp/skills/",
     "./plugins/qol-plugin-window-actions/skills/",
     "./plugins/qol-project/skills/",
+    "./plugins/qol-sessions/skills/",
     "./plugins/qol-shot/skills/",
     "./plugins/qol-trace-discipline/skills/",
     "./plugins/qol-tray/skills/",

@@ -94,6 +94,10 @@
     {
       "id": "qol-debug",
       "source": "../plugins/qol-debug"
+    },
+    {
+      "id": "qol-sessions",
+      "source": "../plugins/qol-sessions"
     }
   ]
 }

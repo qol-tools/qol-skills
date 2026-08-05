@@ -1,0 +1,11 @@
+{
+  "name": "qol-sessions",
+  "version": "0.1.0",
+  "description": "Agent relay surface for live terminal sessions: list sessions, send text into a chosen session's CLI, read the screen back, focus windows. Ships the pi tools sessions_list, session_read_screen, session_send_text, and session_focus over the qol sessions command group and its MCP server.",
+  "author": {
+    "name": "KMRH47"
+  },
+  "skills": [
+    "./skills/"
+  ]
+}
