@@ -747,6 +747,12 @@ function syncPiRootPackageJson(root, plugins, options, changes) {
     if (fs.existsSync(piPluginsDir)) {
       extensionsGlobs.push(`./plugins/${pluginName}/.pi/extensions`);
     }
+
+    const toolsDir = path.join(root, "plugins", pluginName, "extensions");
+
+    if (fs.existsSync(toolsDir)) {
+      extensionsGlobs.push(`./plugins/${pluginName}/extensions`);
+    }
   }
 
   const pi = {

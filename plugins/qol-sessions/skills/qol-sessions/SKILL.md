@@ -29,5 +29,5 @@ The full turn-taking procedure (wait for the turn, verify identity, deliver, con
 - Concurrent delivery from multiple agents into one session is not coordinated yet; do not race another writer (including qol-voice) into the same session.
 ## Reaching the surface
 
-- MCP clients (Claude Code, codex, kimi): `qol sessions mcp` over stdio exposes `sessions_list`, `session_read_screen`, `session_send_text`, and `session_focus` (plus `session_wait_output` in the sessions-relay build).
-- Any shell: the `qol sessions` CLI subcommands (`list`, `send`, `read`, `wait`, `focus`). pi also gets native `sessions_*` tools from the qol-skills pi package extension.
+- MCP clients (Claude Code, codex, kimi): `qol sessions mcp` over stdio exposes `sessions_list`, `session_read_screen`, `session_send_text`, and `session_focus` (plus `session_wait_output` in the sessions-relay build); `qol sessions mcp --help` lists the current tools.
+- Any shell: the `qol sessions` CLI (`qol sessions help` lists your build's subcommands). pi also gets native `sessions_*` tools from the qol-skills pi package extension.

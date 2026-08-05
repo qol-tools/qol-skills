@@ -32,7 +32,7 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
       const text = rows
         .map(
           (row) =>
-            `${row.session}  ${row.tool ?? "?"}  ${row.display_name ?? ""}${row.cwd ? `  (${row.cwd})` : ""}${row.has_activity == null ? "" : row.has_activity ? "  busy" : "  idle"}${row.pending_input ? `  queued:${row.pending_input}` : ""}`,
+            `${row.session}  ${row.tool ?? "?"}  ${row.display_name ?? ""}${row.cwd ? `  (${row.cwd})` : ""}${row.activity == null ? "" : row.activity ? "  busy" : "  idle"}`,
         )
         .join("\n");
       return { content: [{ type: "text", text: text || "no sessions" }], details: { rows } };
