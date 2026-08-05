@@ -1,6 +1,6 @@
 ---
 name: qol-sessions
-description: Use when relaying text into a live terminal session or another agent's CLI on this host, or when choosing which terminal session should receive input. Covers the pi tools sessions_list, session_read_screen, session_send_text, and session_focus, which wrap the qol sessions command group and its MCP server.
+description: Use when relaying text into a live terminal session or another agent's CLI on this host, or when choosing which terminal session should receive input. Covers the sessions_list, session_read_screen, session_send_text, and session_focus tools over the qol sessions command group and its MCP server.
 ---
 
 # qol-sessions
@@ -20,16 +20,14 @@ Sessions are discovered from the shared terminal-sessions backends (kitty remote
 
 ## The relay loop
 
-1. Call `sessions_list` and pick the target session from the tool classification, activity hint, and cwd. Prefer sessions whose tool matches the task and whose screen shows a ready prompt.
-2. Call `session_send_text` with `submit: true` for a command or `submit: false` to complete a partially typed line.
-3. Call `session_read_screen` to observe the CLI's response.
-4. Repeat until the target CLI's screen shows the expected outcome. `sessions_list` activity hints can tell you when the session went busy and came back.
-
-This loop is exactly how one agent relays work to another agent's CLI: text in, screen out, no shared context between the two agents. The turn-taking *procedure* (when to wait, when to send, per-tool idle signals) lives in the `terminal-telepathy` skill; this skill stays the tool reference.
+The full turn-taking procedure (wait for the turn, verify identity, deliver, confirm landed, report) lives in the `terminal-telepathy` skill. This skill stays the tool reference: use it to understand the tools and pick a session, then follow telepathy's loop for the actual relay.
 
 ## Constraints
 
 - Delivery is fire-and-forget typing. There is no acknowledgement from the target CLI; the screen is the only evidence.
 - Only sessions with the input capability accept text, and only the same user's sessions are discoverable.
 - Concurrent delivery from multiple agents into one session is not coordinated yet; do not race another writer (including qol-voice) into the same session.
-- The same tools are exposed to MCP clients (Claude Code, others) by `qol sessions mcp` over stdio.
+## Reaching the surface
+
+- MCP clients (Claude Code, codex, kimi): `qol sessions mcp` over stdio exposes `sessions_list`, `session_read_screen`, `session_send_text`, and `session_focus` (plus `session_wait_output` in the sessions-relay build).
+- Any shell, including pi: the `qol sessions` CLI subcommands (`list`, `send`, `read`, `focus`). The qol-skills pi package lists no session tools; the CLI is the pi path.
