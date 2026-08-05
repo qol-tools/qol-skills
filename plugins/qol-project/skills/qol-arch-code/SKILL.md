@@ -585,6 +585,11 @@ Allowed without challenge:
 - Host-served browser assets under plugin-root `ui/`, and Rust/GPUI code under `src/ui/`.
 - OS-named files inside any `platform/` directory — those *are* the OS impl, cfg inside is redundant but harmless.
 - Files under `tests/` and `examples/`, or named `*_test.rs` / `*_tests.rs` — cross-platform tests legitimately need cfg gates.
+- Test-gated items anywhere: a `#[cfg(test)]` module, field, block, or item, and anything carrying `#[test]` / `#[tokio::test]` / `#[rstest]`. A platform cfg on a test states which OS the test can run on; that is correct, not OS branching in business logic. The hook evaluates the compiled non-test view of the file.
+- Comments. Platform names, `cfg!(target_os = ...)`, and `platforms.len() == 1` written in prose or commented-out code are not platform decisions.
+- Non-platform cfg predicates such as `cfg(debug_assertions)` and `cfg(feature = ...)`.
+- Platform tokens that never meet a branch: carrying a `platforms` field, or passing `target_os` through to a facade, is not a decision. The composite platform-token signals require the token and the branch/routing to appear together, not merely somewhere in the same file.
+- Platform decision signals that the edit did not introduce. The guard reports only signals absent from the file before the edit, so an unrelated edit is not blocked by pre-existing debt. New debt still blocks.
 - Main-session and subagent edits are checked the same way.
 
 Bypass for one-off legitimate exceptions (and you should be very sure it's legitimate — usually it isn't):

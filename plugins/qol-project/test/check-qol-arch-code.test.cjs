@@ -803,6 +803,277 @@ test('passes platform decision inside resolver facade', () => {
     assert.equal(r.exitCode, 0);
 });
 
+const PLATFORM_GATED_TEST_FILE = [
+    'use super::{Plugin, PluginId};',
+    'use std::collections::HashMap;',
+    'use std::sync::Arc;',
+    '',
+    'pub struct PluginManager {',
+    '    plugins: HashMap<PluginId, Plugin>,',
+    '    process_tracker: Arc<ProcessTracker>,',
+    '    #[cfg(test)]',
+    '    profile_reconciliation_count: u64,',
+    '}',
+    '',
+    'impl PluginManager {',
+    '    pub fn reconcile_profile_generation(&mut self) -> Result<bool> {',
+    '        #[cfg(test)]',
+    '        {',
+    '            self.profile_reconciliation_count += 1;',
+    '        }',
+    '        if self.plugins.is_empty() {',
+    '            return Ok(false);',
+    '        }',
+    '        Ok(true)',
+    '    }',
+    '}',
+    '',
+    '#[cfg(test)]',
+    'mod tests {',
+    '    use super::*;',
+    '',
+    '    #[cfg(unix)]',
+    '    #[test]',
+    '    fn running_gpui_daemon_ids_skips_headless_and_stopped_plugins() {',
+    '        let manager = PluginManager::new();',
+    '        assert!(manager.plugins.is_empty());',
+    '    }',
+    '}',
+    '',
+].join('\n');
+
+const TEST_ONLY_PLATFORM_DATA_FILE = [
+    'use super::{autostart, loading, PluginManager};',
+    'use anyhow::Result;',
+    '',
+    'pub(super) fn reload_plugin(manager: &mut PluginManager, plugin_id: &str) -> Result<u64> {',
+    '    #[cfg(debug_assertions)]',
+    '    let old_pid = manager.plugins.get(plugin_id).and_then(Plugin::daemon_pid);',
+    '    #[cfg(not(debug_assertions))]',
+    '    let old_pid = None::<u32>;',
+    '    if !crate::dev_generation::is_shadow() && !crate::dev_generation::is_rolling_restart() {',
+    '        daemon_tracker::clean_stale_sockets(plugin_id);',
+    '    }',
+    '    loading::rebuild_identity_index(manager);',
+    '    Ok(old_pid.unwrap_or_default() as u64)',
+    '}',
+    '',
+    '#[cfg(all(test, unix))]',
+    'mod tests {',
+    '    use super::*;',
+    '',
+    '    #[test]',
+    '    fn reload_rewrites_the_plugins_lock() {',
+    '        save_plugins_lock(&PluginsLock {',
+    '            version: CURRENT_PROFILE_VERSION,',
+    '            plugins: vec![PluginLockEntry {',
+    '                id: TARGET_ID.to_string(),',
+    '                version: "1.0.0".to_string(),',
+    '                platforms: None,',
+    '            }],',
+    '        })',
+    '        .unwrap();',
+    '    }',
+    '}',
+    '',
+].join('\n');
+
+test('passes an unrelated edit to a file whose only platform cfg gates a test', () => {
+    const file = fixtureFile(
+        'apps/qol-tray/src/plugins/manager/mod.rs',
+        PLATFORM_GATED_TEST_FILE,
+    );
+    const r = run({
+        tool_name: 'Edit',
+        tool_input: {
+            file_path: file,
+            old_string: '    process_tracker: Arc<ProcessTracker>,',
+            new_string: '    process_tracker: Arc<ProcessTracker>,\n    last_reload_reason: Option<String>,',
+        },
+    });
+    assert.equal(r.exitCode, 0, r.stderr);
+});
+
+test('passes an unrelated edit to a file whose only platform token is test data', () => {
+    const file = fixtureFile(
+        'apps/qol-tray/src/plugins/manager/runtime.rs',
+        TEST_ONLY_PLATFORM_DATA_FILE,
+    );
+    const r = run({
+        tool_name: 'Edit',
+        tool_input: {
+            file_path: file,
+            old_string: '    loading::rebuild_identity_index(manager);',
+            new_string: '    loading::rebuild_identity_index(manager);\n    sync_ignore_pids(manager);',
+        },
+    });
+    assert.equal(r.exitCode, 0, r.stderr);
+});
+
+test('passes build-profile cfg gates that name no platform', () => {
+    const r = run({
+        tool_name: 'Write',
+        tool_input: {
+            file_path: '/x/Git/qol-monorepo/apps/qol-tray/src/plugins/manager/runtime.rs',
+            content: [
+                'pub(super) fn reload(manager: &mut PluginManager) -> Result<()> {',
+                '    #[cfg(debug_assertions)]',
+                '    let old_pid = manager.daemon_pid();',
+                '    #[cfg(not(debug_assertions))]',
+                '    let old_pid = None::<u32>;',
+                '    if old_pid.is_some() {',
+                '        manager.stop();',
+                '    }',
+                '    Ok(())',
+                '}',
+                '',
+            ].join('\n'),
+        },
+    });
+    assert.equal(r.exitCode, 0, r.stderr);
+});
+
+test('passes a platforms field that is carried but never branched on', () => {
+    const r = run({
+        tool_name: 'Write',
+        tool_input: {
+            file_path: '/x/Git/qol-monorepo/libs/qol-plugin-api/src/manifest/schema.rs',
+            content: [
+                'pub struct PluginManifest {',
+                '    pub id: String,',
+                '    pub platforms: Option<Vec<String>>,',
+                '}',
+                '',
+                'impl PluginManifest {',
+                '    pub fn supported_here(&self) -> bool {',
+                '        super::supports_current_platform(&self.platforms)',
+                '    }',
+                '',
+                '    pub fn display_id(&self) -> &str {',
+                '        if self.id.is_empty() {',
+                '            return "unknown";',
+                '        }',
+                '        &self.id',
+                '    }',
+                '}',
+                '',
+            ].join('\n'),
+        },
+    });
+    assert.equal(r.exitCode, 0, r.stderr);
+});
+
+test('passes platform decisions described only in comments', () => {
+    const r = run({
+        tool_name: 'Write',
+        tool_input: {
+            file_path: '/x/Git/qol-monorepo/apps/qol-tray/src/plugins/state.rs',
+            content: [
+                '/// The facade resolves this with cfg!(target_os = "linux"); callers must not.',
+                '// platforms.len() == 1 means single-OS, and the resolver owns that decision.',
+                'pub fn describe(ready: bool) -> &' + '\'static str {',
+                '    if ready {',
+                '        return "ready";',
+                '    }',
+                '    "idle"',
+                '}',
+                '',
+            ].join('\n'),
+        },
+    });
+    assert.equal(r.exitCode, 0, r.stderr);
+});
+
+test('blocks a platform cfg added to a production item beside a platform-gated test', () => {
+    const file = fixtureFile(
+        'apps/qol-tray/src/plugins/manager/mod.rs',
+        PLATFORM_GATED_TEST_FILE,
+    );
+    const r = run({
+        tool_name: 'Edit',
+        tool_input: {
+            file_path: file,
+            old_string: '    pub fn reconcile_profile_generation(&mut self) -> Result<bool> {',
+            new_string: '    #[cfg(unix)]\n    pub fn reconcile_profile_generation(&mut self) -> Result<bool> {',
+        },
+    });
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /#\[cfg\(unix\/windows\)\]/);
+});
+
+test('blocks platform branching added beside test-only platform data', () => {
+    const file = fixtureFile(
+        'apps/qol-tray/src/plugins/manager/runtime.rs',
+        TEST_ONLY_PLATFORM_DATA_FILE,
+    );
+    const r = run({
+        tool_name: 'Edit',
+        tool_input: {
+            file_path: file,
+            old_string: '    loading::rebuild_identity_index(manager);',
+            new_string: '    if manifest.platforms.len() == 1 { return Ok(0); }',
+        },
+    });
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /platform token \+ branching/);
+});
+
+test('passes cfg(target_os) attached to a platform-gated test', () => {
+    const r = run({
+        tool_name: 'Write',
+        tool_input: {
+            file_path: '/x/Git/qol-monorepo/apps/qol-tray/src/features/task_runner/execution/mod.rs',
+            content: [
+                'pub fn execute(command: &str) -> Result<()> {',
+                '    runner::spawn(command)',
+                '}',
+                '',
+                '#[cfg(test)]',
+                'mod tests {',
+                '    use super::*;',
+                '',
+                '    #[cfg(target_os = "linux")]',
+                '    #[test]',
+                '    fn executes_on_linux() {',
+                '        assert!(execute("true").is_ok());',
+                '    }',
+                '}',
+                '',
+            ].join('\n'),
+        },
+    });
+    assert.equal(r.exitCode, 0, r.stderr);
+});
+
+test('blocks cfg(target_os) on a production item beside a platform-gated test', () => {
+    const r = run({
+        tool_name: 'Write',
+        tool_input: {
+            file_path: '/x/Git/qol-monorepo/apps/qol-tray/src/features/task_runner/execution/mod.rs',
+            content: [
+                '#[cfg(target_os = "linux")]',
+                'pub fn execute(command: &str) -> Result<()> {',
+                '    runner::spawn(command)',
+                '}',
+                '',
+                '#[cfg(test)]',
+                'mod tests {',
+                '    use super::*;',
+                '',
+                '    #[cfg(target_os = "linux")]',
+                '    #[test]',
+                '    fn executes_on_linux() {',
+                '        assert!(execute("true").is_ok());',
+                '    }',
+                '}',
+                '',
+            ].join('\n'),
+        },
+    });
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /line 1: #\[cfg\(target_os = "linux"\)\]/);
+});
+
 test('passes platform decision inside named facade type', () => {
     const r = run({
         tool_name: 'Write',

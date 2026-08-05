@@ -267,6 +267,10 @@ const OS_COMMAND = /\bCommand::new\s*\(\s*"(open|osascript|xdg-open|powershell|c
 const PLATFORM_TOKEN = /\b(current_os|target_os|host_os|os_bucket|platforms|supported_platforms)\b|"(linux|macos|windows|darwin|win32|x11|wayland)"/;
 const ROUTING_TOKEN = /\.join\s*\(\s*"os"\s*\)|format!\s*\(\s*"os\/|PathBuf::from\s*\(\s*"os"\s*\)|\b(os|core|device)_(dir|path|bucket)\b|"(core|device)"|"plugin-configs"/;
 const DECISION_TOKEN = /\b(if|match)\b|=>|==|!=|\.len\(\)\s*==\s*1|\.contains\s*\(/;
+const COMPOSITE_WINDOW = 2;
+const TEST_MARKER_ATTRIBUTE = /^#\[\s*(?:[A-Za-z_]\w*\s*::\s*)*(?:test|rstest|test_case|bench|proptest)\b/;
+const CFG_ATTRIBUTE = /^#\[\s*cfg\s*\(/;
+const ITEM_HEAD = /^\s*(?:\{|(?:pub(?:\s*\([^)]*\))?\s+)?(?:default\s+)?(?:const\s+|async\s+|unsafe\s+|extern\s+(?:"[^"]*"\s+)?)*(?:fn|mod|impl|struct|enum|trait|union|use|type|static|let|macro_rules)\b)/;
 
 function readStdin() {
     try {
@@ -337,6 +341,157 @@ function applyMultiEdit(filePath, edits) {
         current = replaced;
     }
     return current;
+}
+
+function sanitizeSource(content, blankLiterals) {
+    const out = content.split('');
+    const blank = (from, to) => {
+        for (let index = from; index < to && index < out.length; index++) {
+            if (out[index] !== '\n') out[index] = ' ';
+        }
+    };
+    let index = 0;
+    while (index < content.length) {
+        const ch = content[index];
+        if (ch === '/' && content[index + 1] === '/') {
+            let end = content.indexOf('\n', index);
+            if (end < 0) end = content.length;
+            blank(index, end);
+            index = end;
+            continue;
+        }
+        if (ch === '/' && content[index + 1] === '*') {
+            let depth = 1;
+            let end = index + 2;
+            while (end < content.length && depth > 0) {
+                if (content[end] === '/' && content[end + 1] === '*') { depth++; end += 2; continue; }
+                if (content[end] === '*' && content[end + 1] === '/') { depth--; end += 2; continue; }
+                end++;
+            }
+            blank(index, end);
+            index = end;
+            continue;
+        }
+        const raw = /^b?r(#*)"/.exec(content.slice(index, index + 16));
+        if (raw && (ch === 'r' || ch === 'b') && !/\w/.test(content[index - 1] || '')) {
+            const terminator = `"${raw[1]}`;
+            const found = content.indexOf(terminator, index + raw[0].length);
+            const end = found < 0 ? content.length : found + terminator.length;
+            if (blankLiterals) blank(index, end);
+            index = end;
+            continue;
+        }
+        if (ch === '"') {
+            let end = index + 1;
+            while (end < content.length) {
+                if (content[end] === '\\') { end += 2; continue; }
+                if (content[end] === '"') { end++; break; }
+                end++;
+            }
+            if (blankLiterals) blank(index, end);
+            index = end;
+            continue;
+        }
+        if (ch === "'") {
+            const char = /^'(?:\\.|[^\\'])'/.exec(content.slice(index, index + 8));
+            if (char) {
+                if (blankLiterals) blank(index, index + char[0].length);
+                index += char[0].length;
+                continue;
+            }
+        }
+        index++;
+    }
+    return out.join('');
+}
+
+function isTestAttribute(attribute) {
+    if (TEST_MARKER_ATTRIBUTE.test(attribute)) return true;
+    if (!CFG_ATTRIBUTE.test(attribute)) return false;
+    let predicate = attribute;
+    let previous;
+    do {
+        previous = predicate;
+        predicate = predicate.replace(/\bnot\s*\([^()]*\)/g, '');
+    } while (predicate !== previous);
+    return /\btest\b/.test(predicate);
+}
+
+function readAttributeRun(code, start) {
+    const attributes = [];
+    let index = start;
+    while (code.startsWith('#[', index)) {
+        let depth = 0;
+        let end = index + 1;
+        for (; end < code.length; end++) {
+            if (code[end] === '[') depth++;
+            else if (code[end] === ']' && --depth === 0) break;
+        }
+        if (end >= code.length) return null;
+        attributes.push(code.slice(index, end + 1));
+        index = end + 1;
+        while (index < code.length && /\s/.test(code[index])) index++;
+    }
+    if (attributes.length === 0 || index >= code.length) return null;
+    return { attributes, itemStart: index };
+}
+
+function findItemEnd(code, start) {
+    const lineEnd = code.indexOf('\n', start);
+    const head = code.slice(start, lineEnd < 0 ? code.length : lineEnd);
+    const blockItem = ITEM_HEAD.test(head);
+    let depth = 0;
+    let openedBody = false;
+    for (let index = start; index < code.length; index++) {
+        const ch = code[index];
+        if (ch === '{' || ch === '(' || ch === '[') {
+            if (ch === '{' && depth === 0) openedBody = true;
+            depth++;
+            continue;
+        }
+        if (ch === '}' || ch === ')' || ch === ']') {
+            depth--;
+            if (depth < 0) return index;
+            if (depth === 0 && openedBody && ch === '}') return index + 1;
+            continue;
+        }
+        if (depth > 0) continue;
+        if (ch === ';') return index + 1;
+        if (ch === ',' && !blockItem) return index + 1;
+    }
+    return null;
+}
+
+function maskTestItems(content) {
+    const code = sanitizeSource(content, true);
+    const ranges = [];
+    let index = 0;
+    while (index < code.length) {
+        const start = code.indexOf('#[', index);
+        if (start < 0) break;
+        const run = readAttributeRun(code, start);
+        const end = run && run.attributes.some(isTestAttribute)
+            ? findItemEnd(code, run.itemStart)
+            : null;
+        if (end === null) {
+            index = start + 2;
+            continue;
+        }
+        ranges.push([start, end]);
+        index = end;
+    }
+    if (ranges.length === 0) return content;
+    const out = content.split('');
+    for (const [from, to] of ranges) {
+        for (let cursor = from; cursor < to && cursor < out.length; cursor++) {
+            if (out[cursor] !== '\n') out[cursor] = ' ';
+        }
+    }
+    return out.join('');
+}
+
+function productionCode(content) {
+    return sanitizeSource(maskTestItems(content), false);
 }
 
 function findCfgViolations(content, allowTargetAdapterAlias = false) {
@@ -710,13 +865,34 @@ function findStrongPlatformSignals(content) {
 }
 
 function findCompositePlatformSignals(content) {
-    const hasPlatform = PLATFORM_TOKEN.test(content);
-    const hasRouting = ROUTING_TOKEN.test(content);
-    const hasDecision = DECISION_TOKEN.test(content);
+    const lines = content.split(/\r?\n/);
+    let hasRouting = false;
+    let hasDecision = false;
+    for (let index = 0; index < lines.length; index++) {
+        if (!PLATFORM_TOKEN.test(lines[index])) continue;
+        const window = lines
+            .slice(Math.max(0, index - COMPOSITE_WINDOW), index + COMPOSITE_WINDOW + 1)
+            .join('\n');
+        if (ROUTING_TOKEN.test(window)) hasRouting = true;
+        if (DECISION_TOKEN.test(window)) hasDecision = true;
+    }
     const labels = [];
-    if (hasPlatform && hasRouting) labels.push('platform token + storage/path routing');
-    if (hasPlatform && hasDecision) labels.push('platform token + branching');
+    if (hasRouting) labels.push('platform token + storage/path routing');
+    if (hasDecision) labels.push('platform token + branching');
     return labels;
+}
+
+function platformDecisionSignals(content) {
+    const production = productionCode(content);
+    return [
+        ...findStrongPlatformSignals(production),
+        ...findCompositePlatformSignals(production),
+    ];
+}
+
+function findNewPlatformDecisionSignals(filePath, newContent) {
+    const before = new Set(platformDecisionSignals(readExistingFile(filePath) || ''));
+    return platformDecisionSignals(newContent).filter(signal => !before.has(signal));
 }
 
 function blockCompileError(filePath) {
@@ -999,17 +1175,17 @@ function main() {
         return 2;
     }
 
-    const violations = findCfgViolations(newContent, platformContext(filePath)?.facade === true);
+    const violations = findCfgViolations(
+        productionCode(newContent),
+        platformContext(filePath)?.facade === true,
+    );
     if (violations.length > 0) {
         blockCfgViolations(filePath, violations);
         return 2;
     }
 
     if (!isArchitectureBoundary(filePath, newContent)) {
-        const signals = [
-            ...findStrongPlatformSignals(newContent),
-            ...findCompositePlatformSignals(newContent),
-        ];
+        const signals = findNewPlatformDecisionSignals(filePath, newContent);
         if (signals.length > 0) {
             blockPlatformDecision(filePath, signals);
             return 2;
