@@ -90,6 +90,10 @@
       "id": "adversarial-test",
       "source": "../plugins/adversarial-test",
       "displayName": "Adversarial Test Storm"
+    },
+    {
+      "id": "qol-debug",
+      "source": "../plugins/qol-debug"
     }
   ]
 }

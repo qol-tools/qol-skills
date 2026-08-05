@@ -8,6 +8,7 @@
   "skills": [
     "./plugins/adversarial-test/skills/",
     "./plugins/code-review/skills/",
+    "./plugins/qol-debug/skills/",
     "./plugins/qol-langs/skills/",
     "./plugins/qol-plugin-alt-tab/skills/",
     "./plugins/qol-plugin-bluetooth/skills/",
