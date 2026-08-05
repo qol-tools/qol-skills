@@ -72,7 +72,7 @@ const RULES = [
   },
   {
     id: "escaped-quoted-description",
-    message: "Write the frontmatter description as an unquoted YAML scalar; a double-quoted scalar with escaped quotes double-escapes through the manifest sync.",
+    message: "Write the frontmatter description as an unquoted YAML scalar; the sync unescapes quoted scalars, but unquoted is the house style and keeps every generated manifest byte-identical to the skill.",
     pattern: /^description:\s*".*\\"/,
   },
 ];

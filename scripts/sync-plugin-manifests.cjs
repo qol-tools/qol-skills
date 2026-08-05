@@ -233,16 +233,52 @@ function firstSkillDescription(root, pluginName) {
       continue;
     }
 
-    const description = match[1].split(/\r?\n/)
-      .map((line) => line.match(/^description:\s*(.+)$/))
-      .find(Boolean);
-
-    if (description) {
-      return unescapeYamlDescription(description[1]);
+    const lines = match[1].split(/\r?\n/);
+    const index = lines.findIndex((line) => /^description:\s*(.+)$/.test(line));
+    if (index === -1) {
+      continue;
     }
+
+    const head = lines[index].replace(/^description:\s*/, "").trim();
+    const blockIndicator = head.match(/^([>|])[+-]?$/);
+    if (blockIndicator) {
+      return parseBlockScalar(lines.slice(index + 1), blockIndicator[1]);
+    }
+    return unescapeYamlDescription(head);
   }
 
   return null;
+}
+
+function parseBlockScalar(lines, style) {
+  const content = [];
+  for (const line of lines) {
+    if (line.trim() === "") {
+      content.push("");
+      continue;
+    }
+    if (!/^\s+/.test(line)) {
+      break;
+    }
+    content.push(line.trim());
+  }
+  if (style === "|") {
+    return content.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  }
+  const parts = [];
+  let pendingBlank = false;
+  for (const line of content) {
+    if (line === "") {
+      pendingBlank = true;
+      continue;
+    }
+    if (pendingBlank) {
+      parts.push("\n");
+      pendingBlank = false;
+    }
+    parts.push(line);
+  }
+  return parts.join(" ").replace(/ \n /g, "\n\n").trim();
 }
 
 function unescapeYamlDescription(value) {
@@ -251,13 +287,12 @@ function unescapeYamlDescription(value) {
     try {
       return JSON.parse(trimmed);
     } catch {
-      return trimmed.replace(/^["']|["']$/g, "");
     }
   }
   if (trimmed.length >= 2 && trimmed.startsWith("'") && trimmed.endsWith("'")) {
     return trimmed.slice(1, -1).replace(/''/g, "'");
   }
-  return trimmed.replace(/^["']|["']$/g, "");
+  return trimmed;
 }
 
 function baseManifest(root, pluginName, claudeManifest, codexManifest) {

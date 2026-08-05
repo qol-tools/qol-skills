@@ -220,6 +220,46 @@ test("unescapes a quoted skill description when generating missing manifests", (
   assert.doesNotMatch(JSON.stringify(claude), /\\\\/);
 });
 
+test("folds a block-scalar skill description when generating missing manifests", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "qol-skills-manifests-"));
+  const skillDir = path.join(root, "plugins", "epsilon", "skills", "epsilon");
+  fs.mkdirSync(skillDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(skillDir, "SKILL.md"),
+    "---\ndescription: >\n  Triggers on \"a\", \"b\".\n  Second line with a blank after.\n\n  New paragraph.\n---\n",
+  );
+  const zetaDir = path.join(root, "plugins", "zeta", "skills", "zeta");
+  fs.mkdirSync(zetaDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(zetaDir, "SKILL.md"),
+    "---\ndescription: |\n  Line one.\n  Line two.\n---\n",
+  );
+  commitRepo(root);
+
+  execFileSync("node", [script, "--root", root], { stdio: "pipe" });
+
+  const epsilon = readJson(path.join(root, "plugins", "epsilon", ".claude-plugin", "plugin.json"));
+  const zeta = readJson(path.join(root, "plugins", "zeta", ".claude-plugin", "plugin.json"));
+  assert.equal(
+    epsilon.description,
+    'Triggers on "a", "b". Second line with a blank after.\n\nNew paragraph.',
+  );
+  assert.equal(zeta.description, "Line one.\nLine two.");
+});
+
+test("keeps a trailing quote on an unquoted skill description scalar", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "qol-skills-manifests-"));
+  const skillDir = path.join(root, "plugins", "eta", "skills", "eta");
+  fs.mkdirSync(skillDir, { recursive: true });
+  fs.writeFileSync(path.join(skillDir, "SKILL.md"), "---\ndescription: Ask for \"help\"\n---\n");
+  commitRepo(root);
+
+  execFileSync("node", [script, "--root", root], { stdio: "pipe" });
+
+  const claude = readJson(path.join(root, "plugins", "eta", ".claude-plugin", "plugin.json"));
+  assert.equal(claude.description, 'Ask for "help"');
+});
+
 test("rejects manifest names that do not match plugin folders", () => {
   const root = makeRepo();
 
