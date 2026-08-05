@@ -867,6 +867,9 @@ function writeQolShim(binDir, content) {
   fs.chmodSync(shim, 0o755);
 }
 
+const SKIP_WIN_POSIX_SHIM =
+  process.platform === "win32" && "fake qol shim uses a POSIX shebang";
+
 function withPath(extraBinDir) {
   return {
     ...process.env,
@@ -878,7 +881,7 @@ function toolExtensionFile(root) {
   return path.join(root, "plugins", "qol-sessions", "extensions", "hooks.ts");
 }
 
-test("writes a generated tool extension when it is missing", () => {
+test("writes a generated tool extension when it is missing", { skip: SKIP_WIN_POSIX_SHIM }, () => {
   const root = makeToolExtensionRepo();
   const binDir = path.join(root, "fake-bin");
   writeQolShim(binDir, "generated hooks.ts content\n");
@@ -890,7 +893,7 @@ test("writes a generated tool extension when it is missing", () => {
   assert.ok(packageJson.pi.extensions.includes("./plugins/qol-sessions/extensions"));
 });
 
-test("regenerates a stale tool extension and reports it in check mode", () => {
+test("regenerates a stale tool extension and reports it in check mode", { skip: SKIP_WIN_POSIX_SHIM }, () => {
   const root = makeToolExtensionRepo();
   const binDir = path.join(root, "fake-bin");
   writeQolShim(binDir, "fresh generated content\n");
@@ -909,7 +912,7 @@ test("regenerates a stale tool extension and reports it in check mode", () => {
   expectScript(["--root", root, "--check"], { env: withPath(binDir) });
 });
 
-test("accepts a tool extension matching the generator output", () => {
+test("accepts a tool extension matching the generator output", { skip: SKIP_WIN_POSIX_SHIM }, () => {
   const root = makeToolExtensionRepo();
   const binDir = path.join(root, "fake-bin");
   writeQolShim(binDir, "matching content\n");
