@@ -1,0 +1,8 @@
+{
+  "name": "terminal-telepathy",
+  "description": "Use when relaying text or work between two agents' terminals on this host (pi, Claude Code, codex, kimi), handing off a task to another agent's CLI, waiting for another agent to finish its turn before sending, or telling another agent to do something. Covers the automatic relay loop over sessions_list, session_wait_output, session_send_text, session_read_screen, and session_focus.",
+  "version": "0.1.0",
+  "author": {
+    "name": "KMRH47"
+  }
+}

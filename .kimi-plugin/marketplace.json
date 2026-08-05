@@ -98,6 +98,10 @@
     {
       "id": "qol-sessions",
       "source": "../plugins/qol-sessions"
+    },
+    {
+      "id": "terminal-telepathy",
+      "source": "../plugins/terminal-telepathy"
     }
   ]
 }

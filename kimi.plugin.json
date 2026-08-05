@@ -29,6 +29,7 @@
     "./plugins/qol-tray/skills/",
     "./plugins/qol-voice/skills/",
     "./plugins/qol-workflow/skills/",
+    "./plugins/terminal-telepathy/skills/",
     "./plugins/workflow-nodes/skills/"
   ],
   "hooks": [
