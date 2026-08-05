@@ -15,7 +15,7 @@ This skill owns the *procedure* (the turn-taking loop). The *mechanics* (tool se
 |---|---|---|
 | Any shell | `qol sessions list|read|send|focus` | No: poll (the loop below is written for this) |
 | Claude Code, codex, kimi | MCP stdio server: `qol sessions mcp` | Yes in the sessions-relay build (`session_wait_output`); main ships the other four |
-| pi | The `qol sessions` CLI via shell | The qol-skills pi package lists no session tools; the CLI is the path |
+| pi | Native tools via the qol-skills pi package (`sessions_list`, `session_read_screen`, `session_send_text`, `session_wait_output`, `session_focus`), wrapping the same CLI | Yes: `session_wait_output` included |
 
 The poll loop below works on every surface. `session_wait_output` is a one-call optimization when present: it drains the delivery queue, then blocks until the screen changed and stayed stable (settle), or until an expected substring appears, returning `settled`.
 
@@ -52,7 +52,7 @@ The activity hint in `sessions_list` is interpreter-derived per tool and can mis
 
 1. kitty: sessions need `-o allow_remote_control=yes`. qol dev environments configure the kitty backend for you; the guest image itself has no terminal emulator, and the recorded guest recipe (kitty carried via USB stick, `KITTY_LISTEN_ON`) is in the sessions relay design spec. Discovery is scoped to your own kitty control socket, so only your sessions appear.
 2. MCP clients (Claude Code, codex, kimi): register `qol sessions mcp` as a stdio server; approve the session tools once. Check `qol sessions mcp --help` for the current surface instead of trusting this list.
-3. pi: use the `qol sessions` CLI directly (the qol-skills pi package lists no session tools).
+3. pi: the qol-skills pi package registers the five session tools natively (`sessions_*`), wrapping the same CLI; no MCP client needed.
 
 The one-time approval covers the typing mechanics only. Confirm with the user before relaying anything destructive or credential-touching.
 

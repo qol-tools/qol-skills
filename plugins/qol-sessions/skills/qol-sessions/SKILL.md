@@ -30,4 +30,4 @@ The full turn-taking procedure (wait for the turn, verify identity, deliver, con
 ## Reaching the surface
 
 - MCP clients (Claude Code, codex, kimi): `qol sessions mcp` over stdio exposes `sessions_list`, `session_read_screen`, `session_send_text`, and `session_focus` (plus `session_wait_output` in the sessions-relay build).
-- Any shell, including pi: the `qol sessions` CLI subcommands (`list`, `send`, `read`, `focus`). The qol-skills pi package lists no session tools; the CLI is the pi path.
+- Any shell: the `qol sessions` CLI subcommands (`list`, `send`, `read`, `wait`, `focus`). pi also gets native `sessions_*` tools from the qol-skills pi package extension.
