@@ -51,6 +51,18 @@ test("allows behavioral cardinality and live runtime state", () => {
   assert.deepEqual(violations, []);
 });
 
+test("flags escaped quotes inside a double-quoted description scalar", () => {
+  const violations = scanText('description: "Triggers on \\"locate bugs\\", \\"find bugs\\"."');
+
+  assert.deepEqual(violations.map((violation) => violation.rule), ["escaped-quoted-description"]);
+});
+
+test("allows an unquoted description scalar with bare quotes", () => {
+  const violations = scanText('description: Triggers on "locate bugs", "find bugs".');
+
+  assert.deepEqual(violations, []);
+});
+
 test("flags versioned action inventory counts", () => {
   const violations = scanText("The 18 v1 action IDs exist.");
 

@@ -198,6 +198,28 @@ test("generates missing manifests and removes stale marketplace entries", () => 
   execFileSync("node", [script, "--root", root, "--check"], { stdio: "pipe" });
 });
 
+test("unescapes a quoted skill description when generating missing manifests", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "qol-skills-manifests-"));
+  const skillDir = path.join(root, "plugins", "delta", "skills", "delta");
+  fs.mkdirSync(skillDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(skillDir, "SKILL.md"),
+    '---\ndescription: "Triggers on \\"locate bugs\\", \\"find bugs\\"."\n---\n',
+  );
+  commitRepo(root);
+
+  execFileSync("node", [script, "--root", root], { stdio: "pipe" });
+
+  const claude = readJson(path.join(root, "plugins", "delta", ".claude-plugin", "plugin.json"));
+  const codex = readJson(path.join(root, "plugins", "delta", ".codex-plugin", "plugin.json"));
+  const kimi = readJson(path.join(root, "plugins", "delta", ".kimi-plugin", "plugin.json"));
+  const expected = 'Triggers on "locate bugs", "find bugs".';
+  assert.equal(claude.description, expected);
+  assert.equal(codex.description, expected);
+  assert.equal(kimi.description, expected);
+  assert.doesNotMatch(JSON.stringify(claude), /\\\\/);
+});
+
 test("rejects manifest names that do not match plugin folders", () => {
   const root = makeRepo();
 

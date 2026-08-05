@@ -238,11 +238,26 @@ function firstSkillDescription(root, pluginName) {
       .find(Boolean);
 
     if (description) {
-      return description[1].trim().replace(/^["']|["']$/g, "");
+      return unescapeYamlDescription(description[1]);
     }
   }
 
   return null;
+}
+
+function unescapeYamlDescription(value) {
+  const trimmed = value.trim();
+  if (trimmed.length >= 2 && trimmed.startsWith('"') && trimmed.endsWith('"')) {
+    try {
+      return JSON.parse(trimmed);
+    } catch {
+      return trimmed.replace(/^["']|["']$/g, "");
+    }
+  }
+  if (trimmed.length >= 2 && trimmed.startsWith("'") && trimmed.endsWith("'")) {
+    return trimmed.slice(1, -1).replace(/''/g, "'");
+  }
+  return trimmed.replace(/^["']|["']$/g, "");
 }
 
 function baseManifest(root, pluginName, claudeManifest, codexManifest) {

@@ -70,6 +70,11 @@ const RULES = [
     message: "Treat the plugin manifest as the source of truth instead of copying its mutable fields into prose.",
     pattern: /^\s*[-*]\s+(?:binary name|daemon|menu|platforms?|runtime actions? map|runtime command)\s*:/i,
   },
+  {
+    id: "escaped-quoted-description",
+    message: "Write the frontmatter description as an unquoted YAML scalar; a double-quoted scalar with escaped quotes double-escapes through the manifest sync.",
+    pattern: /^description:\s*".*\\"/,
+  },
 ];
 
 // Plugin manifests own plugin identity; a source directory name does not.
