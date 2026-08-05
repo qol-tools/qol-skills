@@ -1,0 +1,11 @@
+interface:
+  display_name: "Code Review"
+  short_description: "Review code with focused agents."
+  default_prompt: |
+    Use code-review to run a read-only code review. If the user invokes
+    $qol-code-review or asks for the qol-code-review skill without requesting solo mode,
+    run review-board mode: read the runtime adapter, spawn real reviewer agents,
+    record reviewer agent ids, then synthesize findings. In Codex, use
+    multi_agent_v1 via tool_search if needed; do not simulate agents in the
+    parent thread. If agents cannot be spawned, report AGENT BOARD NOT RUN and
+    verdict invalid instead of silently falling back.

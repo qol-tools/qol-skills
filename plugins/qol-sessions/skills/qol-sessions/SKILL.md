@@ -21,7 +21,7 @@ Sessions are discovered from the shared terminal-sessions backends (kitty remote
 
 ## The relay loop
 
-The full turn-taking procedure (wait for the turn, verify identity, deliver, confirm landed, report) lives in the `terminal-telepathy` skill. This skill stays the tool reference: use it to understand the tools and pick a session, then follow telepathy's loop for the actual relay.
+The full turn-taking procedure (wait for the turn, verify identity, deliver, confirm landed, report) lives in the `qol-terminal-telepathy` skill. This skill stays the tool reference: use it to understand the tools and pick a session, then follow telepathy's loop for the actual relay.
 
 ## Constraints
 

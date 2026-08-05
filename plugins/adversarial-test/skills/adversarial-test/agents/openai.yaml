@@ -1,4 +1,0 @@
-interface:
-  display_name: "Adversarial Test Storm"
-  short_description: "Break real workflows, preserve evidence, harden fixes"
-  default_prompt: "Use $adversarial-test to attack this feature through its real user path, preserve every failure, and turn stable cases into a repeatable reported storm."

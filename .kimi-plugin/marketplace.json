@@ -2,11 +2,6 @@
   "version": "2",
   "plugins": [
     {
-      "id": "code-review",
-      "source": "../plugins/code-review",
-      "displayName": "Code Review"
-    },
-    {
       "id": "qol-plugin-alt-tab",
       "source": "../plugins/qol-plugin-alt-tab"
     },
@@ -63,10 +58,6 @@
       "source": "../plugins/qol-trace-discipline"
     },
     {
-      "id": "workflow-nodes",
-      "source": "../plugins/workflow-nodes"
-    },
-    {
       "id": "qol-plugin-controllers",
       "source": "../plugins/qol-plugin-controllers"
     },
@@ -87,11 +78,6 @@
       "source": "../plugins/qol-voice"
     },
     {
-      "id": "adversarial-test",
-      "source": "../plugins/adversarial-test",
-      "displayName": "Adversarial Test Storm"
-    },
-    {
       "id": "qol-debug",
       "source": "../plugins/qol-debug"
     },
@@ -100,8 +86,22 @@
       "source": "../plugins/qol-sessions"
     },
     {
-      "id": "terminal-telepathy",
-      "source": "../plugins/terminal-telepathy"
+      "id": "qol-adversarial-test",
+      "source": "../plugins/qol-adversarial-test",
+      "displayName": "Adversarial Test Storm"
+    },
+    {
+      "id": "qol-code-review",
+      "source": "../plugins/qol-code-review",
+      "displayName": "Code Review"
+    },
+    {
+      "id": "qol-terminal-telepathy",
+      "source": "../plugins/qol-terminal-telepathy"
+    },
+    {
+      "id": "qol-workflow-nodes",
+      "source": "../plugins/qol-workflow-nodes"
     }
   ]
 }

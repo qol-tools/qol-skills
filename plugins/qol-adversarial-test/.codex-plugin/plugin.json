@@ -1,0 +1,20 @@
+{
+  "name": "qol-adversarial-test",
+  "version": "0.2.0",
+  "description": "Adversarial testing discipline for real application surfaces: isolated baselines, invariant-driven attack storms, preserved failures, regression-first fixes, live verification, and machine-readable reports.",
+  "author": {
+    "name": "KMRH47"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Adversarial Test Storm",
+    "shortDescription": "Break real workflows and harden the failures.",
+    "longDescription": "Attack real application paths through isolated, invariant-driven test storms; preserve failures as deterministic regressions; verify authorized fixes live; and productize stable attacks as reported workflow nodes.",
+    "developerName": "KMRH47",
+    "category": "Productivity",
+    "capabilities": [
+      "skills"
+    ],
+    "defaultPrompt": "Use $qol-adversarial-test to attack this feature through its real user path, preserve every failure, and turn stable cases into a repeatable reported storm."
+  }
+}

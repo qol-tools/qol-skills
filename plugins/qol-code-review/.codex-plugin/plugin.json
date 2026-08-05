@@ -1,0 +1,20 @@
+{
+  "name": "qol-code-review",
+  "version": "0.3.0",
+  "description": "Code review skill with read-only review orchestration, domain-focused reviewer agents, contextual quick wins, severity/confidence gates, adversarial passes, and machine-parseable synthesis.",
+  "author": {
+    "name": "KMRH47"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Code Review",
+    "shortDescription": "Review code with focused agents.",
+    "longDescription": "Run read-only code reviews, from ordinary patch review to domain-focused reviewer boards with severity, confidence, actionability, contextual quick wins, adversarial passes, and machine-parseable synthesis.",
+    "developerName": "KMRH47",
+    "category": "Productivity",
+    "capabilities": [
+      "skills"
+    ],
+    "defaultPrompt": "Use qol-code-review to run a read-only code review or multi-domain review board with severity, confidence, must-fix actions, contextual quick wins, verification commands, and a compact machine-parseable result block."
+  }
+}

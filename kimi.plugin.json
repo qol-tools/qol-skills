@@ -6,8 +6,8 @@
     "name": "KMRH47"
   },
   "skills": [
-    "./plugins/adversarial-test/skills/",
-    "./plugins/code-review/skills/",
+    "./plugins/qol-adversarial-test/skills/",
+    "./plugins/qol-code-review/skills/",
     "./plugins/qol-debug/skills/",
     "./plugins/qol-langs/skills/",
     "./plugins/qol-plugin-alt-tab/skills/",
@@ -25,12 +25,12 @@
     "./plugins/qol-project/skills/",
     "./plugins/qol-sessions/skills/",
     "./plugins/qol-shot/skills/",
+    "./plugins/qol-terminal-telepathy/skills/",
     "./plugins/qol-trace-discipline/skills/",
     "./plugins/qol-tray/skills/",
     "./plugins/qol-voice/skills/",
     "./plugins/qol-workflow/skills/",
-    "./plugins/terminal-telepathy/skills/",
-    "./plugins/workflow-nodes/skills/"
+    "./plugins/qol-workflow-nodes/skills/"
   ],
   "hooks": [
     {
@@ -131,15 +131,15 @@
     },
     {
       "event": "UserPromptSubmit",
-      "command": "node plugins/workflow-nodes/hooks/inject_workflow_nodes_reminder.mjs"
+      "command": "node plugins/qol-workflow-nodes/hooks/inject_workflow_nodes_reminder.mjs"
     },
     {
       "event": "PreCompact",
-      "command": "node plugins/workflow-nodes/hooks/clear_workflow_nodes_sentinel.mjs"
+      "command": "node plugins/qol-workflow-nodes/hooks/clear_workflow_nodes_sentinel.mjs"
     },
     {
       "event": "SessionStart",
-      "command": "node plugins/workflow-nodes/hooks/clear_workflow_nodes_sentinel.mjs"
+      "command": "node plugins/qol-workflow-nodes/hooks/clear_workflow_nodes_sentinel.mjs"
     }
   ]
 }

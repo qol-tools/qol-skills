@@ -6,15 +6,6 @@
   },
   "plugins": [
     {
-      "name": "code-review",
-      "description": "Code review skill with read-only review orchestration, domain-focused reviewer agents, contextual quick wins, severity/confidence gates, adversarial passes, and machine-parseable synthesis.",
-      "source": "./plugins/code-review",
-      "version": "0.2.2",
-      "author": {
-        "name": "KMRH47"
-      }
-    },
-    {
       "name": "qol-plugin-alt-tab",
       "description": "Specialist agent and skills for the qol-tray alt-tab plugin: GPUI window list, X11/macOS preview capture, AX/CG discovery, daemon lifecycle, settings UI, release flow, and a SubagentStop hook that auto-curates agent MEMORY.md.",
       "source": "./plugins/qol-plugin-alt-tab",
@@ -141,15 +132,6 @@
       }
     },
     {
-      "name": "workflow-nodes",
-      "description": "Personal productivity rule for KMRH47: when work repeats or performance work needs before/after evidence, convert it into deterministic workflow nodes, measurement ledgers, explicit inputs, outputs, reports, and composable orchestrators instead of burning human memory and agent tokens.",
-      "source": "./plugins/workflow-nodes",
-      "version": "0.1.3",
-      "author": {
-        "name": "KMRH47"
-      }
-    },
-    {
       "name": "qol-plugin-controllers",
       "description": "Skills for the qol-tray Controllers plugin: browser Gamepad mapping, hardware profiles, Linux evdev and Bluetooth diagnostics, signal semantics, and rumble testing.",
       "source": "./plugins/qol-plugin-controllers",
@@ -195,15 +177,6 @@
       }
     },
     {
-      "name": "adversarial-test",
-      "description": "Adversarial testing discipline for real application surfaces: isolated baselines, invariant-driven attack storms, preserved failures, regression-first fixes, live verification, and machine-readable reports.",
-      "source": "./plugins/adversarial-test",
-      "version": "0.1.1",
-      "author": {
-        "name": "KMRH47"
-      }
-    },
-    {
       "name": "qol-debug",
       "description": "Use when asked to locate or hunt for bugs in a qol-tools repo (qol-monorepo, qol-skills) - first-pass identification, evidence-gathering, and high-confidence reporting without fixing. Triggers on \"locate bugs\", \"find bugs\", \"bug hunt\", \"first pass\", \"hunt for defects\", \"report back what you found\", or any read-only debugging sweep. Covers baseline verification (clippy + full test suite), live qol-dev session log mining, recent-fix and newest-feature prioritization, the static bug-shape grep catalog, per-suspect source verification, and the report template that ships only high-confidence findings.",
       "source": "./plugins/qol-debug",
@@ -222,10 +195,37 @@
       }
     },
     {
-      "name": "terminal-telepathy",
+      "name": "qol-adversarial-test",
+      "description": "Adversarial testing discipline for real application surfaces: isolated baselines, invariant-driven attack storms, preserved failures, regression-first fixes, live verification, and machine-readable reports.",
+      "source": "./plugins/qol-adversarial-test",
+      "version": "0.2.0",
+      "author": {
+        "name": "KMRH47"
+      }
+    },
+    {
+      "name": "qol-code-review",
+      "description": "Code review skill with read-only review orchestration, domain-focused reviewer agents, contextual quick wins, severity/confidence gates, adversarial passes, and machine-parseable synthesis.",
+      "source": "./plugins/qol-code-review",
+      "version": "0.3.0",
+      "author": {
+        "name": "KMRH47"
+      }
+    },
+    {
+      "name": "qol-terminal-telepathy",
       "description": "Relay work between agents in different terminals: wait for the other agent's turn, deliver text, confirm it landed, and report the outcome. The automatic turn-taking procedure over the qol sessions surface.",
-      "source": "./plugins/terminal-telepathy",
-      "version": "0.1.1",
+      "source": "./plugins/qol-terminal-telepathy",
+      "version": "0.2.0",
+      "author": {
+        "name": "KMRH47"
+      }
+    },
+    {
+      "name": "qol-workflow-nodes",
+      "description": "Personal productivity rule for KMRH47: when work repeats or performance work needs before/after evidence, convert it into deterministic workflow nodes, measurement ledgers, explicit inputs, outputs, reports, and composable orchestrators instead of burning human memory and agent tokens.",
+      "source": "./plugins/qol-workflow-nodes",
+      "version": "0.2.0",
       "author": {
         "name": "KMRH47"
       }

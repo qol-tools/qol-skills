@@ -5,18 +5,6 @@
   },
   "plugins": [
     {
-      "name": "code-review",
-      "source": {
-        "source": "local",
-        "path": "./plugins/code-review"
-      },
-      "policy": {
-        "installation": "INSTALLED_BY_DEFAULT",
-        "authentication": "ON_INSTALL"
-      },
-      "category": "Productivity"
-    },
-    {
       "name": "qol-plugin-alt-tab",
       "source": {
         "source": "local",
@@ -185,18 +173,6 @@
       "category": "Productivity"
     },
     {
-      "name": "workflow-nodes",
-      "source": {
-        "source": "local",
-        "path": "./plugins/workflow-nodes"
-      },
-      "policy": {
-        "installation": "INSTALLED_BY_DEFAULT",
-        "authentication": "ON_INSTALL"
-      },
-      "category": "Productivity"
-    },
-    {
       "name": "qol-plugin-controllers",
       "source": {
         "source": "local",
@@ -257,18 +233,6 @@
       "category": "Productivity"
     },
     {
-      "name": "adversarial-test",
-      "source": {
-        "source": "local",
-        "path": "./plugins/adversarial-test"
-      },
-      "policy": {
-        "installation": "INSTALLED_BY_DEFAULT",
-        "authentication": "ON_INSTALL"
-      },
-      "category": "Productivity"
-    },
-    {
       "name": "qol-debug",
       "source": {
         "source": "local",
@@ -293,10 +257,46 @@
       "category": "Productivity"
     },
     {
-      "name": "terminal-telepathy",
+      "name": "qol-adversarial-test",
       "source": {
         "source": "local",
-        "path": "./plugins/terminal-telepathy"
+        "path": "./plugins/qol-adversarial-test"
+      },
+      "policy": {
+        "installation": "INSTALLED_BY_DEFAULT",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "qol-code-review",
+      "source": {
+        "source": "local",
+        "path": "./plugins/qol-code-review"
+      },
+      "policy": {
+        "installation": "INSTALLED_BY_DEFAULT",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "qol-terminal-telepathy",
+      "source": {
+        "source": "local",
+        "path": "./plugins/qol-terminal-telepathy"
+      },
+      "policy": {
+        "installation": "INSTALLED_BY_DEFAULT",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "qol-workflow-nodes",
+      "source": {
+        "source": "local",
+        "path": "./plugins/qol-workflow-nodes"
       },
       "policy": {
         "installation": "INSTALLED_BY_DEFAULT",
