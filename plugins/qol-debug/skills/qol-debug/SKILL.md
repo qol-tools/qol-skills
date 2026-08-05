@@ -21,6 +21,8 @@ Classify the request before touching anything:
 
 ### 1. Baseline (start early; scan while it runs)
 
+These commands apply to Rust workspace roots (qol-monorepo). Adapt the baseline to the target repo's toolchain elsewhere: a Node repo runs its own test suite and has no `target/` cache.
+
 - Check for a warm `target/` directory first — clippy and tests reuse it.
 - `cargo clippy --workspace --all-targets`: zero warnings means the bugs are logic-level, not lint-level.
 - `cargo test --workspace -q`: a fully green suite means bugs hide in untested or newly-added paths.
@@ -33,6 +35,10 @@ The user often runs `qol dev` from the current tree. The live session is the str
 - `~/.local/share/qol-tray/logs/qol-dev-<pid>.log` — the dev console log of the running session
 - `~/.local/share/qol-tray/logs/qol-tray.<date>.log` — structured startup events
 - `~/.local/share/qol-tray/logs/qol-daemons.log` — daemon output (multi-day history; check timestamps before trusting an entry)
+
+These are the Linux host paths; resolve the tray log dir from the host's data dir on other platforms.
+
+Before trusting a live log, confirm the running `qol dev` and its plugin daemons execute binaries from the tree under review: the process list must resolve into the reviewed checkout (for example `target/debug/plugin-*` or `target/qol-dev/runtime/<hash>/qol-tray`). Record that with the evidence — a stale session's logs look authentic but prove nothing.
 
 Grep for `error|warn|fail|panic`, then read every hit in context. False positives are common and must be filtered before they become findings:
 
@@ -48,6 +54,7 @@ A genuine runtime failure in the current tree outranks any static suspicion. Rea
 - Newest features are least battle-tested: `git log --oneline -5 -- <area>` before reading the area.
 - Shared libs with real logic (parsing, retry, admission, migrations, state machines) before UI code.
 - Concurrency, timeouts, lifecycle ordering, and platform-specific code before straight-line code.
+- Stop when the sweep stops producing suspects: cover the baseline, the live evidence, and the areas named by recent fix commits, then report. Do not inventory the whole repository.
 
 ### 4. Static pattern scans (grep catalog)
 
@@ -86,5 +93,6 @@ Precede the findings with a method summary: baseline results with the real comma
 ## Boundaries
 
 - Reading host logs is evidence, not experimentation: reproducing or verifying runtime behavior happens in a disposable guest VM under `qol-project:qol-dev-environments`, never on the host session.
+- For runtime-only findings, the trace-target decision follows `qol-trace-discipline`.
 - A dirty worktree changes what the live session runs — record `git status` and `git log -1` with the evidence so the finding is pinned to a revision.
 - Fixes follow the delivery rules of the repo being fixed (`qol-workflow:qol-monorepo-rules`, `qol-workflow:git-trees`); the hunt itself never commits.
