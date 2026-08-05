@@ -845,3 +845,90 @@ test("pi extension blocks on a JSON permission denial", () => {
   assert.match(source, /permissionDecision === "deny"/);
   assert.match(source, /reason: decision\.permissionDecisionReason/);
 });
+
+function makeToolExtensionRepo() {
+  const root = makeRepo();
+
+  fs.mkdirSync(path.join(root, "plugins", "qol-sessions"), { recursive: true });
+  writeJson(path.join(root, "plugins", "qol-sessions", ".claude-plugin", "plugin.json"), {
+    name: "qol-sessions",
+    description: "Session relay tools.",
+    version: "0.1.0",
+    author: { name: "KMRH47" },
+  });
+
+  return root;
+}
+
+function writeQolShim(binDir, content) {
+  fs.mkdirSync(binDir, { recursive: true });
+  const shim = path.join(binDir, "qol");
+  fs.writeFileSync(shim, `#!/usr/bin/env node\nprocess.stdout.write(${JSON.stringify(content)});\n`);
+  fs.chmodSync(shim, 0o755);
+}
+
+function withPath(extraBinDir) {
+  return {
+    ...process.env,
+    PATH: [extraBinDir, path.dirname(process.execPath)].join(path.delimiter),
+  };
+}
+
+function toolExtensionFile(root) {
+  return path.join(root, "plugins", "qol-sessions", "extensions", "hooks.ts");
+}
+
+test("writes a generated tool extension when it is missing", () => {
+  const root = makeToolExtensionRepo();
+  const binDir = path.join(root, "fake-bin");
+  writeQolShim(binDir, "generated hooks.ts content\n");
+
+  expectScript(["--root", root], { env: withPath(binDir) });
+
+  assert.equal(fs.readFileSync(toolExtensionFile(root), "utf8"), "generated hooks.ts content\n");
+  const packageJson = readJson(path.join(root, "package.json"));
+  assert.ok(packageJson.pi.extensions.includes("./plugins/qol-sessions/extensions"));
+});
+
+test("regenerates a stale tool extension and reports it in check mode", () => {
+  const root = makeToolExtensionRepo();
+  const binDir = path.join(root, "fake-bin");
+  writeQolShim(binDir, "fresh generated content\n");
+  fs.mkdirSync(path.dirname(toolExtensionFile(root)), { recursive: true });
+  fs.writeFileSync(toolExtensionFile(root), "stale hand-written content\n");
+
+  const result = expectScriptFailure(["--root", root, "--check"], {
+    env: withPath(binDir),
+  });
+  assert.match(result.stderr, /plugins\/qol-sessions\/extensions\/hooks\.ts/);
+  assert.equal(fs.readFileSync(toolExtensionFile(root), "utf8"), "stale hand-written content\n");
+
+  expectScript(["--root", root], { env: withPath(binDir) });
+  assert.equal(fs.readFileSync(toolExtensionFile(root), "utf8"), "fresh generated content\n");
+
+  expectScript(["--root", root, "--check"], { env: withPath(binDir) });
+});
+
+test("accepts a tool extension matching the generator output", () => {
+  const root = makeToolExtensionRepo();
+  const binDir = path.join(root, "fake-bin");
+  writeQolShim(binDir, "matching content\n");
+  fs.mkdirSync(path.dirname(toolExtensionFile(root)), { recursive: true });
+  fs.writeFileSync(toolExtensionFile(root), "matching content\n");
+
+  expectScript(["--root", root], { env: withPath(binDir) });
+  expectScript(["--root", root, "--check"], { env: withPath(binDir) });
+});
+
+test("fails loudly when the tool extension generator is missing", () => {
+  const root = makeToolExtensionRepo();
+  const emptyBin = path.join(root, "empty-bin");
+  fs.mkdirSync(emptyBin, { recursive: true });
+
+  const result = expectScriptFailure(["--root", root], {
+    env: withPath(emptyBin),
+  });
+
+  assert.match(result.stderr, /Cannot generate qol-sessions extensions\/hooks\.ts/);
+  assert.ok(!fs.existsSync(path.join(root, "plugins", "qol-sessions", "extensions")));
+});

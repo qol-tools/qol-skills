@@ -731,6 +731,52 @@ function syncPiPlugin(root, pluginName, base, options, changes, failures) {
   }
 }
 
+const TOOL_EXTENSION_SOURCES = {
+  "qol-sessions": {
+    command: ["qol", "sessions", "export", "pi"],
+    file: "extensions/hooks.ts",
+  },
+};
+
+function syncToolExtension(root, pluginName, options, changes, failures) {
+  const source = TOOL_EXTENSION_SOURCES[pluginName];
+
+  if (!source) {
+    return;
+  }
+
+  let generated;
+
+  try {
+    generated = execFileSync(source.command[0], source.command.slice(1), {
+      cwd: root,
+      encoding: "utf8",
+      timeout: 30_000,
+    });
+  } catch (error) {
+    failures.push(
+      `Cannot generate ${pluginName} ${source.file}: ${gitErrorMessage(error)}`,
+    );
+    return;
+  }
+
+  const file = path.join(root, "plugins", pluginName, source.file);
+  const current = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : null;
+
+  if (current !== null && normalizeNewlines(current) === normalizeNewlines(generated)) {
+    return;
+  }
+
+  changes.push(relative(root, file));
+
+  if (options.check) {
+    return;
+  }
+
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, generated);
+}
+
 function syncPiRootPackageJson(root, plugins, options, changes) {
   const file = path.join(root, "package.json");
   const current = maybeReadJson(file) ?? {
@@ -858,6 +904,7 @@ function syncPlugin(root, pluginName, options, changes, failures, changedFiles) 
   }
 
   syncPiPlugin(root, pluginName, base, options, changes, failures);
+  syncToolExtension(root, pluginName, options, changes, failures);
 
   return { pluginName, claude, codex, kimi: nextKimi };
 }

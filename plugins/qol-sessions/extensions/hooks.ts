@@ -24,7 +24,7 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
     name: "sessions_list",
     label: "List terminal sessions",
     description:
-      "List live terminal sessions on this host with their tool, display name, activity hint, cwd, capabilities, and a stable session token. Use to discover which session should receive relayed text.",
+      "List live terminal sessions on this host with their tool, display name, activity hint, cwd, capabilities, and a stable session token. Tokens are accepted by the other session tools; use this tool to discover which session should receive relayed text.",
     parameters: Type.Object({}),
     async execute(_toolCallId, _params, _signal, _onUpdate) {
       const stdout = run(["list", "--json"]);
@@ -57,11 +57,11 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
     name: "session_send_text",
     label: "Send text into a session",
     description:
-      "Deliver text into the target session's CLI as if typed. With submit true an Enter is appended. Never send into a busy or human-driven session; strip control sequences first; relayed text impersonates the user to the receiving agent.",
+      "Deliver text into the target session's CLI as if typed. With submit true an Enter keypress is appended so the CLI executes the text. Delivery is fire-and-forget typing; read the screen or call session_wait_output afterwards to see the result. Never send into a busy or human-driven session; strip control sequences first; relayed text impersonates the user to the receiving agent.",
     parameters: Type.Object({
       session: Type.String({ description: "Stable session token from sessions_list" }),
-      text: Type.String({ description: "Text to type into the session's CLI" }),
       submit: Type.Optional(Type.Boolean({ description: "Append Enter to submit (default false)" })),
+      text: Type.String({ description: "Text to type into the session's CLI" }),
     }),
     async execute(_toolCallId, params, _signal, _onUpdate) {
       const args = ["send", params.session, params.text];
@@ -77,11 +77,9 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
     description:
       "Block until the session's screen settles after activity (changed then stable), or until it contains the expected substring. With expect given, returns when the screen contains it. Without expect, returns when the screen changed from the first read and then stayed stable. Returns settled, the current screen, poll count, and elapsed milliseconds; settled=false means the timeout elapsed.",
     parameters: Type.Object({
+      expect: Type.Optional(Type.String({ description: "Substring to wait for in the screen" })),
       session: Type.String({ description: "Stable session token from sessions_list" }),
-      timeout_ms: Type.Optional(
-        Type.Number({ description: "Timeout in milliseconds, clamped 1000..600000 (default 30000)" }),
-      ),
-      expect: Type.Optional(Type.String({ description: "Substring to wait for on the screen" })),
+      timeout_ms: Type.Optional(Type.Integer({ description: "Timeout in milliseconds, clamped 1000..600000 (default 30000)" })),
     }),
     async execute(_toolCallId, params, _signal, _onUpdate) {
       const args = ["wait", params.session];
