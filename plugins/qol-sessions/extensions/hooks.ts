@@ -75,9 +75,9 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
     name: "session_wait_output",
     label: "Wait for session output",
     description:
-      "Block until the session's screen settles after activity (changed then stable), or until it contains the expected substring. With expect given, returns when the screen contains it. Without expect, returns when the screen changed from the first read and then stayed stable. Returns settled, the current screen, poll count, and elapsed milliseconds; settled=false means the timeout elapsed.",
+      "Block until the session's screen settles or shows the expected output. With expect given, the substring must appear somewhere other than the echo of the text you last sent into the session, and the screen must then settle (one read unchanged) before the call returns. Without expect, returns when the screen changed from the first read and then stayed stable. Returns settled, the current screen, poll count, and elapsed milliseconds; settled=false means the timeout elapsed.",
     parameters: Type.Object({
-      expect: Type.Optional(Type.String({ description: "Substring to wait for in the screen" })),
+      expect: Type.Optional(Type.String({ description: "Substring to wait for in the screen; the echo of the last-sent text does not count" })),
       session: Type.String({ description: "Stable session token from sessions_list" }),
       timeout_ms: Type.Optional(Type.Integer({ description: "Timeout in milliseconds, clamped 1000..600000 (default 30000)" })),
     }),
