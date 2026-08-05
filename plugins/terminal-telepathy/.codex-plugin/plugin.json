@@ -1,7 +1,7 @@
 {
   "name": "terminal-telepathy",
   "description": "Relay work between agents in different terminals: wait for the other agent's turn, deliver text, confirm it landed, and report the outcome. The automatic turn-taking procedure over the qol sessions surface.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": {
     "name": "KMRH47"
   },
