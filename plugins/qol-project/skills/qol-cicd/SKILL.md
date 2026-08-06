@@ -28,6 +28,35 @@ Release units and tagging rules live in the `qol-tray-release-flow` skill; read 
 - Platform coverage derives from `plugin.toml` `platforms` - never hardcode a runner list for plugin builds.
 - Run release pruning sub-daily at a non-zero minute and keep manual dispatch available; weekly cleanup allows bursty versioning to accumulate stale releases for too long.
 
+## Shared build setup and cache contract
+
+`.github/actions/rust-setup/action.yml` owns the toolchain, rust-cache, and
+Linux apt dependency steps. Every workflow job that compiles the workspace
+calls it with its `cache-key` input; never copy those three steps into a
+workflow. Setup only: build commands and verify gates stay in the workflows
+and scripts. RUSTFLAGS stays declared per job so warning parity remains
+visible in each workflow file.
+
+Cache namespaces are one per (build family, platform). Candidates and releases
+of the same unit run the same invocation, so they share a namespace:
+
+| Workflow / job | cache-key |
+|---|---|
+| ci.yml check (ubuntu, macos) | `ci-${{ matrix.os }}` |
+| ci.yml process-windows | `ci-windows-sandbox` |
+| plugin-version.yml plugin_candidate / release.yml build | `plugin-release-${{ matrix.target }}` |
+| plugin-version.yml qol_tray candidates / qol-tray-release.yml builds | `qol-tray-linux`, `qol-tray-macos` |
+
+Every rust-cache use runs with `save-if: ${{ github.ref == 'refs/heads/main' }}`
+so only main-fed jobs save caches. Cache keys embed the shared key, runner,
+RUSTFLAGS env hash, and lockfile hash; changing a namespace or RUSTFLAGS
+invalidates keys, so batch such changes into one deliberate cold wave.
+
+`.github/scripts/cache_prune.py` (run from release-prune.yml) enforces the
+deterministic cache budget: the newest two entries per namespace survive and
+anything unaccessed for 14 days is deleted. Script changes ship with matching
+tests in `.github/scripts/tests/`.
+
 ## Local verification
 
 ```bash
