@@ -96,10 +96,6 @@
       "displayName": "Code Review"
     },
     {
-      "id": "qol-terminal-telepathy",
-      "source": "../plugins/qol-terminal-telepathy"
-    },
-    {
       "id": "qol-workflow-nodes",
       "source": "../plugins/qol-workflow-nodes"
     }

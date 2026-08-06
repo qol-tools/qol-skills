@@ -189,7 +189,7 @@
       "name": "qol-sessions",
       "description": "Agent relay surface for live terminal sessions: list sessions, send text into a chosen session's CLI, read the screen back, wait for output to settle, and focus windows. The sessions_* tool family is served from a single contract by the qol sessions CLI, its MCP server, and the pi extension.",
       "source": "./plugins/qol-sessions",
-      "version": "0.1.2",
+      "version": "0.2.0",
       "author": {
         "name": "KMRH47"
       }
@@ -208,15 +208,6 @@
       "description": "Code review skill with read-only review orchestration, domain-focused reviewer agents, contextual quick wins, severity/confidence gates, adversarial passes, and machine-parseable synthesis.",
       "source": "./plugins/qol-code-review",
       "version": "0.3.0",
-      "author": {
-        "name": "KMRH47"
-      }
-    },
-    {
-      "name": "qol-terminal-telepathy",
-      "description": "Relay work between agents in different terminals: wait for the other agent's turn, deliver text, confirm it landed, and report the outcome. The automatic turn-taking procedure over the qol sessions surface.",
-      "source": "./plugins/qol-terminal-telepathy",
-      "version": "0.2.1",
       "author": {
         "name": "KMRH47"
       }

@@ -281,18 +281,6 @@
       "category": "Productivity"
     },
     {
-      "name": "qol-terminal-telepathy",
-      "source": {
-        "source": "local",
-        "path": "./plugins/qol-terminal-telepathy"
-      },
-      "policy": {
-        "installation": "INSTALLED_BY_DEFAULT",
-        "authentication": "ON_INSTALL"
-      },
-      "category": "Productivity"
-    },
-    {
       "name": "qol-workflow-nodes",
       "source": {
         "source": "local",

@@ -25,7 +25,6 @@
     "./plugins/qol-project/skills/",
     "./plugins/qol-sessions/skills/",
     "./plugins/qol-shot/skills/",
-    "./plugins/qol-terminal-telepathy/skills/",
     "./plugins/qol-trace-discipline/skills/",
     "./plugins/qol-tray/skills/",
     "./plugins/qol-voice/skills/",
