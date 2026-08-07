@@ -1,7 +1,7 @@
 ---
 name: qol-arch-cicd
 description: >
-  Use when authoring or modifying CI / release workflows (`.github/workflows/*.yml`) or `Cargo.toml` files in the qol-monorepo. Encodes the cross-platform infrastructure contract that prevents CI/release parity failures: platform matrices derived from `plugin.toml` `platforms`, warning parity between CI and release builds, conditional dependencies expressed as `[target.'cfg(target_os = ...)'.dependencies]` rather than as cfg gates in source. Triggers on edits to workflow YAML, on changes to `Cargo.toml` `[dependencies]` / `[target...]` sections, on the words "release pipeline", "plugin CI", "matrix build", "RUSTFLAGS". For the code patterns the matrix exists to catch, see `qol-arch-code` and `qol-arch-cross-platform`.
+  Use when authoring or modifying CI / release workflows (`.github/workflows/*.yml`), `Cargo.toml`, or `Cargo.lock` in the qol-monorepo. Encodes the cross-platform infrastructure contract that prevents CI/release parity failures: platform matrices derived from `plugin.toml` `platforms`, strictness parity between CI and release builds (both `-D warnings` and `--locked`), conditional dependencies expressed as `[target.'cfg(target_os = ...)'.dependencies]` rather than as cfg gates in source. Triggers on edits to workflow YAML, on changes to `Cargo.toml` `[dependencies]` / `[target...]` sections, on a stale or regenerated `Cargo.lock`, and on the words "release pipeline", "plugin CI", "matrix build", "RUSTFLAGS", "lockfile", "--locked". For the code patterns the matrix exists to catch, see `qol-arch-code` and `qol-arch-cross-platform`.
 ---
 
 # qol-arch-cicd: Cross-Platform CI/CD Infrastructure Contract
@@ -30,11 +30,19 @@ Release builds resolve their matrix from the plugin's declared `platforms` (`.gi
 No matrix-padding for OSes the plugin doesn't claim - macOS runners cost ~10x Linux, and red builds on platforms a plugin never meant to support train the reader to ignore red.
 Never hardcode a runner list for plugin builds; if a plugin's platform set changes, `plugin.toml` is the only place that changes.
 
-### 2. Warning parity between CI, release, and local builds
+### 2. Strictness parity between CI, release, and local builds
 
 CI gates with clippy `--all-targets -- -D warnings`; the release workflows build with `RUSTFLAGS: -D warnings`.
 A pipeline that is more lenient than the others hides breakage until the strictest one finally runs - and that one is usually the release.
 When you add a workflow that runs `cargo`, match the strictness of the existing ones; when you loosen anything, leave a comment explaining why.
+
+**Lockfile strictness is part of parity.** Release builds pass `--locked` (`.github/scripts/release_candidate.py`), and production installs do too, so every earlier gate must as well.
+A `Cargo.toml` that declares a dependency `Cargo.lock` does not record is invisible to a lenient gate: cargo simply rewrites the lockfile and carries on.
+Two consequences make that failure expensive rather than merely late - the rewrite dirties the working tree mid-build, which trips the clean-tree gate in `qol install` and in the release identity export, and because the repo commits direct to `main`, a post-merge discovery means `main` is already broken.
+
+Do not mistake `cargo metadata --locked --no-deps` for a freshness check.
+`--no-deps` skips dependency resolution and exits 0 against a stale lockfile; only a full resolve (`cargo metadata --locked`) or a `--locked` build detects it.
+That exact blind spot let a stale lockfile reach `main` and fail 25 `Versioning` jobs while `CI` stayed green.
 
 ### 3. Conditional dependencies belong in `Cargo.toml`, not source
 
@@ -64,6 +72,7 @@ A change to a workflow or `Cargo.toml` passes when:
 
 - Plugin build matrices derive from `plugin.toml` `platforms`, not a hardcoded runner list.
 - The new/edited workflow keeps warning parity with the existing ones (clippy `-D warnings` in CI, `RUSTFLAGS: -D warnings` in release builds).
+- Every gate that runs `cargo build` / `test` / `clippy` passes `--locked`, matching the release pipeline, and lockfile freshness is asserted with a full resolve rather than `--no-deps`.
 - Platform-only deps live in `[target.'cfg(target_os = ...)'.dependencies]`, not `[dependencies]`.
 
 ## Enforcement source
