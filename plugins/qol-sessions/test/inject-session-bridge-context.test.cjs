@@ -50,6 +50,9 @@ test('matching prompts receive the event-driven feature loop', () => {
         assert.match(context, /never scan terminal sockets, override backend environment variables/);
         assert.match(context, /one bounded implementation round at a time/);
         assert.match(context, /completion hook wake you/);
+        assert.match(context, /does not prove delivery or activity/);
+        assert.match(context, /only report lifecycle states emitted by session_bridge/);
+        assert.match(context, /never send a final response while its transaction is pending/);
         assert.match(context, /Never wake the reasoning loop to poll/);
         assert.match(context, /background completion waiter/);
         assert.match(context, /ready for review, not feature acceptance/);
@@ -63,6 +66,9 @@ test('the skill requires an event-driven review loop through feature acceptance'
     assert.match(skill, /one event-driven transaction per implementation round/);
     assert.match(skill, /Invoke `session_bridge` exactly once for the current round/);
     assert.match(skill, /register that handle exactly once/);
+    assert.match(skill, /proves neither delivery nor implementation activity/);
+    assert.match(skill, /Never announce that the target is connected, resumed, active, or complete unless `session_bridge` reports that lifecycle state/);
+    assert.match(skill, /never send a final response merely because the host yielded control/);
     assert.match(skill, /Never poll a process, continuation handle, screen, session, status, or clock/);
     assert.match(skill, /A round-complete event means ready for architect review; it never means the feature is accepted/);
     assert.match(skill, /Treat every token returned by `sessions_list` as an opaque, instance-bound capability/);
