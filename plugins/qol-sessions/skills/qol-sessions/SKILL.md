@@ -12,7 +12,7 @@ Use one event-driven transaction per implementation round and repeat rounds unti
 | Action | Purpose |
 |---|---|
 | `sessions_list()` | Discover live terminals and their stable session tokens |
-| `session_bridge(session, task, timeout_ms?, acknowledge_marker?)` | Resume unfinished output or submit one bounded round, then suspend until its completion event |
+| `session_bridge(session, task, acknowledge_marker?)` | Resume unfinished output or submit one bounded round, then suspend until its completion event |
 | `session_loop_close(session, completion_marker, outcome, landed, before, now, verification, remaining)` | Acknowledge the final round, end the loop, and render its canonical report |
 | `qol sessions next [<session>]` (CLI) | Read the durable round state and print the exact next command for each open round |
 | `qol sessions resume <session>` (CLI) | Re-attach to the one pending round and wait for its completion marker without submitting; `--kickstart` first nudges an interrupted session |
@@ -72,6 +72,8 @@ The CLI-session integration installs the continuation hooks. Agents never create
 `session_loop_close` is the only termination path. It returns the canonical `What landed / Before / Now / Verification / Remaining` report. Return that report exactly; the loop stays armed until it appears in the architect's final response. Never call it to accept one implementation round; acceptance covers the user's complete request. Prose or lifecycle markers cannot close the loop.
 
 ## Timeout recovery
+
+The architect never chooses a round deadline. A round stays open until the implementation emits its completion signal, and `session_bridge` rejects a caller-supplied `timeout_ms`. Command budgets inside the implementation session are a separate concern that belongs in the task text, never in the bridge lifecycle.
 
 The Codex plugin config keeps the outer MCP tool deadline longer than the CLI bridge's maximum round timeout. Preserve that strict ordering whenever either limit changes; otherwise the host can abandon a live bridge before it returns a completion or timeout outcome.
 

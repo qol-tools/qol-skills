@@ -112,11 +112,9 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
       acknowledge_marker: Type.Optional(Type.String({ description: "Completion marker from the last reviewed completed bridge; required to submit the next round instead of recovering the prior response" })),
       session: Type.String({ description: "Stable session token from sessions_list" }),
       task: Type.String({ description: "Bounded implementation task to submit exactly once after any pending response is acknowledged" }),
-      timeout_ms: Type.Optional(Type.Integer({ description: "Optional timeout in milliseconds, clamped 1000..86400000 (default 3600000)" })),
     }),
     async execute(_toolCallId, params, _signal, _onUpdate) {
       const args = ["bridge", params.session];
-      if (params.timeout_ms != null) args.push("--timeout-ms", String(Math.round(params.timeout_ms)));
       if (params.acknowledge_marker != null) args.push("--acknowledge-marker", params.acknowledge_marker);
       args.push("--", params.task);
       setLoopPhase("waiting");
