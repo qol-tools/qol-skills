@@ -13,7 +13,9 @@ const BRIDGE_CONTEXT = [
     'An open tool call, opaque continuation handle, or elapsed time does not prove delivery or activity; only report lifecycle states emitted by session_bridge, and never send a final response while its transaction is pending.',
     'Never wake the reasoning loop to poll a process, continuation handle, screen, or status; if the host yields a handle, register one background completion waiter and resume only from its completion event.',
     'A round completion event means ready for review, not feature acceptance: personally inspect the implementation, then send the same session another bounded correction round unless the feature meets the user\'s acceptance criteria.',
-    'Continue until the architect accepts the feature, the user redirects the work, or a genuine blocker requires the user.',
+    'The CLI-session integration owns the continuation hooks; never create, spawn, or poll hooks yourself, and never stop at a round boundary while its feature loop is armed.',
+    'Continue until the architect accepts the entire feature, then put [qol-sessions:feature-accepted] on its own line in the final response; never use that marker for one round.',
+    'If the user redirects the work or a genuine blocker requires user input, explain it and put [qol-sessions:feature-paused] on its own line.',
     'Keep roles capability-based; never hard-code product, model, vendor, or session names into the workflow.',
 ].join(' ');
 

@@ -57,7 +57,12 @@ test('matching prompts receive the event-driven feature loop', () => {
         assert.match(context, /background completion waiter/);
         assert.match(context, /ready for review, not feature acceptance/);
         assert.match(context, /another bounded correction round unless the feature meets/);
-        assert.match(context, /Continue until the architect accepts the feature/);
+        assert.match(context, /integration owns the continuation hooks/);
+        assert.match(context, /never create, spawn, or poll hooks yourself/);
+        assert.match(context, /never stop at a round boundary/);
+        assert.match(context, /Continue until the architect accepts the entire feature/);
+        assert.match(context, /\[qol-sessions:feature-accepted\]/);
+        assert.match(context, /\[qol-sessions:feature-paused\]/);
     }
 });
 
@@ -75,6 +80,13 @@ test('the skill requires an event-driven review loop through feature acceptance'
     assert.match(skill, /Never inspect terminal sockets, override backend environment variables/);
     assert.match(skill, /return to step 3 with the same session/);
     assert.match(skill, /Finish only when the architect has accepted the feature/);
+    assert.match(skill, /CLI-session integration installs the continuation hooks/);
+    assert.match(skill, /Agents never create, spawn, or poll hooks themselves/);
+    assert.match(skill, /queues another architect turn after the agent settles/);
+    assert.match(skill, /Stop-capable host blocks the round-boundary response/);
+    assert.match(skill, /\[qol-sessions:feature-accepted\]/);
+    assert.match(skill, /Never emit it for acceptance of one round/);
+    assert.match(skill, /\[qol-sessions:feature-paused\]/);
     assert.match(skill, /Do not use `read`, `send`, `wait`, or `focus` as an agent fallback/);
 });
 

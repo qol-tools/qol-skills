@@ -81,6 +81,10 @@
       "command": "node plugins/qol-sessions/bin/inject-session-bridge-context.cjs"
     },
     {
+      "event": "Stop",
+      "command": "node plugins/qol-sessions/bin/guard-session-feature-loop.cjs"
+    },
+    {
       "event": "SessionStart",
       "matcher": "startup|resume|clear",
       "command": "node plugins/qol-tray/bin/inject-dev-recompile-context.cjs"

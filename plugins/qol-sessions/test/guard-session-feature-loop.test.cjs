@@ -1,0 +1,228 @@
+'use strict';
+
+const test = require('node:test');
+const assert = require('node:assert');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { spawnSync } = require('node:child_process');
+
+const HOOK = path.join(__dirname, '..', 'bin', 'guard-session-feature-loop.cjs');
+const {
+    ACCEPTANCE_MARKER,
+    PAUSE_MARKER,
+    blockReason,
+    currentBranch,
+    featureLoopPhase,
+} = require('../bin/guard-session-feature-loop.cjs');
+
+function assistant(uuid, parentUuid, content) {
+    return {
+        uuid,
+        parentUuid,
+        isSidechain: false,
+        type: 'assistant',
+        message: { role: 'assistant', content },
+    };
+}
+
+function user(uuid, parentUuid, content) {
+    return {
+        uuid,
+        parentUuid,
+        isSidechain: false,
+        type: 'user',
+        message: { role: 'user', content },
+    };
+}
+
+function bridgeCall(uuid, parentUuid, id = 'bridge-1') {
+    return assistant(uuid, parentUuid, [{
+        type: 'tool_use',
+        id,
+        name: 'mcp__plugin_qol-sessions_qol-sessions__session_bridge',
+        input: {},
+    }]);
+}
+
+function bridgeResult(uuid, parentUuid, text, options = {}) {
+    return user(uuid, parentUuid, [{
+        type: 'tool_result',
+        tool_use_id: options.id ?? 'bridge-1',
+        is_error: options.isError ?? false,
+        content: [{ type: 'text', text }],
+    }]);
+}
+
+function writeTranscript(entries) {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'qol-sessions-stop-'));
+    const transcript = path.join(root, 'transcript.jsonl');
+    fs.writeFileSync(transcript, entries.map((entry) => JSON.stringify(entry)).join('\n'));
+    return { root, transcript };
+}
+
+function runHook(entries, overrides = {}) {
+    const { root, transcript } = writeTranscript(entries);
+    try {
+        return spawnSync('node', [HOOK], {
+            input: JSON.stringify({
+                hook_event_name: 'Stop',
+                transcript_path: transcript,
+                ...overrides,
+            }),
+            encoding: 'utf8',
+        });
+    } finally {
+        fs.rmSync(root, { recursive: true });
+    }
+}
+
+test('a completed bridge arms review until whole-feature acceptance', () => {
+    const entries = [
+        assistant('root', null, 'delegate the implementation'),
+        bridgeCall('call', 'root'),
+        bridgeResult('result', 'call', '{"completed":true,"completion_marker":"QOL_BRIDGE_DONE_123"}'),
+        assistant('round', 'result', 'Round 1 accepted. Next round is gated on another decision.'),
+    ];
+    assert.equal(featureLoopPhase(entries), 'review');
+    const result = runHook(entries);
+    assert.equal(result.status, 0);
+    const output = JSON.parse(result.stdout);
+    assert.equal(output.decision, 'block');
+    assert.match(output.reason, /Do not finish at a round boundary/);
+});
+
+test('the acceptance marker disarms the review loop', () => {
+    const entries = [
+        bridgeCall('call', null),
+        bridgeResult('result', 'call', '{"completed":true,"completion_marker":"QOL_BRIDGE_DONE_123"}'),
+        assistant('accepted', 'result', `All feature criteria pass.\n${ACCEPTANCE_MARKER}`),
+    ];
+    assert.equal(featureLoopPhase(entries), 'idle');
+    const result = runHook(entries);
+    assert.equal(result.status, 0);
+    assert.equal(result.stdout, '');
+});
+
+test('direct Stop payload acceptance works before transcript flush', () => {
+    const entries = [
+        bridgeCall('call', null),
+        bridgeResult('result', 'call', '{"completed":true,"completion_marker":"QOL_BRIDGE_DONE_123"}'),
+    ];
+    const result = runHook(entries, {
+        last_assistant_message: [{ type: 'text', text: `Accepted.\n${ACCEPTANCE_MARKER}` }],
+    });
+    assert.equal(result.status, 0);
+    assert.equal(result.stdout, '');
+});
+
+test('an explicit user redirect or genuine blocker can pause the loop', () => {
+    const entries = [
+        bridgeCall('call', null),
+        bridgeResult('result', 'call', '{"completed":true,"completion_marker":"QOL_BRIDGE_DONE_123"}'),
+        assistant('paused', 'result', `The user redirected this work.\n${PAUSE_MARKER}`),
+    ];
+    assert.equal(featureLoopPhase(entries), 'idle');
+    assert.equal(runHook(entries).stdout, '');
+});
+
+test('a background bridge keeps the architect session open without resubmission', () => {
+    const entries = [
+        bridgeCall('call', null),
+        bridgeResult(
+            'result',
+            'call',
+            'MCP tool is still running after 120s. It was moved to the background and keeps running.',
+        ),
+        assistant('stopped', 'result', 'Running in the background.'),
+    ];
+    assert.equal(featureLoopPhase(entries), 'waiting');
+    const result = runHook(entries, { stop_hook_active: true });
+    assert.equal(result.status, 0);
+    const output = JSON.parse(result.stdout);
+    assert.match(output.reason, /single blocking continuation/);
+    assert.match(output.reason, /Do not resubmit/);
+});
+
+test('completed false and bridge errors pause automatic continuation', () => {
+    const timedOut = [
+        bridgeCall('call', null),
+        bridgeResult('result', 'call', '{"completed":false,"completion_marker":"QOL_BRIDGE_DONE_123"}'),
+    ];
+    assert.equal(featureLoopPhase(timedOut), 'paused');
+    assert.equal(runHook(timedOut).stdout, '');
+
+    const failed = [
+        bridgeCall('call', null),
+        bridgeResult('result', 'call', 'transport failed', { isError: true }),
+    ];
+    assert.equal(featureLoopPhase(failed), 'paused');
+    assert.equal(runHook(failed).stdout, '');
+});
+
+test('a host continuation outcome advances a waiting bridge', () => {
+    const entries = [
+        bridgeCall('call', null),
+        bridgeResult('background', 'call', 'still running; moved to the background'),
+        assistant('wait-call', 'background', [{
+            type: 'tool_use',
+            id: 'wait-1',
+            name: 'TaskOutput',
+            input: {},
+        }]),
+        user('wait-result', 'wait-call', [{
+            type: 'tool_result',
+            tool_use_id: 'wait-1',
+            content: '{"completed":true,"completion_marker":"QOL_BRIDGE_DONE_456"}',
+        }]),
+    ];
+    assert.equal(featureLoopPhase(entries), 'review');
+});
+
+test('only the active transcript branch controls the loop', () => {
+    const entries = [
+        assistant('root', null, 'start'),
+        bridgeCall('abandoned-call', 'root'),
+        bridgeResult(
+            'abandoned-result',
+            'abandoned-call',
+            '{"completed":true,"completion_marker":"QOL_BRIDGE_DONE_123"}',
+        ),
+        assistant('current', 'root', 'unrelated branch'),
+    ];
+    assert.deepEqual(currentBranch(entries).map((entry) => entry.uuid), ['root', 'current']);
+    assert.equal(featureLoopPhase(entries), 'idle');
+    assert.equal(runHook(entries).stdout, '');
+});
+
+test('a later bridge re-arms a previously accepted feature loop', () => {
+    const entries = [
+        bridgeCall('call-1', null, 'bridge-1'),
+        bridgeResult(
+            'result-1',
+            'call-1',
+            '{"completed":true,"completion_marker":"QOL_BRIDGE_DONE_123"}',
+            { id: 'bridge-1' },
+        ),
+        assistant('accepted', 'result-1', ACCEPTANCE_MARKER),
+        bridgeCall('call-2', 'accepted', 'bridge-2'),
+        bridgeResult(
+            'result-2',
+            'call-2',
+            '{"completed":true,"completion_marker":"QOL_BRIDGE_DONE_456"}',
+            { id: 'bridge-2' },
+        ),
+    ];
+    assert.equal(featureLoopPhase(entries), 'review');
+});
+
+test('malformed or unrelated Stop payloads fail open', () => {
+    const malformed = spawnSync('node', [HOOK], { input: 'not-json', encoding: 'utf8' });
+    assert.equal(malformed.status, 0);
+    assert.equal(malformed.stdout, '');
+    const wrongEvent = runHook([], { hook_event_name: 'UserPromptSubmit' });
+    assert.equal(wrongEvent.status, 0);
+    assert.equal(wrongEvent.stdout, '');
+    assert.match(blockReason('review'), new RegExp(ACCEPTANCE_MARKER.replace(/[\[\]]/g, '\\$&')));
+    assert.match(blockReason('review'), new RegExp(PAUSE_MARKER.replace(/[\[\]]/g, '\\$&')));
+});

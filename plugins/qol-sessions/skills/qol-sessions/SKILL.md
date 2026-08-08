@@ -49,6 +49,24 @@ The reasoning loop must be idle while implementation runs. Waiting inside the to
 
 The caller remains the architect and reviewer. The target implements. The target's claim of completion is evidence for step 5, not an acceptance decision. These are responsibilities, never hard-coded products, models, session names, or vendors.
 
+## Lifecycle enforcement
+
+The CLI-session integration installs the continuation hooks. Agents never create, spawn, or poll hooks themselves.
+
+- Invoking `session_bridge` arms the feature loop before submission.
+- A pending bridge keeps the architect session open for the host's single blocking continuation and completion event.
+- A completed round keeps the loop armed through personal review. A lifecycle-capable host queues another architect turn after the agent settles; a Stop-capable host blocks the round-boundary response.
+- A timeout or bridge error pauses automatic continuation because replay could duplicate work.
+- Loop state is host-session-local and follows the active transcript branch. An abandoned branch must not arm the current branch.
+
+After personally accepting the entire user feature, put this exact marker on its own line in the final response:
+
+```text
+[qol-sessions:feature-accepted]
+```
+
+Never emit it for acceptance of one round. If the user redirects the work or a genuine blocker requires user input, explain why and use `[qol-sessions:feature-paused]` on its own line. These lifecycle markers close the automatic loop; they do not add public actions.
+
 ## Timeout recovery
 
 `completed=false` means the task may still be running. Never resubmit it and never start a reasoning-loop wait.
