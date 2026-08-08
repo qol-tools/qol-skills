@@ -1,6 +1,6 @@
 ---
 name: readme
-description: Use when writing or editing any README.md inside a qol-tools repo. Defines three timelessness rules and a single canonical structure (title, CI badge, tagline, Quick start, optional About, License). The intent is that every qol-tools README looks the same and never goes stale, because all current-state info lives on GitHub's dynamic surfaces (CI matrix, badge, repo topics, issues), not in prose.
+description: Use when writing or editing any README.md inside a qol-tools repo. Defines three timelessness rules and a single canonical structure (a centered header of title, badges and tagline, then Quick start, optional About, License). Badges live only at a repo root, never on a monorepo subpackage, because a GitHub badge cannot scope below a workflow file. Cross-package links are relative. The intent is that every qol-tools README looks the same and never goes stale, because all current-state info lives on GitHub's dynamic surfaces (CI matrix, badge, repo topics, issues), not in prose.
 ---
 
 # README — qol-tools shape
@@ -22,12 +22,16 @@ No version, license, downloads, or coverage badges - they're either decorative o
 ## Canonical structure
 
 ```markdown
+<div align="center">
+
 # Title
 
 [![tests](https://github.com/<org>/<repo>/actions/workflows/tests.yml/badge.svg)](https://github.com/<org>/<repo>/actions/workflows/tests.yml)
 [![lint](https://github.com/<org>/<repo>/actions/workflows/lint.yml/badge.svg)](https://github.com/<org>/<repo>/actions/workflows/lint.yml)
 
 Tagline (one sentence, platform-agnostic).
+
+</div>
 
 ## Quick start
 
@@ -48,15 +52,29 @@ PolyForm Noncommercial 1.0.0
 
 `## About` is **optional** — include only when the tagline isn't enough. Everything else is mandatory.
 
+### The centered header
+
+Title, badges and tagline sit inside a `<div align="center">` that closes before `## Quick start`. GitHub renders the H1, the badge row and the one-line tagline as a centered header block; everything below it stays left-aligned prose.
+
+Nothing else goes inside the div. Not the Quick start, not About, not the License. A README where the whole body is centered is unreadable.
+
 ## Section rules
 
 ### Title
 
-H1, the project's marketing name. Capitalised (`QoL Tray`, `Plugin Lights`), not the bare repo name.
+H1, the project's canonical display name, capitalised. Read it from the artifact that already declares it rather than inventing one: for a plugin that is `plugin.toml`'s `name` field, which is also the string the plugin store shows. Never the bare folder or crate name (`qol-color` is a crate id, `QoL Color` is the title).
 
 ### Badges
 
 One status badge per workflow that gates merge, stacked under the H1, each linked to its workflow page so a click goes to the live run view. The standard set in qol-tools is `tests` and `lint`; add others only when a new workflow file represents a distinct merge gate. Never use `CI` as a workflow name or alt text - it doesn't say what passed.
+
+### Monorepo subpackages
+
+In a monorepo, only the root README carries badges. Subpackage READMEs (`apps/*`, `libs/*`, `plugins/*`) have a centered header with no badge row at all.
+
+A GitHub badge resolves per workflow file. It cannot scope to a job, a path filter, or a crate. So a badge on `plugins/lights/README.md` shows the whole repo's result while appearing to report on the plugin, which is the one thing a status badge must never do. The alternatives both cost more than they return: one workflow file per package abandons the shared affected-crates plan, and a shields.io endpoint badge fed by a CI-published JSON adds a publishing surface that goes stale exactly when a package is skipped as unaffected.
+
+Cross-links between packages are relative paths, not `github.com` URLs. `[QoL Tray](../../apps/qol-tray)` resolves on GitHub, in a local editor, and after an org or repo rename. An absolute URL to a package that used to be its own repo is the first thing to rot when repos consolidate.
 
 ### Tagline
 
@@ -136,13 +154,15 @@ If a section in the README is about any of these, it's almost certainly duplicat
 
 Don't rewrite the prose. Reshape:
 
-1. **Title** — fix capitalisation.
-2. **Badges** - add one status badge per merge-gating workflow under the H1 (minimum: `tests`; add `lint` when present). Drop everything else.
+1. **Title** — take the canonical display name, fix capitalisation.
+2. **Badges** - at a repo root, add one status badge per merge-gating workflow under the H1 (minimum: `tests`; add `lint` when present) and drop everything else. In a monorepo subpackage, remove the badge row entirely.
 3. **Tagline** — collapse to one sentence. Cut emojis, marketing verbs, platform names, stack names.
-4. **Reorder + rename** sections to canonical names (`## Quick start`, `## About`, `## License`).
-5. **Delete** anything in the anti-patterns list above.
-6. **Move** long-form content into feature folders / docs / qol-skills.
-7. **Verify** License section is `## License` plus exactly `PolyForm Noncommercial 1.0.0`.
-8. **Update repo settings** (one time): set repo topics that previously sat in the README's prose — `linux`, `macos`, `rust`, plus topical tags. CI matrix already reflects what's tested.
+4. **Center the header**: wrap title, badges and tagline in `<div align="center">`, closing it before `## Quick start`.
+5. **Relative-link** every cross-package reference; an absolute URL to a sibling package is dead the day the repos merge.
+6. **Reorder + rename** sections to canonical names (`## Quick start`, `## About`, `## License`).
+7. **Delete** anything in the anti-patterns list above.
+8. **Move** long-form content into feature folders / docs / qol-skills.
+9. **Verify** License section is `## License` plus exactly `PolyForm Noncommercial 1.0.0`.
+10. **Update repo settings** (one time): set repo topics that previously sat in the README's prose — `linux`, `macos`, `rust`, plus topical tags. CI matrix already reflects what's tested.
 
 If you're touching a README at all, fix the parts that conflict with this skill — even the parts you didn't come to edit. README drift compounds.
