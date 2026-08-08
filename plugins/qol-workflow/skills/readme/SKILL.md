@@ -66,6 +66,8 @@ Nothing else goes inside the div. Not the Quick start, not About, not the Licens
 
 H1, the project's canonical display name, capitalised. Read it from the artifact that already declares it rather than inventing one: for a plugin that is `plugin.toml`'s `name` field, which is also the string the plugin store shows. Never the bare folder or crate name (`qol-color` is a crate id, `QoL Color` is the title).
 
+One exception: a scaffold whose `name` is a placeholder a copier is told to replace. There the manifest name describes the copy, not the thing the README documents, so title it for what the directory is. `plugins/template` keeps `name = "My Plugin"` and a `# Plugin Template` heading.
+
 ### Badges
 
 One status badge per workflow that gates merge or ships a release, stacked under the H1, each linked to its workflow page so a click goes to the live run view. The standard set in qol-tools is `tests` and `lint`, plus the release workflow where one exists; add others only when a new workflow file represents a distinct gate. Never use `CI` as a workflow name or alt text - it doesn't say what passed. Alt text repeats the workflow's `name:` verbatim, because that name is what the rendered image says.
