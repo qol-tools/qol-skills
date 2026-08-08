@@ -15,7 +15,9 @@ Every qol-tools README has the same skeleton, and it never says anything that go
 
 ### Badge rule
 
-One badge per workflow that gates merge, stacked directly under the H1. The minimum is a `tests` badge; add a `lint` badge when fmt/clippy run as a separate gate. The label on the badge image is set by the workflow's `name:` field, so the workflow file itself must be named `tests` or `lint` (never `CI` - opaque, doesn't tell the reader what failed).
+One badge per workflow that gates merge or ships a release, stacked directly under the H1. The minimum is a `tests` badge; add a `lint` badge when fmt/clippy run as a separate gate, and a release badge when a workflow publishes artifacts users install. The label on the badge image is set by the workflow's `name:` field, so the workflow file itself must be named `tests` or `lint` (never `CI` - opaque, doesn't tell the reader what failed).
+
+Drop a badge whose recent runs are mostly `skipped`. A skipped run renders grey, so the badge reads as broken or blank instead of reporting anything. Check the last handful of runs on the default branch before adding one.
 
 No version, license, downloads, or coverage badges - they're either decorative or duplicate canonical sources (`Cargo.toml`, `LICENSE`, GitHub Releases).
 
@@ -66,7 +68,7 @@ H1, the project's canonical display name, capitalised. Read it from the artifact
 
 ### Badges
 
-One status badge per workflow that gates merge, stacked under the H1, each linked to its workflow page so a click goes to the live run view. The standard set in qol-tools is `tests` and `lint`; add others only when a new workflow file represents a distinct merge gate. Never use `CI` as a workflow name or alt text - it doesn't say what passed.
+One status badge per workflow that gates merge or ships a release, stacked under the H1, each linked to its workflow page so a click goes to the live run view. The standard set in qol-tools is `tests` and `lint`, plus the release workflow where one exists; add others only when a new workflow file represents a distinct gate. Never use `CI` as a workflow name or alt text - it doesn't say what passed. Alt text repeats the workflow's `name:` verbatim, because that name is what the rendered image says.
 
 ### Monorepo subpackages
 
@@ -155,7 +157,7 @@ If a section in the README is about any of these, it's almost certainly duplicat
 Don't rewrite the prose. Reshape:
 
 1. **Title** — take the canonical display name, fix capitalisation.
-2. **Badges** - at a repo root, add one status badge per merge-gating workflow under the H1 (minimum: `tests`; add `lint` when present) and drop everything else. In a monorepo subpackage, remove the badge row entirely.
+2. **Badges** - at a repo root, add one status badge per merge-gating or release-shipping workflow under the H1 (minimum: `tests`; add `lint` and the release workflow when present, skipping any whose recent runs are mostly `skipped`) and drop everything else. In a monorepo subpackage, remove the badge row entirely.
 3. **Tagline** — collapse to one sentence. Cut emojis, marketing verbs, platform names, stack names.
 4. **Center the header**: wrap title, badges and tagline in `<div align="center">`, closing it before `## Quick start`.
 5. **Relative-link** every cross-package reference; an absolute URL to a sibling package is dead the day the repos merge.
