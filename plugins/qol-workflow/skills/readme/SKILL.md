@@ -72,7 +72,7 @@ One status badge per workflow that gates merge, stacked under the H1, each linke
 
 In a monorepo, only the root README carries badges. Subpackage READMEs (`apps/*`, `libs/*`, `plugins/*`) have a centered header with no badge row at all.
 
-A GitHub badge resolves per workflow file. It cannot scope to a job, a path filter, or a crate. So a badge on `plugins/lights/README.md` shows the whole repo's result while appearing to report on the plugin, which is the one thing a status badge must never do. The alternatives both cost more than they return: one workflow file per package abandons the shared affected-crates plan, and a shields.io endpoint badge fed by a CI-published JSON adds a publishing surface that goes stale exactly when a package is skipped as unaffected.
+A GitHub badge resolves per workflow file. It cannot scope to a job, a path filter, or a crate. So a badge on `plugins/*/README.md` shows the whole repo's result while appearing to report on the plugin, which is the one thing a status badge must never do. The alternatives both cost more than they return: one workflow file per package abandons the shared affected-crates plan, and a shields.io endpoint badge fed by a CI-published JSON adds a publishing surface that goes stale exactly when a package is skipped as unaffected.
 
 Cross-links between packages are relative paths, not `github.com` URLs. `[QoL Tray](../../apps/qol-tray)` resolves on GitHub, in a local editor, and after an org or repo rename. An absolute URL to a package that used to be its own repo is the first thing to rot when repos consolidate.
 
