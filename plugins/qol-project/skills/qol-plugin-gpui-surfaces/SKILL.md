@@ -108,8 +108,9 @@ extend `settings_panel/` instead. What the kit module guarantees:
    render as commands, never as a false `[off]` state. Query-backed actions
    may use `label_map` keys `true` and `false` for semantic state labels;
    semantic states stay neutral instead of inheriting boolean on/off colors.
-   Unsupported kinds (object maps, ...) are skipped; the web page still shows
-   them. `show_when` is evaluated from the current controller value by the
+   object_array and object_map render as editable rows, and a field the panel
+   cannot render shows a visible unsupported row instead of being skipped.
+   `show_when` is evaluated from the current controller value by the
    shared row model; hidden rows leave both rendering and keyboard navigation
    immediately when that value changes. Query-backed option objects may carry
    an optional RGB `accent`; shared renderers preserve that generic decoration,
@@ -153,8 +154,8 @@ extend `settings_panel/` instead. What the kit module guarantees:
 6. Every change saves immediately by PUTting **row values merged over
    the loaded config** to `PUT /api/plugins/{id}/config`. No apply
    button. Merging (not rebuilding from rows) is load-bearing: fields
-   the panel skips (object maps, ...) must survive a save, while row
-   fields still self-heal stale values. NEVER write `config.json`
+   the panel does not own (unsupported rows, query-backed rows) must
+   survive a save, while row fields still self-heal stale values. NEVER write `config.json`
    directly as the primary save: those files are materialized artifacts
    the tray regenerates from its profile scope store at boot, so direct
    writes silently revert on restart (and a partial file in the
