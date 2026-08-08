@@ -34,7 +34,7 @@ function syncManifests(root) {
   const syncScript = path.join(__dirname, 'sync-plugin-manifests.cjs');
   execFileSync(process.execPath, [syncScript, '--root', root], {
     cwd: root,
-    stdio: 'inherit',
+    stdio: ['ignore', 2, 'inherit'],
   });
 }
 

@@ -103,7 +103,7 @@ test('drifted content is patch-bumped and the manifests resync', () => {
 
   const result = runBump(root);
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /alpha 0\.1\.0 -> 0\.1\.1/);
+  assert.deepEqual(result.stdout.split('\n').filter(Boolean), ['alpha 0.1.0 -> 0.1.1']);
 
   const claude = JSON.parse(
     fs.readFileSync(path.join(root, 'plugins', 'alpha', '.claude-plugin', 'plugin.json'), 'utf8'),
