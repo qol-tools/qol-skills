@@ -129,6 +129,7 @@ Read `references/review-checklists.md` whenever a review spans more than two dom
 
 ## Sequencing
 
+- Verify the baseline before the substance: confirm the tree builds, tests, and lints green at the reviewed commit, and prove any claimed pre-existing failure exists on the clean tree (stash or a second worktree) before attributing it to the patch. Report the baseline evidence alongside the first finding batch.
 - Run `review-router` first when reviewer choice is not obvious.
 - Run independent primary reviewers in parallel unless they share hard dependencies.
 - In Codex, "run independent reviewers in parallel" means use the Codex adapter, not parent-thread roleplay.
@@ -160,6 +161,14 @@ Confidence levels:
 - `high`: reproducible in code path and/or validated by command output.
 - `medium`: strong evidence plus likely behavior.
 - `low`: plausible concern needing follow-up verification.
+
+## Review invariants
+
+- A review never attributes a failure or a green baseline to a patch without first proving the state on the clean tree (stash or second worktree): claimed pre-existing failures are verified before the patch is blamed or absolved, and baseline evidence ships with the first finding batch.
+- Every code-path claim in a finding cites the exact branch taken or is marked unverified with lowered confidence: a misread path claim is a finding defect even when the conclusion survives.
+- A `required_action` is always a proposal, never a verdict: behavioral assumptions embedded in a suggested fix, such as timing heuristics or claims about when the user acts, are challenged against the evidence before adoption.
+- "Author claims confirmed" is always reported separately from findings, so independently verified statements stay distinguishable from the author's narrative.
+- Every finding ships a 30-second user-actionable reproduction naming the expected outcome, or names who must run it and what to report back when the repro needs the live desktop session.
 
 Actionability gates:
 

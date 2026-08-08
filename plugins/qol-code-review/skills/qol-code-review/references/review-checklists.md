@@ -5,10 +5,11 @@
 For each finding, include a concrete, reproducible signal:
 - exact file + line (or command output)
 - observed behavior
-- reproduction command (or reasoning + why command is unavailable)
+- Every finding includes a 30-second user-actionable reproduction naming the expected outcome; when the repro needs the live desktop session or an external condition, the finding names who must run it and what outcome to report back.
 - impact estimate
 - required action
 - confidence level
+- Behavioral claims about focus, visibility, or lifecycle cite runtime trace output (for example qol trace probes) when the repo has it, never inference alone.
 
 Use this severity scale:
 - blocker: corruption, release breakage, privilege/security escape, irreversible data loss
@@ -45,6 +46,9 @@ Use these checklists to tailor agent prompts. Do not paste every item into every
 - Confirm failure modes are explicit, recoverable, and do not mask deeper corruption.
 - Look for data-loss, migration, persistence, concurrency, and ordering regressions.
 - Validate compatibility boundaries (API/schema/contract) across supported plugin/workspace variants.
+- Every wait-for-event path has a bound and a cleanup that restores the prior state; a copy of a repo pattern is always diffed against its canonical owner rather than accepted as a new variant.
+- Every timed constant covers the evidence window the change itself cites, or is derived: a retry/timeout/guard constant tuned to the middle of an observed range is flagged.
+- Every platform-gated mechanism is checked on every platform the artifact declares: a silent no-op on a declared platform is a coverage gap, not a feature.
 - Prefer changed-hunk review first, then direct call graph/dependency impact before broad scans.
 
 ## Requirements
@@ -62,6 +66,7 @@ Use these checklists to tailor agent prompts. Do not paste every item into every
 - Flag divergence risk when two paths enforce the same rule differently.
 - Distinguish useful defense-in-depth from noise: redundancy is justified only when it adds fault tolerance or clearer diagnostics.
 - Prefer extending established local patterns over adding a second abstraction.
+- Byte-identical blocks pasted into multiple call sites are always flagged, even when the duplication predates the patch; one shared helper is required when the copies differ only in names.
 
 ## History / Compatibility
 
@@ -70,6 +75,7 @@ Use these checklists to tailor agent prompts. Do not paste every item into every
 - Look for changes that break existing user muscle memory, automation, caches, or installed plugin layouts.
 - Confirm changelog/docs/test updates cover compatibility-sensitive behavior.
 - Treat "not reproducible from fresh install" and "only after restart/upgrade" as first-class review cases.
+- Every "restores previous behavior" or "regression from a named commit" claim is verified with git history before it is accepted: `git log -S` / `git log -G` on the touched symbols finds when the mechanism first appeared, and the cited commit's message is read, since it may state the opposite rationale.
 
 ## Performance
 
@@ -116,6 +122,7 @@ Use these checklists to tailor agent prompts. Do not paste every item into every
 - Check operational ergonomics: reruns, manual dispatch, local dry runs, and failure recovery.
 - Enforce deterministic ordering of logs and artifact names.
 - Ensure error text is attributable and actionable with next steps.
+- A mechanism that asserts focus, grabs input, raises windows, or holds modal state never fights the operator's natural next action: clicking another window, keeping typing, or switching apps.
 
 ## Contextual Quick Wins
 
