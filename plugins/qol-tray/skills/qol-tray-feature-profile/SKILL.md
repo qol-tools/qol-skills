@@ -140,8 +140,8 @@ cargo test validate_plugin_config_rejects_wrong_typed_values -- --nocapture
 Required final verification starts with the repo-native commands:
 
 ```bash
-make build
-make test
+qol build
+qol check
 cargo build --features dev
 ```
 

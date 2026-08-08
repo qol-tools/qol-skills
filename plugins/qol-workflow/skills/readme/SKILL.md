@@ -100,8 +100,8 @@ Always a `bash` code block, runnable as-is. **Heading is required** — don't dr
 
 The command picks one path:
 
-- **Consumer path** (`make install`) — for repos that have a real end-user (`qol-tray`, plugins distributed via the store).
-- **Dev path** (`make dev` or a Cargo dependency block) — for repos whose only readers are devs (libraries, `qol-cicd`, internal tooling).
+- **Consumer path** (`qol install`): for repos that have a real end-user (`qol-tray`, plugins distributed via the store).
+- **Dev path** (`qol dev` or a Cargo dependency block): for repos whose only readers are devs (libraries, `qol-cicd`, internal tooling).
 
 If the project genuinely has both audiences and one path doesn't subsume the other, ship two subsections (`### Install`, `### Develop`). Avoid this when one path is enough.
 

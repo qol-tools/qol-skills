@@ -83,7 +83,7 @@ When you discover a symbol in a shared module is causing dead_code on another pl
 3. **If consumers span platforms but only some are gated**, the symbol is genuinely cross-platform — but the OS that doesn't have a consumer needs one (perhaps a stub call). Add it.
 4. **Move the symbol.** Cut from the shared file, paste into `platform/<os>.rs` (or a sibling `platform/<os>/<feature>.rs` if the symbol is large enough to warrant). Update its visibility: `pub` → `pub(crate)` or `pub(super)` as tight as possible.
 5. **Update `use` statements** in consumers.
-6. **Verify.** `RUSTFLAGS="-D warnings" cargo clippy --all-targets --all-features --keep-going` on the host you're on. Then trust CI for the other OSes (or run `make ci-local` if cross-compile toolchains are installed locally — see `qol-arch-cicd`).
+6. **Verify.** `RUSTFLAGS="-D warnings" cargo clippy --all-targets --all-features --keep-going` on the host you're on. Then trust CI for the other OSes (or run `qol check` plus a manual `cargo clippy --target <triple>` for each cross-compile toolchain installed locally; see `qol-arch-cicd`).
 
 Concrete example (the `d797294` pattern):
 

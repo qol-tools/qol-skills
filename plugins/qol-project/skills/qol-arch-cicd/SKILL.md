@@ -74,15 +74,16 @@ its assumptions with the workflow and workspace layout in the checked-out
 monorepo and require fixtures for every enforced shape. Never re-enable a
 layout-sensitive check merely because the script exists.
 
-## `make ci-local`: developer-side parity
+## Developer-side parity: `qol check`
 
-Crates that ship a `Makefile` expose a `ci-local` target mirroring the CI gate locally:
+There is no `ci-local` equivalent in the `qol` CLI and none is being added. The local parity gate is `qol check`, which covers `cargo fmt --all --check`, clippy over the affected crates with `-D warnings`, cargo tests, the qol-tray UI tests, and the `.github/scripts` release tests.
 
-1. `cargo fmt --all -- --check`
-2. `cargo clippy --all-targets --all-features -- -D warnings`
-3. `RUSTFLAGS="-D warnings" cargo test --all-features`
+The only checks the retired `ci-local` target ran that `qol check` does not are the cross-target clippy runs. Run those manually when the toolchains are installed locally:
 
-`plugin-template` ships the same target, so every new plugin starts with it.
+```bash
+cargo clippy --target x86_64-pc-windows-gnu --all-targets --all-features -- -D warnings
+cargo clippy --target x86_64-apple-darwin --all-targets --all-features -- -D warnings
+```
 
 ## Sibling skills
 

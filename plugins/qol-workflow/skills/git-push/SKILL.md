@@ -38,7 +38,7 @@ driver with a manual lockfile conflict resolution.
 
 1. Check the repository root, branch, upstream, worktree location, and dirty state. Confirm that `main` is in the main clone or that a feature branch is in its worktree.
 2. Confirm the requested repository and branch. Call out unrelated dirty changes before any pull, rebase, or push.
-3. **Run the repo-native verification workflow first.** If the repo defines `make build`, `make test`, or an equivalent project script, run that exact workflow before raw tool commands.
+3. **Run the repo-native verification workflow first.** If the repo has a native verification command (`qol check` in qol-tools repos, or an equivalent project script), run that exact workflow before raw tool commands.
 4. **Run the CI-equivalent lint and test suite for the affected scope.** Prefer the repository's affected-target planner or documented verification command. For a standalone Rust repo without a more specific workflow, use:
    ```bash
    cargo fmt -- --check

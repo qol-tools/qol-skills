@@ -46,7 +46,7 @@ Existing patterns live under `ui/lib/*.test.js` (see `world-navigation.test.js`,
 2. Read the relevant skill(s) and the current file(s) you're changing. Don't assume structure — verify.
 3. Trace data flow end-to-end: user action → view handler → hook → data layer → API → backend. Map every layer before proposing a fix.
 4. Prefer editing existing files to creating new ones. If you extract a helper, put it where similar helpers live.
-5. Run repo-native verification before claiming done: `make build`, `make test`, `cargo build --features dev`. Also `node --test ui/lib/*.test.js` for frontend helpers.
+5. Run repo-native verification before claiming done: `qol build`, `qol check`, `cargo build --features dev`. Also `node --test ui/lib/*.test.js` for frontend helpers.
 6. Confirm feature in browser when the change is visible. Type-check passes ≠ feature works.
 
 ## Output style
