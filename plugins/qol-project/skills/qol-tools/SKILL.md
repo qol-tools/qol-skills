@@ -52,9 +52,10 @@ Plugins remain separate executables loaded by the host at runtime; they are neve
 
 ## Docs and skills — where things live
 
-- **Design specs:** `docs/superpowers/specs/YYYY-MM-DD-<topic>.md`. Living proposals, updated in place.
-- **Implementation plans:** `docs/superpowers/plans/YYYY-MM-DD-<topic>.md`.
-- **Status notes:** `docs/superpowers/` (ad-hoc files).
+- **Design specs:** `docs/specs/YYYY-MM-DD-<topic>.md`. Living proposals, updated in place.
+- **Implementation plans:** `docs/plans/YYYY-MM-DD-<topic>.md`.
+- **Research and status notes:** `docs/notes/YYYY-MM-DD-<topic>.md`.
+- Never name a docs directory after a plugin. `docs/superpowers/` was the old home of all three and the name advertised a tool instead of describing the contents.
 - **Skills:** the `qol-skills` repo, surfaced as Claude Code plugins via the marketplace. Skills under the `qol-*` namespaces are workspace-owned. Skills under `superpowers:`, `commit-commands:`, etc. are third-party and must not be edited.
 - Current project state lives in git (`git branch`, `git log`) and `docs/`; read it at need instead of trusting prose.
 
@@ -116,7 +117,7 @@ Any prose written into the qol-tools world (SKILL.md, README, commit body, PR de
 | `the 3 file migrations: v3.15->v3.16, v3.16->v3.17, v3.17->v3.18` | "every migration registered in `PreFlightRegistry::current()`" |
 | a plugin's source directory, named as a literal path | "the `plugins/*` directory whose manifest declares `id = \"plugin-lights\"`" - manifests own plugin identity, directory names do not |
 | `` `OLDEST_SUPPORTED = 3.15.0` `` | "below `OLDEST_SUPPORTED` (slides per release)" |
-| ``active branch is `world-canvas-overhaul` `` | omit, or point at `docs/superpowers/` for live state |
+| ``active branch is `world-canvas-overhaul` `` | omit, or point at `docs/plans/` for live state |
 | `as of qol-config 1.3.0` | omit, or "the API selected by the workspace" |
 | `754 lib tests` | "the full lib test suite" |
 | `the May 2026 wipe incident` | "the wipe-then-clone incident that motivated this section" (date only if it anchors a specific commit a reader needs to find) |

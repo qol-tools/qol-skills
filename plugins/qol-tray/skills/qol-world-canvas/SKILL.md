@@ -7,11 +7,11 @@ description: Use when working on divable elements, dive traits (confined, periph
 
 ## Model
 
-The world is one continuous 2D coordinate space plus a layer axis (see `docs/superpowers/specs/2026-04-11-world-confinement-design.md`). Pages live at world coordinates; the camera pans/zooms/changes layer. Dive frames are pushed on a LIFO stack; ascend pops one frame at a time.
+The world is one continuous 2D coordinate space plus a layer axis (see `docs/specs/2026-04-11-world-confinement-design.md`). Pages live at world coordinates; the camera pans/zooms/changes layer. Dive frames are pushed on a LIFO stack; ascend pops one frame at a time.
 
 Each divable element declares a **DiveTarget** (source selector, claim rect, page list) and may carry a `traits` map. Traits are orthogonal capabilities that affect how the divable is rendered or behaves while the user is inside it.
 
-Design spec: `docs/superpowers/specs/2026-04-15-divable-traits-design.md`.
+Design spec: `docs/specs/2026-04-15-divable-traits-design.md`.
 
 ## Trait registry
 
