@@ -16,6 +16,14 @@ Use one event-driven transaction per implementation round and repeat rounds unti
 
 `session_bridge` owns submit, completion signalling, suspension, wakeup, and result delivery for one round. The generated completion marker is split in the submitted prompt, so the target's input echo cannot complete the bridge. A round-complete event means ready for architect review; it never means the feature is accepted.
 
+## Session identity contract
+
+Treat every token returned by `sessions_list` as an opaque, instance-bound capability. `sessions_list` owns discovery across reachable terminal instances, and `session_bridge` routes through the instance encoded by the token.
+
+- Never parse, construct, shorten, or reuse a token after fresh discovery.
+- Never inspect terminal sockets, override backend environment variables, or invoke backend-native remote-control commands to reach a missing session.
+- If a live target is absent from `sessions_list`, report a discovery defect. Do not bypass the two-action surface.
+
 ## Suspension contract
 
 The reasoning loop must be idle while implementation runs. Waiting inside the tool process or host runtime is cheap; repeatedly waking an agent to inspect the same continuation is forbidden.

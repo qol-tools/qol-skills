@@ -8,6 +8,7 @@ const BRIDGE_TARGET_PATTERN = /\b(?:agent|implementer|terminal|session)\b/i;
 const BRIDGE_CONTEXT = [
     '[qol-sessions]',
     'For architect-to-implementer work across independent terminals, run an architect-owned feature loop: call sessions_list once, then use session_bridge(session, task) for one bounded implementation round at a time.',
+    'Treat the returned session token as opaque and instance-bound; never scan terminal sockets, override backend environment variables, or bypass the two-action surface.',
     'Each session_bridge call is one complete event-driven round: invoke it once, let its completion hook wake you, and never end after a raw send or resubmit after a timeout.',
     'Never wake the reasoning loop to poll a process, continuation handle, screen, or status; if the host yields a handle, register one background completion waiter and resume only from its completion event.',
     'A round completion event means ready for review, not feature acceptance: personally inspect the implementation, then send the same session another bounded correction round unless the feature meets the user\'s acceptance criteria.',

@@ -46,6 +46,8 @@ test('matching prompts receive the event-driven feature loop', () => {
         const context = JSON.parse(result.stdout).hookSpecificOutput.additionalContext;
         assert.match(context, /sessions_list/);
         assert.match(context, /session_bridge/);
+        assert.match(context, /session token as opaque and instance-bound/);
+        assert.match(context, /never scan terminal sockets, override backend environment variables/);
         assert.match(context, /one bounded implementation round at a time/);
         assert.match(context, /completion hook wake you/);
         assert.match(context, /Never wake the reasoning loop to poll/);
@@ -63,6 +65,8 @@ test('the skill requires an event-driven review loop through feature acceptance'
     assert.match(skill, /register that handle exactly once/);
     assert.match(skill, /Never poll a process, continuation handle, screen, session, status, or clock/);
     assert.match(skill, /A round-complete event means ready for architect review; it never means the feature is accepted/);
+    assert.match(skill, /Treat every token returned by `sessions_list` as an opaque, instance-bound capability/);
+    assert.match(skill, /Never inspect terminal sockets, override backend environment variables/);
     assert.match(skill, /return to step 3 with the same session/);
     assert.match(skill, /Finish only when the architect has accepted the feature/);
     assert.match(skill, /Do not use `read`, `send`, `wait`, or `focus` as an agent fallback/);
