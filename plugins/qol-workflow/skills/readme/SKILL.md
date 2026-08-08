@@ -66,7 +66,7 @@ Nothing else goes inside the div. Not the Quick start, not About, not the Licens
 
 H1, the project's canonical display name, capitalised. Read it from the artifact that already declares it rather than inventing one: for a plugin that is `plugin.toml`'s `name` field, which is also the string the plugin store shows. Never the bare folder or crate name (`qol-color` is a crate id, `QoL Color` is the title).
 
-One exception: a scaffold whose `name` is a placeholder a copier is told to replace. There the manifest name describes the copy, not the thing the README documents, so title it for what the directory is. `plugins/template` keeps `name = "My Plugin"` and a `# Plugin Template` heading.
+One exception: a scaffold whose `name` is a placeholder a copier is told to replace. There the manifest name describes the copy, not the thing the README documents, so title it for the scaffold's purpose. The template manifest keeps `name = "My Plugin"` and a `# Plugin Template` heading.
 
 ### Badges
 
