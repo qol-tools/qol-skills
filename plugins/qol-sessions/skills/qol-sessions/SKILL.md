@@ -39,6 +39,7 @@ Treat every token returned by `sessions_list` as an opaque, instance-bound capab
 The reasoning loop must be idle while implementation runs. Waiting inside the tool process or host runtime is cheap; repeatedly waking an agent to inspect the same continuation is forbidden.
 
 - Invoke `session_bridge` exactly once for the current round and await that transaction.
+- One session carries one bridge process. A second bridge or resume against a session that another process is already waiting on is refused, and `qol sessions next` reports that round as `phase=attached` with no command. Never work around that refusal: let the attached process return.
 - When the host keeps the tool call open, leave it open.
 - When the host yields an opaque continuation handle, register that handle exactly once with its background completion waiter and yield. Resume only from the completion event.
 - Keep the architect task open while the bridge is pending. Commentary may report a bridge-emitted lifecycle event, but never send a final response merely because the host yielded control.
