@@ -15,7 +15,7 @@ Use one event-driven transaction per implementation round and repeat rounds unti
 | `session_bridge(session, task, timeout_ms?, acknowledge_marker?)` | Resume unfinished output or submit one bounded round, then suspend until its completion event |
 | `session_loop_close(session, completion_marker, outcome, landed, before, now, verification, remaining)` | Acknowledge the final round, end the loop, and render its canonical report |
 | `qol sessions next [<session>]` (CLI) | Read the durable round state and print the exact next command for each open round |
-| `qol sessions resume <session>` (CLI) | Re-attach to the one pending round and wait for its completion marker without submitting |
+| `qol sessions resume <session>` (CLI) | Re-attach to the one pending round and wait for its completion marker without submitting; `--kickstart` first nudges an interrupted session |
 
 `session_bridge` owns submit, completion signalling, suspension, wakeup, and result delivery for one round. Before submitting new work, it durably resumes any unfinished prior bridge to that session. A recovered response returns `submitted=false`; review it first, then call again only if the deferred task still remains. Pass the reviewed response's `completion_marker` as `acknowledge_marker` on that next call. No new prompt may be submitted until this explicit acknowledgement matches the pending round. The generated completion marker is split in the submitted prompt, so the target's input echo cannot complete the bridge. A round-complete event means ready for architect review; it never means the feature is accepted.
 
@@ -74,6 +74,8 @@ The CLI-session integration installs the continuation hooks. Agents never create
 The Codex plugin config keeps the outer MCP tool deadline longer than the CLI bridge's maximum round timeout. Preserve that strict ordering whenever either limit changes; otherwise the host can abandon a live bridge before it returns a completion or timeout outcome.
 
 `completed=false` means the task may still be running. Never resubmit it and never start a reasoning-loop wait. The deterministic recovery is `qol sessions next`, which resolves an interrupted or timed-out round to its exact `qol sessions resume` command.
+
+`stalled=true` means the target went idle without emitting its completion signal, usually because it was interrupted (compaction, abort, crash-restart). Never conclude that the implementation is still working from an open handle or elapsed time; the wait itself detects idleness and returns. The deterministic recovery is again `qol sessions next`, which resolves a stalled round to `qol sessions resume <session> --kickstart`: it nudges the session to continue or emit the signal, then re-attaches. Kickstart never resends the task.
 
 Return the `session` and `completion_marker` to the user. A human or an external monitor may use the diagnostic command:
 
