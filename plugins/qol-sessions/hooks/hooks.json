@@ -1,5 +1,5 @@
 {
-  "description": "Routes cross-terminal architect and implementer prompts to the atomic session bridge instead of a fire-and-forget relay.",
+  "description": "Installs the event-driven architect review loop for cross-terminal implementation work.",
   "hooks": {
     "UserPromptSubmit": [
       {

@@ -7,9 +7,11 @@ const BRIDGE_TARGET_PATTERN = /\b(?:agent|implementer|terminal|session)\b/i;
 
 const BRIDGE_CONTEXT = [
     '[qol-sessions]',
-    'For architect-to-implementer work across independent terminals, call sessions_list once and then session_bridge(session, task).',
-    'session_bridge is the complete submit-and-wait transaction: keep that call open, never end after a raw send, and never resubmit after a timeout.',
-    'The caller remains responsible for inspecting the implementation and reviewing it before replying.',
+    'For architect-to-implementer work across independent terminals, run an architect-owned feature loop: call sessions_list once, then use session_bridge(session, task) for one bounded implementation round at a time.',
+    'Each session_bridge call is one complete event-driven round: invoke it once, let its completion hook wake you, and never end after a raw send or resubmit after a timeout.',
+    'Never wake the reasoning loop to poll a process, continuation handle, screen, or status; if the host yields a handle, register one background completion waiter and resume only from its completion event.',
+    'A round completion event means ready for review, not feature acceptance: personally inspect the implementation, then send the same session another bounded correction round unless the feature meets the user\'s acceptance criteria.',
+    'Continue until the architect accepts the feature, the user redirects the work, or a genuine blocker requires the user.',
     'Keep roles capability-based; never hard-code product, model, vendor, or session names into the workflow.',
 ].join(' ');
 
