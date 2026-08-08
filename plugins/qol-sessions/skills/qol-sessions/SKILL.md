@@ -39,6 +39,7 @@ The reasoning loop must be idle while implementation runs. Waiting inside the to
 - When the host keeps the tool call open, leave it open.
 - When the host yields an opaque continuation handle, register that handle exactly once with its background completion waiter and yield. Resume only from the completion event.
 - Keep the architect task open while the bridge is pending. Commentary may report a bridge-emitted lifecycle event, but never send a final response merely because the host yielded control.
+- Stay silent while the bridge is pending. If the reasoning loop resumes without a bridge-emitted lifecycle event, emit no text at all; yield again. Never restate that you are still waiting, still attached, still connected, that no event has arrived, or that the loop is being kept alive. Repeating a status the previous turn already gave is noise, and a turn that only reports the absence of an event is always noise.
 - Never poll a process, continuation handle, screen, session, status, or clock from repeated reasoning turns. Progress rendering outside the reasoning loop is fine.
 - If the host supports neither a blocking tool await nor a background completion notification, report that the bridge surface is unavailable. Do not emulate it with polling.
 
