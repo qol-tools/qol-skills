@@ -227,7 +227,7 @@ test('a background bridge keeps the architect session open without resubmission'
     const result = runHook(entries, { stop_hook_active: true });
     assert.equal(result.status, 0);
     const output = JSON.parse(result.stdout);
-    assert.match(output.reason, /single blocking continuation/);
+    assert.match(output.reason, /qol sessions next/);
     assert.match(output.reason, /Do not resubmit/);
 });
 

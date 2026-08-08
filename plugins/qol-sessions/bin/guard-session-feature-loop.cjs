@@ -181,10 +181,10 @@ function loopPhase(payload) {
 
 function blockReason(phase, finalReport = '') {
     const next = phase === 'waiting'
-        ? 'Resume the existing bridge through the host\'s single blocking continuation and await its completion event. Do not resubmit the task and do not poll.'
+        ? 'Run `qol sessions next` and invoke exactly the command it prints as one foreground call through the host\'s single blocking continuation. Write no other text. Do not resubmit the task and do not poll.'
         : phase === 'closing'
             ? `Return this exact canonical final report without adding or removing sections:\n\n${finalReport}`
-            : 'Personally inspect the returned implementation. If anything remains, send the same session one bounded correction round.';
+            : 'Personally inspect the returned implementation. If anything remains, send the same session one bounded correction round; `qol sessions next` prints the exact command template.';
     return `[qol-sessions feature loop]\n\nThe architect-owned feature loop is still active. ${next}\n\nDo not finish at a round boundary. Only after the entire user feature is accepted, call session_loop_close with the final response session and completion_marker, outcome accepted, landed, before, now, verification, and remaining. If the user redirected the work or a genuine blocker requires user input, call session_loop_close with outcome paused and record the unfinished scope under remaining.`;
 }
 

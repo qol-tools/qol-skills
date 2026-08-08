@@ -14,6 +14,8 @@ Use one event-driven transaction per implementation round and repeat rounds unti
 | `sessions_list()` | Discover live terminals and their stable session tokens |
 | `session_bridge(session, task, timeout_ms?, acknowledge_marker?)` | Resume unfinished output or submit one bounded round, then suspend until its completion event |
 | `session_loop_close(session, completion_marker, outcome, landed, before, now, verification, remaining)` | Acknowledge the final round, end the loop, and render its canonical report |
+| `qol sessions next [<session>]` (CLI) | Read the durable round state and print the exact next command for each open round |
+| `qol sessions resume <session>` (CLI) | Re-attach to the one pending round and wait for its completion marker without submitting |
 
 `session_bridge` owns submit, completion signalling, suspension, wakeup, and result delivery for one round. Before submitting new work, it durably resumes any unfinished prior bridge to that session. A recovered response returns `submitted=false`; review it first, then call again only if the deferred task still remains. Pass the reviewed response's `completion_marker` as `acknowledge_marker` on that next call. No new prompt may be submitted until this explicit acknowledgement matches the pending round. The generated completion marker is split in the submitted prompt, so the target's input echo cannot complete the bridge. A round-complete event means ready for architect review; it never means the feature is accepted.
 
@@ -39,7 +41,7 @@ The reasoning loop must be idle while implementation runs. Waiting inside the to
 - When the host keeps the tool call open, leave it open.
 - When the host yields an opaque continuation handle, register that handle exactly once with its background completion waiter and yield. Resume only from the completion event.
 - Keep the architect task open while the bridge is pending. Commentary may report a bridge-emitted lifecycle event, but never send a final response merely because the host yielded control.
-- Stay silent while the bridge is pending. If the reasoning loop resumes without a bridge-emitted lifecycle event, emit no text at all; yield again. Never restate that you are still waiting, still attached, still connected, that no event has arrived, or that the loop is being kept alive. Repeating a status the previous turn already gave is noise, and a turn that only reports the absence of an event is always noise.
+- Flow control is command-owned, never narrated. If the reasoning loop resumes without a bridge-emitted lifecycle event, run `qol sessions next` and invoke exactly the command it prints as one foreground call, writing no other text. A waiting round resolves to `qol sessions resume`, which blocks until the completion marker; a turn that only reports the absence of an event is always wrong.
 - Never poll a process, continuation handle, screen, session, status, or clock from repeated reasoning turns. Progress rendering outside the reasoning loop is fine.
 - If the host supports neither a blocking tool await nor a background completion notification, report that the bridge surface is unavailable. Do not emulate it with polling.
 
@@ -71,7 +73,7 @@ The CLI-session integration installs the continuation hooks. Agents never create
 
 The Codex plugin config keeps the outer MCP tool deadline longer than the CLI bridge's maximum round timeout. Preserve that strict ordering whenever either limit changes; otherwise the host can abandon a live bridge before it returns a completion or timeout outcome.
 
-`completed=false` means the task may still be running. Never resubmit it and never start a reasoning-loop wait.
+`completed=false` means the task may still be running. Never resubmit it and never start a reasoning-loop wait. The deterministic recovery is `qol sessions next`, which resolves an interrupted or timed-out round to its exact `qol sessions resume` command.
 
 Return the `session` and `completion_marker` to the user. A human or an external monitor may use the diagnostic command:
 
