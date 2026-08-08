@@ -1,6 +1,6 @@
 {
   "name": "qol-debug",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Use when asked to locate, hunt for bugs, or find security vulnerabilities in a qol-tools repo (qol-monorepo, qol-skills) - first-pass identification, evidence-gathering, and high-confidence reporting without fixing. Triggers on \"locate bugs\", \"find bugs\", \"bug hunt\", \"first pass\", \"hunt for defects\", \"report back what you found\", \"find security vulnerabilities\", \"security review\", \"hunt for vulnerabilities\", \"find exploits\", or any read-only debugging or security sweep. Covers baseline verification (clippy + full test suite), live qol-dev session log mining, recent-fix and newest-feature prioritization, the static bug-shape and security grep catalogs, per-suspect source verification, multi-perspective review for high-value targets, guest-VM confirmation of runtime findings, and the report template that ships only high-confidence findings.",
   "author": {
     "name": "KMRH47"

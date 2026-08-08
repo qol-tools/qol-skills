@@ -117,7 +117,7 @@
       "name": "qol-project",
       "description": "Project-level conventions for the qol-tools ecosystem: mission invariants, org layout, shared CI/release contracts, cross-platform architecture guardrails, shared library placement, plugin templates, and clean OS development environments for portability validation. Ships PreToolUse hooks that block architecture-contract violations plus a UserPromptSubmit hook that reminds Claude to consult qol-mission when prompts mention design/scope/issue terms in a qol-tools repo.",
       "source": "./plugins/qol-project",
-      "version": "0.8.4",
+      "version": "0.8.5",
       "author": {
         "name": "KMRH47"
       }
@@ -180,7 +180,7 @@
       "name": "qol-debug",
       "description": "Use when asked to locate, hunt for bugs, or find security vulnerabilities in a qol-tools repo (qol-monorepo, qol-skills) - first-pass identification, evidence-gathering, and high-confidence reporting without fixing. Triggers on \"locate bugs\", \"find bugs\", \"bug hunt\", \"first pass\", \"hunt for defects\", \"report back what you found\", \"find security vulnerabilities\", \"security review\", \"hunt for vulnerabilities\", \"find exploits\", or any read-only debugging or security sweep. Covers baseline verification (clippy + full test suite), live qol-dev session log mining, recent-fix and newest-feature prioritization, the static bug-shape and security grep catalogs, per-suspect source verification, multi-perspective review for high-value targets, guest-VM confirmation of runtime findings, and the report template that ships only high-confidence findings.",
       "source": "./plugins/qol-debug",
-      "version": "0.1.3",
+      "version": "0.1.4",
       "author": {
         "name": "KMRH47"
       }
@@ -207,7 +207,7 @@
       "name": "qol-code-review",
       "description": "Code review skill with read-only review orchestration, domain-focused reviewer agents, contextual quick wins, severity/confidence gates, adversarial passes, and machine-parseable synthesis.",
       "source": "./plugins/qol-code-review",
-      "version": "0.3.0",
+      "version": "0.3.1",
       "author": {
         "name": "KMRH47"
       }
