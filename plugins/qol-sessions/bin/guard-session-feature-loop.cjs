@@ -2,10 +2,8 @@
 
 const fs = require('node:fs');
 
-const ACCEPTANCE_MARKER = '[qol-sessions:feature-accepted]';
-const PAUSE_MARKER = '[qol-sessions:feature-paused]';
-const TERMINATION_PATTERN = /(?:^|\r?\n)\[qol-sessions:feature-(?:accepted|paused)\](?=\r?\n|$)/;
 const BRIDGE_TOOL_PATTERN = /(?:^|__)session_bridge$/;
+const LOOP_CLOSE_TOOL_PATTERN = /(?:^|__)session_loop_close$/;
 const COMPLETED_TRUE_PATTERN = /"completed"\s*:\s*true/i;
 const COMPLETED_FALSE_PATTERN = /"completed"\s*:\s*false/i;
 const COMPLETION_MARKER_PATTERN = /"completion_marker"\s*:/i;
@@ -83,13 +81,31 @@ function bridgeOutcome(text) {
     return 'waiting';
 }
 
-function featureLoopPhase(entries) {
+function closeReceipt(text) {
+    try {
+        const receipt = JSON.parse(text);
+        if (receipt?.loop_closed !== true) return null;
+        if (typeof receipt.final_report !== 'string' || !receipt.final_report.trim()) return null;
+        return receipt.final_report;
+    } catch {
+        return null;
+    }
+}
+
+function featureLoopState(entries) {
     let phase = 'idle';
+    let finalReport = '';
     const bridgeCalls = new Set();
+    const closeCalls = new Set();
     for (const entry of currentBranch(entries)) {
         const content = entryContent(entry);
         const blocks = Array.isArray(content) ? content : [];
         if (entryRole(entry) === 'assistant') {
+            const assistantText = textFromContent(content);
+            if (phase === 'closing' && finalReport && assistantText.includes(finalReport)) {
+                phase = 'idle';
+                finalReport = '';
+            }
             for (const block of blocks) {
                 if (
                     block?.type === 'tool_use'
@@ -98,15 +114,32 @@ function featureLoopPhase(entries) {
                 ) {
                     if (typeof block.id === 'string') bridgeCalls.add(block.id);
                     phase = 'waiting';
+                    finalReport = '';
+                }
+                if (
+                    block?.type === 'tool_use'
+                    && typeof block.name === 'string'
+                    && LOOP_CLOSE_TOOL_PATTERN.test(block.name)
+                    && typeof block.id === 'string'
+                ) {
+                    closeCalls.add(block.id);
                 }
             }
-            if (TERMINATION_PATTERN.test(textFromContent(content))) phase = 'idle';
             continue;
         }
         if (entryRole(entry) !== 'user') continue;
         for (const block of blocks) {
             if (block?.type !== 'tool_result') continue;
             const text = textFromContent(block.content);
+            if (closeCalls.has(block.tool_use_id)) {
+                closeCalls.delete(block.tool_use_id);
+                const report = block.is_error ? null : closeReceipt(text);
+                if (report) {
+                    phase = 'closing';
+                    finalReport = report;
+                }
+                continue;
+            }
             if (bridgeCalls.has(block.tool_use_id)) {
                 bridgeCalls.delete(block.tool_use_id);
                 phase = block.is_error ? 'paused' : bridgeOutcome(text);
@@ -121,7 +154,11 @@ function featureLoopPhase(entries) {
             }
         }
     }
-    return phase;
+    return { phase, finalReport };
+}
+
+function featureLoopPhase(entries) {
+    return featureLoopState(entries).phase;
 }
 
 function directAssistantText(payload) {
@@ -129,25 +166,37 @@ function directAssistantText(payload) {
     return textFromContent(direct?.content ?? direct);
 }
 
-function loopPhase(payload) {
-    let phase = featureLoopPhase(readEntries(payload?.transcript_path));
-    if (TERMINATION_PATTERN.test(directAssistantText(payload))) phase = 'idle';
-    return phase;
+function loopState(payload) {
+    const state = featureLoopState(readEntries(payload?.transcript_path));
+    const direct = directAssistantText(payload);
+    if (state.phase === 'closing' && state.finalReport && direct.includes(state.finalReport)) {
+        return { phase: 'idle', finalReport: '' };
+    }
+    return state;
 }
 
-function blockReason(phase) {
+function loopPhase(payload) {
+    return loopState(payload).phase;
+}
+
+function blockReason(phase, finalReport = '') {
     const next = phase === 'waiting'
         ? 'Resume the existing bridge through the host\'s single blocking continuation and await its completion event. Do not resubmit the task and do not poll.'
-        : 'Personally inspect the returned implementation. If anything remains, send the same session one bounded correction round.';
-    return `[qol-sessions feature loop]\n\nThe architect-owned feature loop is still active. ${next}\n\nDo not finish at a round boundary. Only after the entire user feature is accepted, put ${ACCEPTANCE_MARKER} on its own line in the final response. If the user redirected the work or a genuine blocker requires user input, explain it and put ${PAUSE_MARKER} on its own line.`;
+        : phase === 'closing'
+            ? `Return this exact canonical final report without adding or removing sections:\n\n${finalReport}`
+            : 'Personally inspect the returned implementation. If anything remains, send the same session one bounded correction round.';
+    return `[qol-sessions feature loop]\n\nThe architect-owned feature loop is still active. ${next}\n\nDo not finish at a round boundary. Only after the entire user feature is accepted, call session_loop_close with the final response session and completion_marker, outcome accepted, landed, before, now, verification, and remaining. If the user redirected the work or a genuine blocker requires user input, call session_loop_close with outcome paused and record the unfinished scope under remaining.`;
 }
 
 function main() {
     const payload = readPayload();
     if (payload?.hook_event_name && payload.hook_event_name !== 'Stop') return 0;
-    const phase = loopPhase(payload);
-    if (phase !== 'waiting' && phase !== 'review') return 0;
-    process.stdout.write(JSON.stringify({ decision: 'block', reason: blockReason(phase) }));
+    const state = loopState(payload);
+    if (!['waiting', 'review', 'closing'].includes(state.phase)) return 0;
+    process.stdout.write(JSON.stringify({
+        decision: 'block',
+        reason: blockReason(state.phase, state.finalReport),
+    }));
     return 0;
 }
 
@@ -160,14 +209,14 @@ if (require.main === module) {
 }
 
 module.exports = {
-    ACCEPTANCE_MARKER,
     BRIDGE_TOOL_PATTERN,
-    PAUSE_MARKER,
-    TERMINATION_PATTERN,
+    LOOP_CLOSE_TOOL_PATTERN,
     blockReason,
     currentBranch,
     directAssistantText,
+    featureLoopState,
     featureLoopPhase,
+    loopState,
     loopPhase,
     readEntries,
     textFromContent,

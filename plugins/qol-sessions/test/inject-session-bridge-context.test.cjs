@@ -7,7 +7,9 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const HOOK = path.join(__dirname, '..', 'bin', 'inject-session-bridge-context.cjs');
+const MCP_CONFIG = path.join(__dirname, '..', '.mcp.json');
 const SKILL = path.join(__dirname, '..', 'skills', 'qol-sessions', 'SKILL.md');
+const BRIDGE_MAX_TIMEOUT_SECONDS = 86_400;
 const {
     BRIDGE_CONTEXT,
     BRIDGE_TOPIC_PATTERN,
@@ -46,10 +48,17 @@ test('matching prompts receive the event-driven feature loop', () => {
         const context = JSON.parse(result.stdout).hookSpecificOutput.additionalContext;
         assert.match(context, /sessions_list/);
         assert.match(context, /session_bridge/);
+        assert.match(context, /session_loop_close/);
+        assert.match(context, /qol-workflow:git-trees/);
+        assert.match(context, /qol-workflow:commit/);
+        assert.match(context, /worktree route and canonical squash-to-one-commit/);
         assert.match(context, /session token as opaque and instance-bound/);
         assert.match(context, /never scan terminal sockets, override backend environment variables/);
         assert.match(context, /one bounded implementation round at a time/);
         assert.match(context, /completion hook wake you/);
+        assert.match(context, /resumes any unfinished prior bridge and surfaces its latest response/);
+        assert.match(context, /submitted=false/);
+        assert.match(context, /completion_marker as acknowledge_marker/);
         assert.match(context, /does not prove delivery or activity/);
         assert.match(context, /only report lifecycle states emitted by session_bridge/);
         assert.match(context, /never send a final response while its transaction is pending/);
@@ -61,8 +70,9 @@ test('matching prompts receive the event-driven feature loop', () => {
         assert.match(context, /never create, spawn, or poll hooks yourself/);
         assert.match(context, /never stop at a round boundary/);
         assert.match(context, /Continue until the architect accepts the entire feature/);
-        assert.match(context, /\[qol-sessions:feature-accepted\]/);
-        assert.match(context, /\[qol-sessions:feature-paused\]/);
+        assert.match(context, /final response session and completion_marker, outcome accepted/);
+        assert.match(context, /canonical final report from session_loop_close exactly/);
+        assert.match(context, /outcome paused and record the unfinished scope under remaining/);
     }
 });
 
@@ -76,18 +86,34 @@ test('the skill requires an event-driven review loop through feature acceptance'
     assert.match(skill, /never send a final response merely because the host yielded control/);
     assert.match(skill, /Never poll a process, continuation handle, screen, session, status, or clock/);
     assert.match(skill, /A round-complete event means ready for architect review; it never means the feature is accepted/);
+    assert.match(skill, /durably resumes any unfinished prior bridge/);
+    assert.match(skill, /returns `submitted=false`/);
+    assert.match(skill, /`completion_marker` as `acknowledge_marker`/);
+    assert.match(skill, /No new prompt may be submitted until this explicit acknowledgement matches/);
     assert.match(skill, /Treat every token returned by `sessions_list` as an opaque, instance-bound capability/);
     assert.match(skill, /Never inspect terminal sockets, override backend environment variables/);
     assert.match(skill, /return to step 3 with the same session/);
-    assert.match(skill, /Finish only when the architect has accepted the feature/);
+    assert.match(skill, /call `session_loop_close` with the final response's `session` and `completion_marker`/);
     assert.match(skill, /CLI-session integration installs the continuation hooks/);
     assert.match(skill, /Agents never create, spawn, or poll hooks themselves/);
     assert.match(skill, /queues another architect turn after the agent settles/);
     assert.match(skill, /Stop-capable host blocks the round-boundary response/);
-    assert.match(skill, /\[qol-sessions:feature-accepted\]/);
-    assert.match(skill, /Never emit it for acceptance of one round/);
-    assert.match(skill, /\[qol-sessions:feature-paused\]/);
+    assert.match(skill, /`session_loop_close` is the only termination path/);
+    assert.match(skill, /Never call it to accept one implementation round/);
+    assert.match(skill, /Load `qol-workflow:git-trees`/);
+    assert.match(skill, /`qol-workflow:commit` before committing/);
+    assert.match(skill, /worktree route/);
+    assert.match(skill, /squash-to-one-commit integration/);
+    assert.match(skill, /What landed \/ Before \/ Now \/ Verification \/ Remaining/);
     assert.match(skill, /Do not use `read`, `send`, `wait`, or `focus` as an agent fallback/);
+    assert.match(skill, /outer MCP tool deadline longer than the CLI bridge's maximum round timeout/);
+});
+
+test('the Codex MCP host outlives the longest bridge round', () => {
+    const config = JSON.parse(fs.readFileSync(MCP_CONFIG, 'utf8'));
+    const server = config.mcpServers['qol-sessions'];
+    assert.ok(Number.isInteger(server.tool_timeout_sec));
+    assert.ok(server.tool_timeout_sec > BRIDGE_MAX_TIMEOUT_SECONDS);
 });
 
 test('the implementation bridge envelope does not receive architect instructions', () => {

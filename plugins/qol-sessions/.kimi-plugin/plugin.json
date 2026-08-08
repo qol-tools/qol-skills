@@ -1,7 +1,7 @@
 {
   "name": "qol-sessions",
-  "version": "0.3.4",
-  "description": "Two-action architect-to-implementer feature loop for independent terminals: discover once, then bridge event-signalled implementation rounds through architect review until acceptance.",
+  "version": "0.3.5",
+  "description": "Architect-to-implementer feature loop for independent terminals with event-signalled rounds, explicit closure, and a canonical final report.",
   "author": {
     "name": "KMRH47"
   },
