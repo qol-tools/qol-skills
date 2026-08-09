@@ -104,6 +104,29 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
   });
 
   pi.registerTool({
+    name: "session_spawn",
+    label: "Spawn a tool session",
+    description:
+      "Launch a tagged harness for a registered tool in a new terminal tab, or reuse the single live session already carrying the key when its tool matches. The key makes retries idempotent: a key held by a different tool conflicts, multiple matches are ambiguous, and a launched session is returned only once it is live, tagged, and described as the requested tool. Surface is tab or os-window; the default comes from the spawn_surface config, then tab.",
+    parameters: Type.Object({
+      cwd: Type.String({ description: "Working directory for the spawned session" }),
+      key: Type.String({ description: "Stable spawn key; required so retries are idempotent" }),
+      surface: Type.Optional(Type.String({ description: "tab or os-window; defaults to the spawn_surface config, then tab" })),
+      tool: Type.String({ description: "Registered CLI tool to spawn (codex, claude, pi, kimi)" }),
+    }),
+    async execute(_toolCallId, params, _signal, _onUpdate) {
+      const args = ["spawn", "--tool", params.tool, "--cwd", params.cwd, "--key", params.key];
+      if (params.surface != null) args.push("--surface", params.surface);
+      const stdout = run(args, 60_000);
+      const outcome = JSON.parse(stdout);
+      const text = outcome.reused
+        ? `reused session ${outcome.session} (${outcome.tool}, key ${outcome.key}, ${outcome.cwd})`
+        : `spawned session ${outcome.session} (${outcome.tool}, key ${outcome.key}, ${outcome.cwd}, ${outcome.surface})`;
+      return { content: [{ type: "text", text }], details: { outcome } };
+    },
+  });
+
+  pi.registerTool({
     name: "session_bridge",
     label: "Bridge an implementation task",
     description:

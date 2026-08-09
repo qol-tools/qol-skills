@@ -47,6 +47,9 @@ test('matching prompts receive the event-driven feature loop', () => {
         assert.equal(result.status, 0);
         const context = JSON.parse(result.stdout).hookSpecificOutput.additionalContext;
         assert.match(context, /sessions_list/);
+        assert.match(context, /session_spawn/);
+        assert.match(context, /lane-stable key/);
+        assert.match(context, /returns only a live bridgeable session/);
         assert.match(context, /session_bridge/);
         assert.match(context, /session_loop_close/);
         assert.match(context, /qol-workflow:git-trees/);
@@ -90,7 +93,9 @@ test('the skill requires an event-driven review loop through feature acceptance'
     assert.match(skill, /returns `submitted=false`/);
     assert.match(skill, /`completion_marker` as `acknowledge_marker`/);
     assert.match(skill, /No new prompt may be submitted until this explicit acknowledgement matches/);
-    assert.match(skill, /Treat every token returned by `sessions_list` as an opaque, instance-bound capability/);
+    assert.match(skill, /`session_spawn` is keyed, not heuristic/);
+    assert.match(skill, /immediately usable by `session_bridge`/);
+    assert.match(skill, /Treat every token returned by `sessions_list` or `session_spawn` as an opaque, instance-bound capability/);
     assert.match(skill, /Never inspect terminal sockets, override backend environment variables/);
     assert.match(skill, /return to step 3 with the same session/);
     assert.match(skill, /call `session_loop_close` with the final response's `session` and `completion_marker`/);
