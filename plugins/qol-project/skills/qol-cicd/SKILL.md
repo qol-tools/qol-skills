@@ -23,6 +23,7 @@ Release units and tagging rules live in the `qol-tray-release-flow` skill; read 
 ## Editing guidance
 
 - The Python release scripts under `.github/scripts/` have tests in `.github/scripts/tests/`; `ci.yml` runs them on every push, and any script change needs a matching test change.
+- A `workflow_run` consumer must pass `github.event.workflow_run.id` into its verifier and validate that exact run's workflow, event, SHA, conclusion, and required jobs. Do not rediscover the triggering run through a filtered workflow-list query; manual dispatch may retain SHA-based lookup. [GitHub's documented pattern](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_run) uses the event's run ID directly.
 - Pin third-party actions to a commit SHA (the existing workflows all do).
 - Keep `RUSTFLAGS`/clippy at `-D warnings` parity with local checks; a workflow that is more lenient than the local gate hides breakage until release time.
 - Platform coverage derives from `plugin.toml` `platforms` - never hardcode a runner list for plugin builds.
