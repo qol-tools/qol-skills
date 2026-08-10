@@ -1,8 +1,13 @@
+<div align="center">
+
 # QoL Skills
 
 [![tests](https://github.com/qol-tools/qol-skills/actions/workflows/tests.yml/badge.svg)](https://github.com/qol-tools/qol-skills/actions/workflows/tests.yml)
+[![release plugins](https://github.com/qol-tools/qol-skills/actions/workflows/release-plugins.yml/badge.svg)](https://github.com/qol-tools/qol-skills/actions/workflows/release-plugins.yml)
 
 Claude Code, Codex, and Kimi Code skills marketplace for the [qol-tools](https://github.com/qol-tools) org.
+
+</div>
 
 ## Quick start
 
