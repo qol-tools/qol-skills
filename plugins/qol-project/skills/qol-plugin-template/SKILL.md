@@ -5,14 +5,14 @@ description: Use when bootstrapping a new qol-tray plugin from the template plug
 
 # qol-plugin-template
 
-The `plugins/*` directory whose manifest declares `id = "plugin-template"` is the canonical scaffold. Its checked-out files are the source of truth for baseline layout, dependencies, workflows, Make targets, contract syntax, and validation; this skill must not duplicate that inventory.
+The `plugins/*` directory whose manifest declares `id = "plugin-template"` is the canonical scaffold. Its checked-out files are the source of truth for baseline layout, dependencies, CI workflows, contract syntax, and validation; this skill must not duplicate that inventory.
 
 ## Bootstrap procedure
 
 1. Copy the maintained template directory to `plugins/<plugin-id>/` without copying build output.
 2. Mint a UUID only if the manifest schema uses a persistent UID. Once published, that UID is immutable.
 3. Search the copied tree for template identity/placeholders and replace every occurrence deliberately. Do not rely on a remembered filename list.
-4. Keep `Cargo.toml` package/binary identity, `plugin.toml` runtime command/artifact metadata, build scripts, Make targets, workflow filters, README identity, and ignore rules coherent.
+4. Keep `Cargo.toml` package/binary identity, `plugin.toml` runtime command/artifact metadata, build scripts, CI workflow filters, README identity, and ignore rules coherent.
 5. Replace example behavior with a thin entrypoint plus ownership modules appropriate to the plugin.
 6. Declare only platforms with real runtime behavior; compile unsupported adapters as typed errors where shared code requires them.
 7. Add settings/daemon/runtime contracts only when the behavior needs them.
