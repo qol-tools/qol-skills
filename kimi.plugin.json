@@ -124,6 +124,11 @@
       "command": "node plugins/qol-workflow/bin/branch-deny-pid-branch-name.cjs"
     },
     {
+      "event": "PreToolUse",
+      "matcher": "Edit|Write|MultiEdit",
+      "command": "node plugins/qol-workflow/bin/deny-tool-matches.cjs"
+    },
+    {
       "event": "UserPromptSubmit",
       "command": "node plugins/qol-workflow/bin/qol-cicd-context.cjs"
     },

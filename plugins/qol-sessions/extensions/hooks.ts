@@ -190,4 +190,22 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
       };
     },
   });
+
+  pi.registerTool({
+    name: "session_close",
+    label: "Close an implementation session",
+    description:
+      "Terminate a spawned implementation session's terminal after its feature loop is closed. Refuses the calling terminal, sessions without a spawn identity, and sessions whose loop is still open; close the loop via session_loop_close first.",
+    parameters: Type.Object({
+      session: Type.String({ description: "Stable session token of the spawned implementation session to close" }),
+    }),
+    async execute(_toolCallId, params, _signal, _onUpdate) {
+      const stdout = run(["close", params.session], 30_000);
+      const outcome = JSON.parse(stdout);
+      return {
+        content: [{ type: "text", text: `closed session ${outcome.session} (${outcome.tool}, key ${outcome.key})` }],
+        details: { outcome },
+      };
+    },
+  });
 }
