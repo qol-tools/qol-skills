@@ -35,6 +35,10 @@ Interpretation is a registry, not a chain of conditionals. The strategy trait ca
 
 Readings are two-stage on purpose. A strategy returns a phase plus an optional label; a separate pure transition maps the previous status and the new phase to the next status. Keep the transition pure - it is the part worth testing exhaustively, and it is where sticky states are honored so an acknowledged session does not re-alert on every poll.
 
+## Naming and per-tool backends (the law)
+
+Every harness-specific behavior - naming, title grammars, metadata extraction, screen stabilization - is a backend behind a capability facade, never a `match` on the tool in shared code. The naming capability is `HarnessNaming` plus one uniform `resolve_display_name` chain (harness metadata name, then harness title grammar, then spawn identity, then project); each harness owns its grammar backend in `builtins/<tool>/name.rs`. Presentation consumes the tool model (labels, accents, ids) instead of re-deriving strings, and the daemon, signal, and UI layers never branch on the tool. Adding a harness means adding a backend and registering it; the fallback chain and the facade stay untouched. The generic backend has no title grammar, so an unrecognized harness degrades to the spawn key or project name instead of disappearing or misbranding. For the backend-split rule itself see `qol-arch-code`; this law's enforcement hook is `qol-workflow:deny-tool-matches`.
+
 ## Common changes
 
 **Support a new CLI tool:** add a strategy, register it for the tool, and add classification so sessions resolve to it. Enrich display and phase reading; do not add tool branches to the registry, daemon, or UI.
