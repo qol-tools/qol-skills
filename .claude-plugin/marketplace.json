@@ -99,7 +99,7 @@
       "name": "qol-workflow",
       "description": "Cross-cutting workflow conventions for any qol-tools repo: commit message conventions (with the no-attribution hard rule), git push and worktree workflows, and universal coding guidelines. Ships PreToolUse hooks that (1) inject commit context, (2) block AI-attribution lines, (3) block branch-creation/switching inside a qol-* main clone (worktrees-only rule), (4) deny per-tool `match` branches added to shared CLI-sessions code (the naming/backends law).",
       "source": "./plugins/qol-workflow",
-      "version": "0.4.11",
+      "version": "0.4.12",
       "author": {
         "name": "KMRH47"
       }
@@ -117,7 +117,7 @@
       "name": "qol-project",
       "description": "Project-level conventions for the qol-tools ecosystem: mission invariants, org layout, shared CI/release contracts, cross-platform architecture guardrails, shared library placement, plugin templates, and clean OS development environments for portability validation. Ships PreToolUse hooks that block architecture-contract violations plus a UserPromptSubmit hook that reminds Claude to consult qol-mission when prompts mention design/scope/issue terms in a qol-tools repo.",
       "source": "./plugins/qol-project",
-      "version": "0.8.10",
+      "version": "0.8.11",
       "author": {
         "name": "KMRH47"
       }
