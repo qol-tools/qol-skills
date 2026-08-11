@@ -1,4 +1,4 @@
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 
@@ -10,10 +10,6 @@ const PRE_TOOL_USE_HOOKS = [
 
 const USER_PROMPT_SUBMIT_HOOKS = [
     { script: "bin/inject-session-bridge-context.cjs" }
-];
-
-const STOP_GUARD_HOOKS = [
-    { script: "bin/guard-session-feature-loop.cjs" }
 ];
 
 function runHook(script, input) {
@@ -43,14 +39,6 @@ function runHook(script, input) {
   if (stdout) {
     try {
       const parsed = JSON.parse(stdout);
-
-      if (parsed?.decision === "block") {
-        return {
-          blocked: true,
-          reason: parsed?.reason || `Blocked by ${script}`,
-        };
-      }
-
       const decision = parsed?.hookSpecificOutput;
 
       if (decision?.permissionDecision === "deny") {
@@ -72,14 +60,6 @@ function matchedToolName(matcher, toolName) {
     .split("|")
     .map((name) => name.trim())
     .find((name) => name.toLowerCase() === toolName.toLowerCase());
-}
-
-function stopGuardInput(ctx: ExtensionContext) {
-  return JSON.stringify({
-    transcript_path: ctx.sessionManager.getSessionFile() ?? "",
-    cwd: process.cwd(),
-    hook_event_name: "Stop",
-  });
 }
 
 export default function (pi: ExtensionAPI) {
@@ -125,36 +105,6 @@ export default function (pi: ExtensionAPI) {
 
       if (extraContext) {
         return { systemPrompt: (event.systemPrompt ?? "") + extraContext };
-      }
-    });
-  }
-
-  if (STOP_GUARD_HOOKS.length > 0) {
-    pi.on("session_before_switch", async (event, ctx) => {
-      const input = stopGuardInput(ctx);
-
-      for (const hook of STOP_GUARD_HOOKS) {
-        const result = runHook(hook.script, input);
-
-        if (result.blocked) {
-          return { cancel: true };
-        }
-      }
-    });
-
-    pi.on("session_shutdown", async (event, ctx) => {
-      if (event.reason !== "quit") {
-        return;
-      }
-
-      const input = stopGuardInput(ctx);
-
-      for (const hook of STOP_GUARD_HOOKS) {
-        const result = runHook(hook.script, input);
-
-        if (result.blocked) {
-          ctx.ui.notify(result.reason, "warning");
-        }
       }
     });
   }

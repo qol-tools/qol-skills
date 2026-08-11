@@ -14,14 +14,6 @@ const USER_PROMPT_SUBMIT_HOOKS = [
     { script: "bin/qol-mission-reminder.cjs" }
 ];
 
-const SESSION_START_CONTEXT_HOOKS = [
-    { script: "bin/inject-qol-cli-context.cjs" }
-];
-
-let stashedContext = "";
-let stashedSessionFile = "";
-let injectedSessionFile = "";
-
 function runHook(script, input) {
   const scriptPath = path.join(PLUGIN_DIR, script);
 
@@ -115,38 +107,6 @@ export default function (pi: ExtensionAPI) {
 
       if (extraContext) {
         return { systemPrompt: (event.systemPrompt ?? "") + extraContext };
-      }
-    });
-  }
-
-  if (SESSION_START_CONTEXT_HOOKS.length > 0) {
-    pi.on("session_start", async (event, ctx) => {
-      const sessionFile = ctx.sessionManager.getSessionFile() ?? "";
-      const sessionId = path.basename(sessionFile);
-      let context = "";
-
-      for (const hook of SESSION_START_CONTEXT_HOOKS) {
-        const result = runHook(hook.script, JSON.stringify({ session_id: sessionId }));
-
-        if (result.context) {
-          context += "\n\n" + result.context;
-        }
-      }
-
-      stashedContext = context;
-      stashedSessionFile = sessionFile;
-    });
-
-    pi.on("before_agent_start", async (event, ctx) => {
-      const sessionFile = ctx.sessionManager.getSessionFile() ?? "";
-
-      if (
-        stashedContext
-        && sessionFile === stashedSessionFile
-        && sessionFile !== injectedSessionFile
-      ) {
-        injectedSessionFile = sessionFile;
-        return { systemPrompt: (event.systemPrompt ?? "") + "\n\n" + stashedContext };
       }
     });
   }
