@@ -1,15 +1,18 @@
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 
 const PLUGIN_DIR = path.resolve(__dirname, "../..");
 
 const PRE_TOOL_USE_HOOKS = [
-
 ];
 
 const USER_PROMPT_SUBMIT_HOOKS = [
-    { script: "bin/inject-session-bridge-context.cjs" }
+    { script: "bin/inject-session-bridge-context.cjs" },
+];
+
+const STOP_GUARD_HOOKS = [
+    { script: "bin/guard-session-feature-loop.cjs" },
 ];
 
 function runHook(script, input) {
@@ -39,6 +42,14 @@ function runHook(script, input) {
   if (stdout) {
     try {
       const parsed = JSON.parse(stdout);
+
+      if (parsed?.decision === "block") {
+        return {
+          blocked: true,
+          reason: parsed?.reason || `Blocked by ${script}`,
+        };
+      }
+
       const decision = parsed?.hookSpecificOutput;
 
       if (decision?.permissionDecision === "deny") {
@@ -62,32 +73,15 @@ function matchedToolName(matcher, toolName) {
     .find((name) => name.toLowerCase() === toolName.toLowerCase());
 }
 
+function stopGuardInput(ctx: ExtensionContext) {
+  return JSON.stringify({
+    transcript_path: ctx.sessionManager.getSessionFile() ?? "",
+    cwd: process.cwd(),
+    hook_event_name: "Stop",
+  });
+}
+
 export default function (pi: ExtensionAPI) {
-  if (PRE_TOOL_USE_HOOKS.length > 0) {
-    pi.on("tool_call", async (event, _ctx) => {
-      if (!event.toolName) {
-        return;
-      }
-
-      const hook = PRE_TOOL_USE_HOOKS.find(
-        (h) => h.matcher && matchedToolName(h.matcher, event.toolName)
-      );
-
-      if (!hook) {
-        return;
-      }
-
-      const input = JSON.stringify({
-        tool_name: matchedToolName(hook.matcher, event.toolName),
-        tool_input: event.input ?? {},
-      });
-      const result = runHook(hook.script, input);
-
-      if (result.blocked) {
-        return { block: true, reason: result.reason };
-      }
-    });
-  }
 
   if (USER_PROMPT_SUBMIT_HOOKS.length > 0) {
     pi.on("before_agent_start", async (event, _ctx) => {
@@ -105,6 +99,36 @@ export default function (pi: ExtensionAPI) {
 
       if (extraContext) {
         return { systemPrompt: (event.systemPrompt ?? "") + extraContext };
+      }
+    });
+  }
+
+  if (STOP_GUARD_HOOKS.length > 0) {
+    pi.on("session_before_switch", async (_event, ctx) => {
+      const input = stopGuardInput(ctx);
+
+      for (const hook of STOP_GUARD_HOOKS) {
+        const result = runHook(hook.script, input);
+
+        if (result.blocked) {
+          return { cancel: true };
+        }
+      }
+    });
+
+    pi.on("session_shutdown", async (event, ctx) => {
+      if (event.reason !== "quit") {
+        return;
+      }
+
+      const input = stopGuardInput(ctx);
+
+      for (const hook of STOP_GUARD_HOOKS) {
+        const result = runHook(hook.script, input);
+
+        if (result.blocked) {
+          ctx.ui.notify(result.reason, "warning");
+        }
       }
     });
   }

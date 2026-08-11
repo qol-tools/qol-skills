@@ -10,12 +10,12 @@ const PRE_TOOL_USE_HOOKS = [
     { matcher: "Bash", script: "bin/branch-deny-checkout-in-main-clone.cjs" },
     { matcher: "Bash", script: "bin/branch-deny-agent-checkout.cjs" },
     { matcher: "Bash", script: "bin/branch-deny-pid-branch-name.cjs" },
-    { matcher: "Edit|Write|MultiEdit", script: "bin/deny-tool-matches.cjs" }
+    { matcher: "Edit|Write|MultiEdit", script: "bin/deny-tool-matches.cjs" },
 ];
 
 const USER_PROMPT_SUBMIT_HOOKS = [
     { script: "bin/qol-cicd-context.cjs" },
-    { script: "bin/qol-monorepo-rules-context.cjs" }
+    { script: "bin/qol-monorepo-rules-context.cjs" },
 ];
 
 function runHook(script, input) {
@@ -45,6 +45,14 @@ function runHook(script, input) {
   if (stdout) {
     try {
       const parsed = JSON.parse(stdout);
+
+      if (parsed?.decision === "block") {
+        return {
+          blocked: true,
+          reason: parsed?.reason || `Blocked by ${script}`,
+        };
+      }
+
       const decision = parsed?.hookSpecificOutput;
 
       if (decision?.permissionDecision === "deny") {

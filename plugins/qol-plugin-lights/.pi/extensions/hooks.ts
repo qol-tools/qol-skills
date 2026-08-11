@@ -5,11 +5,10 @@ import path from "node:path";
 const PLUGIN_DIR = path.resolve(__dirname, "../..");
 
 const PRE_TOOL_USE_HOOKS = [
-    { matcher: "Edit|Write|NotebookEdit", script: "bin/route-to-agent.cjs" }
+    { matcher: "Edit|Write|NotebookEdit", script: "bin/route-to-agent.cjs" },
 ];
 
 const USER_PROMPT_SUBMIT_HOOKS = [
-
 ];
 
 function runHook(script, input) {
@@ -39,6 +38,14 @@ function runHook(script, input) {
   if (stdout) {
     try {
       const parsed = JSON.parse(stdout);
+
+      if (parsed?.decision === "block") {
+        return {
+          blocked: true,
+          reason: parsed?.reason || `Blocked by ${script}`,
+        };
+      }
+
       const decision = parsed?.hookSpecificOutput;
 
       if (decision?.permissionDecision === "deny") {
@@ -85,26 +92,6 @@ export default function (pi: ExtensionAPI) {
 
       if (result.blocked) {
         return { block: true, reason: result.reason };
-      }
-    });
-  }
-
-  if (USER_PROMPT_SUBMIT_HOOKS.length > 0) {
-    pi.on("before_agent_start", async (event, _ctx) => {
-      let extraContext = "";
-
-      for (const hook of USER_PROMPT_SUBMIT_HOOKS) {
-        const cwd = event.systemPromptOptions?.cwd ?? "";
-        const input = JSON.stringify({ cwd, prompt: event.prompt });
-        const result = runHook(hook.script, input);
-
-        if (result.context) {
-          extraContext += "\n\n" + result.context;
-        }
-      }
-
-      if (extraContext) {
-        return { systemPrompt: (event.systemPrompt ?? "") + extraContext };
       }
     });
   }

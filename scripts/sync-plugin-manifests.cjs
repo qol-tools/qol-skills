@@ -539,6 +539,9 @@ function piExtensionContent(root, pluginName, failures) {
 
   const preToolUse = [];
   const userPromptSubmit = [];
+  const sessionStart = [];
+  const preCompact = [];
+  const stopGuards = [];
 
   for (const [event, entries] of Object.entries(document?.hooks ?? {})) {
     if (!Array.isArray(entries)) {
@@ -557,134 +560,293 @@ function piExtensionContent(root, pluginName, failures) {
           preToolUse.push({ matcher: entry.matcher, script });
         } else if (event === "UserPromptSubmit") {
           userPromptSubmit.push({ script });
+        } else if (event === "SessionStart") {
+          sessionStart.push({ script });
+        } else if (event === "PreCompact") {
+          preCompact.push({ script });
+        } else if (event === "Stop") {
+          stopGuards.push({ script });
         }
       }
     }
   }
 
-  if (preToolUse.length === 0 && userPromptSubmit.length === 0) {
+  if (
+    preToolUse.length === 0
+    && userPromptSubmit.length === 0
+    && sessionStart.length === 0
+    && preCompact.length === 0
+    && stopGuards.length === 0
+  ) {
     return null;
   }
 
-  const preToolUseEntries = preToolUse
-    .map((hook) => `    { matcher: ${JSON.stringify(hook.matcher)}, script: ${JSON.stringify(hook.script)} }`)
-    .join(",\n");
-  const userPromptEntries = userPromptSubmit
-    .map((hook) => `    { script: ${JSON.stringify(hook.script)} }`)
-    .join(",\n");
+  const lines = [];
+  const typeImport = stopGuards.length > 0
+    ? 'import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";'
+    : 'import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";';
 
-  return `import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { spawnSync } from "node:child_process";
-import path from "node:path";
+  lines.push(typeImport);
+  lines.push('import { spawnSync } from "node:child_process";');
+  lines.push('import path from "node:path";');
+  lines.push("");
+  lines.push('const PLUGIN_DIR = path.resolve(__dirname, "../..");');
+  lines.push("");
+  lines.push("const PRE_TOOL_USE_HOOKS = [");
+  for (const hook of preToolUse) {
+    lines.push(`    { matcher: ${JSON.stringify(hook.matcher)}, script: ${JSON.stringify(hook.script)} },`);
+  }
+  lines.push("];");
+  lines.push("");
+  lines.push("const USER_PROMPT_SUBMIT_HOOKS = [");
+  for (const hook of userPromptSubmit) {
+    lines.push(`    { script: ${JSON.stringify(hook.script)} },`);
+  }
+  lines.push("];");
 
-const PLUGIN_DIR = path.resolve(__dirname, "../..");
-
-const PRE_TOOL_USE_HOOKS = [
-${preToolUseEntries}
-];
-
-const USER_PROMPT_SUBMIT_HOOKS = [
-${userPromptEntries}
-];
-
-function runHook(script, input) {
-  const scriptPath = path.join(PLUGIN_DIR, script);
-
-  let result;
-
-  try {
-    result = spawnSync(process.execPath, [scriptPath], {
-      input,
-      encoding: "utf-8",
-      timeout: 5000,
-    });
-  } catch (_error) {
-    return { blocked: false };
+  if (sessionStart.length > 0) {
+    lines.push("");
+    lines.push("const SESSION_START_CONTEXT_HOOKS = [");
+    for (const hook of sessionStart) {
+      lines.push(`    { script: ${JSON.stringify(hook.script)} },`);
+    }
+    lines.push("];");
   }
 
-  const stdout = (result?.stdout ?? "").trim();
-  const stderr = (result?.stderr ?? "").trim();
-
-  if (result?.status !== 0 && result?.status !== null) {
-    return { blocked: true, reason: stderr || stdout || \`Blocked by \${script}\` };
+  if (preCompact.length > 0) {
+    lines.push("");
+    lines.push("const PRE_COMPACT_HOOKS = [");
+    for (const hook of preCompact) {
+      lines.push(`    { script: ${JSON.stringify(hook.script)} },`);
+    }
+    lines.push("];");
   }
 
-  let context;
-
-  if (stdout) {
-    try {
-      const parsed = JSON.parse(stdout);
-      const decision = parsed?.hookSpecificOutput;
-
-      if (decision?.permissionDecision === "deny") {
-        return {
-          blocked: true,
-          reason: decision.permissionDecisionReason || \`Blocked by \${script}\`,
-        };
-      }
-
-      context = decision?.additionalContext;
-    } catch (_ignored) {}
+  if (stopGuards.length > 0) {
+    lines.push("");
+    lines.push("const STOP_GUARD_HOOKS = [");
+    for (const hook of stopGuards) {
+      lines.push(`    { script: ${JSON.stringify(hook.script)} },`);
+    }
+    lines.push("];");
   }
 
-  return { blocked: false, context };
-}
-
-function matchedToolName(matcher, toolName) {
-  return matcher
-    .split("|")
-    .map((name) => name.trim())
-    .find((name) => name.toLowerCase() === toolName.toLowerCase());
-}
-
-export default function (pi: ExtensionAPI) {
-  if (PRE_TOOL_USE_HOOKS.length > 0) {
-    pi.on("tool_call", async (event, _ctx) => {
-      if (!event.toolName) {
-        return;
-      }
-
-      const hook = PRE_TOOL_USE_HOOKS.find(
-        (h) => h.matcher && matchedToolName(h.matcher, event.toolName)
-      );
-
-      if (!hook) {
-        return;
-      }
-
-      const input = JSON.stringify({
-        tool_name: matchedToolName(hook.matcher, event.toolName),
-        tool_input: event.input ?? {},
-      });
-      const result = runHook(hook.script, input);
-
-      if (result.blocked) {
-        return { block: true, reason: result.reason };
-      }
-    });
+  if (sessionStart.length > 0) {
+    lines.push("");
+    lines.push('let stashedContext = "";');
+    lines.push('let stashedSessionFile = "";');
+    lines.push('let injectedSessionFile = "";');
   }
 
-  if (USER_PROMPT_SUBMIT_HOOKS.length > 0) {
-    pi.on("before_agent_start", async (event, _ctx) => {
-      let extraContext = "";
+  lines.push("");
+  lines.push("function runHook(script, input) {");
+  lines.push("  const scriptPath = path.join(PLUGIN_DIR, script);");
+  lines.push("");
+  lines.push("  let result;");
+  lines.push("");
+  lines.push("  try {");
+  lines.push("    result = spawnSync(process.execPath, [scriptPath], {");
+  lines.push('      input,');
+  lines.push('      encoding: "utf-8",');
+  lines.push("      timeout: 5000,");
+  lines.push("    });");
+  lines.push("  } catch (_error) {");
+  lines.push("    return { blocked: false };");
+  lines.push("  }");
+  lines.push("");
+  lines.push('  const stdout = (result?.stdout ?? "").trim();');
+  lines.push('  const stderr = (result?.stderr ?? "").trim();');
+  lines.push("");
+  lines.push("  if (result?.status !== 0 && result?.status !== null) {");
+  lines.push('    return { blocked: true, reason: stderr || stdout || `Blocked by ${script}` };');
+  lines.push("  }");
+  lines.push("");
+  lines.push("  let context;");
+  lines.push("");
+  lines.push("  if (stdout) {");
+  lines.push("    try {");
+  lines.push("      const parsed = JSON.parse(stdout);");
+  lines.push("");
+  lines.push('      if (parsed?.decision === "block") {');
+  lines.push("        return {");
+  lines.push("          blocked: true,");
+  lines.push('          reason: parsed?.reason || `Blocked by ${script}`,');
+  lines.push("        };");
+  lines.push("      }");
+  lines.push("");
+  lines.push("      const decision = parsed?.hookSpecificOutput;");
+  lines.push("");
+  lines.push('      if (decision?.permissionDecision === "deny") {');
+  lines.push("        return {");
+  lines.push("          blocked: true,");
+  lines.push('          reason: decision.permissionDecisionReason || `Blocked by ${script}`,');
+  lines.push("        };");
+  lines.push("      }");
+  lines.push("");
+  lines.push("      context = decision?.additionalContext;");
+  lines.push("    } catch (_ignored) {}");
+  lines.push("  }");
+  lines.push("");
+  lines.push("  return { blocked: false, context };");
+  lines.push("}");
+  lines.push("");
+  lines.push("function matchedToolName(matcher, toolName) {");
+  lines.push("  return matcher");
+  lines.push('    .split("|")');
+  lines.push("    .map((name) => name.trim())");
+  lines.push("    .find((name) => name.toLowerCase() === toolName.toLowerCase());");
+  lines.push("}");
 
-      for (const hook of USER_PROMPT_SUBMIT_HOOKS) {
-        const cwd = event.systemPromptOptions?.cwd ?? "";
-        const input = JSON.stringify({ cwd, prompt: event.prompt });
-        const result = runHook(hook.script, input);
-
-        if (result.context) {
-          extraContext += "\\n\\n" + result.context;
-        }
-      }
-
-      if (extraContext) {
-        return { systemPrompt: (event.systemPrompt ?? "") + extraContext };
-      }
-    });
+  if (stopGuards.length > 0) {
+    lines.push("");
+    lines.push("function stopGuardInput(ctx: ExtensionContext) {");
+    lines.push("  return JSON.stringify({");
+    lines.push('    transcript_path: ctx.sessionManager.getSessionFile() ?? "",');
+    lines.push('    cwd: process.cwd(),');
+    lines.push('    hook_event_name: "Stop",');
+    lines.push("  });");
+    lines.push("}");
   }
-}
-`;
+
+  lines.push("");
+  lines.push("export default function (pi: ExtensionAPI) {");
+
+  if (preToolUse.length > 0) {
+    lines.push("  if (PRE_TOOL_USE_HOOKS.length > 0) {");
+    lines.push('    pi.on("tool_call", async (event, _ctx) => {');
+    lines.push("      if (!event.toolName) {");
+    lines.push("        return;");
+    lines.push("      }");
+    lines.push("");
+    lines.push("      const hook = PRE_TOOL_USE_HOOKS.find(");
+    lines.push("        (h) => h.matcher && matchedToolName(h.matcher, event.toolName)");
+    lines.push("      );");
+    lines.push("");
+    lines.push("      if (!hook) {");
+    lines.push("        return;");
+    lines.push("      }");
+    lines.push("");
+    lines.push("      const input = JSON.stringify({");
+    lines.push("        tool_name: matchedToolName(hook.matcher, event.toolName),");
+    lines.push("        tool_input: event.input ?? {},");
+    lines.push("      });");
+    lines.push("      const result = runHook(hook.script, input);");
+    lines.push("");
+    lines.push("      if (result.blocked) {");
+    lines.push("        return { block: true, reason: result.reason };");
+    lines.push("      }");
+    lines.push("    });");
+    lines.push("  }");
+  }
+
+  if (userPromptSubmit.length > 0) {
+    lines.push("");
+    lines.push("  if (USER_PROMPT_SUBMIT_HOOKS.length > 0) {");
+    lines.push('    pi.on("before_agent_start", async (event, _ctx) => {');
+    lines.push('      let extraContext = "";');
+    lines.push("");
+    lines.push("      for (const hook of USER_PROMPT_SUBMIT_HOOKS) {");
+    lines.push('        const cwd = event.systemPromptOptions?.cwd ?? "";');
+    lines.push("        const input = JSON.stringify({ cwd, prompt: event.prompt });");
+    lines.push("        const result = runHook(hook.script, input);");
+    lines.push("");
+    lines.push("        if (result.context) {");
+    lines.push('          extraContext += "\\n\\n" + result.context;');
+    lines.push("        }");
+    lines.push("      }");
+    lines.push("");
+    lines.push("      if (extraContext) {");
+    lines.push('        return { systemPrompt: (event.systemPrompt ?? "") + extraContext };');
+    lines.push("      }");
+    lines.push("    });");
+    lines.push("  }");
+  }
+
+  if (sessionStart.length > 0) {
+    lines.push("");
+    lines.push("  if (SESSION_START_CONTEXT_HOOKS.length > 0) {");
+    lines.push('    pi.on("session_start", async (_event, ctx) => {');
+    lines.push('      const sessionFile = ctx.sessionManager.getSessionFile() ?? "";');
+    lines.push("      const sessionId = path.basename(sessionFile);");
+    lines.push('      let context = "";');
+    lines.push("");
+    lines.push("      for (const hook of SESSION_START_CONTEXT_HOOKS) {");
+    lines.push("        const result = runHook(hook.script, JSON.stringify({ session_id: sessionId }));");
+    lines.push("");
+    lines.push("        if (result.context) {");
+    lines.push('          context += "\\n\\n" + result.context;');
+    lines.push("        }");
+    lines.push("      }");
+    lines.push("");
+    lines.push("      stashedContext = context;");
+    lines.push("      stashedSessionFile = sessionFile;");
+    lines.push("    });");
+    lines.push("");
+    lines.push('    pi.on("before_agent_start", async (event, ctx) => {');
+    lines.push('      const sessionFile = ctx.sessionManager.getSessionFile() ?? "";');
+    lines.push("");
+    lines.push("      if (");
+    lines.push("        stashedContext");
+    lines.push("        && sessionFile === stashedSessionFile");
+    lines.push("        && sessionFile !== injectedSessionFile");
+    lines.push("      ) {");
+    lines.push("        injectedSessionFile = sessionFile;");
+    lines.push('        return { systemPrompt: (event.systemPrompt ?? "") + "\\n\\n" + stashedContext };');
+    lines.push("      }");
+    lines.push("    });");
+    lines.push("  }");
+  }
+
+  if (preCompact.length > 0) {
+    lines.push("");
+    lines.push("  if (PRE_COMPACT_HOOKS.length > 0) {");
+    lines.push('    pi.on("session_before_compact", async (_event, ctx) => {');
+    lines.push('      const sessionId = path.basename(ctx.sessionManager.getSessionFile() ?? "");');
+    lines.push("");
+    lines.push("      for (const hook of PRE_COMPACT_HOOKS) {");
+    lines.push("        runHook(hook.script, JSON.stringify({ session_id: sessionId }));");
+    lines.push("      }");
+    lines.push("    });");
+    lines.push("  }");
+  }
+
+  if (stopGuards.length > 0) {
+    lines.push("");
+    lines.push("  if (STOP_GUARD_HOOKS.length > 0) {");
+    lines.push('    pi.on("session_before_switch", async (_event, ctx) => {');
+    lines.push("      const input = stopGuardInput(ctx);");
+    lines.push("");
+    lines.push("      for (const hook of STOP_GUARD_HOOKS) {");
+    lines.push("        const result = runHook(hook.script, input);");
+    lines.push("");
+    lines.push("        if (result.blocked) {");
+    lines.push("          return { cancel: true };");
+    lines.push("        }");
+    lines.push("      }");
+    lines.push("    });");
+    lines.push("");
+    lines.push('    pi.on("session_shutdown", async (event, ctx) => {');
+    lines.push('      if (event.reason !== "quit") {');
+    lines.push("        return;");
+    lines.push("      }");
+    lines.push("");
+    lines.push("      const input = stopGuardInput(ctx);");
+    lines.push("");
+    lines.push("      for (const hook of STOP_GUARD_HOOKS) {");
+    lines.push("        const result = runHook(hook.script, input);");
+    lines.push("");
+    lines.push("        if (result.blocked) {");
+    lines.push('          ctx.ui.notify(result.reason, "warning");');
+    lines.push("        }");
+    lines.push("      }");
+    lines.push("    });");
+    lines.push("  }");
+  }
+
+  lines.push("}");
+  lines.push("");
+
+  return lines.join("\n");
 }
 
 function piManifest(base) {

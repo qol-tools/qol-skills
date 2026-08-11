@@ -5,12 +5,23 @@ import path from "node:path";
 const PLUGIN_DIR = path.resolve(__dirname, "../..");
 
 const PRE_TOOL_USE_HOOKS = [
-
 ];
 
 const USER_PROMPT_SUBMIT_HOOKS = [
-    { script: "hooks/inject_workflow_nodes_reminder.mjs" }
+    { script: "hooks/inject_workflow_nodes_reminder.mjs" },
 ];
+
+const SESSION_START_CONTEXT_HOOKS = [
+    { script: "hooks/clear_workflow_nodes_sentinel.mjs" },
+];
+
+const PRE_COMPACT_HOOKS = [
+    { script: "hooks/clear_workflow_nodes_sentinel.mjs" },
+];
+
+let stashedContext = "";
+let stashedSessionFile = "";
+let injectedSessionFile = "";
 
 function runHook(script, input) {
   const scriptPath = path.join(PLUGIN_DIR, script);
@@ -39,6 +50,14 @@ function runHook(script, input) {
   if (stdout) {
     try {
       const parsed = JSON.parse(stdout);
+
+      if (parsed?.decision === "block") {
+        return {
+          blocked: true,
+          reason: parsed?.reason || `Blocked by ${script}`,
+        };
+      }
+
       const decision = parsed?.hookSpecificOutput;
 
       if (decision?.permissionDecision === "deny") {
@@ -63,31 +82,6 @@ function matchedToolName(matcher, toolName) {
 }
 
 export default function (pi: ExtensionAPI) {
-  if (PRE_TOOL_USE_HOOKS.length > 0) {
-    pi.on("tool_call", async (event, _ctx) => {
-      if (!event.toolName) {
-        return;
-      }
-
-      const hook = PRE_TOOL_USE_HOOKS.find(
-        (h) => h.matcher && matchedToolName(h.matcher, event.toolName)
-      );
-
-      if (!hook) {
-        return;
-      }
-
-      const input = JSON.stringify({
-        tool_name: matchedToolName(hook.matcher, event.toolName),
-        tool_input: event.input ?? {},
-      });
-      const result = runHook(hook.script, input);
-
-      if (result.blocked) {
-        return { block: true, reason: result.reason };
-      }
-    });
-  }
 
   if (USER_PROMPT_SUBMIT_HOOKS.length > 0) {
     pi.on("before_agent_start", async (event, _ctx) => {
@@ -105,6 +99,48 @@ export default function (pi: ExtensionAPI) {
 
       if (extraContext) {
         return { systemPrompt: (event.systemPrompt ?? "") + extraContext };
+      }
+    });
+  }
+
+  if (SESSION_START_CONTEXT_HOOKS.length > 0) {
+    pi.on("session_start", async (_event, ctx) => {
+      const sessionFile = ctx.sessionManager.getSessionFile() ?? "";
+      const sessionId = path.basename(sessionFile);
+      let context = "";
+
+      for (const hook of SESSION_START_CONTEXT_HOOKS) {
+        const result = runHook(hook.script, JSON.stringify({ session_id: sessionId }));
+
+        if (result.context) {
+          context += "\n\n" + result.context;
+        }
+      }
+
+      stashedContext = context;
+      stashedSessionFile = sessionFile;
+    });
+
+    pi.on("before_agent_start", async (event, ctx) => {
+      const sessionFile = ctx.sessionManager.getSessionFile() ?? "";
+
+      if (
+        stashedContext
+        && sessionFile === stashedSessionFile
+        && sessionFile !== injectedSessionFile
+      ) {
+        injectedSessionFile = sessionFile;
+        return { systemPrompt: (event.systemPrompt ?? "") + "\n\n" + stashedContext };
+      }
+    });
+  }
+
+  if (PRE_COMPACT_HOOKS.length > 0) {
+    pi.on("session_before_compact", async (_event, ctx) => {
+      const sessionId = path.basename(ctx.sessionManager.getSessionFile() ?? "");
+
+      for (const hook of PRE_COMPACT_HOOKS) {
+        runHook(hook.script, JSON.stringify({ session_id: sessionId }));
       }
     });
   }
