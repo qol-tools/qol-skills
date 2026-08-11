@@ -394,6 +394,39 @@ adapter. Every selected adapter exposes the same callable surface; adding a
 callable to one adapter requires adding its real implementation or typed-error
 stub to the others before adding the consumer.
 
+Cover **every unlisted target** as well, with the complement cfg. The
+linux/macos/windows-only facade compiles nowhere else: on FreeBSD, NetBSD, or
+any other target the `Backend`/`Platform` re-export is undefined and the whole
+crate fails to build. The house convention (qol-platform, qol-process, qol-fs,
+qol-tray paths, window-actions, alt-tab capture) is a named `fallback` (or
+`unsupported`) module re-exported under the complement cfg, returning the same
+typed errors as the macOS and Windows stubs:
+
+```rust
+#[cfg(target_os = "linux")]
+mod linux;
+#[cfg(target_os = "macos")]
+mod macos;
+#[cfg(target_os = "windows")]
+mod windows;
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+mod fallback;
+
+#[cfg(target_os = "linux")]
+pub(crate) use linux::Platform;
+#[cfg(target_os = "macos")]
+pub(crate) use macos::Platform;
+#[cfg(target_os = "windows")]
+pub(crate) use windows::Platform;
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+pub(crate) use fallback::Platform;
+```
+
+Verify the complement by checking the exotic target locally (`rustup target add
+x86_64-unknown-freebsd`, then `cargo check`/`clippy --all-targets` for that
+target) — the exotic-target build also exercises the stub paths in dependency
+crates, so it catches interface drift the three-OS matrix never sees.
+
 Provide a stub impl that returns a typed error at runtime:
 
 ```rust
@@ -413,7 +446,13 @@ impl WindowOps for Platform {
 }
 ```
 
-The host (qol-tray) decides UX — show "not supported on this platform" toast, hide the menu item, etc. The plugin compiles, clippy passes, tests pass — and unsupported behavior fails gracefully at runtime.
+When a fallback guard type (a `ProcessTreeGuard`, lock guard, or similar)
+stands in for a real one, mirror the real guard's surface including a no-op
+`impl Drop`. Shared code that calls `drop(guard)` to bound a lifetime window is
+then a genuine `Drop` invocation on every target, and clippy's
+`drop_non_drop` stays quiet under `-D warnings` on the exotic-target build —
+otherwise the same `drop()` call that runs real cleanup on Linux is a lint
+error on FreeBSD.
 
 ## Platform-specific dependencies
 
@@ -448,7 +487,7 @@ The `<os>.rs` source files use these unconditionally — the cfg gate at the man
 - ❌ **Never have a trait method that exists only on one OS via cfg.** Add it to the trait, stub it on others.
 - ❌ **Never return `unimplemented!()` from a stub** — it panics. Return a typed `Err` so the caller can handle it.
 - ✅ **Name the backend by capability/substrate** (`x11_snapshot`, `systemd_user`, `dbus_session`, `mqtt_bridge`) when that is the real boundary.
-- ✅ **Always cover every OS in the facade,** with a dedicated adapter or an explicitly selected fallback. Code must compile on Linux, macOS, and Windows.
+- ✅ **Always cover every OS and every unlisted target in the facade,** with a dedicated adapter or an explicitly selected fallback. Code must compile on Linux, macOS, and Windows — and on exotic targets via the complement-cfg `fallback`/`unsupported` module (see "Stubs for unsupported OSes").
 - ✅ **Keep facade parity,** so each selected adapter exposes the same callable surface. Adapter-private helpers do not belong in the facade; follow `qol-arch-cross-platform` for consumer locality.
 
 ## Facade decision points
