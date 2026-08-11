@@ -32,6 +32,10 @@
     {
       "event": "UserPromptSubmit",
       "command": "node bin/qol-mission-reminder.cjs"
+    },
+    {
+      "event": "UserPromptSubmit",
+      "command": "node bin/inject-qol-memory-recall.cjs"
     }
   ]
 }
