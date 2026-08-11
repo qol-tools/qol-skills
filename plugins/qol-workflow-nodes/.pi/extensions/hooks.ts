@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 
@@ -10,6 +10,10 @@ const PRE_TOOL_USE_HOOKS = [
 
 const USER_PROMPT_SUBMIT_HOOKS = [
     { script: "hooks/inject_workflow_nodes_reminder.mjs" }
+];
+
+const SESSION_START_CLEAR_HOOKS = [
+    { script: "hooks/clear_workflow_nodes_sentinel.mjs" }
 ];
 
 function runHook(script, input) {
@@ -62,6 +66,12 @@ function matchedToolName(matcher, toolName) {
     .find((name) => name.toLowerCase() === toolName.toLowerCase());
 }
 
+function sessionInput(ctx: ExtensionContext) {
+  return JSON.stringify({
+    session_id: path.basename(ctx.sessionManager.getSessionFile() ?? ""),
+  });
+}
+
 export default function (pi: ExtensionAPI) {
   if (PRE_TOOL_USE_HOOKS.length > 0) {
     pi.on("tool_call", async (event, _ctx) => {
@@ -105,6 +115,24 @@ export default function (pi: ExtensionAPI) {
 
       if (extraContext) {
         return { systemPrompt: (event.systemPrompt ?? "") + extraContext };
+      }
+    });
+  }
+
+  if (SESSION_START_CLEAR_HOOKS.length > 0) {
+    pi.on("session_start", async (event, ctx) => {
+      const input = sessionInput(ctx);
+
+      for (const hook of SESSION_START_CLEAR_HOOKS) {
+        runHook(hook.script, input);
+      }
+    });
+
+    pi.on("session_before_compact", async (event, ctx) => {
+      const input = sessionInput(ctx);
+
+      for (const hook of SESSION_START_CLEAR_HOOKS) {
+        runHook(hook.script, input);
       }
     });
   }
