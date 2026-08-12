@@ -117,6 +117,8 @@ A bridge call ends in one of three ways: a completed round (`submitted=true` or 
 
 A screen-read failure after a delivered round follows the same ladder: `qol sessions next` resolves it to a resume, never a re-submit.
 
+Host-aborted wait. A pending bridge can be killed by the host's own abort signal (the user interrupts the architect session, or the harness cancels the open tool call). The extension then reports an abort, for example `qol sessions aborted by the host`. This is not a transport error and not a deadlock: the task was already delivered and the round is still open in the target terminal. Check `qol sessions next`; a `phase=waiting` round proves the implementation is running, and the exact recovery is the printed `qol sessions resume` command. Never re-submit an aborted wait. When the user sees the architect session sitting on a pending bridge, tell them it is a live round in another tab, not a hang.
+
 Spawn readiness failure. A `session_spawn` call can fail with the same transport error before returning a session (for example `spawn readiness discovery failed` with the kitty null-cwd parse error): the backend created the window but could not parse its fresh state. The deterministic move is to retry the spawn exactly once with the SAME key. The keyed spawn reuses the maturing window and returns its token; a second key would create a duplicate lane. If the retry fails too, diagnose the backend read-only and report the spawn surface as unavailable; do not loop.
 
 Known kitty defect: the window model parses `cwd` as a required path string while kitty reports null for fresh windows before the shell sets PWD. The fix belongs in `libs/qol-terminal-sessions/src/kitty/parse.rs` (tolerate null cwd), not in the bridge protocol.
