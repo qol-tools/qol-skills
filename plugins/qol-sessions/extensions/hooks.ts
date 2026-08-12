@@ -8,49 +8,104 @@ const LOOP_PHASES = new Set(["idle", "waiting", "review", "closing", "paused"]);
 const REVIEW_FOLLOW_UP = `The qol-sessions feature loop is still active. Personally inspect the implementation against the user's complete acceptance criteria. If anything remains, call session_bridge for the next bounded correction round and acknowledge the reviewed completion_marker. If the entire feature is accepted, call session_loop_close with the session, completion_marker, outcome accepted, landed, before, now, verification, and remaining. If the user redirected the work or a genuine blocker requires user input, call session_loop_close with the session, completion_marker, outcome paused, and unfinished scope under remaining. Do not stop at a round boundary.`;
 const FINAL_REPORT_FOLLOW_UP = `The qol-sessions feature loop is closing. Return the exact canonical final report emitted by session_loop_close. Do not add or remove sections.`;
 
-function run(args, timeoutMs, input, signal) {
+function mcpState() {
+  return {
+    child: null,
+    nextId: 1,
+    pending: new Map(),
+    buffer: "",
+    stderr: "",
+    broken: false,
+  };
+}
+
+const state = mcpState();
+
+function ensureMcp() {
+  if (state.child && state.child.exitCode === null && !state.broken) return;
+  const child = spawn("qol", ["sessions", "mcp"], { stdio: ["pipe", "pipe", "pipe"] });
+  state.child = child;
+  state.nextId = 1;
+  state.pending = new Map();
+  state.buffer = "";
+  state.stderr = "";
+  state.broken = false;
+  child.stderr.on("data", (chunk) => { state.stderr += chunk; });
+  child.stdout.on("data", (chunk) => {
+    state.buffer += chunk;
+    let newline;
+    while ((newline = state.buffer.indexOf("\n")) !== -1) {
+      const line = state.buffer.slice(0, newline);
+      state.buffer = state.buffer.slice(newline + 1);
+      if (!line.trim()) continue;
+      let message;
+      try {
+        message = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      const entry = state.pending.get(message.id);
+      if (!entry) continue;
+      state.pending.delete(message.id);
+      if (entry.timer !== null) clearTimeout(entry.timer);
+      entry.resolve(message);
+    }
+  });
+  child.on("error", (error) => {
+    state.broken = true;
+    failAll(new Error(`qol sessions mcp failed: ${error.message}`));
+  });
+  child.on("close", (code) => {
+    state.broken = true;
+    const message = state.stderr.trim() || `qol sessions mcp exited with ${code ?? "unknown"}`;
+    failAll(new Error(message));
+  });
+}
+
+function failAll(error) {
+  for (const entry of state.pending.values()) {
+    if (entry.timer !== null) clearTimeout(entry.timer);
+    entry.reject(error);
+  }
+  state.pending.clear();
+}
+
+function mcpCall(request, timeoutMs, signal) {
   return new Promise((resolve, reject) => {
-    const child = spawn("qol", ["sessions", ...args], { stdio: ["pipe", "pipe", "pipe"] });
-    let stdout = "";
-    let stderr = "";
-    let settled = false;
-    let timer = null;
-    const settle = (fn) => {
-      if (settled) return;
-      settled = true;
-      if (timer !== null) clearTimeout(timer);
-      signal?.removeEventListener("abort", onAbort);
-      fn();
-    };
+    ensureMcp();
+    const id = state.nextId++;
+    const entry = { resolve, reject, timer: null };
+    state.pending.set(id, entry);
+    entry.timer = setTimeout(() => {
+      state.pending.delete(id);
+      reject(new Error(`qol sessions mcp timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
     const onAbort = () => {
-      child.kill("SIGTERM");
-      settle(() => reject(new Error("qol sessions aborted by the host")));
+      state.pending.delete(id);
+      if (entry.timer !== null) clearTimeout(entry.timer);
+      reject(new Error("qol sessions aborted by the host"));
     };
-    timer = setTimeout(() => {
-      child.kill("SIGTERM");
-      settle(() => reject(new Error(`qol sessions timed out after ${timeoutMs ?? 60_000}ms`)));
-    }, timeoutMs ?? 60_000);
     if (signal?.aborted) {
       onAbort();
       return;
     }
     signal?.addEventListener("abort", onAbort, { once: true });
-    child.stdout.on("data", (chunk) => { stdout += chunk; });
-    child.stderr.on("data", (chunk) => { stderr += chunk; });
-    child.on("error", (error) => settle(() => reject(new Error(`qol sessions failed: ${error.message}`))));
-    child.on("close", (code, childSignal) => settle(() => {
-      if (childSignal) {
-        reject(new Error(`qol sessions exited with ${childSignal}`));
-        return;
-      }
-      if (code !== 0) {
-        const message = stderr.trim() || stdout.trim();
-        reject(new Error(message || `qol sessions exited with ${code}`));
-        return;
-      }
-      resolve(stdout.trim());
-    }));
-    child.stdin.end(input ?? "");
+    state.child.stdin.write(`${JSON.stringify({ ...request, id })}\n`);
+  });
+}
+
+function toolCall(name, arguments_, timeoutMs, signal) {
+  return mcpCall(
+    { jsonrpc: "2.0", method: "tools/call", params: { name, arguments: arguments_ } },
+    timeoutMs,
+    signal,
+  ).then((response) => {
+    const result = response?.result;
+    const text = result?.content?.[0]?.text;
+    if (result?.isError || typeof text !== "string") {
+      throw new Error(text || `${name} failed`);
+    }
+    return text;
   });
 }
 
@@ -121,7 +176,7 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
       "List live terminal sessions on this host with their role-neutral tool identity, display name, activity hint, cwd, capabilities, and stable session token. Use it once to choose the implementation terminal for session_bridge.",
     parameters: Type.Object({}),
     async execute(_toolCallId, _params, signal, _onUpdate) {
-      const stdout = await run(["list", "--json"], 60_000, undefined, signal);
+      const stdout = await toolCall("sessions_list", {}, 60_000, signal);
       const rows = JSON.parse(stdout);
       const text = rows
         .map(
@@ -141,13 +196,12 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
     parameters: Type.Object({
       cwd: Type.String({ description: "Working directory for the spawned session" }),
       key: Type.String({ description: "Stable spawn key; required so retries are idempotent" }),
+      model: Type.Optional(Type.String({ description: "Model override for the spawned session (e.g. deepseek-v4-pro); beats the spawn_model config" })),
       surface: Type.Optional(Type.String({ description: "tab or os-window; defaults to the spawn_surface config, then tab" })),
       tool: Type.String({ description: "Registered CLI tool to spawn (codex, claude, pi, kimi)" }),
     }),
     async execute(_toolCallId, params, signal, _onUpdate) {
-      const args = ["spawn", "--tool", params.tool, "--cwd", params.cwd, "--key", params.key];
-      if (params.surface != null) args.push("--surface", params.surface);
-      const stdout = await run(args, 60_000, undefined, signal);
+      const stdout = await toolCall("session_spawn", params, 60_000, signal);
       const outcome = JSON.parse(stdout);
       const text = outcome.reused
         ? `reused session ${outcome.session} (${outcome.tool}, key ${outcome.key}, ${outcome.cwd})`
@@ -167,12 +221,9 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
       task: Type.String({ description: "Bounded implementation task to submit exactly once after any pending response is acknowledged" }),
     }),
     async execute(_toolCallId, params, signal, _onUpdate) {
-      const args = ["bridge", params.session];
-      if (params.acknowledge_marker != null) args.push("--acknowledge-marker", params.acknowledge_marker);
-      args.push("--", params.task);
       setLoopPhase("waiting");
       try {
-        const stdout = await run(args, BRIDGE_TIMEOUT_MS, undefined, signal);
+        const stdout = await toolCall("session_bridge", params, BRIDGE_TIMEOUT_MS, signal);
         const outcome = JSON.parse(stdout);
         setLoopPhase(outcome.completed ? "review" : "paused");
         const text = outcome.completed
@@ -207,11 +258,7 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
       verification: Type.String({ description: "Concrete checks and live evidence" }),
     }),
     async execute(_toolCallId, params, signal, _onUpdate) {
-      const request = { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "session_loop_close", arguments: params } };
-      const response = JSON.parse(await run(["mcp"], 10_000, `${JSON.stringify(request)}\n`, signal));
-      const result = response?.result;
-      const text = result?.content?.[0]?.text;
-      if (result?.isError || typeof text !== "string") throw new Error(text || "session_loop_close failed");
+      const text = await toolCall("session_loop_close", params, 10_000, signal);
       const receipt = JSON.parse(text);
       setLoopPhase("closing", receipt.final_report);
       return {
@@ -230,7 +277,7 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
       session: Type.String({ description: "Stable session token of the spawned implementation session to close" }),
     }),
     async execute(_toolCallId, params, signal, _onUpdate) {
-      const stdout = await run(["close", params.session], 30_000, undefined, signal);
+      const stdout = await toolCall("session_close", params, 30_000, signal);
       const outcome = JSON.parse(stdout);
       return {
         content: [{ type: "text", text: `closed session ${outcome.session} (${outcome.tool}, key ${outcome.key})` }],
