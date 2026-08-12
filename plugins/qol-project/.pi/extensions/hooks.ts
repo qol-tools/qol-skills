@@ -12,7 +12,6 @@ const PRE_TOOL_USE_HOOKS = [
 
 const USER_PROMPT_SUBMIT_HOOKS = [
     { script: "bin/qol-mission-reminder.cjs" },
-    { script: "bin/inject-qol-memory-recall.cjs" },
 ];
 
 const SESSION_START_CONTEXT_HOOKS = [
