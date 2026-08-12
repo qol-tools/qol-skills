@@ -148,6 +148,20 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
     if (loopPhase === "waiting") setLoopPhase("paused");
   }
 
+  function assistantBranchContains(ctx, needle) {
+    for (const entry of [...ctx.sessionManager.getBranch()]) {
+      if (entry?.type !== "message" || entry.message?.role !== "assistant") continue;
+      const content = entry.message.content;
+      const text = typeof content === "string"
+        ? content
+        : Array.isArray(content)
+          ? content.filter((block) => block?.type === "text").map((block) => block.text).join("\n")
+          : "";
+      if (text.includes(needle)) return true;
+    }
+    return false;
+  }
+
   pi.on("session_start", async (_event, ctx) => {
     restoreLoopPhase(ctx);
   });
@@ -157,13 +171,19 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
   });
 
   pi.on("agent_end", async (event, _ctx) => {
-    const text = assistantText(event.messages);
-    if (loopPhase === "closing" && loopFinalReport && text.includes(loopFinalReport)) {
-      setLoopPhase("idle");
-    }
+    try {
+      const text = assistantText(event.messages);
+      if (loopPhase === "closing" && loopFinalReport && text.includes(loopFinalReport)) {
+        setLoopPhase("idle");
+      }
+    } catch (_error) {}
   });
 
-  pi.on("agent_settled", async (_event, _ctx) => {
+  pi.on("agent_settled", async (_event, ctx) => {
+    if (loopPhase === "closing" && loopFinalReport && assistantBranchContains(ctx, loopFinalReport)) {
+      setLoopPhase("idle");
+      return;
+    }
     if (loopFollowUpSent) return;
     if (loopPhase === "review") {
       loopFollowUpSent = true;
