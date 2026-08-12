@@ -117,6 +117,8 @@ A bridge call ends in one of three ways: a completed round (`submitted=true` or 
 
 A screen-read failure after a delivered round follows the same ladder: `qol sessions next` resolves it to a resume, never a re-submit.
 
+Spawn readiness failure. A `session_spawn` call can fail with the same transport error before returning a session (for example `spawn readiness discovery failed` with the kitty null-cwd parse error): the backend created the window but could not parse its fresh state. The deterministic move is to retry the spawn exactly once with the SAME key. The keyed spawn reuses the maturing window and returns its token; a second key would create a duplicate lane. If the retry fails too, diagnose the backend read-only and report the spawn surface as unavailable; do not loop.
+
 Known kitty defect: the window model parses `cwd` as a required path string while kitty reports null for fresh windows before the shell sets PWD. The fix belongs in `libs/qol-terminal-sessions/src/kitty/parse.rs` (tolerate null cwd), not in the bridge protocol.
 
 ## Safety
