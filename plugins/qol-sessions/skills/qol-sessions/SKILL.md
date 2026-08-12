@@ -42,8 +42,8 @@ Treat every token returned by `sessions_list` or `session_spawn` as an opaque, i
 A spawned lane's title is part of its identity, not decoration. The lane key is the title source, and the title is what lets the architect and the human tell lanes apart at a glance, especially when several lanes run in parallel.
 
 1. Immediately after `session_spawn` returns, verify the title in `sessions_list`. Accept the spawn only when the display identity names the lane (for example `dv-guestsweep`).
-2. If the tab carries the tool's generic default, do not bridge yet. Prefix the first bridge round with a titling command the target runs in its own terminal before any other work: `kitty @ set-tab-title title="<lane key>"`, or if that is unavailable, `printf '\033]2;<lane key>\033\\'` for a window title. The completion marker still governs the round.
-3. Re-verify the title with `sessions_list` after the round completes. A lane that returns with a generic title failed its round prefix and needs a correction round.
+2. If the tab carries the tool's generic default, do not bridge yet. Prefix the first bridge round with a titling command the target runs in its own terminal before any other work: `kitty @ set-tab-title <lane key>` (the title is positional; the `title=` form becomes part of the title string), or if that is unavailable, `printf '\033]2;<lane key>\033\\'` for a window title. The completion marker still governs the round.
+3. Re-verify the title after the round completes. Some tools re-title their own window on every render (pi titles from its session name), so `sessions_list` may keep showing the generic title; the pinned kitty tab title is the stable lane marker in that case and is checked with `kitty @ ls` (read-only). A lane whose tab title does not carry the lane key failed its round prefix and needs a correction round.
 
 Never start two parallel lanes with indistinguishable titles.
 
