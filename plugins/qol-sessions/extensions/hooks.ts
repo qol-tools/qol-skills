@@ -127,12 +127,14 @@ function assistantText(messages) {
 export default function sessionsToolsExtension(pi: ExtensionAPI) {
   let loopPhase = "idle";
   let loopFinalReport = "";
+  let loopFollowUpSent = false;
 
   function setLoopPhase(phase, finalReport = "") {
     if (loopPhase === phase && loopFinalReport === finalReport) return;
     loopPhase = phase;
     loopFinalReport = finalReport;
-    pi.appendEntry(LOOP_ENTRY, { phase, final_report: finalReport });
+    loopFollowUpSent = false;
+    pi.appendEntry(LOOP_ENTRY, { phase, final_report: finalReport, follow_up_sent: false });
   }
 
   function restoreLoopPhase(ctx) {
@@ -142,6 +144,7 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
     const restored = entry?.data?.phase;
     loopPhase = LOOP_PHASES.has(restored) ? restored : "idle";
     loopFinalReport = typeof entry?.data?.final_report === "string" ? entry.data.final_report : "";
+    loopFollowUpSent = entry?.data?.follow_up_sent === true;
     if (loopPhase === "waiting") setLoopPhase("paused");
   }
 
@@ -161,10 +164,15 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
   });
 
   pi.on("agent_settled", async (_event, _ctx) => {
+    if (loopFollowUpSent) return;
     if (loopPhase === "review") {
+      loopFollowUpSent = true;
+      pi.appendEntry(LOOP_ENTRY, { phase: loopPhase, final_report: loopFinalReport, follow_up_sent: true });
       pi.sendUserMessage(REVIEW_FOLLOW_UP, { deliverAs: "followUp" });
     }
     if (loopPhase === "closing") {
+      loopFollowUpSent = true;
+      pi.appendEntry(LOOP_ENTRY, { phase: loopPhase, final_report: loopFinalReport, follow_up_sent: true });
       pi.sendUserMessage(`${FINAL_REPORT_FOLLOW_UP}\n\n${loopFinalReport}`, { deliverAs: "followUp" });
     }
   });
