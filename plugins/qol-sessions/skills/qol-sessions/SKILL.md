@@ -13,7 +13,8 @@ Use one event-driven transaction per implementation round and repeat rounds unti
 |---|---|
 | `sessions_list()` | Discover live terminals and their stable session tokens |
 | `session_spawn(tool, cwd, key, surface?)` | Launch a keyed implementation terminal or reuse its matching live session, then return its bridgeable token |
-| `session_bridge(session, task, acknowledge_marker?)` | Resume unfinished output or submit one bounded round, then suspend until its completion event |
+| `session_submit(session, task, acknowledge_marker?)` | Deliver one bounded round and return immediately with the round open, so other lanes can be submitted before any waiting |
+| `session_bridge(session, task?, acknowledge_marker?)` | Resume unfinished output, or submit one bounded round and suspend until its completion event; omit `task` to wait for the round a prior `session_submit` left open |
 | `session_loop_close(session, completion_marker, outcome, landed, before, now, verification, remaining)` | Acknowledge the final round, end the loop, and render its canonical report |
 | `qol sessions next [<session>]` (CLI) | Read the durable round state and print the exact next command for each open round |
 | `qol sessions resume <session>` (CLI) | Re-attach to the one pending round and wait for its completion marker without submitting; `--kickstart` first nudges an interrupted session |
@@ -22,6 +23,8 @@ Use one event-driven transaction per implementation round and repeat rounds unti
 `session_spawn` is keyed, not heuristic. Supply a stable key for the delegated lane and reuse that key for retries. The same live key and tool returns the existing session; a different tool or multiple live matches fails instead of repurposing a terminal. A successful result is already live, tagged, described as the requested tool, and immediately usable by `session_bridge`. The default surface comes from the sessions configuration and falls back to a tab; request `os-window` only when the work needs a separate window.
 
 `session_bridge` owns submit, completion signalling, suspension, wakeup, and result delivery for one round. Before submitting new work, it durably resumes any unfinished prior bridge to that session. A recovered response returns `submitted=false`; review it first, then call again only if the deferred task still remains. Pass the reviewed response's `completion_marker` as `acknowledge_marker` on that next call. No new prompt may be submitted until this explicit acknowledgement matches the pending round. The generated completion marker is split in the submitted prompt, so the target's input echo cannot complete the bridge. A round-complete event means ready for architect review; it never means the feature is accepted.
+
+`session_submit` exists so several lanes can run in parallel: `session_bridge` suspends the architect turn until one lane completes, so a second lane never receives its task if you try to bridge it first. For parallel lanes, spawn every lane first, then `session_submit` every lane's task (each call returns in seconds), then `session_bridge` each lane in turn to wait. A submit refuses when a round is already pending on that session; the wait is always `session_bridge` with the task omitted.
 
 ## Required workflow dependencies
 
