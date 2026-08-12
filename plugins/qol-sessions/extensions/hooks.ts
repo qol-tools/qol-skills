@@ -254,7 +254,7 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
     name: "session_loop_close",
     label: "Close the feature loop",
     description:
-      "Close the architect-owned feature loop through an explicit state transition and render the canonical final report. Use outcome `accepted` only after personally verifying the complete user request; use `paused` only for a user redirect or genuine blocker.",
+      "Close the architect-owned feature loop through an explicit state transition and render the canonical final report. Use outcome `accepted` only after personally verifying the complete user request; accepted is terminal and also closes the implementation terminal, whose transcript persists for resume. Use `paused` only for a user redirect or genuine blocker, which keeps the terminal open.",
     parameters: Type.Object({
       before: Type.String({ description: "User-visible behavior before this work" }),
       completion_marker: Type.String({ description: "Completion marker from the final reviewed bridge" }),
