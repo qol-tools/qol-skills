@@ -173,6 +173,7 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
   }
 
   let watcherChild: ReturnType<typeof spawn> | null = null;
+  let stdoutBuffer = "";
 
   async function startWatcher(ctx) {
     if (watcherChild !== null && watcherChild.exitCode == null) return;
@@ -187,7 +188,10 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
       });
       watcherChild = child;
       child.stdout.on("data", (chunk) => {
-        for (const line of chunk.toString().split("\n")) {
+        stdoutBuffer += chunk.toString();
+        const lines = stdoutBuffer.split("\n");
+        stdoutBuffer = lines.pop() ?? "";
+        for (const line of lines) {
           const trimmed = line.trim();
           if (!trimmed) continue;
           let event;
