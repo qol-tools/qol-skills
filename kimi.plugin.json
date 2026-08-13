@@ -73,6 +73,11 @@
       "command": "node plugins/qol-project/bin/inject-qol-cli-context.cjs"
     },
     {
+      "event": "SessionStart",
+      "matcher": ".*",
+      "command": "node plugins/qol-project/bin/inject-qol-memory-continue.cjs"
+    },
+    {
       "event": "UserPromptSubmit",
       "command": "node plugins/qol-project/bin/qol-mission-reminder.cjs"
     },

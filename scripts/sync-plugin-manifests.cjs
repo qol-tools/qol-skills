@@ -765,13 +765,18 @@ function piExtensionContent(root, pluginName, failures) {
   if (sessionStart.length > 0) {
     lines.push("");
     lines.push("  if (SESSION_START_CONTEXT_HOOKS.length > 0) {");
-    lines.push('    pi.on("session_start", async (_event, ctx) => {');
+    lines.push('    pi.on("session_start", async (event, ctx) => {');
     lines.push('      const sessionFile = ctx.sessionManager.getSessionFile() ?? "";');
-    lines.push("      const sessionId = path.basename(sessionFile);");
+    lines.push("      const sessionId = ctx.sessionManager.getSessionId();");
     lines.push('      let context = "";');
     lines.push("");
     lines.push("      for (const hook of SESSION_START_CONTEXT_HOOKS) {");
-    lines.push("        const result = runHook(hook.script, JSON.stringify({ session_id: sessionId }));");
+    lines.push("        const result = runHook(hook.script, JSON.stringify({");
+    lines.push("          session_id: sessionId,");
+    lines.push("          cwd: ctx.sessionManager.getCwd(),");
+    lines.push("          session_file: sessionFile,");
+    lines.push('          reason: event.reason ?? "",');
+    lines.push("        }));");
     lines.push("");
     lines.push("        if (result.context) {");
     lines.push('          context += "\\n\\n" + result.context;');

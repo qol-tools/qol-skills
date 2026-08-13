@@ -91,13 +91,18 @@ function stopGuardInput(ctx: ExtensionContext) {
 export default function (pi: ExtensionAPI) {
 
   if (SESSION_START_CONTEXT_HOOKS.length > 0) {
-    pi.on("session_start", async (_event, ctx) => {
+    pi.on("session_start", async (event, ctx) => {
       const sessionFile = ctx.sessionManager.getSessionFile() ?? "";
-      const sessionId = path.basename(sessionFile);
+      const sessionId = ctx.sessionManager.getSessionId();
       let context = "";
 
       for (const hook of SESSION_START_CONTEXT_HOOKS) {
-        const result = runHook(hook.script, JSON.stringify({ session_id: sessionId }));
+        const result = runHook(hook.script, JSON.stringify({
+          session_id: sessionId,
+          cwd: ctx.sessionManager.getCwd(),
+          session_file: sessionFile,
+          reason: event.reason ?? "",
+        }));
 
         if (result.context) {
           context += "\n\n" + result.context;
