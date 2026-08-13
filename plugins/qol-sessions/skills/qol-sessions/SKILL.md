@@ -50,9 +50,18 @@ A spawned lane's title is part of its identity, not decoration. The lane key is 
 
 Never start two parallel lanes with indistinguishable titles.
 
-## Lane tier
+## Tier assignment
 
-Implementation lanes run on the cheapest fast tier the user's harness offers, never on the expensive tier by default. The harness may not encode tier in the tool name: the same tool can come up on different models depending on its default configuration. Verify the tier right after spawn (the sessions surface or the target's model indicator) and if an implementation lane came up on the expensive tier, close it and respawn, or have the user switch it, before bridging any work.
+The current session is the architect and final reviewer and always runs on the frontier tier. Every spawned lane runs on the flash tier, and the tier choice is deterministic, never the harness default: the harness may not encode tier in the tool name, and the same tool can come up on different models depending on its default configuration.
+
+- Pass an explicit flash-tier model override to every `session_spawn` (its `model` argument). The `spawn_model` entry in `sessions.toml` is the fallback when an override is absent; a missing model is a refusal point, never a silent default.
+- Verify the lane's tier right after spawn from the target's model indicator. A lane that came up on the wrong tier is closed and respawned with the explicit model before any work is bridged; the architect never lets a flash lane run on the frontier tier or a frontier lane run on the flash tier.
+- The architect never delegates its own tier's work: scoping, acceptance review, verdict synthesis, and the final report stay in the frontier session. Flash lanes implement, research, and produce preliminary reviews; they never accept a feature.
+- Tiers are roles, not product names: the concrete model for each tier comes from the lane's explicit override or the config, never from hard-coded names in this skill.
+
+## Orchestrated review
+
+When the delegated work is a code review, load `qol-code-review`; it is the invariant owner of the reviewer catalog, checklists, severity rubric, and the tiered review protocol. This skill supplies only lanes, tiers, and gating: one flash lane per reviewer role runs in parallel, adversarial flash lanes are gated on review completion, and the frontier architect synthesizes the verdict in-session before the loop closes. Never copy review-domain content into this skill; when the protocol evolves, it evolves in `qol-code-review` and this reference picks it up unchanged. The same ownership rule applies to every domain: implementation, research, debugging, and adversarial protocols live in their owning skills, and sessions only orchestrates them.
 
 ## Suspension contract
 

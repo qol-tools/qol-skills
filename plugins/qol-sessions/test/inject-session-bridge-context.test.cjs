@@ -13,7 +13,10 @@ const BRIDGE_MAX_TIMEOUT_SECONDS = 86_400;
 const {
     BRIDGE_CONTEXT,
     BRIDGE_TOPIC_PATTERN,
+    QOL_WORKSPACE_PATTERN,
+    TIER_RULE,
     shouldInject,
+    shouldInjectTierRule,
 } = require('../bin/inject-session-bridge-context.cjs');
 
 function run(payload) {
@@ -30,11 +33,51 @@ test('bridge topics are role-based and model-invariant', () => {
     assert.doesNotMatch(BRIDGE_CONTEXT, /gpt|claude|codex|kimi|deepseek|fable/i);
 });
 
-test('unrelated prompts stay silent', () => {
+test('unrelated prompts stay silent outside a qol workspace', () => {
     assert.ok(!shouldInject({ prompt: 'fix the settings panel padding' }));
-    const result = run({ hook_event_name: 'UserPromptSubmit', prompt: 'fix padding' });
+    const result = run({
+        hook_event_name: 'UserPromptSubmit',
+        prompt: 'fix padding',
+        cwd: '/tmp/elsewhere',
+    });
     assert.equal(result.status, 0);
     assert.equal(result.stdout, '');
+});
+
+test('the tier rule fires unconditionally inside a qol workspace', () => {
+    const qolCwd = '/media/kmrh47/WD_SN850X/Git/qol-skills';
+    assert.ok(QOL_WORKSPACE_PATTERN.test(qolCwd));
+    assert.ok(!QOL_WORKSPACE_PATTERN.test('/tmp/elsewhere'));
+    assert.ok(shouldInjectTierRule({ hook_event_name: 'UserPromptSubmit', prompt: 'fix padding', cwd: qolCwd }));
+    assert.ok(!shouldInjectTierRule({ hook_event_name: 'PreToolUse', prompt: 'fix padding', cwd: qolCwd }));
+    assert.ok(!shouldInjectTierRule({ prompt: '[qol session bridge]\nact as the implementer', cwd: qolCwd }));
+    assert.doesNotMatch(TIER_RULE, /gpt|claude|codex|kimi|deepseek|fable/i);
+    assert.match(TIER_RULE, /frontier tier/);
+    assert.match(TIER_RULE, /flash-tier model override/);
+    assert.match(TIER_RULE, /session_spawn/);
+    const result = run({
+        hook_event_name: 'UserPromptSubmit',
+        prompt: 'fix padding',
+        cwd: qolCwd,
+    });
+    assert.equal(result.status, 0);
+    const context = JSON.parse(result.stdout).hookSpecificOutput.additionalContext;
+    assert.match(context, /\[qol-sessions tier rule\]/);
+    assert.match(context, /never through a raw harness spawn/);
+    assert.doesNotMatch(context, /sessions_list/);
+});
+
+test('a qol workspace topic prompt receives the tier rule plus the full bridge context', () => {
+    const qolCwd = '/media/kmrh47/WD_SN850X/Git/qol-skills';
+    const result = run({
+        hook_event_name: 'UserPromptSubmit',
+        prompt: 'hand off implementation to another agent terminal',
+        cwd: qolCwd,
+    });
+    assert.equal(result.status, 0);
+    const context = JSON.parse(result.stdout).hookSpecificOutput.additionalContext;
+    assert.match(context, /\[qol-sessions tier rule\]/);
+    assert.match(context, /sessions_list/);
 });
 
 test('matching prompts receive the event-driven feature loop', () => {
@@ -43,7 +86,7 @@ test('matching prompts receive the event-driven feature loop', () => {
         'send it to the agent',
         'await the agent response',
     ]) {
-        const result = run({ hook_event_name: 'UserPromptSubmit', prompt });
+        const result = run({ hook_event_name: 'UserPromptSubmit', prompt, cwd: '/tmp/elsewhere' });
         assert.equal(result.status, 0);
         const context = JSON.parse(result.stdout).hookSpecificOutput.additionalContext;
         assert.match(context, /sessions_list/);
@@ -52,6 +95,9 @@ test('matching prompts receive the event-driven feature loop', () => {
         assert.match(context, /returns only a live bridgeable session/);
         assert.match(context, /session_bridge/);
         assert.match(context, /session_loop_close/);
+        assert.match(context, /flash-tier model override/);
+        assert.match(context, /Spawned lanes run on the flash tier/);
+        assert.match(context, /verdict synthesis, and the final report happen in-session/);
         assert.match(context, /qol-workflow:git-trees/);
         assert.match(context, /qol-workflow:commit/);
         assert.match(context, /worktree route and canonical squash-to-one-commit/);
@@ -125,6 +171,7 @@ test('the implementation bridge envelope does not receive architect instructions
     const result = run({
         hook_event_name: 'UserPromptSubmit',
         prompt: '[qol session bridge]\nAct as the implementation agent. Do not delegate it.',
+        cwd: '/media/kmrh47/WD_SN850X/Git/qol-skills',
     });
     assert.equal(result.status, 0);
     assert.equal(result.stdout, '');

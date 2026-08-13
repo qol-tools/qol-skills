@@ -147,6 +147,17 @@ Read `references/review-checklists.md` whenever a review spans more than two dom
   3) adversarial challenge
 - Close each agent once its findings are incorporated.
 
+## Session-orchestrated tiered review
+
+When the review runs through qol sessions, the tier split is deterministic and the protocol is fixed. Orchestration mechanics (spawn, bridge, gating, reporting) come from `qol-sessions`; this skill owns the review semantics, and no session mechanics are copied here.
+
+1. Review pass. The frontier architect (the current session) defines the scope, runs `review-router` to pick the reviewer set, and spawns one flash lane per selected reviewer role in parallel. Each lane receives the scope plus its checklist and returns severity-ordered findings with file/line references and confidence.
+2. Adversarial pass. Gated on every review lane completing: flash adversarial lanes spawn in parallel, one per attack category (malformed inputs, stale state, hostile refs, partial failures, race/retry behavior, assumption-breaking). Each adversarial lane receives the prior findings and refutes severity, confidence, and misread-path claims, reporting only newly discovered or under-severity risks.
+3. Verdict pass. When both passes complete, the frontier architect synthesizes in-session: group findings by severity and domain, apply the Severity and Confidence Rubric, and produce the severity-ordered go/no-go. The verdict is never delegated to a flash lane and never produced by the parent thread pretending to be the board.
+4. Report. Persist the review via the bundled writer and close the loop with the canonical report.
+
+Reviewer lanes are flash tier by default; the architect may name a frontier lane for a specific domain only when the user explicitly asks for it. Findings from all lanes are evidence for the verdict, never the verdict itself.
+
 ## Severity and Confidence Rubric
 
 Use this for every finding:
