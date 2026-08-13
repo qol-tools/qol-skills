@@ -152,6 +152,10 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
       const tokens = await readWatchedTokens(sessionId);
       if (!tokens.includes(token)) tokens.push(token);
       await fs.writeFile(watchStateFile(sessionId), JSON.stringify(tokens));
+      if (watcherChild !== null && watcherChild.exitCode == null) {
+        watcherChild.kill("SIGTERM");
+        watcherChild = null;
+      }
     } catch {}
   }
 
