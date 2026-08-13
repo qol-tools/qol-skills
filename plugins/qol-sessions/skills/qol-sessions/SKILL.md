@@ -12,7 +12,7 @@ Use one event-driven transaction per implementation round and repeat rounds unti
 | Action | Purpose |
 |---|---|
 | `sessions_list()` | Discover live terminals and their stable session tokens |
-| `session_spawn(tool, cwd, key, model?, title?, task?)` | Launch a keyed implementation terminal (titled, on the flash tier) or reuse its matching live session, then return its bridgeable token; `model` names the lane's tier override, `title` names the tab (defaults to the lane key), and `task` delivers the first round so it is already open when the call returns |
+| `session_spawn(tool, cwd, key, model?, title?, task?, background?)` | Launch a keyed implementation terminal (titled, on the flash tier) or reuse its matching live session, then return its bridgeable token; `model` names the lane's tier override, `title` names the tab (defaults to the lane key), `task` delivers the first round so it is already open when the call returns, and `background` launches fire-and-forget with the task queued at spawn time, returning before the lane is live |
 | `session_submit(session, task, acknowledge_marker?)` | Deliver one bounded round and return immediately with the round open, so other lanes can be submitted before any waiting |
 | `session_bridge(session, task?, acknowledge_marker?)` | Resume unfinished output, or submit one bounded round and suspend until its completion event; omit `task` to wait for the round a prior `session_spawn(task)` or `session_submit` left open |
 | `session_loop_close(session, completion_marker, outcome, landed, before, now, verification, remaining)` | Acknowledge the final round, end the loop, and render its canonical report |
@@ -88,6 +88,18 @@ The reasoning loop must be idle while implementation runs. Waiting inside the to
 
 The caller remains the architect and reviewer. The target implements. The target's claim of completion is evidence for step 5, not an acceptance decision. These are responsibilities, never hard-coded products, models, session names, or vendors.
 
+## Background lanes and wake
+
+`session_spawn` with `background: true` launches the lane fire-and-forget: the task is embedded in the launch command and the pending round is queued at spawn time, and the call returns without waiting for the live UI or any liveness confirmation. Background mode requires `task`; a background spawn result means the round was queued, not that the lane is up. The initiator is woken when the watcher reports the round.
+
+`qol sessions watch <tokens>` waits on pending rounds and prints one JSON event per line: `completed` when the completion marker appears, `gone` when the terminal died with the round open (the round is then discarded), and `stalled` when the target went idle without the marker. Polling starts at a 10s base interval and backs off to a 30s cap; every 10th read is a strict screen read, the rest are relaxed. A stall is reported after 15 minutes without screen change.
+
+Calling `qol sessions watch` with no tokens selects all-rounds mode: it holds the watch-all lock, watches every pending round, and emits `completed` for checkpoints it observes in the durable store, including rounds it was not given. All-rounds mode is diagnostic only and completes foreign checkpoints it observes; the pi extension never uses it and always passes explicit tokens.
+
+The pi extension runs the wake flow for background spawns. On a background spawn it records the new session token in the watch-owner state file for the initiator's pi session, spawns the watcher child (`qol sessions watch <tokens>`, detached) from the tool handler, and parses its stdout for events. On `completed`, `gone`, or `stalled` it wakes the initiator with `pi.sendUserMessage` using `deliverAs: "followUp"` and `triggerTurn: true`, with guidance text that routes the architect to `session_bridge`. The watcher child is killed with SIGTERM on `session_shutdown`.
+
+The architect handles the wake exactly like a bridge return: collect the lane with `session_bridge` (task omitted) and review the round as usual. A `gone` wake means the lane terminal closed and its round was discarded; start a fresh lane only if the work still matters. A `stalled` wake means the target went idle; nudge it with `qol sessions resume --kickstart`, or collect with `session_bridge`.
+
 ## Lifecycle enforcement
 
 The CLI-session integration installs the continuation hooks. Agents never create, spawn, or poll hooks themselves.
@@ -101,6 +113,8 @@ The CLI-session integration installs the continuation hooks. Agents never create
 `session_loop_close` is the only termination path. It returns the canonical `What landed / Before / Now / Verification / Remaining` report. Return that report exactly; the loop stays armed until it appears in the architect's final response. Never call it to accept one implementation round; acceptance covers the user's complete request. Prose or lifecycle markers cannot close the loop.
 
 An accepted close also closes the implementation terminal after the transition is recorded; the report and transition stay authoritative even when that close fails (a dead tab never fails the loop closure). A paused close leaves the terminal open. No separate close call exists in the workflow: the terminal dies with its accepted loop.
+
+The loop-close receipt carries the close outcome: `loop_closed`, `outcome`, and `final_report` are always present, and an accepted close adds `terminal_closed`. `terminal_closed` is true when the spawned terminal closed cleanly and false when the close itself failed, for example because the terminal was already gone; the report and transition stay authoritative either way.
 
 ## Timeout recovery
 
@@ -130,6 +144,13 @@ A bridge call ends in one of three ways: a completed round (`submitted=true` or 
 4. The same transport error repeats: stop retrying. Diagnose the backend read-only (kitty: scan `kitty @ ls` for null fields the parser requires), record the defect, report the bridge surface as unavailable, and wait for the user. A retry loop is always wrong.
 
 A screen-read failure after a delivered round follows the same ladder: `qol sessions next` resolves it to a resume, never a re-submit.
+
+## Hard rules
+
+1. Kitty 0.45.0 `get-text --match` is window selection only; content matching does not exist. Every new kitty command shape must be verified against the live kitty before commit; fake-runner tests are not sufficient.
+2. Lanes never install or refresh shared binaries (`~/.cargo/bin/qol`); only the architect runs `qol setup` after review.
+3. A lane that must touch files outside its assigned file set stops and reports instead of expanding scope.
+4. Concurrent lanes in one worktree get disjoint file sets verified before spawn.
 
 Host-aborted wait. A pending bridge can be killed by the host's own abort signal (the user interrupts the architect session, or the harness cancels the open tool call). The extension then reports an abort, for example `qol sessions aborted by the host`. This is not a transport error and not a deadlock: the task was already delivered and the round is still open in the target terminal. Check `qol sessions next`; a `phase=waiting` round proves the implementation is running, and the exact recovery is the printed `qol sessions resume` command. Never re-submit an aborted wait. When the user sees the architect session sitting on a pending bridge, tell them it is a live round in another tab, not a hang.
 
