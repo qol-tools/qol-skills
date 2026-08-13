@@ -114,7 +114,7 @@ The CLI-session integration installs the continuation hooks. Agents never create
 
 An accepted close also closes the implementation terminal after the transition is recorded; the report and transition stay authoritative even when that close fails (a dead tab never fails the loop closure). A paused close leaves the terminal open. No separate close call exists in the workflow: the terminal dies with its accepted loop.
 
-The loop-close receipt carries the close outcome: `loop_closed`, `outcome`, and `final_report` are always present, and an accepted close adds `terminal_closed`. `terminal_closed` is true when the spawned terminal closed cleanly and false when the close itself failed, for example because the terminal was already gone; the report and transition stay authoritative either way.
+The loop-close receipt carries the close outcome: `loop_closed`, `outcome`, and `final_report` are always present, and an accepted close adds `terminal_closed`, `terminal_state` (`closed` | `already_gone` | `close_failed`), and `close_detail` when a reason exists. `terminal_closed` is true when no live lane terminal remains (cleanly closed or already gone) and false only when the close failed on a live terminal; the report and transition stay authoritative either way.
 
 ## Timeout recovery
 
