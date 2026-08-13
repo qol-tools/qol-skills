@@ -231,9 +231,15 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
               ? `qol sessions: lane ${event.session} completed.\n\n${reportSnippet(event.screen)}\n\nReview it, then close the loop with session_loop_close.`
               : `qol sessions: lane ${event.session} ${event.event}. ${action}`;
           wakeDebugLog(sessionId, `send message_bytes=${message.length}`);
-          pi.sendUserMessage(message, { deliverAs: "followUp", triggerTurn: true })
-            .then(() => wakeDebugLog(sessionId, "send ok"))
-            .catch((error) => wakeDebugLog(sessionId, `send failed: ${error?.message ?? error}`));
+          try {
+            const sent = pi.sendUserMessage(message, { deliverAs: "followUp", triggerTurn: true });
+            wakeDebugLog(sessionId, `send returned ${typeof sent}`);
+            if (sent && typeof sent.then === "function") {
+              sent.then(() => wakeDebugLog(sessionId, "send ok")).catch((error) => wakeDebugLog(sessionId, `send failed: ${error?.message ?? error}`));
+            }
+          } catch (error) {
+            wakeDebugLog(sessionId, `send threw: ${error?.message ?? error}`);
+          }
         }
       });
       child.on("error", (error) => {
