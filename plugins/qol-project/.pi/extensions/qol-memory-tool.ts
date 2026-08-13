@@ -1,8 +1,8 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { spawnSync } from "node:child_process";
-import { join, basename } from "node:path";
-import { appendFileSync, readFileSync, mkdirSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { join, basename, dirname } from "node:path";
+import { appendFileSync, readFileSync, mkdirSync, existsSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 
 function memoryStore(): string {
@@ -14,6 +14,36 @@ function memoryStore(): string {
 
 const UNITS_PATH = join(memoryStore(), "units.jsonl");
 const CAPTURE_DISABLED = process.env.QOL_MEMORY_LIVE_CAPTURE_DISABLE === "1";
+const DISTILL_DEBOUNCE_MS = 15 * 60 * 1000;
+const DISTILL_LOG = "/tmp/qol-memory-distill.log";
+const distillDebounce = new Map<string, number>();
+
+function distillPath(): string {
+  const store = memoryStore();
+  const manifest = join(store, "manifest.json");
+  try {
+    const m = JSON.parse(readFileSync(manifest, "utf8"));
+    if (m && m.ask_mjs) return join(dirname(m.ask_mjs), "decisions.mjs");
+  } catch {}
+  if (process.env.QOL_MEMORY_DISTILL && process.env.QOL_MEMORY_DISTILL.length) return process.env.QOL_MEMORY_DISTILL;
+  return "";
+}
+
+function spawnDistill(args: string[]) {
+  const dp = distillPath();
+  const stamp = new Date().toISOString();
+  if (!dp) {
+    try { appendFileSync(DISTILL_LOG, stamp + " SKIP no distillPath (" + args.join(" ") + ")\n"); } catch {}
+    return;
+  }
+  try { appendFileSync(DISTILL_LOG, stamp + " SPAWN " + args.join(" ") + "\n"); } catch {}
+  const child = spawn("node", [dp, ...args], {
+    detached: true,
+    stdio: "ignore",
+    env: { ...process.env, QOL_MEMORY_LIVE_CAPTURE_DISABLE: "1" },
+  });
+  child.unref();
+}
 
 function unitKey(source: string, file: string, ts: string, text: string): string {
   return createHash("sha256").update([source, file, ts, text].join("|")).digest("hex").slice(0, 16);
@@ -69,6 +99,12 @@ export default function (pi: ExtensionAPI) {
     const e = event.compactionEntry;
     if (!e) return;
     appendUnit(ctx, "compaction", new Date(e.timestamp).toISOString(), redact(e.summary || ""), []);
+    const sid = ctx.sessionManager.getSessionId() as string;
+    const now = Date.now();
+    if (sid && now - (distillDebounce.get(sid) || 0) > DISTILL_DEBOUNCE_MS) {
+      distillDebounce.set(sid, now);
+      setImmediate(() => spawnDistill(["--session", sid, "--live"]));
+    }
   });
 
   pi.registerTool({
@@ -129,4 +165,14 @@ export default function (pi: ExtensionAPI) {
       return { content: [{ type: "text", text: lines.join("\n") }], details: {} };
     },
   });
+
+  const catchallMarker = join(memoryStore(), ".distill-catchall.ts");
+  try {
+    const prev = existsSync(catchallMarker) ? readFileSync(catchallMarker, "utf8") : "";
+    const prevTs = Date.parse(prev) || 0;
+    if (Date.now() - prevTs > 12 * 60 * 60 * 1000) {
+      writeFileSync(catchallMarker, new Date().toISOString());
+      setImmediate(() => spawnDistill(["--live"]));
+    }
+  } catch {}
 }
