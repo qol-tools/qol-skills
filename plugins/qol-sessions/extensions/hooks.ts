@@ -118,7 +118,7 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
     if (loopPhase === "closing") {
       if (!closingFollowUpSent) {
         closingFollowUpSent = true;
-        pi.sendUserMessage(`${FINAL_REPORT_FOLLOW_UP}\n\n${loopFinalReport}`, { deliverAs: "followUp" });
+        pi.sendUserMessage(FINAL_REPORT_FOLLOW_UP, { deliverAs: "followUp" });
       } else {
         setLoopPhase("idle");
       }
