@@ -72,12 +72,17 @@ function assistantText(messages) {
 export default function sessionsToolsExtension(pi: ExtensionAPI) {
   let loopPhase = "idle";
   let loopFinalReport = "";
+  let closingFollowUpSent = false;
 
   function setLoopPhase(phase, finalReport = "") {
     if (loopPhase === phase && loopFinalReport === finalReport) return;
     loopPhase = phase;
     loopFinalReport = finalReport;
     pi.appendEntry(LOOP_ENTRY, { phase, final_report: finalReport });
+  }
+
+  function normalized(text) {
+    return text.replace(/[^a-z0-9]/gi, "").toLowerCase();
   }
 
   function restoreLoopPhase(ctx) {
@@ -100,7 +105,7 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
 
   pi.on("agent_end", async (event, _ctx) => {
     const text = assistantText(event.messages);
-    if (loopPhase === "closing" && loopFinalReport && text.includes(loopFinalReport)) {
+    if (loopPhase === "closing" && loopFinalReport && normalized(text).includes(normalized(loopFinalReport))) {
       setLoopPhase("idle");
     }
   });
@@ -110,7 +115,12 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
       pi.sendUserMessage(REVIEW_FOLLOW_UP, { deliverAs: "followUp" });
     }
     if (loopPhase === "closing") {
-      pi.sendUserMessage(`${FINAL_REPORT_FOLLOW_UP}\n\n${loopFinalReport}`, { deliverAs: "followUp" });
+      if (!closingFollowUpSent) {
+        closingFollowUpSent = true;
+        pi.sendUserMessage(`${FINAL_REPORT_FOLLOW_UP}\n\n${loopFinalReport}`, { deliverAs: "followUp" });
+      } else {
+        setLoopPhase("idle");
+      }
     }
   });
 
