@@ -1,6 +1,6 @@
 {
   "name": "qol-skills",
-  "description": "Claude Code skills for the qol-tools ecosystem (qol-tray host app, plugins, shared libs, CI workflows, and general engineering practices) \u2014 split into fine-grained plugins for per-plugin toggling.",
+  "description": "Claude Code skills for the qol-tools ecosystem (qol-tray host app, plugins, shared libs, CI workflows, and general engineering practices) — split into fine-grained plugins for per-plugin toggling.",
   "owner": {
     "name": "KMRH47"
   },
@@ -106,7 +106,7 @@
     },
     {
       "name": "qol-langs",
-      "description": "Personal-experience wells for languages and frameworks used in qol-tools: rust-conventions, gpui-conventions, preact-conventions. Workspace-specific style and gotchas, NOT canonical library docs \u2014 for those, use context7.",
+      "description": "Personal-experience wells for languages and frameworks used in qol-tools: rust-conventions, gpui-conventions, preact-conventions. Workspace-specific style and gotchas, NOT canonical library docs — for those, use context7.",
       "source": "./plugins/qol-langs",
       "version": "0.3.1",
       "author": {
@@ -189,7 +189,7 @@
       "name": "qol-sessions",
       "description": "Architect-to-implementer feature loop for independent terminals with event-signalled rounds, explicit closure, and a canonical final report.",
       "source": "./plugins/qol-sessions",
-      "version": "0.4.10",
+      "version": "0.5.0",
       "author": {
         "name": "KMRH47"
       }
