@@ -93,6 +93,7 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
     loopPhase = LOOP_PHASES.has(restored) ? restored : "idle";
     loopFinalReport = typeof entry?.data?.final_report === "string" ? entry.data.final_report : "";
     if (loopPhase === "waiting") setLoopPhase("paused");
+    if (loopPhase === "closing") setLoopPhase("idle");
   }
 
   pi.on("session_start", async (_event, ctx) => {
