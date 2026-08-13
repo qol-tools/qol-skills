@@ -12,7 +12,7 @@ Use one event-driven transaction per implementation round and repeat rounds unti
 | Action | Purpose |
 |---|---|
 | `sessions_list()` | Discover live terminals and their stable session tokens |
-| `session_spawn(tool, cwd, key, surface?)` | Launch a keyed implementation terminal or reuse its matching live session, then return its bridgeable token |
+| `session_spawn(tool, cwd, key, model?, surface?)` | Launch a keyed implementation terminal or reuse its matching live session, then return its bridgeable token; `model` names the spawned lane's tier override |
 | `session_submit(session, task, acknowledge_marker?)` | Deliver one bounded round and return immediately with the round open, so other lanes can be submitted before any waiting |
 | `session_bridge(session, task?, acknowledge_marker?)` | Resume unfinished output, or submit one bounded round and suspend until its completion event; omit `task` to wait for the round a prior `session_submit` left open |
 | `session_loop_close(session, completion_marker, outcome, landed, before, now, verification, remaining)` | Acknowledge the final round, end the loop, and render its canonical report |
