@@ -228,7 +228,7 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
                 : "Collect with session_bridge.";
           const message =
             event.event === "completed"
-              ? `qol sessions: lane ${event.session} completed.\n\n${reportSnippet(event.screen)}\n\nReview it, then close the loop with session_loop_close.`
+              ? `qol sessions: lane ${event.session} completed.\n\n${reportSnippet(event.screen)}\n\nReview it, then close the loop with session_loop_close.` + (event.autoclose === true ? "\n\n(lane auto-closed)" : "")
               : `qol sessions: lane ${event.session} ${event.event}. ${action}`;
           wakeDebugLog(sessionId, `send message_bytes=${message.length}`);
           try {
@@ -291,6 +291,7 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
     description:
       "Launch a tagged harness for a registered tool in a new terminal tab, or reuse the single live session already carrying the key when its tool matches. The key makes retries idempotent: a key held by a different tool conflicts, multiple matches are ambiguous, and a launched session is returned only once it is live, tagged, and described as the requested tool. Surface is tab or os-window; the default comes from the spawn_surface config, then tab.",
     parameters: Type.Object({
+      autoclose: Type.Optional(Type.Boolean({ description: "Close the lane terminal automatically when the watcher confirms the round's completion; only applies to newly spawned terminals, never to a reused session" })),
       background: Type.Optional(Type.Boolean({ description: "Fire-and-forget launch: embed the first task in the launch command, queue the pending round at spawn time, and return without waiting for the live UI (requires task); the pi extension wakes the initiator when a watcher detects the round" })),
       cwd: Type.String({ description: "Working directory for the spawned session" }),
       key: Type.String({ description: "Stable spawn key; required so retries are idempotent" }),
@@ -307,6 +308,7 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
       if (params.title != null) args.push("--title", params.title);
       if (params.task != null) args.push("--task", params.task);
       if (params.background === true) args.push("--background");
+      if (params.autoclose === true) args.push("--auto-close");
       const stdout = await run(args, 60_000, undefined, signal);
       const outcome = JSON.parse(stdout);
       let text;
