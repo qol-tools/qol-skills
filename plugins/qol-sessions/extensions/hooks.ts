@@ -76,9 +76,11 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
   let loopPhase = "idle";
   let loopFinalReport = "";
   let closingFollowUpSent = false;
+  let reviewFollowUpSent = false;
 
   function setLoopPhase(phase, finalReport = "") {
     if (loopPhase === phase && loopFinalReport === finalReport) return;
+    if (loopPhase === "review" && phase !== "review") reviewFollowUpSent = false;
     loopPhase = phase;
     loopFinalReport = finalReport;
     pi.appendEntry(LOOP_ENTRY, { phase, final_report: finalReport });
@@ -117,7 +119,10 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
 
   pi.on("agent_settled", async (_event, _ctx) => {
     if (loopPhase === "review") {
-      pi.sendUserMessage(REVIEW_FOLLOW_UP, { deliverAs: "followUp" });
+      if (!reviewFollowUpSent) {
+        reviewFollowUpSent = true;
+        pi.sendUserMessage(REVIEW_FOLLOW_UP, { deliverAs: "followUp" });
+      }
     }
     if (loopPhase === "closing") {
       if (!closingFollowUpSent) {
@@ -315,6 +320,7 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
       if (params.acknowledge_marker != null) args.push("--acknowledge-marker", params.acknowledge_marker);
       const stdout = await run(args, 60_000, undefined, signal);
       const outcome = JSON.parse(stdout);
+      reviewFollowUpSent = false;
       const text = `task submitted to session ${outcome.session}; round open, wait with session_bridge (omit task)`;
       return { content: [{ type: "text", text: `${text}\n${outcome.screen}` }], details: { outcome } };
     },
