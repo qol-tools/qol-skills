@@ -220,12 +220,14 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
     name: "session_spawn",
     label: "Spawn a tool session",
     description:
-      "Launch a tagged harness for a registered tool in a new terminal tab, or reuse the single live session already carrying the key when its tool matches. The key makes retries idempotent: a key held by a different tool conflicts, multiple matches are ambiguous, and a launched session is returned only once it is live, tagged, and described as the requested tool. Surface is tab or os-window; the default comes from the spawn_surface config, then tab.",
+      "Launch a tagged harness for a registered tool in a new terminal tab, or reuse the single live session already carrying the key when its tool matches. The key makes retries idempotent: a key held by a different tool conflicts, multiple matches are ambiguous, and a launched session is returned only once it is live, tagged, and described as the requested tool. Surface is tab or os-window; the default comes from the spawn_surface config, then tab. The lane key is the default tab title; pass an explicit title to override. Pass a task to deliver the first bounded round at spawn time so the round is already open when this call returns, then wait with session_bridge (omit its task).",
     parameters: Type.Object({
       cwd: Type.String({ description: "Working directory for the spawned session" }),
       key: Type.String({ description: "Stable spawn key; required so retries are idempotent" }),
       model: Type.Optional(Type.String({ description: "Model override for the spawned session (e.g. deepseek-v4-pro); beats the spawn_model config" })),
       surface: Type.Optional(Type.String({ description: "tab or os-window; defaults to the spawn_surface config, then tab" })),
+      title: Type.Optional(Type.String({ description: "Tab title for the spawned session; defaults to the lane key" })),
+      task: Type.Optional(Type.String({ description: "Bounded first-round task delivered at spawn time; the round is open when the call returns and session_bridge (no task) waits for it" })),
       tool: Type.String({ description: "Registered CLI tool to spawn (codex, claude, pi, kimi)" }),
     }),
     async execute(_toolCallId, params, signal, _onUpdate) {
@@ -233,7 +235,8 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
       const outcome = JSON.parse(stdout);
       const text = outcome.reused
         ? `reused session ${outcome.session} (${outcome.tool}, key ${outcome.key}, ${outcome.cwd})`
-        : `spawned session ${outcome.session} (${outcome.tool}, key ${outcome.key}, ${outcome.cwd}, ${outcome.surface})`;
+        : `spawned session ${outcome.session} (${outcome.tool}, key ${outcome.key}, ${outcome.cwd}, ${outcome.surface})`
+          + (outcome.task_submitted ? "; first round delivered, wait with session_bridge (omit task)" : "");
       return { content: [{ type: "text", text }], details: { outcome } };
     },
   });
