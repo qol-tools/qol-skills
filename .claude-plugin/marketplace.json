@@ -189,7 +189,7 @@
       "name": "qol-sessions",
       "description": "Architect-to-implementer feature loop for independent terminals with event-signalled rounds, explicit closure, and a canonical final report.",
       "source": "./plugins/qol-sessions",
-      "version": "0.5.11",
+      "version": "0.5.12",
       "author": {
         "name": "KMRH47"
       }
@@ -207,7 +207,7 @@
       "name": "qol-code-review",
       "description": "Code review skill with read-only review orchestration, domain-focused reviewer agents, contextual quick wins, severity/confidence gates, adversarial passes, and machine-parseable synthesis.",
       "source": "./plugins/qol-code-review",
-      "version": "0.3.2",
+      "version": "0.3.3",
       "author": {
         "name": "KMRH47"
       }

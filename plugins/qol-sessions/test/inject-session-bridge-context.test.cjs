@@ -52,7 +52,7 @@ test('the tier rule fires unconditionally inside a qol workspace', () => {
     assert.ok(!shouldInjectTierRule({ hook_event_name: 'PreToolUse', prompt: 'fix padding', cwd: qolCwd }));
     assert.ok(!shouldInjectTierRule({ prompt: '[qol session bridge]\nact as the implementer', cwd: qolCwd }));
     assert.doesNotMatch(TIER_RULE, /gpt|claude|codex|kimi|deepseek|fable/i);
-    assert.match(TIER_RULE, /frontier tier/);
+    assert.match(TIER_RULE, /flash tier/);
     assert.match(TIER_RULE, /flash-tier model override/);
     assert.match(TIER_RULE, /session_spawn/);
     const result = run({
