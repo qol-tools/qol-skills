@@ -411,3 +411,14 @@ test('format: exact block shape, 140-char truncation, whitespace collapse, prove
   assert.doesNotMatch(snip, /\s{2,}|\n/);
   assert.match(ctx, /landed in the store since your last session here \(2026-08-14T08:00:00Z\):/);
 });
+
+test('first session: no marker entry renders the never anchor, not a zero date', () => {
+  const store = sandbox();
+  writeUnits(store, [
+    unit(1, { ts: '2026-08-14T09:00:00.000Z', text: 'first decision one held in the archive ledger' }),
+    unit(2, { ts: '2026-08-14T10:00:00.000Z', text: 'second decision one held in the archive ledger' }),
+  ]);
+  writeMarker(store, {});
+  const ctx = contextOf(run(store, {}));
+  assert.match(ctx, /^\[qol-memory continue\] 2 unit\(s\) landed in the store since your last session here \(never\):$/m);
+});

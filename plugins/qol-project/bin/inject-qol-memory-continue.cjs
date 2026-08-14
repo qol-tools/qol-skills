@@ -160,7 +160,7 @@ function snippet(text) {
 }
 
 function anchorTs(entry) {
-  if (!entry || !entry.ts) return "1970-01-01T00:00:00Z";
+  if (!entry || !entry.ts) return "never";
   return String(entry.ts).replace(/\.\d{3}Z$/, "Z");
 }
 
