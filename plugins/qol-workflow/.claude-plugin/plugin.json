@@ -1,7 +1,7 @@
 {
   "name": "qol-workflow",
   "description": "Cross-cutting workflow conventions for any qol-tools repo: commit message conventions (with the no-attribution hard rule), git push and worktree workflows, and universal coding guidelines. Ships PreToolUse hooks that (1) inject commit context, (2) block AI-attribution lines, (3) block branch-creation/switching inside a qol-* main clone (worktrees-only rule), (4) deny per-tool `match` branches added to shared CLI-sessions code (the naming/backends law).",
-  "version": "0.4.13",
+  "version": "0.4.14",
   "author": {
     "name": "KMRH47"
   }

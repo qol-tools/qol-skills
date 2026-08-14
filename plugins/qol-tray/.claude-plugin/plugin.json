@@ -1,7 +1,7 @@
 {
   "name": "qol-tray",
   "description": "Host-app plugin for qol-tray: specialist agents (frontend, backend) plus deep skills for core architecture (qol-tray-core), Rust internals, UI systems, dev logging, world canvas, Profile feature, release flow, and apps-testing. Includes hooks for routing edits to the right specialist agent and reflecting agent learnings.",
-  "version": "0.6.10",
+  "version": "0.6.11",
   "author": {
     "name": "KMRH47"
   }
