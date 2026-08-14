@@ -67,6 +67,23 @@ The current session is the architect and final reviewer and runs on the flash ti
 - The architect never delegates its own work: scoping, acceptance review, verdict synthesis, and the final report stay in the architect session. Lanes implement, research, and produce preliminary reviews; they never accept a feature.
 - Tiers are roles, not product names: the concrete model for each tier comes from the lane's explicit override or the config, never from hard-coded names in this skill.
 
+## Spawn resource capping
+
+Every `session_spawn` launch runs inside a systemd user scope, so parallel agent lanes cannot make the desktop unusable. The launched harness becomes `systemd-run --user --scope --slice=qol-agents.slice -p CPUWeight=<w> -p IOWeight=<w> [-p CPUQuota=<q>] -- <harness> <args>`; the lane keeps the kitty tab, title, cwd, identity vars, and keyed reuse semantics because only the launched program is wrapped. All lanes share the `qol-agents.slice`, and the same weights and quota are applied to the `qol.slice` and `qol-agents.slice` units after the lane is live, so the lane group stays deprioritized against the interactive session (the scope weight alone only competes between sibling scopes inside the slice).
+
+The keys live in `sessions.toml` (`~/.config/qol-tray/`), read at spawn time:
+
+- `spawn_cap` - off switch for the whole wrapper; `false` launches unwrapped. Default: on.
+- `spawn_cpu_weight` - lane CPU weight, systemd range 1..=10000. Default: 40 (interactive sessions stay at the default 100, so the interactive session wins contention).
+- `spawn_io_weight` - lane IO weight, same range. Default: 40; inert on hosts without the io controller delegated to the user manager.
+- `spawn_cpu_quota` - hard CPUQuota for each lane scope and for the slice total (for example `"600%"` caps every lane and the whole lane group at six cores). Unset by default; weights are always applied, quota only when configured.
+
+Out-of-range weights fail the spawn with a clear config error, like an invalid `spawn_surface`. The wrapper degrades, never fails: before launch the CLI probes systemd with a throwaway scope carrying the exact properties, and when `systemd-run` is unavailable (non-systemd hosts, macOS) or a property is rejected, the lane launches unwrapped. A rejected quota degrades to weight-only capping. The decision is traced as `qol trace CLI_SESSION_SPAWN` events `cap_enabled` / `cap_disabled reason=config|systemd_scope_unavailable` / `cap_quota_dropped`.
+
+Capped lanes show up under `systemctl --user status qol-agents.slice`; the scope carries `CPUWeight`, `IOWeight`, and `CPUQuota` values, and the slice carries the same so the total stays bounded. Note that on lowlatency kernels the CPU controller may not bind weight ratios when runnable processes do not exceed the core count, so a configured `spawn_cpu_quota` is the reliable hard bound there.
+
+`qol env` guest VMs (qemu) are spawned by the qol CLI, not by `session_spawn`; their admission control is a separate lease-based system in the qol-dev-env crate and is not covered by these keys.
+
 ## Orchestrated review
 
 When the delegated work is a code review, load `qol-code-review`; it is the invariant owner of the reviewer catalog, checklists, severity rubric, and the tiered review protocol. This skill supplies only lanes, tiers, and gating: one flash lane per reviewer role runs in parallel, adversarial flash lanes are gated on review completion, and the architect synthesizes the verdict in-session before the loop closes. Never copy review-domain content into this skill; when the protocol evolves, it evolves in `qol-code-review` and this reference picks it up unchanged. The same ownership rule applies to every domain: implementation, research, debugging, and adversarial protocols live in their owning skills, and sessions only orchestrates them.
