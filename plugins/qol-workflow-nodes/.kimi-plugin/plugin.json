@@ -1,6 +1,6 @@
 {
   "name": "qol-workflow-nodes",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Personal productivity rule for KMRH47: when work repeats or performance work needs before/after evidence, convert it into deterministic workflow nodes, measurement ledgers, explicit inputs, outputs, reports, and composable orchestrators instead of burning human memory and agent tokens.",
   "author": {
     "name": "KMRH47"
