@@ -552,6 +552,26 @@ Treat GPUI's background executor as bounded. Never park its workers on `std::syn
 
 GPUI caches a window's backing scale factor. When the window moves to a monitor with a different DPI the cache drifts (blurry / mis-scaled render). Query the real `NSWindow.backingScaleFactor` and re-sync when a reposition crosses monitors.
 
+### Fraction heights on absolutely-positioned elements resolve to zero
+
+`.h(fraction(0.20))` (or any percentage height) on an `absolute` div inside a
+`relative().size_full()` parent lays out at height 0 in this GPUI revision —
+the element keeps its x/width but collapses vertically (verified live: a
+recording canvas inside such a band received 960x0). Percentage `top`, `left`,
+and `width` resolve fine; only height fails on absolute elements. Use pixel
+heights for absolute elements: compute `px(pane_height * FRACTION)` yourself.
+
+### Canvas paths are window-space: always offset by `bounds.origin`
+
+`window.paint_path` inserts a path at its raw coordinates — a canvas's paint
+closure receives the element's `bounds`, and paths built from only
+`bounds.size` land at the window's top-left (under the title bar / other UI),
+invisible. The workspace convention is to build every point in window
+coordinates by adding `bounds.origin` (qol-shot `display_point`,
+qol-gpui gamepad `at(bounds, x, y)`). Do local math against
+`bounds.size`, then add `bounds.origin` to the final geometry before building
+the `Path`.
+
 ## Low-Level Patterns (verified)
 
 Alternative to gpui-component for full control.
