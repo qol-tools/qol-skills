@@ -1,6 +1,6 @@
 ---
 name: qol-tray-dev-recompile
-description: Use when debugging whether a qol-tray or plugin change reached the running process. Covers the canonical dev recompile/restart path, daemon teardown, plugin build provenance, and evidence needed before blaming stale code.
+description: Use when you debug whether a qol-tray or plugin change reached the running process. Covers the canonical dev recompile/restart path, daemon teardown, plugin build provenance, and evidence needed before blaming stale code.
 ---
 
 # qol-tray dev recompile

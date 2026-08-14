@@ -1,6 +1,6 @@
 ---
 name: git-push
-description: Use when the user asks to push a repo or branch. Verifies local branch state, syncs with the remote using git pull --rebase before pushing, and handles divergence safely for the qol workspace repos.
+description: Use when the user asks to push a repo or branch, or asks you to decide whether to push. Verifies local branch state, syncs with the remote using git pull --rebase before pushing, and handles divergence safely for the qol workspace repos.
 ---
 
 # git-push

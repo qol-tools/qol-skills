@@ -1,6 +1,6 @@
 ---
 name: qol-apps-testing
-description: Use when adding, updating, or reviewing tests for qol apps and plugins in this workspace. Covers when to prefer property tests, when to use parameterized tests with dense case sets, and how to avoid low-value tests.
+description: Use when adding, updating, or reviewing tests for qol apps and plugins in this workspace. Covers when a property test wins, when to use parameterized tests with dense case sets, and how to avoid low-value tests.
 ---
 
 # qol-apps-testing
