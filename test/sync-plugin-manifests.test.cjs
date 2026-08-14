@@ -846,6 +846,99 @@ test("pi extension blocks on a JSON permission denial", () => {
   assert.match(source, /reason: decision\.permissionDecisionReason/);
 });
 
+function generatedSessionStartExtension() {
+  const root = makeRepo();
+  writeAlphaHooks(root, {
+    hooks: {
+      SessionStart: [
+        {
+          matcher: ".*",
+          hooks: [
+            { type: "command", command: "node -e 'const fs=require(\"node:fs\");' alpha bin/inject-qol-memory-continue.cjs" },
+          ],
+        },
+      ],
+    },
+  });
+
+  execFileSync("node", [script, "--root", root], { stdio: "pipe" });
+
+  return fs.readFileSync(
+    path.join(root, "plugins", "alpha", ".pi", "extensions", "hooks.ts"),
+    "utf8",
+  );
+}
+
+function evalSessionStartBlock(source) {
+  const start = source.indexOf("if (SESSION_START_CONTEXT_HOOKS.length > 0) {");
+  assert.ok(start >= 0, "generated extension defines the session-start block");
+
+  const tail = source.slice(start).replace(/\s+$/, "");
+  assert.ok(tail.endsWith("  }\n}"), "generated extension ends with the session-start block");
+
+  const block = tail.slice(0, -2);
+  const code =
+    `let stashedContext = "";\n`
+    + `let stashedSessionFile = "";\n`
+    + `let injectedSessionFile = "";\n`
+    + block
+    + `\nreturn { stashedContext: () => stashedContext, stashedSessionFile: () => stashedSessionFile, injectedSessionFile: () => injectedSessionFile };`;
+
+  const handlers = {};
+  const pi = { on: (event, fn) => { handlers[event] = fn; } };
+  const hooks = [{ script: "bin/inject-qol-memory-continue.cjs" }];
+  let hookResult = {};
+  const runHook = () => hookResult;
+
+  const api = new Function("pi", "runHook", "SESSION_START_CONTEXT_HOOKS", code)(pi, runHook, hooks);
+  const ctx = (file) => ({ sessionManager: { getSessionFile: () => file, getSessionId: () => "id", getCwd: () => "/cwd" } });
+
+  return {
+    handlers,
+    api,
+    setHookResult: (r) => { hookResult = r; },
+    ctx,
+  };
+}
+
+test("session-start stash survives a gate-miss refire and clears on a new session file", async () => {
+  const { handlers, api, setHookResult, ctx } = evalSessionStartBlock(generatedSessionStartExtension());
+  const event = { reason: "startup" };
+
+  setHookResult({ context: "BLOCK" });
+  await handlers.session_start(event, ctx("s1.jsonl"));
+  assert.equal(api.stashedContext(), "\n\nBLOCK");
+
+  setHookResult({});
+  await handlers.session_start({ reason: "reload" }, ctx("s1.jsonl"));
+  assert.equal(api.stashedContext(), "\n\nBLOCK", "gate-miss refire must not clobber a pending injection");
+
+  await handlers.session_start(event, ctx("s2.jsonl"));
+  assert.equal(api.stashedContext(), "", "new session file clears the stash");
+});
+
+test("session-start stash delivers once to before_agent_start for the same session file", async () => {
+  const { handlers, api, setHookResult, ctx } = evalSessionStartBlock(generatedSessionStartExtension());
+
+  setHookResult({ context: "BLOCK" });
+  await handlers.session_start({ reason: "startup" }, ctx("s1.jsonl"));
+
+  const first = await handlers.before_agent_start({ systemPrompt: "BASE" }, ctx("s1.jsonl"));
+  assert.equal(first.systemPrompt, "BASE\n\n\n\nBLOCK");
+  assert.equal(api.injectedSessionFile(), "s1.jsonl");
+
+  const second = await handlers.before_agent_start({ systemPrompt: "BASE" }, ctx("s1.jsonl"));
+  assert.equal(second, undefined, "injection happens once per session");
+
+  setHookResult({});
+  await handlers.session_start({ reason: "reload" }, ctx("s1.jsonl"));
+  const third = await handlers.before_agent_start({ systemPrompt: "BASE" }, ctx("s1.jsonl"));
+  assert.equal(third, undefined);
+
+  const other = await handlers.before_agent_start({ systemPrompt: "BASE" }, ctx("other.jsonl"));
+  assert.equal(other, undefined, "stash never leaks into another session file");
+});
+
 function makeToolExtensionRepo() {
   const root = makeRepo();
 

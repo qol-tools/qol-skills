@@ -783,8 +783,13 @@ function piExtensionContent(root, pluginName, failures) {
     lines.push("        }");
     lines.push("      }");
     lines.push("");
-    lines.push("      stashedContext = context;");
-    lines.push("      stashedSessionFile = sessionFile;");
+    lines.push("      if (context) {");
+    lines.push("        stashedContext = context;");
+    lines.push("        stashedSessionFile = sessionFile;");
+    lines.push("      } else if (sessionFile !== stashedSessionFile) {");
+    lines.push('        stashedContext = "";');
+    lines.push("        stashedSessionFile = sessionFile;");
+    lines.push("      }");
     lines.push("    });");
     lines.push("");
     lines.push('    pi.on("before_agent_start", async (event, ctx) => {');

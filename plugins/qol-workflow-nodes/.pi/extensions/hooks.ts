@@ -122,8 +122,13 @@ export default function (pi: ExtensionAPI) {
         }
       }
 
-      stashedContext = context;
-      stashedSessionFile = sessionFile;
+      if (context) {
+        stashedContext = context;
+        stashedSessionFile = sessionFile;
+      } else if (sessionFile !== stashedSessionFile) {
+        stashedContext = "";
+        stashedSessionFile = sessionFile;
+      }
     });
 
     pi.on("before_agent_start", async (event, ctx) => {
