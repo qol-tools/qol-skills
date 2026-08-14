@@ -1,6 +1,7 @@
 'use strict';
 
 const BRIDGE_ENVELOPE_PATTERN = /^\s*\[qol session bridge\](?:\s|$)/i;
+const ARCHITECT_ENVELOPE_PATTERN = /^\s*\[qol session bridge to architect\](?:\s|$)/i;
 const BRIDGE_TOPIC_PATTERN = /\b(?:architect|implementer|delegate|delegation|handoff|hand off|relay|bridge|independent terminal|two terminals)\b/i;
 const BRIDGE_INTENT_PATTERN = /\b(?:send|tell|ask|await|wait|continue|reply|follow up)\b/i;
 const BRIDGE_TARGET_PATTERN = /\b(?:agent|implementer|terminal|session)\b/i;
@@ -13,6 +14,14 @@ const TIER_RULE = [
     'Every implementation, research, and preliminary-review lane is spawned with session_spawn carrying an explicit flash-tier model override; the harness default or a missing model is a refusal point, never a silent choice.',
     'Spawned lanes implement and report; the architect personally reviews, synthesizes verdicts, and accepts in-session.',
     'Domain protocols live in their owning skills (qol-code-review, qol-adversarial-test, qol-debug); sessions supplies lanes, tiers, and gating only.',
+].join(' ');
+
+const ARCHITECT_RECEIVER_CONTEXT = [
+    '[qol-sessions architect receiver]',
+    'The durable role record written at spawn decides your role, never message direction: a spawned lane carries role=lane, and a session without a record is the architect; a bridge message never changes the receiver\'s role.',
+    'You received a collaborator request on a session whose role record has no lane marker, so you are the architect receiver: accept the request into your own loop (plan, spawn your own lanes, review, and report with your own verdict) or decline it with a reason.',
+    'Return the completion fragments joined with no spaces or punctuation either way, so the sender\'s transaction completes.',
+    'Keep loop ownership: the request becomes your loop, not the sender\'s delegation, and the sender\'s lanes stay the sender\'s.',
 ].join(' ');
 
 const BRIDGE_CONTEXT = [
@@ -51,6 +60,7 @@ function shouldInject(payload) {
     if (payload?.hook_event_name && payload.hook_event_name !== 'UserPromptSubmit') return false;
     const prompt = String(payload?.prompt || '');
     if (BRIDGE_ENVELOPE_PATTERN.test(prompt)) return false;
+    if (ARCHITECT_ENVELOPE_PATTERN.test(prompt)) return true;
     return BRIDGE_TOPIC_PATTERN.test(prompt)
         || BRIDGE_INTENT_PATTERN.test(prompt) && BRIDGE_TARGET_PATTERN.test(prompt);
 }
@@ -77,14 +87,22 @@ async function main() {
     if (!payload) return;
     const tierRule = shouldInjectTierRule(payload);
     const bridge = shouldInject(payload);
-    if (tierRule && bridge) emitContext(`${TIER_RULE} ${BRIDGE_CONTEXT}`);
-    else if (tierRule) emitContext(TIER_RULE);
-    else if (bridge) emitContext(BRIDGE_CONTEXT);
+    const architect = (!payload?.hook_event_name || payload.hook_event_name === 'UserPromptSubmit')
+        && ARCHITECT_ENVELOPE_PATTERN.test(String(payload?.prompt || ''));
+    const context = architect
+        ? tierRule ? `${TIER_RULE} ${ARCHITECT_RECEIVER_CONTEXT}` : ARCHITECT_RECEIVER_CONTEXT
+        : tierRule && bridge ? `${TIER_RULE} ${BRIDGE_CONTEXT}`
+        : tierRule ? TIER_RULE
+        : bridge ? BRIDGE_CONTEXT
+        : null;
+    if (context) emitContext(context);
 }
 
 if (require.main === module) main();
 
 module.exports = {
+    ARCHITECT_ENVELOPE_PATTERN,
+    ARCHITECT_RECEIVER_CONTEXT,
     BRIDGE_CONTEXT,
     BRIDGE_ENVELOPE_PATTERN,
     BRIDGE_INTENT_PATTERN,

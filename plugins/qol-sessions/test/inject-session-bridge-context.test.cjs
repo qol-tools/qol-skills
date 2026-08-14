@@ -11,6 +11,8 @@ const MCP_CONFIG = path.join(__dirname, '..', '.mcp.json');
 const SKILL = path.join(__dirname, '..', 'skills', 'qol-sessions', 'SKILL.md');
 const BRIDGE_MAX_TIMEOUT_SECONDS = 86_400;
 const {
+    ARCHITECT_ENVELOPE_PATTERN,
+    ARCHITECT_RECEIVER_CONTEXT,
     BRIDGE_CONTEXT,
     BRIDGE_TOPIC_PATTERN,
     QOL_WORKSPACE_PATTERN,
@@ -175,6 +177,62 @@ test('the implementation bridge envelope does not receive architect instructions
     });
     assert.equal(result.status, 0);
     assert.equal(result.stdout, '');
+});
+
+test('the architect bridge envelope receives the architect-receiver context', () => {
+    const result = run({
+        hook_event_name: 'UserPromptSubmit',
+        prompt: '[qol session bridge to architect]\nA request is open on this session. Accept it or decline with a reason.',
+        cwd: '/media/kmrh47/WD_SN850X/Git/qol-skills',
+    });
+    assert.equal(result.status, 0);
+    const context = JSON.parse(result.stdout).hookSpecificOutput.additionalContext;
+    assert.match(context, /\[qol-sessions architect receiver\]/);
+    assert.match(context, /\[qol-sessions tier rule\]/);
+    assert.match(context, /durable role record/);
+    assert.match(context, /never changes the receiver's role/);
+    assert.match(context, /accept the request into your own loop/);
+    assert.match(context, /decline it with a reason/);
+    assert.match(context, /completion fragments joined with no spaces or punctuation/);
+    assert.match(context, /Keep loop ownership/);
+    assert.doesNotMatch(context, /sessions_list/);
+});
+
+test('the architect envelope works outside a qol workspace without the tier rule', () => {
+    const result = run({
+        hook_event_name: 'UserPromptSubmit',
+        prompt: '[qol session bridge to architect]\nA request is open on this session.',
+        cwd: '/tmp/elsewhere',
+    });
+    assert.equal(result.status, 0);
+    const context = JSON.parse(result.stdout).hookSpecificOutput.additionalContext;
+    assert.match(context, /\[qol-sessions architect receiver\]/);
+    assert.doesNotMatch(context, /tier rule/);
+    const nonBridge = run({
+        hook_event_name: 'PreToolUse',
+        prompt: '[qol session bridge to architect]\nA request is open on this session.',
+        cwd: '/tmp/elsewhere',
+    });
+    assert.equal(nonBridge.status, 0);
+    assert.equal(nonBridge.stdout, '');
+});
+
+test('the hook exports the architect envelope pattern and receiver context', () => {
+    assert.ok(ARCHITECT_ENVELOPE_PATTERN instanceof RegExp);
+    assert.ok(ARCHITECT_ENVELOPE_PATTERN.test('[qol session bridge to architect]\nA request is open'));
+    assert.ok(ARCHITECT_ENVELOPE_PATTERN.test('  [qol session bridge to architect]'));
+    assert.ok(!ARCHITECT_ENVELOPE_PATTERN.test('[qol session bridge]\nAct as the implementation agent'));
+    assert.ok(!ARCHITECT_ENVELOPE_PATTERN.test('[qol session bridge to architect-extra]'));
+    assert.ok(typeof ARCHITECT_RECEIVER_CONTEXT === 'string');
+    assert.ok(ARCHITECT_RECEIVER_CONTEXT.length > 0);
+    assert.ok(shouldInject({
+        hook_event_name: 'UserPromptSubmit',
+        prompt: '[qol session bridge to architect]\nA request is open',
+    }));
+    assert.ok(!shouldInject({
+        hook_event_name: 'UserPromptSubmit',
+        prompt: '[qol session bridge]\nAct as the implementation agent',
+    }));
 });
 
 test('other hook events and malformed input stay silent', () => {
