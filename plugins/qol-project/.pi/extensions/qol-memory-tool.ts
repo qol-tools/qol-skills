@@ -127,9 +127,11 @@ export default function (pi: ExtensionAPI) {
       if (!askPath) {
         return { content: [{ type: "text", text: "memory unavailable: no qol-memory manifest at " + manifest }], details: {} };
       }
-      const args = [askPath, String(params.query || ""), "--brief"];
+      const args = [askPath, String(params.query || ""), "--brief", "--log-source", "tool"];
       const sid = ctx.sessionManager.getSessionId();
       if (sid) args.push("--exclude-session", sid);
+      const cwd = ctx.sessionManager.getCwd();
+      if (cwd) args.push("--log-cwd", cwd);
       try { appendFileSync("/tmp/qol-memory-tool-calls.log", new Date().toISOString() + " TOOL " + JSON.stringify(args) + "\n"); } catch {}
       const r = spawnSync("node", args, {
         encoding: "utf8", timeout: 6000,
