@@ -188,23 +188,6 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
     } catch {}
   }
 
-  function reportSnippet(screen) {
-    if (typeof screen !== "string" || screen.length === 0) return "";
-    const max = 8 * 1024;
-    const truncated = screen.length > max;
-    let start = truncated ? screen.length - max : 0;
-    while (start > 0 && start < screen.length) {
-      const code = screen.charCodeAt(start);
-      if (code >= 0xdc00 && code <= 0xdfff) {
-        start -= 1;
-      } else {
-        break;
-      }
-    }
-    const snippet = screen.slice(start);
-    return truncated ? `(report tail; full screen via session_bridge)\n${snippet}` : snippet;
-  }
-
   let watcherChild: ReturnType<typeof spawn> | null = null;
   let stdoutBuffer = "";
 
@@ -235,7 +218,7 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
             event = JSON.parse(trimmed);
           } catch {}
           if (typeof event?.event !== "string" || typeof event?.session !== "string") continue;
-          wakeDebugLog(sessionId, `event=${event.event} session=${event.session} screen=${typeof event.screen === "string" ? event.screen.length : 0}`);
+          wakeDebugLog(sessionId, `event=${event.event} session=${event.session} delivered=${event.delivered === true}${typeof event.wake_error === "string" ? ` error=${event.wake_error}` : ""} screen=${typeof event.screen === "string" ? event.screen.length : 0}`);
           const remaining = dropWatchedToken(sessionId, event.session);
           if (remaining === null) {
             wakeDebugLog(sessionId, `delivery skip session=${event.session} reason=already_delivered`);
@@ -249,25 +232,8 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
           if (remaining.length > 0) {
             await startWatcher(ctx);
           }
-          const action =
-            event.event === "gone"
-              ? "The lane terminal closed and its round was discarded; start a fresh lane if the work still matters."
-              : event.event === "stalled"
-                ? "The lane produced no output for 15 minutes; nudge it with qol sessions resume --kickstart, or collect with session_bridge."
-                : "Collect with session_bridge.";
-          const message =
-            event.event === "completed"
-              ? `qol sessions: lane ${event.session} completed.\n\n${reportSnippet(event.screen)}\n\nReview it, then close the loop with session_loop_close.` + (event.autoclose === true ? "\n\n(lane auto-closed)" : "")
-              : `qol sessions: lane ${event.session} ${event.event}. ${action}`;
-          wakeDebugLog(sessionId, `send message_bytes=${message.length}`);
-          try {
-            const sent = pi.sendUserMessage(message, { deliverAs: "followUp", triggerTurn: true });
-            wakeDebugLog(sessionId, `send returned ${typeof sent}`);
-            if (sent && typeof sent.then === "function") {
-              sent.then(() => wakeDebugLog(sessionId, "send ok")).catch((error) => wakeDebugLog(sessionId, `send failed: ${error?.message ?? error}`));
-            }
-          } catch (error) {
-            wakeDebugLog(sessionId, `send threw: ${error?.message ?? error}`);
+          if (event.delivered === false) {
+            wakeDebugLog(sessionId, `wake undeliverable session=${event.session} event=${event.event} error=${typeof event.wake_error === "string" ? event.wake_error : "unknown"}`);
           }
         }
       });
@@ -321,7 +287,7 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
       "Launch a tagged harness for a registered tool in a new terminal tab, or reuse the single live session already carrying the key when its tool matches. The key makes retries idempotent: a key held by a different tool conflicts, multiple matches are ambiguous, and a launched session is returned only once it is live, tagged, and described as the requested tool. Surface is tab or os-window; the default comes from the spawn_surface config, then tab.",
     parameters: Type.Object({
       autoclose: Type.Optional(Type.Boolean({ description: "Close the lane terminal automatically when the watcher confirms the round's completion; only applies to newly spawned terminals, never to a reused session" })),
-      background: Type.Optional(Type.Boolean({ description: "Fire-and-forget launch: embed the first task in the launch command, queue the pending round at spawn time, and return without waiting for the live UI (requires task); the pi extension wakes the initiator when a watcher detects the round" })),
+      background: Type.Optional(Type.Boolean({ description: "Fire-and-forget launch: embed the first task in the launch command, queue the pending round at spawn time, and return without waiting for the live UI (requires task); the client watcher wakes the initiator when it detects the round" })),
       cwd: Type.String({ description: "Working directory for the spawned session" }),
       key: Type.String({ description: "Stable spawn key; required so retries are idempotent" }),
       model: Type.Optional(Type.String({ description: "Model override for the spawned session (e.g. deepseek-v4-pro); beats the spawn_model config" })),
