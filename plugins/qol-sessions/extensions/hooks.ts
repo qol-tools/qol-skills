@@ -159,6 +159,22 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
     return [];
   }
 
+  function dropWatchedToken(sessionId, token) {
+    let tokens = [];
+    try {
+      const parsed = JSON.parse(fs.readFileSync(watchStateFile(sessionId), "utf8"));
+      tokens = Array.isArray(parsed) ? parsed.filter((candidate) => typeof candidate === "string") : [];
+    } catch {}
+    const remaining = tokens.filter((candidate) => candidate !== token);
+    if (remaining.length === tokens.length) return null;
+    try {
+      fs.writeFileSync(watchStateFile(sessionId), JSON.stringify(remaining));
+    } catch {
+      return null;
+    }
+    return remaining;
+  }
+
   async function recordWatchedToken(sessionId, token) {
     try {
       await fsp.mkdir(sessionsDir(), { recursive: true });
@@ -206,7 +222,7 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
       });
       watcherChild = child;
       wakeDebugLog(sessionId, `watch spawn pid=${child.pid}`);
-      child.stdout.on("data", (chunk) => {
+      child.stdout.on("data", async (chunk) => {
         stdoutBuffer += chunk.toString();
         const lines = stdoutBuffer.split("\n");
         stdoutBuffer = lines.pop() ?? "";
@@ -220,6 +236,19 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
           } catch {}
           if (typeof event?.event !== "string" || typeof event?.session !== "string") continue;
           wakeDebugLog(sessionId, `event=${event.event} session=${event.session} screen=${typeof event.screen === "string" ? event.screen.length : 0}`);
+          const remaining = dropWatchedToken(sessionId, event.session);
+          if (remaining === null) {
+            wakeDebugLog(sessionId, `delivery skip session=${event.session} reason=already_delivered`);
+            continue;
+          }
+          wakeDebugLog(sessionId, `token removed remaining=${remaining.length}`);
+          if (watcherChild !== null && watcherChild.exitCode == null) {
+            watcherChild.kill("SIGTERM");
+            watcherChild = null;
+          }
+          if (remaining.length > 0) {
+            await startWatcher(ctx);
+          }
           const action =
             event.event === "gone"
               ? "The lane terminal closed and its round was discarded; start a fresh lane if the work still matters."
