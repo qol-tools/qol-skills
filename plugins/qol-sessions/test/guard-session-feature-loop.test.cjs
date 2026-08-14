@@ -101,7 +101,19 @@ function runHook(entries, overrides = {}) {
     }
 }
 
-test('a completed bridge arms review until whole-feature acceptance', () => {
+function bridgeAndClose(entries, outcome = 'accepted', id = 'close-1') {
+    entries.push(bridgeCall('call', null));
+    entries.push(bridgeResult('result', 'call', '{"completed":true,"completion_marker":"QOL_BRIDGE_DONE_123"}'));
+    entries.push(loopCloseCall('close', 'result', id));
+    entries.push(loopCloseResult(
+        'closed',
+        'close',
+        JSON.stringify({ loop_closed: true, outcome, final_report: FINAL_REPORT }),
+        { id },
+    ));
+}
+
+test('an open loop blocks the stop until whole-feature acceptance', () => {
     const entries = [
         assistant('root', null, 'delegate the implementation'),
         bridgeCall('call', 'root'),
@@ -114,29 +126,32 @@ test('a completed bridge arms review until whole-feature acceptance', () => {
     const output = JSON.parse(result.stdout);
     assert.equal(output.decision, 'block');
     assert.match(output.reason, /Do not finish at a round boundary/);
+    assert.match(output.reason, /The loop ends only when session_loop_close succeeds/);
 });
 
-test('a successful loop-close receipt requires the canonical final report', () => {
-    const entries = [
-        bridgeCall('call', null),
-        bridgeResult('result', 'call', '{"completed":true,"completion_marker":"QOL_BRIDGE_DONE_123"}'),
-        loopCloseCall('close', 'result'),
-        loopCloseResult(
-            'closed',
-            'close',
-            JSON.stringify({ loop_closed: true, outcome: 'accepted', final_report: FINAL_REPORT }),
-        ),
-    ];
-    assert.equal(featureLoopPhase(entries), 'closing');
+test('a successful loop-close receipt closes the loop immediately', () => {
+    const entries = [];
+    bridgeAndClose(entries);
+    assert.equal(featureLoopPhase(entries), 'idle');
     const result = runHook(entries);
     assert.equal(result.status, 0);
-    const output = JSON.parse(result.stdout);
-    assert.match(output.reason, /Return this exact canonical final report/);
-    assert.match(output.reason, /## What landed/);
+    assert.equal(result.stdout, '');
+});
 
-    const finalized = [...entries, assistant('final', 'closed', FINAL_REPORT)];
-    assert.equal(featureLoopPhase(finalized), 'idle');
-    assert.equal(runHook(finalized).stdout, '');
+test('close-then-summary passes the stop without re-emitting the report', () => {
+    const entries = [];
+    bridgeAndClose(entries);
+    const summary = 'Landed: guard fix. Verified: tests pass. Remaining: none.';
+    entries.push(assistant('final', 'closed', summary));
+    assert.equal(featureLoopPhase(entries), 'idle');
+    const flushed = runHook(entries);
+    assert.equal(flushed.status, 0);
+    assert.equal(flushed.stdout, '');
+    const pending = runHook(entries, {
+        last_assistant_message: [{ type: 'text', text: summary }],
+    });
+    assert.equal(pending.status, 0);
+    assert.equal(pending.stdout, '');
 });
 
 test('legacy prose markers cannot bypass typed loop closure', () => {
@@ -151,36 +166,10 @@ test('legacy prose markers cannot bypass typed loop closure', () => {
     assert.equal(JSON.parse(result.stdout).decision, 'block');
 });
 
-test('direct Stop payload recognizes the canonical report before transcript flush', () => {
-    const entries = [
-        bridgeCall('call', null),
-        bridgeResult('result', 'call', '{"completed":true,"completion_marker":"QOL_BRIDGE_DONE_123"}'),
-        loopCloseCall('close', 'result'),
-        loopCloseResult(
-            'closed',
-            'close',
-            JSON.stringify({ loop_closed: true, outcome: 'accepted', final_report: FINAL_REPORT }),
-        ),
-    ];
-    const result = runHook(entries, {
-        last_assistant_message: [{ type: 'text', text: FINAL_REPORT }],
-    });
-    assert.equal(result.status, 0);
-    assert.equal(result.stdout, '');
-});
-
-test('an explicit paused receipt can end the loop', () => {
-    const entries = [
-        bridgeCall('call', null),
-        bridgeResult('result', 'call', '{"completed":true,"completion_marker":"QOL_BRIDGE_DONE_123"}'),
-        loopCloseCall('close', 'result'),
-        loopCloseResult(
-            'closed',
-            'close',
-            JSON.stringify({ loop_closed: true, outcome: 'paused', final_report: FINAL_REPORT }),
-        ),
-        assistant('final', 'closed', FINAL_REPORT),
-    ];
+test('an explicit paused receipt closes the loop without a verbatim report', () => {
+    const entries = [];
+    bridgeAndClose(entries, 'paused');
+    entries.push(assistant('final', 'closed', 'Paused on a blocker; recorded under remaining.'));
     assert.equal(featureLoopPhase(entries), 'idle');
     assert.equal(runHook(entries).stdout, '');
 });
@@ -211,6 +200,11 @@ test('failed, malformed, or unrelated close receipts cannot end the loop', () =>
     assert.equal(featureLoopPhase(failed), 'review');
     assert.equal(featureLoopPhase(malformed), 'review');
     assert.equal(featureLoopPhase(unrelated), 'review');
+    for (const entries of [failed, malformed, unrelated]) {
+        const result = runHook(entries);
+        assert.equal(result.status, 0);
+        assert.equal(JSON.parse(result.stdout).decision, 'block');
+    }
 });
 
 test('a background bridge keeps the architect session open without resubmission', () => {
@@ -283,29 +277,16 @@ test('only the active transcript branch controls the loop', () => {
 });
 
 test('a later bridge re-arms a previously accepted feature loop', () => {
-    const entries = [
-        bridgeCall('call-1', null, 'bridge-1'),
-        bridgeResult(
-            'result-1',
-            'call-1',
-            '{"completed":true,"completion_marker":"QOL_BRIDGE_DONE_123"}',
-            { id: 'bridge-1' },
-        ),
-        loopCloseCall('close', 'result-1'),
-        loopCloseResult(
-            'closed',
-            'close',
-            JSON.stringify({ loop_closed: true, outcome: 'accepted', final_report: FINAL_REPORT }),
-        ),
-        assistant('final', 'closed', FINAL_REPORT),
-        bridgeCall('call-2', 'final', 'bridge-2'),
-        bridgeResult(
-            'result-2',
-            'call-2',
-            '{"completed":true,"completion_marker":"QOL_BRIDGE_DONE_456"}',
-            { id: 'bridge-2' },
-        ),
-    ];
+    const entries = [];
+    bridgeAndClose(entries);
+    entries.push(assistant('final', 'closed', 'Landed. Remaining: none.'));
+    entries.push(bridgeCall('call-2', 'final', 'bridge-2'));
+    entries.push(bridgeResult(
+        'result-2',
+        'call-2',
+        '{"completed":true,"completion_marker":"QOL_BRIDGE_DONE_456"}',
+        { id: 'bridge-2' },
+    ));
     assert.equal(featureLoopPhase(entries), 'review');
 });
 
@@ -318,4 +299,5 @@ test('malformed or unrelated Stop payloads fail open', () => {
     assert.equal(wrongEvent.stdout, '');
     assert.match(blockReason('review'), /session_loop_close with the final response session and completion_marker/);
     assert.match(blockReason('review'), /session_loop_close with outcome paused/);
+    assert.match(blockReason('waiting'), /qol sessions next/);
 });

@@ -86,7 +86,7 @@ function closeReceipt(text) {
         const receipt = JSON.parse(text);
         if (receipt?.loop_closed !== true) return null;
         if (typeof receipt.final_report !== 'string' || !receipt.final_report.trim()) return null;
-        return receipt.final_report;
+        return receipt;
     } catch {
         return null;
     }
@@ -94,18 +94,12 @@ function closeReceipt(text) {
 
 function featureLoopState(entries) {
     let phase = 'idle';
-    let finalReport = '';
     const bridgeCalls = new Set();
     const closeCalls = new Set();
     for (const entry of currentBranch(entries)) {
         const content = entryContent(entry);
         const blocks = Array.isArray(content) ? content : [];
         if (entryRole(entry) === 'assistant') {
-            const assistantText = textFromContent(content);
-            if (phase === 'closing' && finalReport && assistantText.includes(finalReport)) {
-                phase = 'idle';
-                finalReport = '';
-            }
             for (const block of blocks) {
                 if (
                     block?.type === 'tool_use'
@@ -114,7 +108,6 @@ function featureLoopState(entries) {
                 ) {
                     if (typeof block.id === 'string') bridgeCalls.add(block.id);
                     phase = 'waiting';
-                    finalReport = '';
                 }
                 if (
                     block?.type === 'tool_use'
@@ -133,11 +126,7 @@ function featureLoopState(entries) {
             const text = textFromContent(block.content);
             if (closeCalls.has(block.tool_use_id)) {
                 closeCalls.delete(block.tool_use_id);
-                const report = block.is_error ? null : closeReceipt(text);
-                if (report) {
-                    phase = 'closing';
-                    finalReport = report;
-                }
+                if (!block.is_error && closeReceipt(text)) phase = 'idle';
                 continue;
             }
             if (bridgeCalls.has(block.tool_use_id)) {
@@ -154,48 +143,36 @@ function featureLoopState(entries) {
             }
         }
     }
-    return { phase, finalReport };
+    return { phase };
 }
 
 function featureLoopPhase(entries) {
     return featureLoopState(entries).phase;
 }
 
-function directAssistantText(payload) {
-    const direct = payload?.last_assistant_message;
-    return textFromContent(direct?.content ?? direct);
-}
-
 function loopState(payload) {
-    const state = featureLoopState(readEntries(payload?.transcript_path));
-    const direct = directAssistantText(payload);
-    if (state.phase === 'closing' && state.finalReport && direct.includes(state.finalReport)) {
-        return { phase: 'idle', finalReport: '' };
-    }
-    return state;
+    return featureLoopState(readEntries(payload?.transcript_path));
 }
 
 function loopPhase(payload) {
     return loopState(payload).phase;
 }
 
-function blockReason(phase, finalReport = '') {
+function blockReason(phase) {
     const next = phase === 'waiting'
         ? 'Run `qol sessions next` and invoke exactly the command it prints as one foreground call through the host\'s single blocking continuation. Write no other text. Do not resubmit the task and do not poll.'
-        : phase === 'closing'
-            ? `Return this exact canonical final report without adding or removing sections:\n\n${finalReport}`
-            : 'Personally inspect the returned implementation. If anything remains, send the same session one bounded correction round; `qol sessions next` prints the exact command template.';
-    return `[qol-sessions feature loop]\n\nThe architect-owned feature loop is still active. ${next}\n\nDo not finish at a round boundary. Only after the entire user feature is accepted, call session_loop_close with the final response session and completion_marker, outcome accepted, landed, before, now, verification, and remaining. If the user redirected the work or a genuine blocker requires user input, call session_loop_close with outcome paused and record the unfinished scope under remaining.`;
+        : 'Personally inspect the returned implementation against the user\'s complete acceptance criteria. If anything remains, send the same session one bounded correction round; `qol sessions next` prints the exact command template. The loop ends only when session_loop_close succeeds; prose or a summary cannot close it.';
+    return `[qol-sessions feature loop]\n\nThe architect-owned feature loop is still open. ${next}\n\nDo not finish at a round boundary. Only after the entire user feature is accepted, call session_loop_close with the final response session and completion_marker, outcome accepted, landed, before, now, verification, and remaining. If the user redirected the work or a genuine blocker requires user input, call session_loop_close with outcome paused and record the unfinished scope under remaining.`;
 }
 
 function main() {
     const payload = readPayload();
     if (payload?.hook_event_name && payload.hook_event_name !== 'Stop') return 0;
     const state = loopState(payload);
-    if (!['waiting', 'review', 'closing'].includes(state.phase)) return 0;
+    if (!['waiting', 'review'].includes(state.phase)) return 0;
     process.stdout.write(JSON.stringify({
         decision: 'block',
-        reason: blockReason(state.phase, state.finalReport),
+        reason: blockReason(state.phase),
     }));
     return 0;
 }
@@ -212,8 +189,8 @@ module.exports = {
     BRIDGE_TOOL_PATTERN,
     LOOP_CLOSE_TOOL_PATTERN,
     blockReason,
+    closeReceipt,
     currentBranch,
-    directAssistantText,
     featureLoopState,
     featureLoopPhase,
     loopState,

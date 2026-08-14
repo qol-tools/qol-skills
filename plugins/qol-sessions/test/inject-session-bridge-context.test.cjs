@@ -122,7 +122,8 @@ test('matching prompts receive the event-driven feature loop', () => {
         assert.match(context, /never stop at a round boundary/);
         assert.match(context, /Continue until the architect accepts the entire feature/);
         assert.match(context, /final response session and completion_marker, outcome accepted/);
-        assert.match(context, /canonical final report from session_loop_close exactly/);
+        assert.match(context, /Once session_loop_close succeeds \(loop_closed=true in its receipt\)/);
+        assert.match(context, /may summarize the canonical report from the receipt/);
         assert.match(context, /outcome paused and record the unfinished scope under remaining/);
     }
 });

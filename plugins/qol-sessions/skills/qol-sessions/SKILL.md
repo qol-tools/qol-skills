@@ -118,7 +118,7 @@ The CLI-session integration installs the continuation hooks. Agents never create
 - A timeout or bridge error pauses automatic continuation because replay could duplicate work.
 - Loop state is host-session-local and follows the active transcript branch. An abandoned branch must not arm the current branch.
 
-`session_loop_close` is the only termination path. It returns the canonical `What landed / Before / Now / Verification / Remaining` report. Return that report exactly; the loop stays armed until it appears in the architect's final response. Never call it to accept one implementation round; acceptance covers the user's complete request. Prose or lifecycle markers cannot close the loop.
+`session_loop_close` is the only termination path. It returns the canonical `What landed / Before / Now / Verification / Remaining` report. A receipt with `loop_closed: true` closes the loop and disarms the Stop guard immediately; the architect's final response may summarize the report instead of re-emitting it byte-verbatim. Never call it to accept one implementation round; acceptance covers the user's complete request. Prose or lifecycle markers cannot close the loop.
 
 An accepted close also closes the implementation terminal after the transition is recorded; the report and transition stay authoritative even when that close fails (a dead tab never fails the loop closure). A paused close leaves the terminal open. No separate close call exists in the workflow: the terminal dies with its accepted loop.
 

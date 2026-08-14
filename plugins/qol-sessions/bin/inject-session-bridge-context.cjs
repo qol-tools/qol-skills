@@ -40,7 +40,7 @@ const BRIDGE_CONTEXT = [
     'A round completion event means ready for review, not feature acceptance: personally inspect the implementation, then send the same session another bounded correction round unless the feature meets the user\'s acceptance criteria.',
     'The CLI-session integration owns the continuation hooks; never create, spawn, or poll hooks yourself, and never stop at a round boundary while its feature loop is armed.',
     'Continue until the architect accepts the entire feature, then call session_loop_close with the final response session and completion_marker, outcome accepted, landed, before, now, verification, and remaining; never close the loop for one round.',
-    'Return the canonical final report from session_loop_close exactly; the loop remains armed until that report appears in the architect final response.',
+    'Once session_loop_close succeeds (loop_closed=true in its receipt), the loop is closed and the Stop guard disarms; the final response may summarize the canonical report from the receipt instead of re-emitting it verbatim.',
     'If the user redirects the work or a genuine blocker requires user input, call session_loop_close with outcome paused and record the unfinished scope under remaining.',
     'Keep roles capability-based; never hard-code product, model, vendor, or session names into the workflow.',
 ].join(' ');
