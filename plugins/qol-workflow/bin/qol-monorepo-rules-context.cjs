@@ -9,6 +9,13 @@
  * skill fires on description match; a hook fires always. That difference is the
  * whole reason this file exists - do not add a topic gate.
  *
+ * The body is repeated only when it is not already in the model's context. The
+ * transcript records every injection, so a prompt whose live context already
+ * carries the reminder gets nothing, and the rules re-enter the moment a
+ * compaction drops them. "Live context" is the transcript after the last
+ * compact summary: that summary's parentUuid still points into the discarded
+ * history, so a parent-chain walk would keep reporting dropped text as present.
+ *
  * Silent on errors - a failing reminder must never block the prompt.
  */
 
@@ -16,6 +23,9 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+
+const REMINDER_MARKER = 'REMINDER from qol-monorepo-rules-context hook';
+const COMPACT_SUMMARY_PATTERN = /"isCompactSummary"\s*:\s*true/;
 
 const QOL_WORKSPACE_PATTERN =
     /(?:^|[\\/])(?:qol-tools|qol-[a-z0-9][a-z0-9-]*|plugin-[a-z0-9][a-z0-9-]*)(?:[\\/]|$)/i;
@@ -50,6 +60,25 @@ function resolvePluginRoot() {
     return path.resolve(__dirname, '..');
 }
 
+function liveContextLines(transcriptPath) {
+    if (!transcriptPath) return [];
+    let raw;
+    try {
+        raw = fs.readFileSync(transcriptPath, 'utf8');
+    } catch {
+        return [];
+    }
+    const lines = raw.split(/\r?\n/);
+    for (let i = lines.length - 1; i >= 0; i--) {
+        if (COMPACT_SUMMARY_PATTERN.test(lines[i])) return lines.slice(i + 1);
+    }
+    return lines;
+}
+
+function alreadyInContext(transcriptPath, marker) {
+    return liveContextLines(transcriptPath).some((line) => line.includes(marker));
+}
+
 function main() {
     const raw = readStdin().trim();
     if (!raw) return 0;
@@ -67,6 +96,8 @@ function main() {
     const cwd = payload.cwd || process.env.PWD || '';
     if (!QOL_WORKSPACE_PATTERN.test(cwd)) return 0;
 
+    if (alreadyInContext(payload.transcript_path, REMINDER_MARKER)) return 0;
+
     const skillFile = path.join(resolvePluginRoot(), 'skills', 'qol-monorepo-rules', 'SKILL.md');
     if (!fs.existsSync(skillFile)) return 0;
 
@@ -80,7 +111,7 @@ function main() {
     const body = stripFrontmatter(skillContent).trim();
     if (!body) return 0;
 
-    const context = `REMINDER from qol-monorepo-rules-context hook (plugin:qol-workflow:qol-monorepo-rules skill):
+    const context = `${REMINDER_MARKER} (plugin:qol-workflow:qol-monorepo-rules skill):
 
 ${body}`;
 
@@ -94,7 +125,13 @@ ${body}`;
     return 0;
 }
 
-module.exports = { stripFrontmatter, QOL_WORKSPACE_PATTERN };
+module.exports = {
+    alreadyInContext,
+    liveContextLines,
+    stripFrontmatter,
+    QOL_WORKSPACE_PATTERN,
+    REMINDER_MARKER,
+};
 
 if (require.main === module) {
     process.exit(main());

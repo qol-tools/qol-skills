@@ -1,5 +1,10 @@
 'use strict';
 
+const fs = require('node:fs');
+
+const TIER_RULE_MARKER = '[qol-sessions tier rule]';
+const COMPACT_SUMMARY_PATTERN = /"isCompactSummary"\s*:\s*true/;
+
 const BRIDGE_ENVELOPE_PATTERN = /^\s*\[qol session bridge\](?:\s|$)/i;
 const ARCHITECT_ENVELOPE_PATTERN = /^\s*\[qol session bridge to architect\](?:\s|$)/i;
 const BRIDGE_TOPIC_PATTERN = /\b(?:architect|implementer|delegate|delegation|handoff|hand off|relay|bridge|independent terminal|two terminals)\b/i;
@@ -74,12 +79,32 @@ function emitContext(context) {
     }));
 }
 
+function liveContextLines(transcriptPath) {
+    if (!transcriptPath) return [];
+    let raw;
+    try {
+        raw = fs.readFileSync(transcriptPath, 'utf8');
+    } catch {
+        return [];
+    }
+    const lines = raw.split(/\r?\n/);
+    for (let i = lines.length - 1; i >= 0; i--) {
+        if (COMPACT_SUMMARY_PATTERN.test(lines[i])) return lines.slice(i + 1);
+    }
+    return lines;
+}
+
+function alreadyInContext(transcriptPath, marker) {
+    return liveContextLines(transcriptPath).some((line) => line.includes(marker));
+}
+
 function shouldInjectTierRule(payload) {
     if (payload?.hook_event_name && payload.hook_event_name !== 'UserPromptSubmit') return false;
     const prompt = String(payload?.prompt || '');
     if (BRIDGE_ENVELOPE_PATTERN.test(prompt)) return false;
     const cwd = payload?.cwd || process.env.PWD || '';
-    return QOL_WORKSPACE_PATTERN.test(cwd);
+    if (!QOL_WORKSPACE_PATTERN.test(cwd)) return false;
+    return !alreadyInContext(payload?.transcript_path, TIER_RULE_MARKER);
 }
 
 async function main() {
@@ -101,6 +126,9 @@ async function main() {
 if (require.main === module) main();
 
 module.exports = {
+    alreadyInContext,
+    liveContextLines,
+    TIER_RULE_MARKER,
     ARCHITECT_ENVELOPE_PATTERN,
     ARCHITECT_RECEIVER_CONTEXT,
     BRIDGE_CONTEXT,

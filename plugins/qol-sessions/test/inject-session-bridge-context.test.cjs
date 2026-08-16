@@ -10,7 +10,10 @@ const HOOK = path.join(__dirname, '..', 'bin', 'inject-session-bridge-context.cj
 const MCP_CONFIG = path.join(__dirname, '..', '.mcp.json');
 const SKILL = path.join(__dirname, '..', 'skills', 'qol-sessions', 'SKILL.md');
 const BRIDGE_MAX_TIMEOUT_SECONDS = 86_400;
+const os = require('node:os');
 const {
+    alreadyInContext,
+    TIER_RULE_MARKER,
     ARCHITECT_ENVELOPE_PATTERN,
     ARCHITECT_RECEIVER_CONTEXT,
     BRIDGE_CONTEXT,
@@ -46,7 +49,7 @@ test('unrelated prompts stay silent outside a qol workspace', () => {
     assert.equal(result.stdout, '');
 });
 
-test('the tier rule fires unconditionally inside a qol workspace', () => {
+test('the tier rule fires on any prompt inside a qol workspace', () => {
     const qolCwd = '/media/kmrh47/WD_SN850X/Git/qol-skills';
     assert.ok(QOL_WORKSPACE_PATTERN.test(qolCwd));
     assert.ok(!QOL_WORKSPACE_PATTERN.test('/tmp/elsewhere'));
@@ -67,6 +70,51 @@ test('the tier rule fires unconditionally inside a qol workspace', () => {
     assert.match(context, /\[qol-sessions tier rule\]/);
     assert.match(context, /never through a raw harness spawn/);
     assert.doesNotMatch(context, /sessions_list/);
+});
+
+test('the tier rule is repeated only when the live context has lost it', () => {
+    const qolCwd = '/media/kmrh47/WD_SN850X/Git/qol-skills';
+    const entry = (content, extra = {}) => ({ type: 'user', message: { role: 'user', content }, ...extra });
+    const write = (entries) => {
+        const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'qol-tier-')), 'transcript.jsonl');
+        fs.writeFileSync(file, entries.map((item) => JSON.stringify(item)).join('\n'));
+        return file;
+    };
+    const ruled = entry(`${TIER_RULE_MARKER} The current session is the architect`);
+    const compacted = entry('summary of earlier work', { isCompactSummary: true });
+    const plain = entry('fix the padding');
+
+    const carried = write([plain, ruled, plain]);
+    assert.ok(alreadyInContext(carried, TIER_RULE_MARKER));
+    assert.ok(!shouldInjectTierRule({ hook_event_name: 'UserPromptSubmit', prompt: 'fix padding', cwd: qolCwd, transcript_path: carried }));
+    assert.equal(run({ hook_event_name: 'UserPromptSubmit', prompt: 'fix padding', cwd: qolCwd, transcript_path: carried }).stdout, '');
+
+    const dropped = write([ruled, compacted, plain]);
+    assert.ok(!alreadyInContext(dropped, TIER_RULE_MARKER));
+    assert.ok(shouldInjectTierRule({ hook_event_name: 'UserPromptSubmit', prompt: 'fix padding', cwd: qolCwd, transcript_path: dropped }));
+
+    const reinjected = write([plain, compacted, ruled, plain]);
+    assert.ok(alreadyInContext(reinjected, TIER_RULE_MARKER));
+
+    assert.ok(!alreadyInContext(undefined, TIER_RULE_MARKER));
+    assert.ok(!alreadyInContext('/nonexistent/transcript.jsonl', TIER_RULE_MARKER));
+    assert.ok(TIER_RULE.startsWith(TIER_RULE_MARKER));
+});
+
+test('a bridge-topic prompt still receives the bridge context after the tier rule is settled', () => {
+    const qolCwd = '/media/kmrh47/WD_SN850X/Git/qol-skills';
+    const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'qol-tier-')), 'transcript.jsonl');
+    fs.writeFileSync(file, JSON.stringify({ type: 'user', message: { role: 'user', content: `${TIER_RULE_MARKER} settled` } }));
+    const result = run({
+        hook_event_name: 'UserPromptSubmit',
+        prompt: 'hand off implementation to another agent terminal',
+        cwd: qolCwd,
+        transcript_path: file,
+    });
+    assert.equal(result.status, 0);
+    const context = JSON.parse(result.stdout).hookSpecificOutput.additionalContext;
+    assert.doesNotMatch(context, /\[qol-sessions tier rule\]/);
+    assert.match(context, /session_bridge/);
 });
 
 test('a qol workspace topic prompt receives the tier rule plus the full bridge context', () => {
