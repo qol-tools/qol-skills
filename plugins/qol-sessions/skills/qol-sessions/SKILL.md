@@ -114,6 +114,26 @@ The reasoning loop must be idle while implementation runs. Delivery ends the arc
 
 The caller remains the architect and reviewer. The target implements. The target's claim of completion is evidence for step 5, not an acceptance decision. These are responsibilities, never hard-coded products, models, session names, or vendors.
 
+## Loop retrospective
+
+Every accepted `session_loop_close` is followed by one retrospective pass, run by the architect without waiting for a user prompt.
+The instrument is a ledger line plus, only when a skill gap is named, a three-lane validation pipeline that may nudge this skill.
+
+1. Append exactly one JSON line to `~/.config/qol-tray/sessions-retro.jsonl`:
+   `{"date","loop_key","tool","model","rounds","correction_rounds","review_caught_defects","lane_deviations","verdict","skill_gap","nudge"}`.
+   The counts come from the loop just closed; `verdict` is one sentence on lane performance; `skill_gap` names where this skill or the spec guidance gave insufficient direction, or is null; `nudge` starts null.
+2. Drift gate, mechanical before cognitive: read the last five ledger lines first.
+   If a prior line carries a non-null `nudge` and the lines after it show `rounds` or `review_caught_defects` trending up, revert that nudge's commit, set its line's `nudge` to `"reverted"`, and stop; a worsening trend outranks any argument the pipeline can write.
+3. `skill_gap` null: the retrospective is the ledger line alone; stop.
+4. `skill_gap` non-null: spawn three flash lanes in parallel (keys `retro-research`, `retro-ground`, `retro-refute`), each given the ledger line and the candidate improvement.
+   The researcher searches for prior art and reported failure modes of the practice; the grounder checks fit against this skill, the qol architecture, and the agentic workflow; the refuter argues the strongest case against and defaults to reject when uncertain.
+5. The architect synthesizes in-session.
+   Two-of-three support turns the candidate into one bounded skill edit, committed to qol-skills with the ledger date and `loop_key` in the commit body, then version-bumped, manifest-synced, and pushed per the marketplace rules; anything less records the rejection in the ledger line and changes nothing.
+6. Caps that keep the loop self-limiting: at most one nudge per closed loop; a nudge edits guidance sections only, never Safety or Hard rules, which stay human-owned; every nudge is one commit so one revert undoes it.
+
+The pipeline judges prose; the ledger judges outcomes.
+Counters are appended by the loop that lived them, so later nudges are evaluated by evidence the pipeline cannot rewrite.
+
 ## Background lanes and wake
 
 Background is the only delivery mode. `session_spawn` with `background: true` launches the lane fire-and-forget: the task is embedded in the launch command and the pending round is queued at spawn time, and the call returns without waiting for the live UI or any liveness confirmation. Background mode requires `task`; a background spawn result means the round was queued, not that the lane is up. `session_submit` arms the same watcher for every later round. The initiator is woken when the watcher reports the round.
