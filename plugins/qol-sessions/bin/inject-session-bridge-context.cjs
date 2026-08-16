@@ -1,9 +1,12 @@
 'use strict';
 
 const fs = require('node:fs');
+const { spawnSync } = require('node:child_process');
 
 const TIER_RULE_MARKER = '[qol-sessions tier rule]';
 const COMPACT_SUMMARY_PATTERN = /"isCompactSummary"\s*:\s*true/;
+const LANE_TIER = 'flash';
+const LANE_PROBE_TIMEOUT_MS = 3000;
 
 const BRIDGE_ENVELOPE_PATTERN = /^\s*\[qol session bridge\](?:\s|$)/i;
 const ARCHITECT_ENVELOPE_PATTERN = /^\s*\[qol session bridge to architect\](?:\s|$)/i;
@@ -98,13 +101,32 @@ function alreadyInContext(transcriptPath, marker) {
     return liveContextLines(transcriptPath).some((line) => line.includes(marker));
 }
 
-function shouldInjectTierRule(payload) {
+function laneSpawnAvailable(run = spawnSync) {
+    let result;
+    try {
+        result = run('qol', ['sessions', 'capability', '--tier', LANE_TIER], {
+            encoding: 'utf8',
+            timeout: LANE_PROBE_TIMEOUT_MS,
+        });
+    } catch {
+        return true;
+    }
+    if (!result || result.error || result.status !== 0) return true;
+    try {
+        return JSON.parse(result.stdout).lane_spawn !== false;
+    } catch {
+        return true;
+    }
+}
+
+function shouldInjectTierRule(payload, laneAvailable = laneSpawnAvailable) {
     if (payload?.hook_event_name && payload.hook_event_name !== 'UserPromptSubmit') return false;
     const prompt = String(payload?.prompt || '');
     if (BRIDGE_ENVELOPE_PATTERN.test(prompt)) return false;
     const cwd = payload?.cwd || process.env.PWD || '';
     if (!QOL_WORKSPACE_PATTERN.test(cwd)) return false;
-    return !alreadyInContext(payload?.transcript_path, TIER_RULE_MARKER);
+    if (alreadyInContext(payload?.transcript_path, TIER_RULE_MARKER)) return false;
+    return laneAvailable();
 }
 
 async function main() {
@@ -127,7 +149,9 @@ if (require.main === module) main();
 
 module.exports = {
     alreadyInContext,
+    laneSpawnAvailable,
     liveContextLines,
+    LANE_TIER,
     TIER_RULE_MARKER,
     ARCHITECT_ENVELOPE_PATTERN,
     ARCHITECT_RECEIVER_CONTEXT,

@@ -13,6 +13,8 @@ const BRIDGE_MAX_TIMEOUT_SECONDS = 86_400;
 const os = require('node:os');
 const {
     alreadyInContext,
+    laneSpawnAvailable,
+    LANE_TIER,
     TIER_RULE_MARKER,
     ARCHITECT_ENVELOPE_PATTERN,
     ARCHITECT_RECEIVER_CONTEXT,
@@ -99,6 +101,22 @@ test('the tier rule is repeated only when the live context has lost it', () => {
     assert.ok(!alreadyInContext(undefined, TIER_RULE_MARKER));
     assert.ok(!alreadyInContext('/nonexistent/transcript.jsonl', TIER_RULE_MARKER));
     assert.ok(TIER_RULE.startsWith(TIER_RULE_MARKER));
+});
+
+test('the tier rule waits until a lane can actually spawn at the tier', () => {
+    const qolCwd = '/media/kmrh47/WD_SN850X/Git/qol-skills';
+    const payload = { hook_event_name: 'UserPromptSubmit', prompt: 'fix padding', cwd: qolCwd };
+    assert.ok(shouldInjectTierRule(payload, () => true));
+    assert.ok(!shouldInjectTierRule(payload, () => false));
+
+    const probe = (result) => laneSpawnAvailable(() => result);
+    assert.ok(probe({ status: 0, stdout: JSON.stringify({ lane_spawn: true }) }));
+    assert.ok(!probe({ status: 0, stdout: JSON.stringify({ lane_spawn: false }) }));
+    assert.ok(probe({ status: 0, stdout: 'not json' }));
+    assert.ok(probe({ status: 1, stdout: JSON.stringify({ lane_spawn: false }) }));
+    assert.ok(probe({ error: new Error('ENOENT'), status: null, stdout: '' }));
+    assert.ok(laneSpawnAvailable(() => { throw new Error('spawn failed'); }));
+    assert.equal(LANE_TIER, 'flash');
 });
 
 test('a bridge-topic prompt still receives the bridge context after the tier rule is settled', () => {

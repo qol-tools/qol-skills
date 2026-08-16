@@ -66,6 +66,7 @@ The current session is the architect and final reviewer and runs on the flash ti
 - Verify the lane's tier right after spawn from the target's model indicator. A lane that came up on the wrong tier is closed and respawned with the explicit model before any work is bridged; a lane never runs on a tier above the architect's own.
 - The architect never delegates its own work: scoping, acceptance review, verdict synthesis, and the final report stay in the architect session. Lanes implement, research, and produce preliminary reviews; they never accept a feature.
 - Tiers are roles, not product names: the concrete model for each tier comes from the lane's explicit override or the config, never from hard-coded names in this skill.
+- The reminder carrying this rule fires only when a lane can actually spawn at the tier, which `qol sessions capability --tier flash` answers as `lane_spawn`: a registered tool is installed and a model at that tier is resolvable. A probe that errors or times out counts as available, so a slow check never drops the rule.
 
 ## Spawn resource capping
 
