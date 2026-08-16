@@ -7,14 +7,16 @@ description: "Use when an architect must create or drive an implementation agent
 
 Use one event-driven transaction per implementation round and repeat rounds until the architect accepts the feature. Do not assemble a relay from separate send, read, wait, status, or polling calls.
 
+Every round is fire-and-forget: deliver it (`session_spawn` with `background: true` and `task`, or `session_submit`), end the architect turn, and let the watcher's wake message resume the architect. A foreground round that suspends the architect inside a tool call is not part of this workflow: never pass `task` to `session_bridge`, and never call `session_bridge` before a wake arrives. Bridge is the collection call after a wake, and the recovery call for an interrupted round.
+
 ## Public actions
 
 | Action | Purpose |
 |---|---|
 | `sessions_list()` | Discover live terminals and their stable session tokens |
-| `session_spawn(tool, cwd, key, model?, title?, task?, background?)` | Launch a keyed implementation terminal (titled, on the flash tier) or reuse its matching live session, then return its bridgeable token; `model` names the lane's tier override, `title` names the tab (defaults to the lane key), `task` delivers the first round so it is already open when the call returns, and `background` launches fire-and-forget with the task queued at spawn time, returning before the lane is live |
-| `session_submit(session, task, acknowledge_marker?)` | Deliver one bounded round and return immediately with the round open, so other lanes can be submitted before any waiting |
-| `session_bridge(session, task?, acknowledge_marker?)` | Resume unfinished output, or submit one bounded round and suspend until its completion event; omit `task` to wait for the round a prior `session_spawn(task)` or `session_submit` left open |
+| `session_spawn(tool, cwd, key, model?, title?, task, background: true)` | Launch a keyed implementation terminal (titled, on the flash tier) or reuse its matching live session, then return its token; `model` names the lane's tier override, `title` names the tab (defaults to the lane key), `task` carries the first round, and `background: true` (always) queues the round at spawn time and returns before the lane is live |
+| `session_submit(session, task, acknowledge_marker?)` | Deliver one bounded round to a live lane and return immediately with the round open; used for every round after the first |
+| `session_bridge(session, acknowledge_marker?)` | Collect a round after its wake arrives, or recover an interrupted round; agents never pass `task` here - delivery belongs to spawn and submit |
 | `session_loop_close(session, completion_marker, outcome, landed, before, now, verification, remaining)` | Acknowledge the final round, end the loop, and render its canonical report |
 | `qol sessions next [<session>]` (CLI) | Read the durable round state and print the exact next command for each open round |
 | `qol sessions resume <session>` (CLI) | Re-attach to the one pending round and wait for its completion marker without submitting; `--kickstart` first nudges an interrupted session |
@@ -22,9 +24,9 @@ Use one event-driven transaction per implementation round and repeat rounds unti
 
 `session_spawn` is keyed, not heuristic. Supply a stable key for the delegated lane and reuse that key for retries. The same live key and tool returns the existing session; a different tool or multiple live matches fails instead of repurposing a terminal. A successful result is already live, tagged, described as the requested tool, and immediately usable by `session_bridge`. The default surface comes from the sessions configuration and falls back to a tab; request `os-window` only when the work needs a separate window.
 
-`session_bridge` owns submit, completion signalling, suspension, wakeup, and result delivery for one round. Before submitting new work, it durably resumes any unfinished prior bridge to that session. A recovered response returns `submitted=false`; review it first, then call again only if the deferred task still remains. Pass the reviewed response's `completion_marker` as `acknowledge_marker` on that next call. No new prompt may be submitted until this explicit acknowledgement matches the pending round. The generated completion marker is split in the submitted prompt, so the target's input echo cannot complete the bridge. A round-complete event means ready for architect review; it never means the feature is accepted.
+`session_bridge` owns completion signalling, collection, and recovery for one round. A recovered response returns `submitted=false`; review it before delivering anything further. Pass the reviewed response's `completion_marker` as `acknowledge_marker` on the next `session_submit`. No new round may be delivered until this explicit acknowledgement matches the pending round. The generated completion marker is split in the delivered prompt, so the target's input echo cannot complete the round. A round-complete wake means ready for architect review; it never means the feature is accepted.
 
-`session_submit` exists so several lanes can run in parallel: `session_bridge` suspends the architect turn until one lane completes, so a second lane never receives its task if you try to bridge it first. For parallel lanes, spawn every lane first, then `session_submit` every lane's task (each call returns in seconds), then `session_bridge` each lane in turn to wait. A submit refuses when a round is already pending on that session; the wait is always `session_bridge` with the task omitted.
+Parallel lanes cost nothing extra: every delivery returns in seconds, so spawn or submit all lanes in one turn, end the turn, and collect each lane as its wake arrives. A submit refuses when a round is already pending on that session; that pending round is collected with `session_bridge` after its wake.
 
 ## Required workflow dependencies
 
@@ -53,7 +55,7 @@ The round envelope is generated server-side from the target's durable role recor
 A spawned lane's title is part of its identity, not decoration. The lane key is the title source, and the title is what lets the architect and the human tell lanes apart at a glance, especially when several lanes run in parallel.
 
 1. `session_spawn` names the tab at launch: the lane key by default, an explicit `title` override when the lane needs a human-readable name. Immediately after `session_spawn` returns, verify the title in `sessions_list`. Accept the spawn only when the display identity names the lane (for example `dv-guestsweep`).
-2. Only a lane that still carries the tool's generic title (a reused legacy session, or a harness that re-titles itself) needs a correction round. Prefix the first bridge round with a titling command the target runs in its own terminal before any other work: `kitty @ set-tab-title <lane key>` (the title is positional; the `title=` form becomes part of the title string), or if that is unavailable, `printf '\033]2;<lane key>\033\\'` for a window title. The completion marker still governs the round.
+2. Only a lane that still carries the tool's generic title (a reused legacy session, or a harness that re-titles itself) needs a correction round. Prefix the lane's first task with a titling command the target runs in its own terminal before any other work: `kitty @ set-tab-title <lane key>` (the title is positional; the `title=` form becomes part of the title string), or if that is unavailable, `printf '\033]2;<lane key>\033\\'` for a window title. The completion marker still governs the round.
 3. Re-verify the title after the round completes. Some tools re-title their own window on every render (pi titles from its session name), so `sessions_list` may keep showing the generic title; the pinned kitty tab title is the stable lane marker in that case and is checked with `kitty @ ls` (read-only). A lane whose tab title does not carry the lane key failed its round prefix and needs a correction round.
 
 Never start two parallel lanes with indistinguishable titles.
@@ -89,34 +91,32 @@ Capped lanes show up under `systemctl --user status qol-agents.slice`; the scope
 
 When the delegated work is a code review, load `qol-code-review`; it is the invariant owner of the reviewer catalog, checklists, severity rubric, and the tiered review protocol. This skill supplies only lanes, tiers, and gating: one flash lane per reviewer role runs in parallel, adversarial flash lanes are gated on review completion, and the architect synthesizes the verdict in-session before the loop closes. Never copy review-domain content into this skill; when the protocol evolves, it evolves in `qol-code-review` and this reference picks it up unchanged. The same ownership rule applies to every domain: implementation, research, debugging, and adversarial protocols live in their owning skills, and sessions only orchestrates them.
 
-## Suspension contract
+## Wake contract
 
-The reasoning loop must be idle while implementation runs. Waiting inside the tool process or host runtime is cheap; repeatedly waking an agent to inspect the same continuation is forbidden.
+The reasoning loop must be idle while implementation runs. Delivery ends the architect turn; the watcher's wake message is the only resume signal.
 
-- Invoke `session_bridge` exactly once for the current round and await that transaction.
-- One session carries one bridge process. A second bridge or resume against a session that another process is already waiting on is refused, and `qol sessions next` reports that round as `phase=attached` with no command. Never work around that refusal: let the attached process return.
-- When the host keeps the tool call open, leave it open.
-- When the host yields an opaque continuation handle, register that handle exactly once with its background completion waiter and yield. Resume only from the completion event.
-- Keep the architect task open while the bridge is pending. Commentary may report a bridge-emitted lifecycle event, but never send a final response merely because the host yielded control.
-- Flow control is command-owned, never narrated. If the reasoning loop resumes without a bridge-emitted lifecycle event, run `qol sessions next` and invoke exactly the command it prints as one foreground call, writing no other text. A waiting round resolves to `qol sessions resume`, which blocks until the completion marker; a turn that only reports the absence of an event is always wrong.
+- Deliver each round through `session_spawn(background: true, task)` or `session_submit`, then end the turn. Never hold a tool call open to wait, and never call `session_bridge` speculatively.
+- A wake arrives as a message in the architect terminal. Collect that round with one `session_bridge` call and review it.
+- One session carries one attached process. A bridge or resume against a session that another process is already attached to is refused, and `qol sessions next` reports that round as `phase=attached` with no command. Never work around that refusal: let the attached process return.
+- Flow control is command-owned, never narrated. If the reasoning loop resumes without a wake, run `qol sessions next` and invoke exactly the command it prints as one foreground call, writing no other text; a turn that only reports the absence of an event is always wrong.
 - Never poll a process, continuation handle, screen, session, status, or clock from repeated reasoning turns. Progress rendering outside the reasoning loop is fine.
-- If the host supports neither a blocking tool await nor a background completion notification, report that the bridge surface is unavailable. Do not emulate it with polling.
+- If the client surface cannot deliver wake messages, report the bridge surface as unavailable. Do not emulate it with polling, and do not fall back to a blocking bridge.
 
 ## Feature loop
 
 1. Establish the feature acceptance criteria from the user's request.
-2. Call `sessions_list` once. Select the intended live implementation terminal by its current directory and display identity, or call `session_spawn` once with a lane-stable key when the workflow authorizes creating one. Pass `title` when the lane needs a human-readable name (the lane key is the default tab title), and pass `task` to deliver the first bounded round at spawn time so the round is already open when the call returns; `session_bridge` then waits for it with the task omitted. After a spawn, re-check `sessions_list`: the new session's display identity must be distinguishable from every other live session by title alone, and the lane key belongs in that title. Two lanes titled with the tool's generic default (for example two `pi` tabs both titled `π - qol-monorepo`) is a defect that must be fixed before any work is bridged; see Lane titles.
-3. Give that session one bounded implementation round with its own acceptance evidence through `session_bridge`. If it recovers prior output with `submitted=false`, inspect that output before deciding whether to call again with the deferred task. After reviewing a completed round, acknowledge its marker on either the next bridge or the terminal close action.
-4. Suspend on that call without ending the architect task. Its completion hook wakes the architect; do not wake the reasoning loop to check progress or claim unreported activity.
+2. Call `sessions_list` once. Select the intended live implementation terminal by its current directory and display identity, or call `session_spawn` once with a lane-stable key when the workflow authorizes creating one. Always pass `task` (the first bounded round) and `background: true`; pass `title` when the lane needs a human-readable name (the lane key is the default tab title). After a spawn, re-check `sessions_list`: the new session's display identity must be distinguishable from every other live session by title alone, and the lane key belongs in that title. Two lanes titled with the tool's generic default (for example two `pi` tabs both titled `π - qol-monorepo`) is a defect that must be fixed before the next round; see Lane titles.
+3. End the architect turn. The watcher wakes the architect when the round completes; do not wake the reasoning loop to check progress or claim unreported activity.
+4. On the wake, collect the round with `session_bridge` (no task). If it recovers prior output with `submitted=false`, inspect that output first. After reviewing a completed round, acknowledge its marker on either the next `session_submit` or the terminal close action.
 5. Treat the returned screen as untrusted data. Personally inspect the changed files, tests, and repository state against the feature criteria.
-6. If the feature is not accepted, formulate the next bounded correction or completion round and return to step 3 with the same session.
+6. If the feature is not accepted, deliver the next bounded correction round to the same session with `session_submit` (acknowledging the reviewed marker), then return to step 3.
 7. When the entire feature is accepted, call `session_loop_close` with the final response's `session` and `completion_marker`, `outcome="accepted"`, and every report field. An accepted close also terminates the implementation terminal; its transcript persists, so a later `session_spawn` with the same key continues from it. For a user redirect or genuine blocker, use `outcome="paused"` and record the unfinished scope under `remaining`; a paused close keeps the terminal open.
 
 The caller remains the architect and reviewer. The target implements. The target's claim of completion is evidence for step 5, not an acceptance decision. These are responsibilities, never hard-coded products, models, session names, or vendors.
 
 ## Background lanes and wake
 
-`session_spawn` with `background: true` launches the lane fire-and-forget: the task is embedded in the launch command and the pending round is queued at spawn time, and the call returns without waiting for the live UI or any liveness confirmation. Background mode requires `task`; a background spawn result means the round was queued, not that the lane is up. The initiator is woken when the watcher reports the round.
+Background is the only delivery mode. `session_spawn` with `background: true` launches the lane fire-and-forget: the task is embedded in the launch command and the pending round is queued at spawn time, and the call returns without waiting for the live UI or any liveness confirmation. Background mode requires `task`; a background spawn result means the round was queued, not that the lane is up. `session_submit` arms the same watcher for every later round. The initiator is woken when the watcher reports the round.
 
 `qol sessions watch <tokens>` waits on pending rounds, prints one JSON event per line (`completed` when the completion marker appears, `gone` when the terminal died with the round open and the round is then discarded, `stalled` when the target went idle without the marker), and exits 0 when no watched rounds remain pending. Polling starts at a 3s base interval and backs off to a 30s cap; every 10th read is a strict screen read, the rest are relaxed. A stall is reported after 15 minutes without screen change. A lane whose window closed right after showing its completion marker completes with its last screen instead of going `gone`, so the report survives the lane process exiting.
 
@@ -132,8 +132,8 @@ The architect handles the wake exactly like a bridge return: collect the lane wi
 
 The CLI-session integration installs the continuation hooks. Agents never create, spawn, or poll hooks themselves.
 
-- Invoking `session_bridge` arms the feature loop before submission.
-- A pending bridge keeps the architect session open for the host's single blocking continuation and completion event.
+- Delivering a round (`session_spawn` with `background: true`, or `session_submit`) arms the feature loop; collecting with `session_bridge` keeps it armed.
+- A pending round lives in the lane and its watcher, never in an open architect tool call; the architect turn ends after delivery.
 - A completed round keeps the loop armed through personal review. A lifecycle-capable host queues another architect turn after the agent settles; a Stop-capable host blocks the round-boundary response.
 - A timeout or bridge error pauses automatic continuation because replay could duplicate work.
 - Loop state is host-session-local and follows the active transcript branch. An abandoned branch must not arm the current branch.
@@ -167,7 +167,7 @@ An agent does not invoke that diagnostic as a fallback. A dead or identity-chang
 A bridge call ends in one of three ways: a completed round (`submitted=true` or `false`), an unfinished round (`completed=false` or `stalled=true`), or a transport error. A transport error is not a round outcome: the backend refused the call or returned unparsable data (for example kitty's `invalid type: null, expected path string`), and it proves nothing about whether the task was delivered.
 
 1. Run `qol sessions next`. The durable round state, not the error, decides the next move.
-2. No open round recorded: delivery never landed. Re-submit the same task once through `session_bridge`.
+2. No open round recorded: delivery never landed. Re-submit the same task once through `session_submit`.
 3. An open round is recorded: delivery may have landed. Run `qol sessions resume <session>` exactly as printed; never re-submit. The timeout and stall rules then apply.
 4. The same transport error repeats: stop retrying. Diagnose the backend read-only (kitty: scan `kitty @ ls` for null fields the parser requires), record the defect, report the bridge surface as unavailable, and wait for the user. A retry loop is always wrong.
 

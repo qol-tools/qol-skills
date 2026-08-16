@@ -18,8 +18,8 @@ const QOL_WORKSPACE_PATTERN =
 
 const TIER_RULE = [
     '[qol-sessions tier rule]',
-    'The current session is the architect and final reviewer and runs on the flash tier; multi-step delegated work runs through the qol sessions surface (session_spawn + session_bridge), never in-harness and never through a raw harness spawn.',
-    'Every implementation, research, and preliminary-review lane is spawned with session_spawn carrying an explicit flash-tier model override; the harness default or a missing model is a refusal point, never a silent choice.',
+    'The current session is the architect and final reviewer and runs on the flash tier; multi-step delegated work runs through the qol sessions surface (session_spawn background:true + wake + session_bridge collection), never in-harness and never through a raw harness spawn.',
+    'Every implementation, research, and preliminary-review lane is spawned with session_spawn carrying an explicit flash-tier model override and background:true; the harness default, a missing model, or a foreground round that suspends the architect in an open tool call is a refusal point, never a silent choice.',
     'Spawned lanes implement and report; the architect personally reviews, synthesizes verdicts, and accepts in-session.',
     'Domain protocols live in their owning skills (qol-code-review, qol-adversarial-test, qol-debug); sessions supplies lanes, tiers, and gating only.',
 ].join(' ');
