@@ -7,6 +7,7 @@ const LOOP_CLOSE_TOOL_PATTERN = /(?:^|__)session_loop_close$/;
 const COMPLETED_TRUE_PATTERN = /"completed"\s*:\s*true/i;
 const COMPLETED_FALSE_PATTERN = /"completed"\s*:\s*false/i;
 const COMPLETION_MARKER_PATTERN = /"completion_marker"\s*:/i;
+const LOOP_CLOSED_TRUE_PATTERN = /loop_closed\\?"?\s*:\s*true/i;
 const BACKGROUND_PATTERN = /still running|moved to the background|keeps running/i;
 
 function readPayload() {
@@ -88,7 +89,7 @@ function closeReceipt(text) {
         if (typeof receipt.final_report !== 'string' || !receipt.final_report.trim()) return null;
         return receipt;
     } catch {
-        return null;
+        return LOOP_CLOSED_TRUE_PATTERN.test(text) ? { loop_closed: true } : null;
     }
 }
 

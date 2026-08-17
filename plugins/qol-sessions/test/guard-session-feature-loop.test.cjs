@@ -138,6 +138,24 @@ test('a successful loop-close receipt closes the loop immediately', () => {
     assert.equal(result.stdout, '');
 });
 
+test('a close receipt persisted to a file still closes the loop', () => {
+    const receipt = JSON.stringify({ loop_closed: true, outcome: 'accepted', final_report: FINAL_REPORT });
+    const entries = [
+        bridgeCall('call', null),
+        bridgeResult('result', 'call', '{"completed":true,"completion_marker":"QOL_BRIDGE_DONE_123"}'),
+        loopCloseCall('close', 'result'),
+        loopCloseResult(
+            'closed',
+            'close',
+            `<persisted-output>\nOutput too large (61.1KB). Full output saved to: /tmp/tool-results/x.json\n\nPreview (first 2KB):\n[\n  {\n    "type": "text",\n    "text": "${receipt.replace(/"/g, '\\"')}\n...\n</persisted-output>`,
+        ),
+    ];
+    assert.equal(featureLoopPhase(entries), 'idle');
+    const result = runHook(entries);
+    assert.equal(result.status, 0);
+    assert.equal(result.stdout, '');
+});
+
 test('close-then-summary passes the stop without re-emitting the report', () => {
     const entries = [];
     bridgeAndClose(entries);
