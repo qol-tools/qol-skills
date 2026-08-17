@@ -153,7 +153,7 @@
       "name": "qol-plugin-cli-sessions",
       "description": "Skills for the plugin-cli-sessions plugin: live CLI session overview, per-tool interpretation, and attention status.",
       "source": "./plugins/qol-plugin-cli-sessions",
-      "version": "0.1.4",
+      "version": "0.1.5",
       "author": {
         "name": "KMRH47"
       }
