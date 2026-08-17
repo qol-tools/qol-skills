@@ -284,9 +284,8 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
     name: "session_spawn",
     label: "Spawn a tool session",
     description:
-      "Launch a tagged harness for a registered tool in a new terminal tab, or reuse the single live session already carrying the key when its tool matches. The key makes retries idempotent: a key held by a different tool conflicts, multiple matches are ambiguous, and a launched session is returned only once it is live, tagged, and described as the requested tool. Surface is tab or os-window; the default comes from the spawn_surface config, then tab. Delivery is background-only: the required task is embedded in the launch and the round is open when the call returns, and autoclose defaults to on for newly spawned terminals (opt out with autoclose: false).",
+      "Launch a tagged harness for a registered tool in a new terminal tab, or reuse the single live session already carrying the key when its tool matches. The key makes retries idempotent: a key held by a different tool conflicts, multiple matches are ambiguous, and a launched session is returned only once it is live, tagged, and described as the requested tool. Surface is tab or os-window; the default comes from the spawn_surface config, then tab. Delivery is background-only: the required task is embedded in the launch and the round is open when the call returns; lanes always close when the watcher confirms completion, and sessions without a spawn identity are never closed.",
     parameters: Type.Object({
-      autoclose: Type.Optional(Type.Boolean({ description: "Close the lane terminal automatically when the watcher confirms the round's completion; defaults to true. Only applies to newly spawned terminals, never to a reused session, so a reuse call must pass autoclose: false" })),
       cwd: Type.String({ description: "Working directory for the spawned session" }),
       key: Type.String({ description: "Stable spawn key; required so retries are idempotent" }),
       model: Type.Optional(Type.String({ description: "Model override for the spawned session (e.g. deepseek-v4-pro); beats the spawn_model config" })),
@@ -302,7 +301,6 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
       if (params.model != null) args.push("--model", params.model);
       if (params.title != null) args.push("--title", params.title);
       args.push("--task", params.task, "--background");
-      if (params.autoclose !== false) args.push("--auto-close");
       if (params.resume === true) args.push("--resume");
       const stdout = await run(args, 60_000, undefined, signal);
       const outcome = JSON.parse(stdout);
@@ -317,16 +315,14 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
     name: "session_submit",
     label: "Submit a task without waiting",
     description:
-      "Deliver one bounded task to a session and return immediately with the round recorded and open, so several lanes can run in parallel before any of them is awaited. The generated completion signal is embedded in the submitted prompt. Refuses when a round is already pending on that session. Wait for the completion with session_bridge on the same session (omit its task), then review and close the loop as usual. Submitted rounds close the lane terminal automatically when the watcher confirms completion (autoclose defaults to on; opt out with autoclose: false); sessions without a spawn identity are never closed.",
+      "Deliver one bounded task to a session and return immediately with the round recorded and open, so several lanes can run in parallel before any of them is awaited. The generated completion signal is embedded in the submitted prompt. Refuses when a round is already pending on that session. Wait for the completion with session_bridge on the same session (omit its task), then review and close the loop as usual. Submitted rounds close the lane terminal automatically when the watcher confirms completion: lanes always close, and sessions without a spawn identity are never closed.",
     parameters: Type.Object({
       acknowledge_marker: Type.Optional(Type.String({ description: "Completion marker from the last reviewed completed bridge; required to submit a new round instead of recovering the prior response" })),
-      autoclose: Type.Optional(Type.Boolean({ description: "Close the lane terminal automatically when the watcher confirms the round's completion; defaults to true. Only applies to sessions with a spawn identity (lanes); architect-receiver sessions are never auto-closed. Opt out with autoclose: false" })),
       session: Type.String({ description: "Stable session token from sessions_list" }),
       task: Type.String({ description: "Bounded implementation task to submit exactly once" }),
     }),
     async execute(_toolCallId, params, signal, _onUpdate) {
       const args = ["submit", params.session, "--task", params.task];
-      if (params.autoclose === false) args.push("--no-auto-close");
       if (params.acknowledge_marker != null) args.push("--acknowledge-marker", params.acknowledge_marker);
       const stdout = await run(args, 60_000, undefined, signal);
       const outcome = JSON.parse(stdout);
