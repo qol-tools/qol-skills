@@ -22,6 +22,7 @@ const TIER_RULE = [
     'Every implementation, research, and preliminary-review lane is spawned with session_spawn carrying tool: "pi", model: "deepseek-v4-flash", and background:true; the harness default, a missing model, or a foreground round that suspends the architect in an open tool call is a refusal point, never a silent choice.',
     'Never spawn a Claude Code lane: tool "claude" is forbidden on this host no matter which harness the architect itself runs in, and pi with deepseek-v4-flash is the only permitted lane binding.',
     'Spawned lanes implement and report; the architect personally reviews, synthesizes verdicts, and accepts in-session.',
+    'Lanes edit only the code the architect named: building, testing, linting, formatting, and committing belong to the architect, who reviews the diff and runs the gate once for the whole round, so a lane never runs cargo build, cargo test, cargo clippy, cargo fmt, or any other build or verification command and never commits.',
     'Domain protocols live in their owning skills (qol-code-review, qol-adversarial-test, qol-debug); sessions supplies lanes, tiers, and gating only.',
 ].join(' ');
 
