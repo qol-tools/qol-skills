@@ -64,17 +64,18 @@ Never start two parallel lanes with indistinguishable titles.
 
 The current session is the architect and final reviewer and runs on the flash tier (for the deepseek family, flash is the architect tier, not pro). Every spawned lane also runs on the flash tier, and the tier choice is deterministic, never the harness default: the harness may not encode tier in the tool name, and the same tool can come up on different models depending on its default configuration.
 
-- Pass an explicit flash-tier model override to every `session_spawn` (its `model` argument). The `spawn_model` entry in `sessions.toml` is the fallback when an override is absent; a missing model is a refusal point, never a silent default.
+- Pass the concrete binding to every `session_spawn`: `tool: "pi"` and `model: "deepseek-v4-flash"` for the flash tier. The `spawn_model` entry in `sessions.toml` is the fallback when an override is absent, and a missing model is a refusal point, never a silent default. When the config file is absent (it is on this host), the fallback source of truth is the host's own spawn record: read the newest `*.json` in `~/Library/Application Support/qol-tray/sessions/spawn-records/`, each one holds `{"key", "tool", "model", ...}` for one past spawn, and use the pairing it records.
+- Never source a tool or model name from your own harness prompt, environment, or model list: a name sitting in your context describes your context, not this host, and filling the tier choice from it is a silent default, which the refusal rule forbids. The binding above, the config, and the spawn records are the only valid sources.
 - Verify the lane's tier right after spawn from the target's model indicator. A lane that came up on the wrong tier is closed and respawned with the explicit model before any work is bridged; a lane never runs on a tier above the architect's own.
 - The architect never delegates its own work: scoping, acceptance review, verdict synthesis, and the final report stay in the architect session. Lanes implement, research, and produce preliminary reviews; they never accept a feature.
-- Tiers are roles, not product names: the concrete model for each tier comes from the lane's explicit override or the config, never from hard-coded names in this skill.
+- Tiers are roles, not product names. The concrete binding (flash = `pi` + `deepseek-v4-flash`) is a source-owned host fact: the spawn records are its authoritative copy, and when they record a different pairing, that pairing wins. The named value is what the newest record holds; re-read that record whenever the pairing matters.
 - The reminder carrying this rule fires only when a lane can actually spawn at the tier, which `qol sessions capability --tier flash` answers as `lane_spawn`: a registered tool is installed and a model at that tier is resolvable. A probe that errors or times out counts as available, so a slow check never drops the rule.
 
 ## Spawn resource capping
 
 Every `session_spawn` launch runs inside a systemd user scope, so parallel agent lanes cannot make the desktop unusable. The launched harness becomes `systemd-run --user --scope --slice=qol-agents.slice -p CPUWeight=<w> -p IOWeight=<w> [-p CPUQuota=<q>] -- <harness> <args>`; the lane keeps the kitty tab, title, cwd, identity vars, and keyed reuse semantics because only the launched program is wrapped. All lanes share the `qol-agents.slice`, and the same weights and quota are applied to the `qol.slice` and `qol-agents.slice` units after the lane is live, so the lane group stays deprioritized against the interactive session (the scope weight alone only competes between sibling scopes inside the slice).
 
-The keys live in `sessions.toml` (`~/.config/qol-tray/`), read at spawn time:
+The keys live in `sessions.toml` in the qol-tray config dir, read at spawn time (on this host: `~/Library/Application Support/qol-tray/sessions.toml`; on Linux: `~/.config/qol-tray/sessions.toml`):
 
 - `spawn_cap` - off switch for the whole wrapper; `false` launches unwrapped. Default: on.
 - `spawn_cpu_weight` - lane CPU weight, systemd range 1..=10000. Default: 40 (interactive sessions stay at the default 100, so the interactive session wins contention).
