@@ -19,7 +19,8 @@ const QOL_WORKSPACE_PATTERN =
 const TIER_RULE = [
     '[qol-sessions tier rule]',
     'The current session is the architect and final reviewer and runs on the flash tier; multi-step delegated work runs through the qol sessions surface (session_spawn background:true + wake + session_bridge collection), never in-harness and never through a raw harness spawn.',
-    'Every implementation, research, and preliminary-review lane is spawned with session_spawn carrying an explicit flash-tier model override and background:true; the harness default, a missing model, or a foreground round that suspends the architect in an open tool call is a refusal point, never a silent choice.',
+    'Every implementation, research, and preliminary-review lane is spawned with session_spawn carrying tool: "pi", model: "deepseek-v4-flash", and background:true; the harness default, a missing model, or a foreground round that suspends the architect in an open tool call is a refusal point, never a silent choice.',
+    'Never spawn a Claude Code lane: tool "claude" is forbidden on this host no matter which harness the architect itself runs in, and pi with deepseek-v4-flash is the only permitted lane binding.',
     'Spawned lanes implement and report; the architect personally reviews, synthesizes verdicts, and accepts in-session.',
     'Domain protocols live in their owning skills (qol-code-review, qol-adversarial-test, qol-debug); sessions supplies lanes, tiers, and gating only.',
 ].join(' ');
@@ -35,7 +36,7 @@ const ARCHITECT_RECEIVER_CONTEXT = [
 const BRIDGE_CONTEXT = [
     '[qol-sessions]',
     'Load qol-workflow:git-trees before choosing the implementation terminal and qol-workflow:commit before committing; delegated code changes always use their worktree route and canonical squash-to-one-commit integration and cleanup path.',
-    'Spawned lanes run on the flash tier: pass an explicit flash-tier model override to session_spawn; the sessions.toml spawn_model entry is the fallback, and a lane that came up on the wrong tier is closed and respawned before any work is bridged.',
+    'Spawned lanes always run tool "pi" with model "deepseek-v4-flash", which is the flash tier on this host; tool "claude" is never spawned, the sessions.toml spawn_model entry is the fallback, and a lane that came up on the wrong tool or tier is closed and respawned before any work is bridged.',
     'The architect session runs on the flash tier and is the final reviewer: acceptance, verdict synthesis, and the final report happen in-session and are never delegated to a lane.',
     'session_spawn names the new tab with the lane key (or an explicit title) and can carry the first bounded task, so a lane starts titled with its first round already open; session_bridge then waits with the task omitted.',
     'For architect-to-implementer work across independent terminals, run an architect-owned feature loop: call sessions_list once, select an intended live terminal or use session_spawn(tool, cwd, key) with a lane-stable key when creation is authorized, use session_bridge(session, task) for one bounded implementation round at a time, then use session_loop_close only for the terminal accepted or paused transition.',
