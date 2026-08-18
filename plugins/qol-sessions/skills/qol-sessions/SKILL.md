@@ -28,6 +28,8 @@ Every round is fire-and-forget: deliver it (`session_spawn` with `background: tr
 
 Parallel lanes cost nothing extra: every delivery returns in seconds, so spawn or submit all lanes in one turn, end the turn, and collect each lane as its wake arrives. A submit refuses when a round is already pending on that session; that pending round is collected with `session_bridge` after its wake.
 
+When parallel lanes share one working tree, every lane brief states, and every lane obeys, an edit-only contract. Each lane edits only its explicitly assigned paths. Lanes never run build, test, lint, or format commands; they only read and edit. Lanes never commit, stage, stash, or push. The architect is the single verifier: compiles, tests, and commits after collecting all lanes. Parallel builds fight over the shared cargo target lock, and a lane's test run can observe another lane's half-applied edits. Verification is meaningful only once, centrally, after the fan-in.
+
 ## Required workflow dependencies
 
 Load `qol-workflow:git-trees` before choosing the implementation terminal and `qol-workflow:commit` before committing. Do not copy their procedures here. This workflow always selects their worktree route for delegated code changes and uses their canonical squash-to-one-commit integration and cleanup path before acceptance. Load any more specific target-repository skills they require.
