@@ -189,7 +189,7 @@
       "name": "qol-sessions",
       "description": "Architect-to-implementer feature loop for independent terminals with event-signalled rounds, explicit closure, and a canonical final report.",
       "source": "./plugins/qol-sessions",
-      "version": "0.5.36",
+      "version": "0.5.37",
       "author": {
         "name": "KMRH47"
       }
