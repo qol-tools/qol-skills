@@ -14,7 +14,7 @@ Every round is fire-and-forget: deliver it (`session_spawn` with `background: tr
 | Action | Purpose |
 |---|---|
 | `sessions_list()` | Discover live terminals and their stable session tokens |
-| `session_spawn(tool, cwd, key, model?, title?, task, background: true)` | Launch a keyed implementation terminal (titled, on the flash tier) or reuse its matching live session, then return its token; `model` names the lane's tier override, `title` names the tab (defaults to the lane key), `task` carries the first round, and `background: true` (always) queues the round at spawn time and returns before the lane is live |
+| `session_spawn(tool, cwd, key, model?, title?, group?, task, background: true)` | Launch a keyed implementation terminal (titled, on the flash tier) or reuse its matching live session, then return its token; `model` names the lane's tier override, `title` names the tab (defaults to the lane key), `group` tags a set of research lanes for grouped delivery (see below), `task` carries the first round, and `background: true` (always) queues the round at spawn time and returns before the lane is live |
 | `session_submit(session, task, acknowledge_marker?)` | Deliver one bounded round to a live lane and return immediately with the round open; used for every round after the first |
 | `session_bridge(session, acknowledge_marker?)` | Collect a round after its wake arrives, or recover an interrupted round; agents never pass `task` here - delivery belongs to spawn and submit |
 | `session_loop_close(session, completion_marker, outcome, landed, before, now, verification, remaining)` | Acknowledge the final round, end the loop, and render its canonical report |
@@ -29,6 +29,10 @@ Every round is fire-and-forget: deliver it (`session_spawn` with `background: tr
 Parallel lanes cost nothing extra: every delivery returns in seconds, so spawn or submit all lanes in one turn, end the turn, and collect each lane as its wake arrives. A submit refuses when a round is already pending on that session; that pending round is collected with `session_bridge` after its wake.
 
 When parallel lanes share one working tree, every lane brief states, and every lane obeys, an edit-only contract. Each lane edits only its explicitly assigned paths. Lanes never run build, test, lint, or format commands; they only read and edit. Lanes never commit, stage, stash, or push. The architect is the single verifier: compiles, tests, and commits after collecting all lanes. Parallel builds fight over the shared cargo target lock, and a lane's test run can observe another lane's half-applied edits. Verification is meaningful only once, centrally, after the fan-in.
+
+### Grouped research
+
+A multi-lane research fan-out toward one synthesis MUST pass the same `group` string to every member's `session_spawn`. When lanes share a group, the watcher writes each lane's scraped tail as a fragment under the sessions data dir at `groups/<group>/<session>.txt`, suppresses per-lane wakes, and when the last member completes it concatenates the fragments in session-token order into `groups/<group>/combined.md` and delivers exactly ONE wake naming that file. The architect resumes once, with the combined file, instead of once per lane. Groupless lanes keep per-lane wakes. Single-lane or implementation rounds stay ungrouped: `group` is for research fan-out into one synthesis only.
 
 ## Required workflow dependencies
 
