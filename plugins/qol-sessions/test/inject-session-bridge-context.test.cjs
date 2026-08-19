@@ -173,6 +173,8 @@ test('matching prompts receive the event-driven feature loop', () => {
         assert.match(context, /qol-workflow:git-trees/);
         assert.match(context, /qol-workflow:commit/);
         assert.match(context, /worktree route and canonical squash-to-one-commit/);
+        assert.match(context, /as a lane you edit only the paths the architect names and never run build, test, lint, format, or git commands/);
+        assert.match(context, /the architect verifies the whole round centrally/);
         assert.match(context, /session token as opaque and instance-bound/);
         assert.match(context, /never scan terminal sockets, override backend environment variables/);
         assert.match(context, /one bounded implementation round at a time/);

@@ -37,6 +37,7 @@ const ARCHITECT_RECEIVER_CONTEXT = [
 const BRIDGE_CONTEXT = [
     '[qol-sessions]',
     'Load qol-workflow:git-trees before choosing the implementation terminal and qol-workflow:commit before committing; delegated code changes always use their worktree route and canonical squash-to-one-commit integration and cleanup path.',
+    'As a lane you edit only the paths the architect names and never run build, test, lint, format, or git commands (no cargo build, cargo test, cargo clippy, cargo fmt, npm test, commit, stage, stash, or push), because the architect verifies the whole round centrally, once, after collecting every lane.',
     'Spawned lanes always run tool "pi" with model "deepseek-v4-flash", which is the flash tier on this host; tool "claude" is never spawned, the sessions.toml spawn_model entry is the fallback, and a lane that came up on the wrong tool or tier is closed and respawned before any work is bridged.',
     'The architect session runs on the flash tier and is the final reviewer: acceptance, verdict synthesis, and the final report happen in-session and are never delegated to a lane.',
     'session_spawn names the new tab with the lane key (or an explicit title) and can carry the first bounded task, so a lane starts titled with its first round already open; session_bridge then waits with the task omitted.',

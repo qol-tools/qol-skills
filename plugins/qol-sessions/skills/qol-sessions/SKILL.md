@@ -28,7 +28,7 @@ Every round is fire-and-forget: deliver it (`session_spawn` with `background: tr
 
 Parallel lanes cost nothing extra: every delivery returns in seconds, so spawn or submit all lanes in one turn, end the turn, and collect each lane as its wake arrives. A submit refuses when a round is already pending on that session; that pending round is collected with `session_bridge` after its wake.
 
-When parallel lanes share one working tree, every lane brief states, and every lane obeys, an edit-only contract. Each lane edits only its explicitly assigned paths. Lanes never run build, test, lint, or format commands; they only read and edit. Lanes never commit, stage, stash, or push. The architect is the single verifier: compiles, tests, and commits after collecting all lanes. Parallel builds fight over the shared cargo target lock, and a lane's test run can observe another lane's half-applied edits. Verification is meaningful only once, centrally, after the fan-in.
+Every spawned lane operates under an edit-only contract, unconditionally, no matter how many lanes are running or whether they share a working tree. A lane reads and edits only the paths the architect named, and never runs build, test, lint, format, or git commands: no cargo build, cargo test, cargo clippy, cargo fmt, no npm test, and no commit, stage, stash, or push. Parallel builds fight over the shared cargo target lock, and a lane's test run can observe another lane's half-applied edits, so verification is the architect's job and happens once, centrally, after the fan-in; a lane that runs tests is producing a result the architect must discard and re-run anyway.
 
 ### Grouped research
 
