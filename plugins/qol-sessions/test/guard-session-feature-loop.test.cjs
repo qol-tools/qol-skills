@@ -421,3 +421,62 @@ test('a pending checkpoint with a different driver does not permit the stop', ()
         fs.rmSync(root, { recursive: true });
     }
 });
+
+test('all checkpoints closed by this initiator permits the stop even after a file-redirected receipt', () => {
+    const entries = [
+        bridgeCall('call', null),
+        bridgeResult('result', 'call', '{"completed":true,"completion_marker":"QOL_BRIDGE_DONE_A"}'),
+        loopCloseCall('close', 'result'),
+        loopCloseResult(
+            'closed',
+            'close',
+            '<persisted-output>\nOutput too large (600.2KB). Full output saved to: /tmp/tool-results/close.json\n\nPreview (first 2KB):\n[{"loop_closed":true...</persisted-output>',
+        ),
+    ];
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'qol-sessions-store-'));
+    try {
+        const store = path.join(root, 'pending-bridge');
+        writeCheckpoint(store, 'named.json', {
+            session: 'named',
+            driver: 'architect-1',
+            completion_marker: 'QOL_BRIDGE_DONE_A',
+            completed: true,
+            closed: true,
+        });
+        writeCheckpoint(store, 'sib-one.json', {
+            session: 'sib-1',
+            driver: 'architect-1',
+            completion_marker: 'QOL_BRIDGE_DONE_B',
+            completed: true,
+            closed: true,
+        });
+        const result = runHook(entries, { checkpoint_dir: store, initiator: 'architect-1' });
+        assert.equal(result.status, 0);
+        assert.equal(result.stdout, '');
+    } finally {
+        fs.rmSync(root, { recursive: true });
+    }
+});
+
+test('a closed:false sibling without any pending round still blocks (no close evidence)', () => {
+    const entries = [
+        bridgeCall('call', null),
+        bridgeResult('result', 'call', '{"completed":true,"completion_marker":"QOL_BRIDGE_DONE_A"}'),
+    ];
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'qol-sessions-store-'));
+    try {
+        const store = path.join(root, 'pending-bridge');
+        writeCheckpoint(store, 'done.json', {
+            session: 'a',
+            driver: 'architect-1',
+            completion_marker: 'QOL_BRIDGE_DONE_C',
+            completed: true,
+            closed: false,
+        });
+        const result = runHook(entries, { checkpoint_dir: store, initiator: 'architect-1' });
+        assert.equal(result.status, 0);
+        assert.equal(JSON.parse(result.stdout).decision, 'block');
+    } finally {
+        fs.rmSync(root, { recursive: true });
+    }
+});

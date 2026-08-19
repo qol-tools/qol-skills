@@ -188,7 +188,7 @@ function checkpointDirs(payload) {
     return STORE_DIRS.map((resolve) => resolve());
 }
 
-function hasPendingCheckpoint(payload) {
+function ownedCheckpointScan(payload) {
     const initiator = typeof payload?.initiator === 'string' && payload.initiator ? payload.initiator : null;
     let storeDir = null;
     let names = [];
@@ -200,9 +200,13 @@ function hasPendingCheckpoint(payload) {
             if (names.length) break;
         }
     } catch {
-        return false;
+        return { storeDir: null, pending: false, anyClosed: false, allClosed: false };
     }
-    if (!storeDir) return false;
+    if (!storeDir) return { storeDir: null, pending: false, anyClosed: false, allClosed: false };
+    let ownedCount = 0;
+    let pending = false;
+    let anyClosed = false;
+    let allClosed = true;
     for (const name of names) {
         if (!name.endsWith('.json') || name.startsWith('role-')) continue;
         let parsed;
@@ -214,11 +218,24 @@ function hasPendingCheckpoint(payload) {
         } catch {
             continue;
         }
-        if (parsed?.completed !== false) continue;
         if (initiator && parsed.driver !== initiator) continue;
-        return true;
+        ownedCount += 1;
+        const isClosed = parsed?.closed === true;
+        if (parsed?.completed === false) pending = true;
+        if (isClosed) anyClosed = true;
+        if (!isClosed) allClosed = false;
     }
-    return false;
+    return { storeDir, pending, anyClosed, allClosed: ownedCount > 0 && allClosed };
+}
+
+function hasPendingCheckpoint(payload) {
+    return ownedCheckpointScan(payload).pending;
+}
+
+function loopClosedInStore(payload) {
+    const scan = ownedCheckpointScan(payload);
+    if (!scan.storeDir) return false;
+    return scan.allClosed || (!scan.pending && scan.anyClosed);
 }
 
 function main() {
@@ -226,6 +243,7 @@ function main() {
     if (payload?.hook_event_name && payload.hook_event_name !== 'Stop') return 0;
     const { phase, armed, closed } = loopState(payload);
     if (closed) return 0;
+    if (loopClosedInStore(payload)) return 0;
     if (phase === 'waiting') return 0;
     if (!armed) return 0;
     if (hasPendingCheckpoint(payload)) return 0;
@@ -254,6 +272,7 @@ module.exports = {
     featureLoopState,
     featureLoopPhase,
     hasPendingCheckpoint,
+    loopClosedInStore,
     loopState,
     loopPhase,
     readEntries,
