@@ -54,7 +54,7 @@ Portable is the default and the founding promise. qol may borrow host resources 
 
 Resident is explicit opt-in for a trusted personal host. It permits durable host policy that remains useful while qol-tray is not running. Every Resident mutation must snapshot prior state before applying, claim only the state qol introduced, remain visible and reversible, and restore the snapshot when residency is disabled or qol is uninstalled.
 
-Resident is selected separately on each host. The choice and its mutation journal are host-local and never sync with the profile. A synced profile may describe desired capabilities, but it must not silently convert another machine from Portable to Resident.
+Resident is selected separately on each host. The residency choice is a per-device entry inside the synced profile at `profile/<active>/core/residency/residency.json`, keyed by a machine-derived device id (`machine-id` on Linux, `IOPlatformUUID` on macOS); a missing entry means Portable. The mutation journal stays host-local and never syncs. A synced profile may describe desired capabilities, but it must not silently convert another machine from Portable to Resident: a foreign box has no entry under its own device id, so only an explicit local toggle (`qol-tray resident-policy residency --resident`) on that device can create one.
 
 ### Architecture contract
 
@@ -109,7 +109,7 @@ When evaluating a proposal:
 - What is each host mutation's declared lifetime? → **Require `PortableSession` or `ResidentPolicy`; reject implicit persistence.**
 - Can Portable restore after clean and abnormal termination? → **Add deterministic recovery, or leave the host unchanged.**
 - Does Resident snapshot, own, expose, reconcile, and reverse only its own state? → **Add the missing lifecycle, or reject the mutation.**
-- Is Resident opt-in host-local and excluded from profile sync? → **Fix the boundary before implementation.**
+- Are residency entries per-device-keyed and only ever written by an explicit toggle on that device? → **Fix the boundary before implementation.**
 - Does it assume software is pre-installed on the host? → **Bundle it, or redesign.**
 - Does it fail silently? → **Surface the failure.**
 - Does it slow down first-run? → **Justify or shrink.**
