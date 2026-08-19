@@ -85,19 +85,27 @@ function writeTranscript(entries) {
     return { root, transcript };
 }
 
+function writeCheckpoint(storeDir, name, record) {
+    fs.mkdirSync(storeDir, { recursive: true });
+    fs.writeFileSync(path.join(storeDir, name), JSON.stringify(record));
+}
+
 function runHook(entries, overrides = {}) {
     const { root, transcript } = writeTranscript(entries);
+    const emptyStore = fs.mkdtempSync(path.join(os.tmpdir(), 'guard-empty-store-'));
     try {
         return spawnSync('node', [HOOK], {
             input: JSON.stringify({
                 hook_event_name: 'Stop',
                 transcript_path: transcript,
+                checkpoint_dir: emptyStore,
                 ...overrides,
             }),
             encoding: 'utf8',
         });
     } finally {
         fs.rmSync(root, { recursive: true });
+        fs.rmSync(emptyStore, { recursive: true });
     }
 }
 
@@ -225,7 +233,7 @@ test('failed, malformed, or unrelated close receipts cannot end the loop', () =>
     }
 });
 
-test('a background bridge keeps the architect session open without resubmission', () => {
+test('a pending background round permits the stop; the watcher owns the wake', () => {
     const entries = [
         bridgeCall('call', null),
         bridgeResult(
@@ -238,25 +246,27 @@ test('a background bridge keeps the architect session open without resubmission'
     assert.equal(featureLoopPhase(entries), 'waiting');
     const result = runHook(entries, { stop_hook_active: true });
     assert.equal(result.status, 0);
-    const output = JSON.parse(result.stdout);
-    assert.match(output.reason, /qol sessions next/);
-    assert.match(output.reason, /Do not resubmit/);
+    assert.equal(result.stdout, '');
 });
 
-test('completed false and bridge errors pause automatic continuation', () => {
+test('completed false and bridge errors leave the loop armed and unreviewed', () => {
     const timedOut = [
         bridgeCall('call', null),
         bridgeResult('result', 'call', '{"completed":false,"completion_marker":"QOL_BRIDGE_DONE_123"}'),
     ];
     assert.equal(featureLoopPhase(timedOut), 'paused');
-    assert.equal(runHook(timedOut).stdout, '');
+    const timedResult = runHook(timedOut);
+    assert.equal(timedResult.status, 0);
+    assert.equal(JSON.parse(timedResult.stdout).decision, 'block');
 
     const failed = [
         bridgeCall('call', null),
         bridgeResult('result', 'call', 'transport failed', { isError: true }),
     ];
     assert.equal(featureLoopPhase(failed), 'paused');
-    assert.equal(runHook(failed).stdout, '');
+    const failedResult = runHook(failed);
+    assert.equal(failedResult.status, 0);
+    assert.equal(JSON.parse(failedResult.stdout).decision, 'block');
 });
 
 test('a host continuation outcome advances a waiting bridge', () => {
@@ -315,7 +325,99 @@ test('malformed or unrelated Stop payloads fail open', () => {
     const wrongEvent = runHook([], { hook_event_name: 'UserPromptSubmit' });
     assert.equal(wrongEvent.status, 0);
     assert.equal(wrongEvent.stdout, '');
-    assert.match(blockReason('review'), /session_loop_close with the final response session and completion_marker/);
-    assert.match(blockReason('review'), /session_loop_close with outcome paused/);
-    assert.match(blockReason('waiting'), /qol sessions next/);
+    assert.match(blockReason(), /session_loop_close with the final response session and completion_marker/);
+    assert.match(blockReason(), /session_loop_close with outcome paused/);
+    assert.doesNotMatch(blockReason(), /qol sessions next/);
+});
+
+test('review-phase plus a pending sibling checkpoint permits the stop', () => {
+    const entries = [
+        bridgeCall('call', null),
+        bridgeResult('result', 'call', '{"completed":true,"completion_marker":"QOL_BRIDGE_DONE_A"}'),
+    ];
+    assert.equal(featureLoopPhase(entries), 'review');
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'qol-sessions-store-'));
+    try {
+        const store = path.join(root, 'pending-bridge');
+        writeCheckpoint(store, 'role-lane.json', { role: 'lane' });
+        writeCheckpoint(store, 'sibling.json', {
+            session: 'sib',
+            driver: 'architect-1',
+            completion_marker: 'QOL_BRIDGE_DONE_B',
+            completed: false,
+            closed: false,
+        });
+        const result = runHook(entries, { checkpoint_dir: store, initiator: 'architect-1' });
+        assert.equal(result.status, 0);
+        assert.equal(result.stdout, '');
+    } finally {
+        fs.rmSync(root, { recursive: true });
+    }
+});
+
+test('review-phase with no pending checkpoint still blocks', () => {
+    const entries = [
+        bridgeCall('call', null),
+        bridgeResult('result', 'call', '{"completed":true,"completion_marker":"QOL_BRIDGE_DONE_A"}'),
+    ];
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'qol-sessions-store-'));
+    try {
+        const store = path.join(root, 'pending-bridge');
+        fs.mkdirSync(store, { recursive: true });
+        writeCheckpoint(store, 'done.json', {
+            session: 'a',
+            driver: 'architect-1',
+            completion_marker: 'QOL_BRIDGE_DONE_C',
+            completed: true,
+            closed: false,
+        });
+        const result = runHook(entries, { checkpoint_dir: store, initiator: 'architect-1' });
+        assert.equal(result.status, 0);
+        assert.equal(JSON.parse(result.stdout).decision, 'block');
+    } finally {
+        fs.rmSync(root, { recursive: true });
+    }
+});
+
+test('unreadable or missing checkpoint_dir falls back to blocking', () => {
+    const entries = [
+        bridgeCall('call', null),
+        bridgeResult('result', 'call', '{"completed":true,"completion_marker":"QOL_BRIDGE_DONE_A"}'),
+    ];
+    const missing = runHook(entries, { checkpoint_dir: '/nonexistent/qol-pending-bridge', initiator: 'architect-1' });
+    assert.equal(missing.status, 0);
+    assert.equal(JSON.parse(missing.stdout).decision, 'block');
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'qol-sessions-store-'));
+    try {
+        const notADir = path.join(root, 'not-a-dir');
+        fs.writeFileSync(notADir, 'x');
+        const unreadable = runHook(entries, { checkpoint_dir: notADir, initiator: 'architect-1' });
+        assert.equal(unreadable.status, 0);
+        assert.equal(JSON.parse(unreadable.stdout).decision, 'block');
+    } finally {
+        fs.rmSync(root, { recursive: true });
+    }
+});
+
+test('a pending checkpoint with a different driver does not permit the stop', () => {
+    const entries = [
+        bridgeCall('call', null),
+        bridgeResult('result', 'call', '{"completed":true,"completion_marker":"QOL_BRIDGE_DONE_A"}'),
+    ];
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'qol-sessions-store-'));
+    try {
+        const store = path.join(root, 'pending-bridge');
+        writeCheckpoint(store, 'foreign.json', {
+            session: 'other',
+            driver: 'other-architect',
+            completion_marker: 'QOL_BRIDGE_DONE_D',
+            completed: false,
+            closed: false,
+        });
+        const result = runHook(entries, { checkpoint_dir: store, initiator: 'architect-1' });
+        assert.equal(result.status, 0);
+        assert.equal(JSON.parse(result.stdout).decision, 'block');
+    } finally {
+        fs.rmSync(root, { recursive: true });
+    }
 });

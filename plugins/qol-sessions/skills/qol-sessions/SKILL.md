@@ -162,9 +162,9 @@ The architect handles the wake exactly like a bridge return: collect the lane wi
 The CLI-session integration installs the continuation hooks. Agents never create, spawn, or poll hooks themselves.
 
 - Delivering a round (`session_spawn` with `background: true`, or `session_submit`) arms the feature loop; collecting with `session_bridge` keeps it armed.
-- A pending round lives in the lane and its watcher, never in an open architect tool call; the architect turn ends after delivery.
-- A completed round keeps the loop armed through personal review. A lifecycle-capable host queues another architect turn after the agent settles; a Stop-capable host blocks the round-boundary response.
-- A timeout or bridge error pauses automatic continuation because replay could duplicate work.
+- A pending round lives in the lane and its watcher, never in an open architect tool call; the architect turn ends after delivery. A pending, watcher-owned round does not block the Stop guard: the reasoning loop ends and the watcher's wake is the only resume signal.
+- A completed round keeps the loop armed through personal review. A lifecycle-capable host queues another architect turn after the agent settles; a Stop-capable host blocks the round-boundary response because a completed round may not have been collected or reviewed yet.
+- A timeout or bridge error pauses automatic continuation because replay could duplicate work; the round is delivered but no longer watcher-pending, so the Stop guard still blocks until the architect drives the deterministic recovery.
 - Loop state is host-session-local and follows the active transcript branch. An abandoned branch must not arm the current branch.
 
 `session_loop_close` is the only termination path. It returns the canonical `What landed / Before / Now / Verification / Remaining` report. A receipt with `loop_closed: true` closes the loop and disarms the Stop guard immediately; the architect's final response may summarize the report instead of re-emitting it byte-verbatim. Never call it to accept one implementation round; acceptance covers the user's complete request. Prose or lifecycle markers cannot close the loop.
