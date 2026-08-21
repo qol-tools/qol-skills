@@ -76,6 +76,23 @@ three states: light, dark, and unfocused (a token swap over either theme).
 | `--cast` | `rgba(60,48,26,.11)` | `rgba(0,0,0,.45)` | small shadow |
 | `--float` | `0 2px 6px rgba(60,48,26,.1), 0 18px 44px -16px rgba(60,48,26,.34)` | `0 2px 6px rgba(0,0,0,.5), 0 18px 44px -14px rgba(0,0,0,.85)` | window elevation |
 
+### Amber is the default accent, not a constant
+
+The product ships six accent presets per theme and the user picks one, so the
+`--acc` values above are the **default preset**, not a fixed colour. Every
+accent-derived token is a function of whatever accent is active: `--acc-ink`,
+`--acc-bg`, `--accsoft`, `--acchalo` and the focus ring. Nothing else in the
+system is accent-derived; the semantic hues, the washes and the hairlines stay
+put whichever accent is chosen, which is what keeps state readable in all six.
+
+Two consequences. A preset is only shippable if its derived tokens still clear
+the contrast floors, so the floors are enforced per preset rather than once for
+amber. And the preset keys are slots rather than colour names: the key `amber`
+carries a different hue and label in each theme, which is how the light theme
+ended up rendering the default accent as the blue `Harbour` (`#2f74a0`) while
+its actual amber sits under the key `violet`, labelled `Brass`. That is a bug
+against this spec, not a design choice.
+
 Gamepad diagram only, four face-button hues that are never the accent:
 `--pad-a #2f7350 / #5cbf8e`, `--pad-b #b5504a / #e08d82`,
 `--pad-x #3a639b / #7fb0e8`, `--pad-y #a8760f / #e0ac3f`.
