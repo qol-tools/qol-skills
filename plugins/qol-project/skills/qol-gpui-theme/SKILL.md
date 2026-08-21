@@ -199,12 +199,10 @@ fix silently:
   a blue-grey; V2 asks for `#16171a`.
 - **The dark accent differs.** `orange_400` is `0xffb454`; V2 asks for `#e0ac3f`.
 - **Light is already close.** `night_900` `0xfaf7f0` against V2's `#fffefb`.
-- **`SystemPalette` has 16 slots; V2 uses about 30 tokens.** Missing entirely:
-  the washes, the two hairline weights, `accsoft` / `acchalo`, `--mark`, the
-  gamepad hues, and the unfocused swap.
-- **The height ladder in `libs/qol-gpui/src/kit.rs` is a different ladder.**
-  `ROW_HEIGHT 44`, `ROW_DESCRIBED_HEIGHT 58`, `HEADER_HEIGHT 42`, `GUTTER 16`
-  against V2's 52, 52, 64 and 20.
+- **The gamepad hues and the unfocused swap have no home yet.** `SystemPalette`
+  carries the solids and `WashPalette` carries the translucent tokens, built as
+  `CssRgba` pairs whose `packed()` yields the `0xRRGGBBAA` word gpui wants. The
+  accent-derived washes follow whichever accent is active.
 
 Closing any of these is a deliberate piece of work with a visible result, so it is
 proposed, not slipped into an unrelated change.
