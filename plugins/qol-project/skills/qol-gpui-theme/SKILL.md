@@ -10,7 +10,12 @@ says how a surface is wired, summoned and dismissed. This skill says what it loo
 like once it is on screen.
 
 Visual reference deck, every surface and every state drawn at real size:
+`reference/bone-and-amber-deck.html` beside this file, also published at
 https://claude.ai/code/artifact/0eeae966-f0e2-4a88-9c2f-2bcf7280f622
+
+The plan for closing the gap between this spec and the code, with what five recon
+lanes found in the tree, is `reference/v2-migration-plan.html`, published at
+https://claude.ai/code/artifact/ef0b287c-2827-4de6-97a0-7dda581f0513
 
 The deck is the picture. This file is the contract. When they disagree, this file
 wins and the deck gets redrawn.
