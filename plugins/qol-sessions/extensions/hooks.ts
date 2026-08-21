@@ -284,30 +284,79 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
     name: "session_spawn",
     label: "Spawn a tool session",
     description:
-      "Launch a tagged harness for a registered tool in a new terminal tab, or reuse the single live session already carrying the key when its tool matches. The key makes retries idempotent: a key held by a different tool conflicts, multiple matches are ambiguous, and a launched session is returned only once it is live, tagged, and described as the requested tool. Surface is tab or os-window; the default comes from the spawn_surface config, then tab. Delivery is background-only: the required task is embedded in the launch and the round is open when the call returns; lanes always close when the watcher confirms completion, and sessions without a spawn identity are never closed.",
+      "Launch a tagged harness for a registered tool in a new terminal tab, or reuse the single live session already carrying the key when its tool matches. The key makes retries idempotent: a key held by a different tool conflicts, multiple matches are ambiguous, and a launched session is returned only once it is live, tagged, and described as the requested tool. Surface is tab or os-window; the default comes from the spawn_surface config, then tab. Delivery is background-only: the task is embedded in the launch and the round is open when the call returns; lanes always close when the watcher confirms completion, and sessions without a spawn identity are never closed. Decide up front how many lanes the work needs: one lane takes key and task, while a set takes `lanes`, one entry per lane, and comes back as a single combined report instead of one wake per lane.",
     parameters: Type.Object({
       cwd: Type.String({ description: "Working directory for the spawned session" }),
       group: Type.Optional(Type.String({ description: "Optional group name; registers the lane as a member of a grouped-research set so completed rounds aggregate into one combined wake under the sessions data dir when every member completes" })),
-      key: Type.String({ description: "Stable spawn key; required so retries are idempotent" }),
+      key: Type.Optional(Type.String({ description: "Stable spawn key for a single lane; makes retries idempotent. Use `lanes` instead when the work needs more than one" })),
+      lanes: Type.Optional(Type.Array(Type.Object({
+      key: Type.String({ description: "Stable spawn key for this lane; unique within the set" }),
+      task: Type.String({ description: "Bounded first-round task for this lane" }),
+      title: Type.Optional(Type.String({ description: "Tab title for this lane; defaults to its key" })),
+    }), { description: "Whole set of lanes to launch in one call, one entry per lane, sized to the work the set has to cover. Replaces key, task and title. Two or more lanes are grouped automatically, so the set wakes you once with one combined report instead of once per lane; pass `group` only to name that set yourself. Spawning a second ungrouped lane while another is still running is refused for exactly this reason" })),
       model: Type.Optional(Type.String({ description: "Model override for the spawned session (e.g. deepseek-v4-pro); beats the spawn_model config" })),
       resume: Type.Optional(Type.Boolean({ description: "Force a resume of the harness's persisted session for this key when a new terminal is launched. Resume is automatic when the spawn ledger holds a session id for the key (same tool and cwd); resume: false opts out. The spawn outcome reports resume and resume_detail" })),
       surface: Type.Optional(Type.String({ description: "tab or os-window; defaults to the spawn_surface config, then tab" })),
-      task: Type.String({ description: "Required bounded first-round task embedded in the launch; the round is open when the call returns and session_bridge (no task) waits for it" }),
+      task: Type.Optional(Type.String({ description: "Bounded first-round task embedded in the launch; the round is open when the call returns and session_bridge (no task) waits for it. Required for a single lane; use `lanes` instead when the work splits across several" })),
       title: Type.Optional(Type.String({ description: "Tab title for the spawned session; defaults to the lane key" })),
       tool: Type.String({ description: "Registered CLI tool to spawn (codex, claude, pi, kimi)" }),
     }),
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const args = ["spawn", "--tool", params.tool, "--cwd", params.cwd, "--key", params.key];
+      const args = ["spawn", "--tool", params.tool, "--cwd", params.cwd];
       if (params.surface != null) args.push("--surface", params.surface);
       if (params.model != null) args.push("--model", params.model);
+      if (params.group != null) args.push("--group", params.group);
+      if (params.resume === true) args.push("--resume");
+      if (Array.isArray(params.lanes)) {
+        args.push("--lanes", JSON.stringify(params.lanes));
+        const stdout = await run(args, 180_000, undefined, signal);
+        const outcome = JSON.parse(stdout);
+        for (const lane of outcome.lanes) {
+          await recordWatchedToken(ctx.sessionManager.getSessionId(), lane.session);
+        }
+        await startWatcher(ctx);
+        const suffix = outcome.combined_report
+          ? `they are grouped as ${outcome.group} and you will be woken once with one combined report`
+          : "you will be woken when it completes";
+        const text = `spawned ${outcome.lanes.length} lane(s) in the background (${params.tool}); ${suffix}`;
+        return { content: [{ type: "text", text }], details: { outcome } };
+      }
+      args.push("--key", params.key);
       if (params.title != null) args.push("--title", params.title);
       args.push("--task", params.task, "--background");
-      if (params.resume === true) args.push("--resume");
       const stdout = await run(args, 60_000, undefined, signal);
       const outcome = JSON.parse(stdout);
       await recordWatchedToken(ctx.sessionManager.getSessionId(), outcome.session);
       await startWatcher(ctx);
       const text = `spawned session ${outcome.session} in the background (${outcome.tool}, key ${outcome.key}); round queued, you will be woken when it completes`;
+      return { content: [{ type: "text", text }], details: { outcome } };
+    },
+  });
+
+  pi.registerTool({
+    name: "session_fork",
+    label: "Fork a detached architect",
+    description:
+      "Launch a detached architect that owns a problem end to end and never reports back. Use it when a second problem surfaces mid-session and chasing it yourself would cost you the thread you are already holding: fork it away and carry on. The fork is the root of a new tree, not a lane - no round is opened on it, no completion marker is embedded in its launch, and session_bridge refuses it. The brief is written to a file under the sessions data dir and the launch points the fork at that path, so a long problem statement survives argv limits and stays readable after the screen scrolls. A fork carries its own model and, where the tool supports one, its own effort level, so a problem that needs a stronger tier than the forking session gets one. The fork is recorded and listable; nothing else links it back.",
+    parameters: Type.Object({
+      brief: Type.String({ description: "Required problem statement. Write it for someone with none of your context: what is wrong, what you already know, what done looks like" }),
+      cwd: Type.String({ description: "Working directory for the detached architect" }),
+      effort: Type.Optional(Type.String({ description: "Reasoning effort for tools that take one (claude): low, medium, high, xhigh, max" })),
+      key: Type.String({ description: "Stable, unused key naming the new tree; a key already held by a live session is refused because a fork always starts fresh" }),
+      model: Type.String({ description: "Required model for the fork; assess the problem and pick the tier that can finish it rather than inheriting your own" }),
+      surface: Type.Optional(Type.String({ description: "tab or os-window; defaults to the spawn_surface config, then tab" })),
+      title: Type.Optional(Type.String({ description: "Tab title for the fork; defaults to the key" })),
+      tool: Type.Optional(Type.String({ description: "Registered CLI tool to fork; defaults to claude" })),
+    }),
+    async execute(_toolCallId, params, signal, _onUpdate) {
+      const args = ["fork", "--tool", params.tool ?? "claude", "--cwd", params.cwd, "--key", params.key, "--model", params.model];
+      if (params.effort != null) args.push("--effort", params.effort);
+      if (params.title != null) args.push("--title", params.title);
+      if (params.surface != null) args.push("--surface", params.surface);
+      args.push("--brief", params.brief);
+      const stdout = await run(args, 60_000, undefined, signal);
+      const outcome = JSON.parse(stdout);
+      const text = `forked detached architect ${outcome.session} (${outcome.tool} ${outcome.model}${outcome.effort ? " " + outcome.effort : ""}, key ${outcome.key}); it owns the brief at ${outcome.brief} and never reports back`;
       return { content: [{ type: "text", text }], details: { outcome } };
     },
   });
