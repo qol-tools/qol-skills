@@ -60,7 +60,7 @@ h1 { font-size: 34px; line-height: 1.15; margin: 12px 0 10px; letter-spacing: -.
 .rail .item { position: relative; height: var(--h-ctl); display: flex; align-items: center; padding: 0 12px; border-radius: var(--r2); font-size: var(--fs-md); color: var(--sidetx); }
 .rail .item.on { background: var(--wash); color: var(--ink); font-weight: 600; }
 .rail .item.on::before { content: ""; position: absolute; width: var(--mark); border-radius: 999px; background: var(--acc); }
-.design .rail .item.on::before { left: -6px; top: 0; bottom: 0; }
+.design .rail .item.on::before { left: 0; top: 0; bottom: 0; }
 .current .rail .item.on::before { left: 0; top: 8px; bottom: 8px; }
 .main { flex: 1; min-width: 0; background: var(--pane); display: flex; flex-direction: column; }
 .search { flex: none; display: flex; align-items: center; gap: 10px; height: var(--h-ctl); margin: 20px 20px 0; padding: 0 var(--padx); border-radius: var(--r4); background: var(--fill); border: 1px solid var(--hair); font-size: var(--fs-md); color: var(--ink2); }
@@ -511,14 +511,14 @@ body { padding-bottom: 200px; }
           <div class="lrow h32"><span class="ic" style="background:#5c626d;border-color:transparent">&#9881;</span><span class="nm">Terminal preferences</span><span class="meta">pref</span></div>
           <div class="lrow h32"><span class="ic" style="background:#8a6208;border-color:transparent">q</span><span class="nm">kitty @ set-colors</span><span class="meta">cmd</span></div>
         </div>
-        <div class="hints" data-gpui="hint bar | launcher/src/ui/layout.rs | deck open / reveal / dismiss &middot; code open / mode / dismiss"><span><span class="k">&crarr;</span>open</span><span><span class="k">&#8997;&crarr;</span>reveal</span><span><span class="k">esc</span>dismiss</span></div>
+        <div class="hints" data-gpui="hint bar | launcher/src/ui/view.rs | open / mode / dismiss on both sides"><span><span class="k">&crarr;</span>open</span><span><span class="k">&#8677;</span>mode</span><span><span class="k">esc</span>dismiss</span></div>
       </div>
       <span class="cap">500 wide &middot; 8 rows max &middot; icon slot &middot; kind column &middot; hint bar</span>
     </div>
     <div class="side">
       <span class="who c">Today &middot; capture</span>
       <img src="assets/launcher-current.png" width="504" height="372" style="display:block" alt="The real launcher window on the host, filtered to the query term">
-      <span class="cap">real capture &middot; native 1:1 &middot; 504 &times; 372 &middot; nine rows, so the 32px row height holds &middot; hints read open / mode / dismiss where the deck says open / reveal / dismiss &middot; the selected row carries an amber stub at the window edge that the deck does not have, and highlights the matched letters in accent, which the deck does not specify</span>
+      <span class="cap">real capture &middot; native 1:1 &middot; 504 &times; 372 &middot; nine rows, so the 32px row height holds &middot; hints read open / mode / dismiss on both sides &middot; the selected row carries the full-height accent marker every other qol surface uses, and highlights the matched letters in accent, which the deck does not specify</span>
     </div>
     </div>
     <div class="cmprow">
@@ -554,7 +554,7 @@ body { padding-bottom: 200px; }
     <div class="right">
       <div class="geo">
         BASE_CARD_WIDTH 220 &times; scale &middot; 16:9 preview<br>
-        HOTKEY_HINTS_HEIGHT 48 &middot; scale 0.5 &hellip; 2.5<br>
+        HOTKEY_HINTS_HEIGHT 40 &middot; scale 0.5 &hellip; 2.5<br>
         alt-tab/src/picker/layout.rs
       </div>
     </div>
@@ -578,7 +578,7 @@ body { padding-bottom: 200px; }
               <div class="strip"><span class="ic"></span><span class="lb">Messages</span></div>
             </div>
           </div>
-          <div class="hints" style="justify-content:center;gap:26px" data-gpui="hotkey hints | HOTKEY_HINTS_HEIGHT 48 | alt-tab/src/picker/layout.rs | deck three bindings, centred &middot; code not yet audited">
+          <div class="hints" style="justify-content:center;gap:26px" data-gpui="hotkey hints | HOTKEY_HINTS_HEIGHT 40 | alt-tab/src/picker/layout.rs | deck three bindings, centred &middot; code not yet audited">
             <span><span class="k">&#8997;&#8677;</span>next</span>
             <span><span class="k">&#8997;&#8679;&#8677;</span>previous</span>
             <span><span class="k">W</span>close window</span>
@@ -608,7 +608,7 @@ body { padding-bottom: 200px; }
     </div>
     <div class="right">
       <div class="geo">
-        360 &times; 400 &middot; row 44 &middot; CORNER_MARGIN 16<br>
+        360 &times; 400 &middot; row 48 &middot; CORNER_MARGIN 16<br>
         collapsed STRIP_HEIGHT 32<br>
         cli-sessions/src/ui/
       </div>
@@ -661,7 +661,7 @@ body { padding-bottom: 200px; }
     <div class="right">
       <div class="geo">
         WINDOW_WIDTH 460 &middot; WINDOW_HEIGHT 540<br>
-        SEARCH_H 40 &middot; ROW_H 38 &middot; FOOTER_H 34<br>
+        SEARCH_H 40 &middot; ROW_H 40 &middot; FOOTER_H 40<br>
         removeapp/src/ui/mod.rs
       </div>
     </div>

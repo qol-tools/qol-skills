@@ -75,6 +75,36 @@ table.plan td:first-child { font-weight: 600; }
 table.plan td .n { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12.5px; color: var(--tx-3); white-space: nowrap; }
 .tw { overflow-x: auto; }
 .all { color: var(--accent); font-weight: 600; }
+.shotprev { --thumb-w: 360px; --thumb-h: 240px; --shot-circ: 46px; --shot-gap: 14px; --shot-lab: 30px; --shot-n: 5; --armed: 0; }
+.fx { display: flex; align-items: center; gap: 7px; }
+.fx8 { display: flex; align-items: center; gap: 8px; }
+.fx10 { display: flex; align-items: center; gap: 10px; }
+.g7 { gap: 7px; }
+.g14 { gap: 14px; }
+.grow { flex: 1; min-width: 0; }
+.g132 { flex: 1; min-width: 132px; }
+.fl1 { flex: 1; }
+.w100 { width: 100%; }
+.m0 { margin: 0; }
+.mla { margin-left: auto; }
+.mt3 { margin-top: var(--sp3); }
+.p12 { padding: 12px; }
+.h230 { height: 230px; }
+.mut { color: var(--ink-2); }
+.neg { color: var(--neg); }
+.wrn { color: var(--wrn-ink); }
+.fmd { font-size: var(--fs-md); }
+.faint { opacity: .62; }
+.thumbwrap { position: relative; width: var(--thumb-w); height: var(--thumb-h); }
+.shotcircles { position: absolute; left: 0; right: 0; top: calc(var(--thumb-h) - var(--shot-circ) / 2); display: flex; justify-content: center; gap: var(--shot-gap); }
+.shotlab { position: relative; height: var(--shot-lab); width: var(--thumb-w); margin-top: calc(var(--shot-circ) / 2 + 9px); }
+.shotlab .act { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); white-space: nowrap; }
+.shotlab .sz { position: absolute; top: 50%; right: 0; transform: translateY(-50%); }
+.chip.sm { height: 22px; font-size: 11px; }
+.well.flat { margin: 0; gap: 8px; }
+.rgrid { --fromw: 88px; --tow: 124px; }
+.check { margin-left: auto; color: var(--acc-ink); font-size: 11px; }
+.actrow { margin-left: auto; display: flex; gap: 9px; }
 .s {
   --pane: #fffefb; --pane-2: #faf8f3; --pane-3: #efece4;
   --edge: #e2ded4;
@@ -123,7 +153,6 @@ table.plan td .n { font-family: "IBM Plex Mono", ui-monospace, monospace; font-s
 }
 .s * { box-sizing: border-box; }
 .spec { padding: 22px 24px; box-shadow: none; }
-.spec.circles { padding: 0; border: 0; background: transparent; box-shadow: none; }
 .w760 { width: 760px; } .w680 { width: 680px; } .w520 { width: 520px; }
 .w500 { width: 500px; } .w460 { width: 460px; } .w360 { width: 360px; } .w340 { width: 340px; }
 .band { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 0 var(--gut); height: var(--h-band); background: var(--pane-2); border-bottom: 1px solid var(--hair); }
@@ -139,10 +168,9 @@ table.plan td .n { font-family: "IBM Plex Mono", ui-monospace, monospace; font-s
 .body { display: flex; align-items: stretch; min-height: 0; background: var(--pane); }
 .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .rail { width: 196px; flex: none; background: var(--side); border-right: 1px solid var(--hair); display: flex; flex-direction: column; padding: 14px 10px; gap: 2px; }
-.rail .cap, .edlab, .rulehead, .dlab { font-size: var(--fs-cap); color: var(--ink-3); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
-.rail .cap { padding: 6px 12px 8px; }
+.edlab, .rulehead, .dlab { font-size: var(--fs-cap); color: var(--ink-3); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
 .rail .item { position: relative; height: var(--h-ctl); display: flex; align-items: center; padding: 0 12px; border-radius: var(--r2); font-size: var(--fs-md); color: var(--sidetx); }
-.rail .item.on::before { content: ""; position: absolute; left: -6px; top: 9px; bottom: 9px; width: var(--mark); border-radius: 2px; background: var(--acc); }
+.rail .item.on::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: var(--mark); border-radius: 2px; background: var(--acc); }
 .rail .item.on { background: var(--wash-sel); color: var(--ink); font-weight: 600; }
 .plane { background: var(--pane); padding: var(--gut); display: flex; flex-direction: column; gap: 28px; flex: 1; }
 .group { display: flex; flex-direction: column; gap: 2px; }
@@ -156,11 +184,12 @@ table.plan td .n { font-family: "IBM Plex Mono", ui-monospace, monospace; font-s
 .row.sel::before, .rule.sel::before, .lrow.sel::before,
 .row.warn::before, .rule.warn::before, .lrow.warn::before,
 .row.bad::before, .rule.bad::before, .lrow.bad::before {
-  content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: var(--mark); border-radius: 2px;
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: var(--mark); border-radius: 2px;
 }
 .row.sel::before, .rule.sel::before, .lrow.sel::before { background: var(--acc); }
 .row.warn::before, .rule.warn::before, .lrow.warn::before { background: var(--wrn); }
 .row.bad::before, .rule.bad::before, .lrow.bad::before { background: var(--neg); }
+.row.sel, .rule.sel, .lrow.sel, .row.warn, .rule.warn, .lrow.warn, .row.bad, .rule.bad, .lrow.bad { overflow: hidden; }
 .row .lg { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 3px; }
 .row .val { flex: none; width: 150px; display: flex; align-items: center; justify-content: flex-end; }
 .row .lab { font-size: var(--fs-lg); font-weight: 500; letter-spacing: -.012em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -220,7 +249,6 @@ table.plan td .n { font-family: "IBM Plex Mono", ui-monospace, monospace; font-s
 .combo.out { background: var(--acc-bg); border-color: var(--accsoft); }
 .combo.out > span { color: var(--acc-ink); font-weight: 600; }
 .combo.out > span + span { border-left-color: var(--accsoft); }
-.combo > span.ar { color: var(--acc-ink); }
 .rule .scope { background: transparent; border-color: transparent; justify-content: flex-start; min-width: 128px; }
 .rule.sel .scope { background: var(--fill); border-color: var(--hair); }
 .disc { color: var(--ink-3); font-size: 15px; width: 18px; text-align: center; flex: none; margin-left: auto; }
@@ -246,9 +274,7 @@ table.plan td .n { font-family: "IBM Plex Mono", ui-monospace, monospace; font-s
 .field { height: var(--h-ctl); padding: 0 12px; display: flex; align-items: center; background: var(--pane); border: 1px solid var(--hair2); border-radius: var(--r2); font-family: "SF Mono", ui-monospace, monospace; font-size: var(--fs-md); color: var(--ink); }
 .field .cur { width: 1.5px; height: 16px; background: var(--acc); margin-left: 2px; }
 .kc { display: inline-flex; align-items: center; justify-content: center; min-width: var(--h-el); height: var(--h-el); padding: 0 8px; background: var(--fill); border: 1px solid var(--hair2); border-radius: var(--r1); box-shadow: 0 1px 2px var(--cast); font-family: "SF Mono", ui-monospace, monospace; font-size: var(--fs-sm); color: var(--ink); flex: none; }
-.kc.mod { color: var(--ink-2); }
 .kc.out { background: var(--acc-bg); border-color: var(--accsoft); box-shadow: 0 1px 3px var(--acchalo); color: var(--acc-ink); font-weight: 600; }
-.plus { color: var(--ink-3); font-size: 11px; width: 9px; text-align: center; flex: none; line-height: 1; }
 .rule { position: relative; display: flex; align-items: center; gap: 7px; min-height: var(--h-rule); padding: 8px var(--padx); border-radius: var(--r3); }
 .rule .side { display: flex; align-items: center; gap: 5px; flex: none; }
 .rule .side.from { width: var(--fromw, 128px); flex: none; }
@@ -259,7 +285,6 @@ table.plan td .n { font-family: "IBM Plex Mono", ui-monospace, monospace; font-s
 .rulehead { display: flex; align-items: center; gap: 7px; padding: 0 var(--padx) 7px; }
 .rulehead .hfrom { width: var(--fromw, 128px); flex: none; }
 .rulehead .hto { width: var(--tow, 160px); flex: none; }
-.rule .sp { flex: 1; }
 .rule .x { color: var(--ink-3); font-size: var(--fs-md); width: 22px; text-align: center; flex: none; }
 .scope { display: inline-flex; align-items: center; justify-content: center; min-width: 72px; height: 24px; font-size: var(--fs-cap); color: var(--ink-2); background: var(--fill); border: 1px solid var(--hair); border-radius: var(--r1); padding: 0 8px; flex: none; }
 .addrow { display: flex; align-items: center; gap: 9px; min-height: 40px; margin-top: 8px; padding: 8px var(--padx); border: 1px dashed var(--hair2); border-radius: var(--r2); color: var(--acc-ink); font-size: var(--fs-md); font-weight: 600; }
@@ -372,9 +397,8 @@ table.plan td .n { font-family: "IBM Plex Mono", ui-monospace, monospace; font-s
 .pcard .pt { font-size: 16px; font-weight: 650; letter-spacing: -.018em; }
 .pcard .pk { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11.5px; color: var(--accent); }
 .pcard p { margin: 0; font-size: 13.5px; color: var(--tx-2); line-height: 1.45; max-width: 52ch; }
-.thumb { width: 360px; height: 240px; background: linear-gradient(135deg, #343945, #4a4a52 55%, #57503f); display: flex; align-items: center; justify-content: center; }
-.circles { display: flex; flex-direction: column; gap: 12px; }
-.circ { width: 46px; height: 46px; background: var(--pane); border: 1px solid var(--hair); border-radius: 999px; box-shadow: var(--float); display: flex; align-items: center; justify-content: center; color: var(--ink-2); }
+.thumb { width: var(--thumb-w, 360px); height: var(--thumb-h, 240px); border-radius: 3px; background: linear-gradient(135deg, #343945, #4a4a52 55%, #57503f); display: flex; align-items: center; justify-content: center; }
+.circ { width: var(--shot-circ, 46px); height: var(--shot-circ, 46px); background: var(--pane); border: 1px solid var(--hair); border-radius: 999px; box-shadow: var(--float); display: flex; align-items: center; justify-content: center; color: var(--ink-2); }
 .circ svg { width: 19px; height: 19px; }
 .circ.pri { background: var(--accsolid); border-color: var(--accsolid); color: var(--onsolid); box-shadow: var(--float); }
 .region { width: 440px; height: 260px; background: linear-gradient(130deg, #2e333c, #434752 55%, #514a3a); border-radius: 0; position: relative; overflow: hidden; }
@@ -468,7 +492,7 @@ unit 4 &middot; gutter 20 &middot; pad 16<br>
 
     <div class="shot">
       <div class="s spec" style="flex-direction:row;gap:8px">
-        <span class="chip"><span class="num strong">13</span><span style="color:var(--ink-2)">apps</span><span class="caret">&#9662;</span></span>
+        <span class="chip"><span class="num strong">13</span><span class="mut">apps</span><span class="caret">&#9662;</span></span>
         <span class="chip">Amber<span class="caret">&#9662;</span></span>
       </div>
       <span class="cap">value chip &middot; 28 tall</span>
@@ -492,10 +516,10 @@ unit 4 &middot; gutter 20 &middot; pad 16<br>
 
     <div class="shot">
       <div class="s spec" style="flex-direction:row;gap:18px;align-items:center">
-        <span style="display:flex;align-items:center;gap:7px"><span class="st ok"></span><span class="t12">running</span></span>
-        <span style="display:flex;align-items:center;gap:7px"><span class="st busy"></span><span class="t12">waiting</span></span>
-        <span style="display:flex;align-items:center;gap:7px"><span class="st err"></span><span class="t12">failed</span></span>
-        <span style="display:flex;align-items:center;gap:7px"><span class="st idle"></span><span class="t12">idle</span></span>
+        <span class="fx"><span class="st ok"></span><span class="t12">running</span></span>
+        <span class="fx"><span class="st busy"></span><span class="t12">waiting</span></span>
+        <span class="fx"><span class="st err"></span><span class="t12">failed</span></span>
+        <span class="fx"><span class="st idle"></span><span class="t12">idle</span></span>
       </div>
       <span class="cap">status dot &middot; semantic, never the accent</span>
     </div>
@@ -509,7 +533,7 @@ unit 4 &middot; gutter 20 &middot; pad 16<br>
 
     <div class="shot">
       <div class="s dd" style="box-shadow:var(--float)">
-        <div class="it on"><span class="sw3" style="background:var(--acc)"></span>Amber<span style="margin-left:auto;color:var(--acc-ink);font-size:11px">&#10003;</span></div>
+        <div class="it on"><span class="sw3" style="background:var(--acc)"></span>Amber<span class="check">&#10003;</span></div>
         <div class="it"><span class="sw3" style="background:#3fa06a"></span>Green</div>
         <div class="it"><span class="sw3" style="background:#3f97a0"></span>Cyan</div>
       </div>
@@ -687,11 +711,10 @@ no literal colour in a component<br>
             <div class="t18">Key Remap</div>
             <div class="t12">Ctrl behaves like Cmd, everywhere except your terminals</div>
           </div>
-          <span class="chip"><span class="num strong">5</span><span style="color:var(--ink-2)">rules active</span></span>
+          <span class="chip"><span class="num strong">5</span><span class="mut">rules active</span></span>
         </div>
         <div class="body">
           <div class="rail">
-            <div class="cap">Sections</div>
             <div class="item on">General</div>
             <div class="item">Character Rules</div>
             <div class="item">Key Rules</div>
@@ -710,7 +733,7 @@ no literal colour in a component<br>
               </div>
               <div class="row sel">
                 <div class="lg"><div class="lab">Excluded apps</div><div class="desc">Non-global remaps are ignored in these apps.</div></div>
-                <span class="val"><span class="chip"><span class="num strong">13</span><span style="color:var(--ink-2)">apps</span><span class="caret">&#9662;</span></span></span>
+                <span class="val"><span class="chip"><span class="num strong">13</span><span class="mut">apps</span><span class="caret">&#9662;</span></span></span>
               </div>
               <div class="well">
               <div class="wh"><span>Excluded apps</span><span class="num">13</span></div>
@@ -723,8 +746,8 @@ no literal colour in a component<br>
                 <span class="tag">VS Code<span class="x">&times;</span></span>
                 <span class="tag">Rider<span class="x">&times;</span></span>
               </div>
-              <div style="display:flex;align-items:center;gap:10px">
-                <span class="field foc" style="flex:1">com.jetbrains.rustrover<span class="cur"></span></span>
+              <div class="fx10">
+                <span class="field foc fl1">com.jetbrains.rustrover<span class="cur"></span></span>
                 <span class="btn pri">Add<span class="k2">&crarr;</span></span>
               </div>
               </div>
@@ -750,7 +773,7 @@ no literal colour in a component<br>
 
           </div>
         </div>
-        <div class="hints"><span><span class="k">&crarr;</span>edit rule</span><span><span class="k">&#9003;</span>remove</span><span><span class="k">&#8984;&crarr;</span>add rule</span><span style="margin-left:auto"><span class="k">/</span>filter</span></div>
+        <div class="hints"><span><span class="k">&crarr;</span>edit rule</span><span><span class="k">&#9003;</span>remove</span><span><span class="k">&#8984;&crarr;</span>add rule</span><span class="mla"><span class="k">/</span>filter</span></div>
         <div class="failbar"><span class="st err"></span>Excluded apps needs app names, not a number. Nothing was saved.</div>
       </div>
       <span class="cap">settings panel &middot; the hint bar always names what &crarr; does</span>
@@ -810,11 +833,10 @@ no literal colour in a component<br>
       <div class="s dark w680">
         <div class="band">
           <div><div class="t18">Lights</div><div class="t12">Zigbee groups and scenes</div></div>
-          <span class="chip"><span class="num strong">3</span><span style="color:var(--ink-2)">groups</span></span>
+          <span class="chip"><span class="num strong">3</span><span class="mut">groups</span></span>
         </div>
         <div class="body">
           <div class="rail">
-            <div class="cap">Sections</div>
             <div class="item on">Groups</div>
             <div class="item">Scenes</div>
             <div class="item">Bridge</div>
@@ -828,7 +850,7 @@ no literal colour in a component<br>
               </div>
               <div class="row sel">
                 <div class="lg"><div class="lab">Brightness</div><div class="desc">Applies to all three bulbs.</div></div>
-                <span class="val"><span class="chip"><span class="num strong">72</span><span style="color:var(--ink-2)">%</span></span></span>
+                <span class="val"><span class="chip"><span class="num strong">72</span><span class="mut">%</span></span></span>
               </div>
               <div class="row">
                 <div class="lg"><div class="lab">Colour</div></div>
@@ -882,7 +904,7 @@ no literal colour in a component<br>
           <div class="lrow h32"><span class="ic" style="background:#5c626d;border-color:transparent">&#9881;</span><span class="nm">Terminal preferences</span><span class="meta">pref</span></div>
           <div class="lrow h32"><span class="ic" style="background:#8a6208;border-color:transparent">q</span><span class="nm">kitty @ set-colors</span><span class="meta">cmd</span></div>
         </div>
-        <div class="hints"><span><span class="k">&crarr;</span>open</span><span><span class="k">&#8997;&crarr;</span>reveal</span><span><span class="k">esc</span>dismiss</span></div>
+        <div class="hints"><span><span class="k">&crarr;</span>open</span><span><span class="k">&#8677;</span>mode</span><span><span class="k">esc</span>dismiss</span></div>
       </div>
       <span class="cap">launcher &middot; 500 wide &middot; 8 rows max</span>
     </div>
@@ -927,7 +949,7 @@ no literal colour in a component<br>
       <h3>Geometry</h3>
       <div class="geo">
         BASE_CARD_WIDTH 220 &times; scale<br>
-        16:9 preview &middot; HOTKEY_HINTS_HEIGHT 48<br>
+        16:9 preview &middot; HOTKEY_HINTS_HEIGHT 40<br>
         MIN_CARD_SCALE 0.5 &hellip; MAX 2.5<br>
         alt-tab/src/picker/layout.rs
       </div>
@@ -999,7 +1021,7 @@ no literal colour in a component<br>
     <div class="right">
       <h3>Geometry</h3>
       <div class="geo">
-        360 &times; 400 &middot; row 44<br>
+        360 &times; 400 &middot; row 48<br>
         collapsed STRIP_HEIGHT 32<br>
         CORNER_MARGIN 16<br>
         cli-sessions/src/ui/
@@ -1012,41 +1034,41 @@ no literal colour in a component<br>
       <div class="s w360" style="height:400px">
         <div class="band sub">
           <div class="t14">Sessions</div>
-          <span class="chip" style="height:22px;font-size:11px"><span class="num strong">4</span><span style="color:var(--ink-2)">live</span></span>
+          <span class="chip sm"><span class="num strong">4</span><span class="mut">live</span></span>
         </div>
         <div class="list" style="flex:1;overflow:hidden">
           <div class="lrow h48 sel">
             <span class="st ok"></span>
-            <span style="flex:1;min-width:0">
+            <span class="grow">
               <div class="nm" style="font-weight:600">fix-view-r2</div>
               <div class="t12">editing view.rs &middot; 1m 12s</div>
             </span>
           </div>
           <div class="lrow h48">
             <span class="st busy"></span>
-            <span style="flex:1;min-width:0">
+            <span class="grow">
               <div class="nm">surf-picker</div>
               <div class="t12">waiting for review</div>
             </span>
           </div>
           <div class="lrow h48">
             <span class="st ok"></span>
-            <span style="flex:1;min-width:0">
+            <span class="grow">
               <div class="nm">surf-kit</div>
               <div class="t12">reading color_wheel.rs</div>
             </span>
           </div>
           <div class="lrow h48">
             <span class="st err"></span>
-            <span style="flex:1;min-width:0">
+            <span class="grow">
               <div class="nm">surf-rest</div>
-              <div class="t11" style="color:var(--neg)">exited 1</div>
+              <div class="t11 neg">exited 1</div>
             </span>
           </div>
           <div class="lrow h48">
             <span class="st idle"></span>
-            <span style="flex:1;min-width:0">
-              <div class="nm" style="color:var(--ink-2)">kr-persist</div>
+            <span class="grow">
+              <div class="nm mut">kr-persist</div>
               <div class="t11">closed 4m ago</div>
             </span>
           </div>
@@ -1054,14 +1076,14 @@ no literal colour in a component<br>
         <div class="hints">
           <span><span class="k">&crarr;</span>focus</span>
           <span><span class="k">&#8984;W</span>close</span>
-          <span style="margin-left:auto"><span class="k">&#8997;S</span>collapse</span>
+          <span class="mla"><span class="k">&#8997;S</span>collapse</span>
         </div>
       </div>
       <span class="cap">expanded &middot; 360 &times; 400</span>
     </div>
 
     <div class="shot">
-      <div class="s strip32" style="width:210px"><span class="st ok"></span><span class="t12" style="flex:1">4 live &middot; 1 failed</span><span class="t11 mono">&#8997;S</span></div>
+      <div class="s strip32" style="width:210px"><span class="st ok"></span><span class="t12 fl1">4 live &middot; 1 failed</span><span class="t11 mono">&#8997;S</span></div>
       <span class="cap">collapsed &middot; 32 tall</span>
     </div>
   </div>
@@ -1105,7 +1127,7 @@ no literal colour in a component<br>
       <h3>Geometry</h3>
       <div class="geo">
         WINDOW_WIDTH 460 &middot; WINDOW_HEIGHT 540<br>
-        SEARCH_H 40 &middot; ROW_H 38 &middot; FOOTER_H 34<br>
+        SEARCH_H 40 &middot; ROW_H 40 &middot; FOOTER_H 40<br>
         removeapp/src/ui/mod.rs
       </div>
     </div>
@@ -1126,13 +1148,13 @@ no literal colour in a component<br>
         </div>
         <div class="failbar" style="align-items:center;padding:14px 16px">
           <span class="st err"></span>
-          <span style="flex:1;min-width:0">
+          <span class="grow">
             <div style="font-size:13.5px;font-weight:600;letter-spacing:-.012em">Remove Docker Desktop</div>
             <div style="font-size:12px;color:var(--ink-2)">App, caches and 3 support folders &middot; 2.4 GB</div>
           </span>
           <span class="kc" style="color:var(--neg);border-color:var(--hair2)">&#8984;&#9003;</span>
         </div>
-        <div class="hints"><span><span class="k">&crarr;</span>select</span><span><span class="k">&#8984;&#9003;</span>remove</span><span style="margin-left:auto" class="num">7 / 214</span></div>
+        <div class="hints"><span><span class="k">&crarr;</span>select</span><span><span class="k">&#8984;&#9003;</span>remove</span><span class="mla num">7 / 214</span></div>
       </div>
       <span class="cap">remove app &middot; 460 &times; 540</span>
     </div>
@@ -1168,13 +1190,13 @@ no literal colour in a component<br>
       <p>
         Two surfaces. The region selector is almost all absence: a dimmed field, a thin accent
         rectangle and a live size readout. The preview that follows is a floating thumbnail with
-        its actions as a column of circles, one of them primary.
+        its actions as a row of circles, one of them primary.
       </p>
     </div>
     <div class="right">
       <h3>Geometry</h3>
       <div class="geo">
-        thumb max 360 &times; 240 &middot; MARGIN 18<br>
+        thumb max 360 &times; 240 &middot; MARGIN 18 &middot; thumb radius 3<br>
         CIRCLE 46 &middot; CIRCLE_GAP 14 &middot; LABEL_H 30<br>
         qol-shot/src/ui/preview.rs
       </div>
@@ -1191,19 +1213,20 @@ no literal colour in a component<br>
     </div>
 
     <div class="shot">
-      <div style="display:flex;gap:14px;align-items:flex-start">
-        <div class="s spec">
+      <div class="s spec shotprev">
+        <div class="thumbwrap">
           <div class="thumb"><div class="mockwin" style="width:64%;height:62%"><div class="mtb"><i></i><i></i><i></i></div><div class="mln" style="width:48%;height:8px;background:var(--hair2)"></div><div class="mln" style="width:82%"></div><div class="mln" style="width:66%"></div></div></div>
-          <div style="height:30px;display:flex;align-items:center;gap:9px;margin-top:10px">
-            <span class="st ok"></span><span class="t12">Copied to clipboard</span>
-            <span class="t11 mono" style="margin-left:auto">2.1 MB</span>
+          <div class="shotcircles">
+            <div class="circ pri"><svg role="img" aria-label="Copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></div>
+            <div class="circ"><svg role="img" aria-label="Copy path" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg></div>
+            <div class="circ"><svg role="img" aria-label="Open folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg></div>
+            <div class="circ"><svg role="img" aria-label="Edit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></div>
+            <div class="circ"><svg role="img" aria-label="Pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-5.3-7-11a7 7 0 0 1 14 0c0 5.7-7 11-7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg></div>
           </div>
         </div>
-        <div class="s spec circles" style="background:transparent;box-shadow:none">
-          <div class="circ pri"><svg role="img" aria-label="Save" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m-5-4 5 5 5-5M5 20h14"/></svg></div>
-          <div class="circ"><svg role="img" aria-label="Annotate" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></div>
-          <div class="circ"><svg role="img" aria-label="Copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></div>
-          <div class="circ"><svg role="img" aria-label="Discard" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2m1 0-1 14H8L7 6"/></svg></div>
+        <div class="shotlab">
+          <span class="t12 act">Copy</span>
+          <span class="t11 mono sz">2.1 MB</span>
         </div>
       </div>
       <span class="cap">preview &middot; 46px actions, 14 gap</span>
@@ -1219,10 +1242,11 @@ no literal colour in a component<br>
       </p>
     </div>
     <div class="note">
-      <h3>Say what happened</h3>
+      <h3>Name the armed action</h3>
       <p>
-        The label under the thumbnail states the outcome and the size. A capture tool that does not
-        confirm the copy makes you paste somewhere to check.
+        The label under the thumbnail names the selected circle and the size. A fixed "copied to
+        clipboard" caption would contradict the other circles; the toast confirms the outcome once
+        the action runs.
       </p>
     </div>
     <div class="note">
@@ -1260,20 +1284,20 @@ no literal colour in a component<br>
     <div class="shot">
       <div style="display:flex;flex-direction:column;gap:16px">
         <div class="s w340 toast ok">
-          <span style="flex:1;min-width:0">
+          <span class="grow">
             <div class="tt">Screenshot copied</div>
             <div class="ts">1284 &times; 726 &middot; 2.1 MB</div>
           </span>
         </div>
         <div class="s w520 toast warn">
-          <span style="flex:1;min-width:0">
+          <span class="grow">
             <div class="tt">Syncing profile</div>
             <div class="ts">3 of 7 plugins &middot; pushing to origin</div>
             <div class="bar"><i style="width:43%"></i></div>
           </span>
         </div>
         <div class="s w340 toast bad">
-          <span style="flex:1;min-width:0">
+          <span class="grow">
             <div class="tt">Hotkey already claimed</div>
             <div class="ts">Cmd+Shift+4 is held by the system</div>
           </span>
@@ -1285,7 +1309,7 @@ no literal colour in a component<br>
     <div class="shot">
       <div class="s wheelbox">
         <div class="wheel" role="img" aria-label="Colour wheel, amber selected"><span class="th"></span></div>
-        <div style="display:flex;align-items:center;gap:10px">
+        <div class="fx10">
           <span style="width:18px;height:18px;background:#d9a03d;border:1px solid var(--hair2);border-radius:999px;box-shadow:0 1px 3px var(--cast)"></span>
           <span class="t12 mono" style="flex:1;color:var(--ink)">#d9a03d</span>
           <span class="t11 mono">&crarr;</span>
@@ -1296,16 +1320,16 @@ no literal colour in a component<br>
 
     <div class="shot">
       <div class="s" style="padding:16px 18px 18px;gap:12px;width:620px">
-        <div style="display:flex;align-items:center;gap:10px">
+        <div class="fx10">
           <span class="st idle"></span><span class="t14">GuliKit KingKong 2 Pro</span>
           <span class="t11" style="color:var(--ink-3)">connected, nothing held</span>
-          <span class="t11 mono" style="margin-left:auto">bt &middot; 87%</span>
+          <span class="t11 mono mla">bt &middot; 87%</span>
         </div>
         <svg class="gp" viewBox="0 0 800 500" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Live GuliKit KingKong 2 Pro controller input diagram"><defs><linearGradient id="gla" gradientUnits="userSpaceOnUse" x1="90" y1="430" x2="250" y2="290"><stop offset="0" class="g0"/><stop offset="1" class="g1"/></linearGradient><linearGradient id="gra" gradientUnits="userSpaceOnUse" x1="710" y1="430" x2="550" y2="290"><stop offset="0" class="g0"/><stop offset="1" class="g1"/></linearGradient></defs><path d="M266 62 C230 61 194 71 164 89" class="capline" stroke-width="20"/><path d="M266 62 C230 61 194 71 164 89" class="capfill" stroke-width="16"/><path d="M212 68 L164 31 H140" class="lead"/><rect x="22" y="14" width="118" height="34" rx="9" class="chip2"/><text x="54" y="31" class="tl" font-size="17">ZL</text><text x="108" y="31" class="tv" font-size="14">0.00</text><path d="M 534 62 C 570 61 606 71 636 89" class="capline" stroke-width="20"/><path d="M 534 62 C 570 61 606 71 636 89" class="capfill" stroke-width="16"/><path d="M 588 68 L 636 31 H 660" class="lead"/><rect x="660" y="14" width="118" height="34" rx="9" class="chip2"/><text x="692" y="31" class="tl" font-size="17">ZR</text><text x="746" y="31" class="tv" font-size="14">0.00</text><path d="M270 80 C231 79 192 89 158 109" class="capline" stroke-width="20"/><path d="M270 80 C231 79 192 89 158 109" class="capfill" stroke-width="16"/><path d="M186 96 L136 77 H96" class="lead"/><rect x="22" y="60" width="74" height="34" rx="9" class="chip2"/><text x="59" y="77" class="tl" font-size="17">L</text><path d="M 530 80 C 569 79 608 89 642 109" class="capline" stroke-width="20"/><path d="M 530 80 C 569 79 608 89 642 109" class="capfill" stroke-width="16"/><path d="M 614 96 L 664 77 H 704" class="lead"/><rect x="704" y="60" width="74" height="34" rx="9" class="chip2"/><text x="741" y="77" class="tl" font-size="17">R</text><path d="M270 82 C231 81 193 91 160 111 C116 138 91 184 77 244 L43 390 C32 438 58 479 101 487 C132 493 158 480 180 452 L246 370 C267 365 298 360 332 360 H468 C502 360 533 365 554 370 L620 452 C642 480 668 493 699 487 C742 479 768 438 757 390 L723 244 C709 184 684 138 640 111 C607 91 569 81 530 82 C493 67 450 60 400 60 C350 60 307 67 270 82 Z" class="body"/><path d="M270 82 C308 69 351 63 400 63 C449 63 492 69 530 82 C499 104 456 115 400 115 C344 115 301 104 270 82 Z" class="crown"/><path d="M77 244 L43 390 C32 438 58 479 101 487 C132 493 158 480 180 452 L246 370 C218 342 189 326 153 317 C118 308 94 284 77 244 Z" fill="url(#gla)"/><path d="M723 244 L757 390 C768 438 742 479 699 487 C668 493 642 480 620 452 L554 370 C582 342 611 326 647 317 C682 308 706 284 723 244 Z" fill="url(#gra)"/><path d="M270 82 C305 100 348 108 400 108 C452 108 495 100 530 82" class="seam"/><rect x="380" y="91" width="40" height="6" rx="3" class="port"/><circle cx="220" cy="188" r="57" class="gate"/><path d="M177 188 H263 M220 145 V231" class="cross"/><g transform="translate(0 0)"><circle cx="220" cy="188" r="31" class="knob"/><circle cx="220" cy="188" r="23" class="ring"/><text x="220" y="188" class="kl" font-size="13">L3</text></g><g transform="translate(55 -23)"><circle cx="250" cy="310" r="58" class="well"/><path d="M236 263 Q236 255 244 255 H256 Q264 255 264 263 V296 H297 Q305 296 305 304 V316 Q305 324 297 324 H264 V357 Q264 365 256 365 H244 Q236 365 236 357 V324 H203 Q195 324 195 316 V304 Q195 296 203 296 H236 Z" class="dbase"/><path d="M236 296 V263 Q236 255 244 255 H256 Q264 255 264 263 V296 L250 310 Z" class="dcell"/><text x="250" y="276" class="dl" font-size="13">&#9650;</text><path d="M264 296 H297 Q305 296 305 304 V316 Q305 324 297 324 H264 L250 310 Z" class="dcell"/><text x="286" y="310" class="dl" font-size="13">&#9654;</text><path d="M264 324 V357 Q264 365 256 365 H244 Q236 365 236 357 V324 L250 310 Z" class="dcell"/><text x="250" y="344" class="dl" font-size="13">&#9660;</text><path d="M236 324 H203 Q195 324 195 316 V304 Q195 296 203 296 H236 L250 310 Z" class="dcell"/><text x="214" y="310" class="dl" font-size="13">&#9664;</text><circle cx="250" cy="310" r="14" class="pivot"/></g><circle cx="338" cy="164" r="16" class="ct"/><text x="338" y="164" class="cl" font-size="18">&#8722;</text><circle cx="400" cy="164" r="23" class="ct"/><text x="400" y="164" class="cl" font-size="17">G</text><circle cx="462" cy="164" r="16" class="ct"/><text x="462" y="164" class="cl" font-size="18">+</text><circle cx="350" cy="214" r="15" class="ct dev"/><text x="350" y="214" class="cl dev" font-size="10">CAP</text><circle cx="400" cy="214" r="15" class="ct dev"/><text x="400" y="214" class="cl dev" font-size="10">SET</text><circle cx="450" cy="214" r="15" class="ct dev"/><text x="450" y="214" class="cl dev" font-size="10">APG</text><circle cx="400" cy="254" r="15" class="ct dev"/><text x="400" y="254" class="cl dev" font-size="13">M</text><circle cx="590" cy="164" r="23" class="fc y"/><text x="590" y="164" class="fl y" font-size="18">Y</text><circle cx="630" cy="204" r="23" class="fc b"/><text x="630" y="204" class="fl b" font-size="18">B</text><circle cx="590" cy="244" r="23" class="fc a"/><text x="590" y="244" class="fl a" font-size="18">A</text><circle cx="550" cy="204" r="23" class="fc x"/><text x="550" y="204" class="fl x" font-size="18">X</text><circle cx="510" cy="290" r="57" class="gate"/><path d="M467 290 H553 M510 247 V333" class="cross"/><g transform="translate(0 0)"><circle cx="510" cy="290" r="31" class="knob"/><circle cx="510" cy="290" r="23" class="ring"/><text x="510" y="290" class="kl" font-size="13">R3</text></g></svg>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <span class="chip" style="height:22px;font-size:11px">18 buttons</span>
-          <span class="chip mono" style="height:22px;font-size:11px">L3 0.00, 0.00</span>
-          <span class="chip mono" style="height:22px;font-size:11px">R3 0.00, 0.00</span>
+          <span class="chip sm">18 buttons</span>
+          <span class="chip mono sm">L3 0.00, 0.00</span>
+          <span class="chip mono sm">R3 0.00, 0.00</span>
         </div>
       </div>
       <span class="cap">controller &middot; resting</span>
@@ -1313,16 +1337,16 @@ no literal colour in a component<br>
 
     <div class="shot">
       <div class="s" style="padding:16px 18px 18px;gap:12px;width:620px">
-        <div style="display:flex;align-items:center;gap:10px">
+        <div class="fx10">
           <span class="st ok"></span><span class="t14">GuliKit KingKong 2 Pro</span>
           <span class="t11" style="color:var(--acc-ink)">ZR &middot; B &middot; right &middot; R3</span>
-          <span class="t11 mono" style="margin-left:auto">bt &middot; 87%</span>
+          <span class="t11 mono mla">bt &middot; 87%</span>
         </div>
         <svg class="gp" viewBox="0 0 800 500" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Live GuliKit KingKong 2 Pro controller input diagram"><defs><linearGradient id="glb" gradientUnits="userSpaceOnUse" x1="90" y1="430" x2="250" y2="290"><stop offset="0" class="g0"/><stop offset="1" class="g1"/></linearGradient><linearGradient id="grb" gradientUnits="userSpaceOnUse" x1="710" y1="430" x2="550" y2="290"><stop offset="0" class="g0"/><stop offset="1" class="g1"/></linearGradient></defs><path d="M266 62 C230 61 194 71 164 89" class="capline" stroke-width="20"/><path d="M266 62 C230 61 194 71 164 89" class="capfill" stroke-width="16"/><path d="M212 68 L164 31 H140" class="lead"/><rect x="22" y="14" width="118" height="34" rx="9" class="chip2"/><text x="54" y="31" class="tl" font-size="17">ZL</text><text x="108" y="31" class="tv" font-size="14">0.00</text><path d="M 534 62 C 570 61 606 71 636 89" class="capline" stroke-width="20"/><path d="M 534 62 C 570 61 606 71 636 89" class="capfill on" stroke-width="16"/><path d="M 588 68 L 636 31 H 660" class="lead"/><rect x="660" y="14" width="118" height="34" rx="9" class="chip2 on"/><text x="692" y="31" class="tl on" font-size="17">ZR</text><text x="746" y="31" class="tv on" font-size="14">0.86</text><path d="M270 80 C231 79 192 89 158 109" class="capline" stroke-width="20"/><path d="M270 80 C231 79 192 89 158 109" class="capfill" stroke-width="16"/><path d="M186 96 L136 77 H96" class="lead"/><rect x="22" y="60" width="74" height="34" rx="9" class="chip2"/><text x="59" y="77" class="tl" font-size="17">L</text><path d="M 530 80 C 569 79 608 89 642 109" class="capline" stroke-width="20"/><path d="M 530 80 C 569 79 608 89 642 109" class="capfill" stroke-width="16"/><path d="M 614 96 L 664 77 H 704" class="lead"/><rect x="704" y="60" width="74" height="34" rx="9" class="chip2"/><text x="741" y="77" class="tl" font-size="17">R</text><path d="M270 82 C231 81 193 91 160 111 C116 138 91 184 77 244 L43 390 C32 438 58 479 101 487 C132 493 158 480 180 452 L246 370 C267 365 298 360 332 360 H468 C502 360 533 365 554 370 L620 452 C642 480 668 493 699 487 C742 479 768 438 757 390 L723 244 C709 184 684 138 640 111 C607 91 569 81 530 82 C493 67 450 60 400 60 C350 60 307 67 270 82 Z" class="body"/><path d="M270 82 C308 69 351 63 400 63 C449 63 492 69 530 82 C499 104 456 115 400 115 C344 115 301 104 270 82 Z" class="crown"/><path d="M77 244 L43 390 C32 438 58 479 101 487 C132 493 158 480 180 452 L246 370 C218 342 189 326 153 317 C118 308 94 284 77 244 Z" fill="url(#glb)"/><path d="M723 244 L757 390 C768 438 742 479 699 487 C668 493 642 480 620 452 L554 370 C582 342 611 326 647 317 C682 308 706 284 723 244 Z" fill="url(#grb)"/><path d="M270 82 C305 100 348 108 400 108 C452 108 495 100 530 82" class="seam"/><rect x="380" y="91" width="40" height="6" rx="3" class="port on"/><circle cx="220" cy="188" r="57" class="gate"/><path d="M177 188 H263 M220 145 V231" class="cross"/><g transform="translate(0 0)"><circle cx="220" cy="188" r="31" class="knob"/><circle cx="220" cy="188" r="23" class="ring"/><text x="220" y="188" class="kl" font-size="13">L3</text></g><g transform="translate(55 -23)"><circle cx="250" cy="310" r="58" class="well"/><path d="M236 263 Q236 255 244 255 H256 Q264 255 264 263 V296 H297 Q305 296 305 304 V316 Q305 324 297 324 H264 V357 Q264 365 256 365 H244 Q236 365 236 357 V324 H203 Q195 324 195 316 V304 Q195 296 203 296 H236 Z" class="dbase"/><path d="M236 296 V263 Q236 255 244 255 H256 Q264 255 264 263 V296 L250 310 Z" class="dcell"/><text x="250" y="276" class="dl" font-size="13">&#9650;</text><path d="M264 296 H297 Q305 296 305 304 V316 Q305 324 297 324 H264 L250 310 Z" class="dcell on"/><text x="286" y="310" class="dl on" font-size="13">&#9654;</text><path d="M264 324 V357 Q264 365 256 365 H244 Q236 365 236 357 V324 L250 310 Z" class="dcell"/><text x="250" y="344" class="dl" font-size="13">&#9660;</text><path d="M236 324 H203 Q195 324 195 316 V304 Q195 296 203 296 H236 L250 310 Z" class="dcell"/><text x="214" y="310" class="dl" font-size="13">&#9664;</text><circle cx="250" cy="310" r="14" class="pivot"/></g><circle cx="338" cy="164" r="16" class="ct"/><text x="338" y="164" class="cl" font-size="18">&#8722;</text><circle cx="400" cy="164" r="23" class="ct"/><text x="400" y="164" class="cl" font-size="17">G</text><circle cx="462" cy="164" r="16" class="ct"/><text x="462" y="164" class="cl" font-size="18">+</text><circle cx="350" cy="214" r="15" class="ct dev"/><text x="350" y="214" class="cl dev" font-size="10">CAP</text><circle cx="400" cy="214" r="15" class="ct dev"/><text x="400" y="214" class="cl dev" font-size="10">SET</text><circle cx="450" cy="214" r="15" class="ct dev"/><text x="450" y="214" class="cl dev" font-size="10">APG</text><circle cx="400" cy="254" r="15" class="ct dev"/><text x="400" y="254" class="cl dev" font-size="13">M</text><circle cx="590" cy="164" r="23" class="fc y"/><text x="590" y="164" class="fl y" font-size="18">Y</text><circle cx="630" cy="204" r="23" class="fc b on"/><text x="630" y="204" class="fl b on" font-size="18">B</text><circle cx="590" cy="244" r="23" class="fc a"/><text x="590" y="244" class="fl a" font-size="18">A</text><circle cx="550" cy="204" r="23" class="fc x"/><text x="550" y="204" class="fl x" font-size="18">X</text><circle cx="510" cy="290" r="57" class="gate on"/><path d="M467 290 H553 M510 247 V333" class="cross"/><g transform="translate(11.16 -6.12)"><circle cx="510" cy="290" r="31" class="knob on"/><circle cx="510" cy="290" r="23" class="ring"/><text x="510" y="290" class="kl on" font-size="13">R3</text></g></svg>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <span class="chip" style="height:22px;font-size:11px">4 held</span>
-          <span class="chip mono" style="height:22px;font-size:11px">ZR 0.86</span>
-          <span class="chip mono" style="height:22px;font-size:11px">R3 0.62, -0.34</span>
+          <span class="chip sm">4 held</span>
+          <span class="chip mono sm">ZR 0.86</span>
+          <span class="chip mono sm">R3 0.62, -0.34</span>
         </div>
       </div>
       <span class="cap">controller &middot; live input</span>
@@ -1436,7 +1460,7 @@ body path &middot; 1<br>
   <div class="stage grid">
     <div class="shot">
       <div class="s w500" style="--fromw:56px;--tow:56px">
-        <div class="band sub"><span class="t14">Character Rules</span><span class="chip"><span class="num strong">2</span><span style="color:var(--ink-2)">rules</span></span></div>
+        <div class="band sub"><span class="t14">Character Rules</span><span class="chip"><span class="num strong">2</span><span class="mut">rules</span></span></div>
         <div class="plane">
           <div class="group">
             <div class="rulehead"><span class="hfrom">From</span><span class="hto">To</span><span>Scope</span></div>
@@ -1451,16 +1475,16 @@ body path &middot; 1<br>
 
     <div class="shot">
       <div class="s w520">
-        <div class="band sub"><span class="t14">Key Rules</span><span class="chip"><span style="color:var(--ink-2)">editing</span></span></div>
+        <div class="band sub"><span class="t14">Key Rules</span><span class="chip"><span class="mut">editing</span></span></div>
         <div class="plane">
           <div class="group">
-            <div class="well" style="margin:0;gap:8px">
-              <div class="edrow"><span class="edlab">From</span><span class="mc on">ctrl</span><span class="mc">alt</span><span class="mc">shift</span><span class="mc">cmd</span><span class="kc capt" style="margin-left:auto">&hellip;</span></div>
-              <div class="edrow"><span class="edlab">To</span><span class="mc">ctrl</span><span class="mc">alt</span><span class="mc">shift</span><span class="mc on">cmd</span><span class="kc out" style="margin-left:auto">C</span></div>
-              <div class="edrow"><span class="edlab">Scope</span><span class="chip"><span style="color:var(--ink-2)">Except excluded</span><span class="caret">&#9662;</span></span></div>
+            <div class="well flat">
+              <div class="edrow"><span class="edlab">From</span><span class="mc on">ctrl</span><span class="mc">alt</span><span class="mc">shift</span><span class="mc">cmd</span><span class="kc capt mla">&hellip;</span></div>
+              <div class="edrow"><span class="edlab">To</span><span class="mc">ctrl</span><span class="mc">alt</span><span class="mc">shift</span><span class="mc on">cmd</span><span class="kc out mla">C</span></div>
+              <div class="edrow"><span class="edlab">Scope</span><span class="chip"><span class="mut">Except excluded</span><span class="caret">&#9662;</span></span></div>
               <div class="actions">
                 <span class="btn dgr">Remove<span class="k2">&#9003;</span></span>
-                <span style="margin-left:auto;display:flex;gap:9px">
+                <span class="actrow">
                   <span class="btn">Cancel<span class="k2">esc</span></span>
                   <span class="btn pri">Save<span class="k2">&crarr;</span></span>
                 </span>
@@ -1473,8 +1497,8 @@ body path &middot; 1<br>
     </div>
 
     <div class="shot">
-      <div class="s w500" style="--fromw:88px;--tow:124px">
-        <div class="band sub"><span class="t14">Mouse Rules</span><span class="chip"><span class="num strong">2</span><span style="color:var(--ink-2)">rules</span></span></div>
+      <div class="s w500 rgrid">
+        <div class="band sub"><span class="t14">Mouse Rules</span><span class="chip"><span class="num strong">2</span><span class="mut">rules</span></span></div>
         <div class="plane">
           <div class="group">
             <div class="rulehead"><span class="hfrom">From</span><span class="hto">To</span><span>Scope</span></div>
@@ -1489,7 +1513,7 @@ body path &middot; 1<br>
 
     <div class="shot">
       <div class="s w500" style="--fromw:132px;--tow:72px">
-        <div class="band sub"><span class="t14">Scroll Rules</span><span class="chip"><span class="num strong">1</span><span style="color:var(--ink-2)">rule</span></span></div>
+        <div class="band sub"><span class="t14">Scroll Rules</span><span class="chip"><span class="num strong">1</span><span class="mut">rule</span></span></div>
         <div class="plane">
           <div class="group">
             <div class="row"><div class="lg"><div class="lab">Natural scrolling</div></div><span class="val"><span class="sw on"><span class="k"></span></span></span></div>
@@ -1504,7 +1528,7 @@ body path &middot; 1<br>
 
     <div class="shot">
       <div class="s w500">
-        <div class="band sub"><span class="t14">Mouse Rules</span><span class="chip"><span class="num strong">0</span><span style="color:var(--ink-2)">rules</span></span></div>
+        <div class="band sub"><span class="t14">Mouse Rules</span><span class="chip"><span class="num strong">0</span><span class="mut">rules</span></span></div>
         <div class="plane">
           <div class="empty">
             <span>No mouse rules yet</span>
@@ -1516,7 +1540,7 @@ body path &middot; 1<br>
     </div>
   </div>
 
-  <div class="stage grid" style="margin-top:var(--sp3)">
+  <div class="stage grid mt3">
     <div class="shot">
       <div class="s w460">
         <div class="band sub"><span class="t14">Appearance</span></div>
@@ -1525,7 +1549,7 @@ body path &middot; 1<br>
             <div class="row sel"><div class="lg"><div class="lab">Theme</div></div><span class="val"><span class="chip open">Amber<span class="caret">&#9652;</span></span></span></div>
             <div style="display:flex;justify-content:flex-end;padding:0 var(--padx)">
               <div class="s dd" style="box-shadow:var(--float)">
-                <div class="it on"><span class="sw3" style="background:var(--acc)"></span>Amber<span style="margin-left:auto;color:var(--acc-ink);font-size:11px">&#10003;</span></div>
+                <div class="it on"><span class="sw3" style="background:var(--acc)"></span>Amber<span class="check">&#10003;</span></div>
                 <div class="it"><span class="sw3" style="background:#3fa06a"></span>Green</div>
                 <div class="it"><span class="sw3" style="background:#3f97a0"></span>Cyan</div>
               </div>
@@ -1567,19 +1591,19 @@ body path &middot; 1<br>
 
     <div class="shot">
       <div class="s w520">
-        <div class="band sub"><span class="t14">Control catalog</span><span class="chip"><span class="num strong">14</span><span style="color:var(--ink-2)">kinds</span></span></div>
+        <div class="band sub"><span class="t14">Control catalog</span><span class="chip"><span class="num strong">14</span><span class="mut">kinds</span></span></div>
         <div class="plane" style="gap:2px">
           <div class="row"><div class="lg"><div class="labline"><span class="lab">Toggle</span><span class="kindtag">bool</span></div><div class="desc">One switch, saved the moment it flips.</div></div><span class="val"><span class="sw on"><span class="k"></span></span></span></div>
           <div class="row"><div class="lg"><div class="labline"><span class="lab">Select</span><span class="kindtag">enum</span></div><div class="desc">One of a fixed list.</div></div><span class="val"><span class="chip">Amber<span class="caret">&#9662;</span></span></span></div>
-          <div class="row"><div class="lg"><div class="labline"><span class="lab">Multi-select</span><span class="kindtag">enum[]</span></div><div class="desc">Any number of the same list.</div></div><span class="val"><span class="chip"><span class="pill3"><i class="on"></i><i class="on"></i><i></i></span><span class="num strong">2</span><span style="color:var(--ink-2)">of 3</span></span></span></div>
+          <div class="row"><div class="lg"><div class="labline"><span class="lab">Multi-select</span><span class="kindtag">enum[]</span></div><div class="desc">Any number of the same list.</div></div><span class="val"><span class="chip"><span class="pill3"><i class="on"></i><i class="on"></i><i></i></span><span class="num strong">2</span><span class="mut">of 3</span></span></span></div>
           <div class="row"><div class="lg"><div class="labline"><span class="lab">Number</span><span class="kindtag">i64</span></div><div class="desc">Arrows step, shift steps by ten.</div></div><span class="val"><span class="step"><b>&minus;</b><span class="v num">72%</span><b>+</b></span></span></div>
           <div class="row"><div class="lg"><div class="labline"><span class="lab">Text</span><span class="kindtag">string</span></div><div class="desc">Edited in place, return commits.</div></div><span class="val"><span class="chip"><span class="mono trunc">SFMono-Regular</span></span></span></div>
-          <div class="row"><div class="lg"><div class="labline"><span class="lab">Text list</span><span class="kindtag">string[]</span></div><div class="desc">Opens the tag well below its row.</div></div><span class="val"><span class="chip"><span class="num strong">13</span><span style="color:var(--ink-2)">apps</span><span class="caret">&#9662;</span></span></span></div>
+          <div class="row"><div class="lg"><div class="labline"><span class="lab">Text list</span><span class="kindtag">string[]</span></div><div class="desc">Opens the tag well below its row.</div></div><span class="val"><span class="chip"><span class="num strong">13</span><span class="mut">apps</span><span class="caret">&#9662;</span></span></span></div>
           <div class="row"><div class="lg"><div class="labline"><span class="lab">Colour</span><span class="kindtag">hex</span></div><div class="desc">Swatch opens the wheel.</div></div><span class="val"><span class="chip"><span class="miniswatch" style="background:#d9a03d"></span><span class="mono">#d9a03d</span></span></span></div>
           <div class="row"><div class="lg"><div class="labline"><span class="lab">Action</span><span class="kindtag">fn</span></div><div class="desc">Runs on the daemon, reports in the strip.</div></div><span class="val"><span class="cta">Pair now</span></span></div>
-          <div class="row"><div class="lg"><div class="labline"><span class="lab">Status</span><span class="kindtag">read only</span></div><div class="desc">Polled from the daemon, never editable.</div></div><span class="val"><span style="display:flex;align-items:center;gap:8px"><span class="st ok"></span><span class="t12">connected</span></span></span></div>
-          <div class="row"><div class="lg"><div class="labline"><span class="lab">List</span><span class="kindtag">rows</span></div><div class="desc">Flat rows with their own actions.</div></div><span class="val"><span class="chip"><span class="num strong">8</span><span style="color:var(--ink-2)">scenes</span><span class="caret">&#9662;</span></span></span></div>
-          <div class="row"><div class="lg"><div class="labline"><span class="lab">Object array</span><span class="kindtag">rules</span></div><div class="desc">Typed fields per entry, edited in place.</div></div><span class="val"><span class="chip"><span class="num strong">5</span><span style="color:var(--ink-2)">rules</span><span class="caret">&#9662;</span></span></span></div>
+          <div class="row"><div class="lg"><div class="labline"><span class="lab">Status</span><span class="kindtag">read only</span></div><div class="desc">Polled from the daemon, never editable.</div></div><span class="val"><span class="fx8"><span class="st ok"></span><span class="t12">connected</span></span></span></div>
+          <div class="row"><div class="lg"><div class="labline"><span class="lab">List</span><span class="kindtag">rows</span></div><div class="desc">Flat rows with their own actions.</div></div><span class="val"><span class="chip"><span class="num strong">8</span><span class="mut">scenes</span><span class="caret">&#9662;</span></span></span></div>
+          <div class="row"><div class="lg"><div class="labline"><span class="lab">Object array</span><span class="kindtag">rules</span></div><div class="desc">Typed fields per entry, edited in place.</div></div><span class="val"><span class="chip"><span class="num strong">5</span><span class="mut">rules</span><span class="caret">&#9662;</span></span></span></div>
           <div class="row"><div class="lg"><div class="labline"><span class="lab">Gamepad</span><span class="kindtag">capture</span></div><div class="desc">Listens until a button arrives.</div></div><span class="val"><span class="kc capt" style="min-width:52px">&#9711; &#9651;</span></span></div>
           <div class="row"><div class="lg"><div class="labline"><span class="lab">QR code</span><span class="kindtag">pairing</span></div><div class="desc">Scan to pair a phone.</div></div><span class="val"><span class="qr"><i></i><i></i><i></i><u></u><i></i><i></i><u></u><i></i><i></i><u></u><i></i><i></i><i></i><i></i><i></i><i></i><u></u><i></i><i></i><u></u><i></i><i></i><u></u><i></i><i></i><i></i><i></i><i></i><i></i><u></u><i></i><u></u><u></u><u></u><i></i><u></u><i></i><i></i><i></i><u></u><u></u><u></u><u></u><u></u><i></i><u></u><i></i><u></u><u></u><u></u><u></u><u></u><i></i><i></i><i></i><i></i><i></i><i></i><u></u><u></u><u></u><u></u><u></u><i></i><i></i><i></i><i></i><u></u><i></i><i></i><u></u><i></i><i></i><u></u><i></i><i></i><u></u><i></i><u></u><i></i><i></i><u></u><i></i><i></i><i></i><u></u><i></i><i></i><i></i><u></u><i></i><i></i><i></i><i></i><u></u><u></u><i></i><i></i><i></i><i></i><i></i><u></u><u></u><u></u><i></i><i></i><i></i><i></i><i></i><u></u><i></i><u></u><i></i><u></u><i></i><u></u><i></i><u></u><u></u><u></u><u></u><i></i><i></i><i></i><i></i><i></i><i></i><i></i><u></u><u></u><i></i><i></i><i></i><u></u><u></u><i></i><i></i><u></u><i></i><i></i><u></u><i></i><i></i><i></i><i></i><i></i><u></u><u></u><u></u><i></i><i></i><u></u><i></i><i></i><i></i><u></u><i></i><i></i><i></i><u></u><i></i><i></i><i></i><i></i><u></u><u></u><i></i><i></i><i></i></span></span></div>
           <div class="row dis"><div class="lg"><div class="labline"><span class="lab">Unsupported</span><span class="kindtag">json</span></div><div class="desc">No editor yet, opens the file instead.</div></div><span class="val"><span class="chip"><span class="mono trunc">{ &hellip; }</span></span></span></div>
@@ -1616,9 +1640,9 @@ body path &middot; 1<br>
   <div class="stage grid">
     <div class="shot">
       <div class="s w520 spec">
-        <div class="group" style="gap:14px">
+        <div class="group g14">
           <div class="hit"><span class="hn">1</span>
-            <div class="row sel" style="margin:0">
+            <div class="row sel m0">
               <div class="lg"><div class="lab">Enabled</div><div class="desc">Remapping runs while this is on.</div></div>
               <span class="val"><span class="hit"><span class="hn">2</span><span class="sw on"><span class="k"></span></span></span></span>
             </div>
@@ -1633,10 +1657,10 @@ body path &middot; 1<br>
     </div>
 
     <div class="shot">
-      <div class="s w520 spec" style="--fromw:88px;--tow:124px">
-        <div class="group" style="gap:14px">
+      <div class="s w520 spec rgrid">
+        <div class="group g14">
           <div class="hit"><span class="hn">1</span>
-            <div class="rule sel" style="margin:0">
+            <div class="rule sel m0">
               <div class="side from"><span class="combo"><span class="mo">ctrl</span><span>C</span></span></div><div class="side to"><span class="combo out"><span>cmd</span><span>C</span></span></div>
               <span class="scope">Except excluded</span><span class="disc">&rsaquo;</span>
             </div>
@@ -1652,14 +1676,14 @@ body path &middot; 1<br>
 
     <div class="shot">
       <div class="s w520 spec">
-        <div class="group" style="gap:14px">
-          <div class="well" style="margin:0;gap:8px">
-            <div class="edrow"><span class="edlab">From</span><span class="hit"><span class="hn">1</span><span class="mc on">ctrl</span></span><span class="mc">alt</span><span class="mc">shift</span><span class="mc">cmd</span><span class="hit" style="margin-left:auto"><span class="hn">2</span><span class="kc capt">&hellip;</span></span></div>
-            <div class="edrow"><span class="edlab">To</span><span class="mc">ctrl</span><span class="mc">alt</span><span class="mc">shift</span><span class="mc on">cmd</span><span class="kc out" style="margin-left:auto">C</span></div>
-            <div class="edrow"><span class="edlab">Scope</span><span class="hit"><span class="hn">3</span><span class="chip"><span style="color:var(--ink-2)">Except excluded</span><span class="caret">&#9662;</span></span></span></div>
+        <div class="group g14">
+          <div class="well flat">
+            <div class="edrow"><span class="edlab">From</span><span class="hit"><span class="hn">1</span><span class="mc on">ctrl</span></span><span class="mc">alt</span><span class="mc">shift</span><span class="mc">cmd</span><span class="hit mla"><span class="hn">2</span><span class="kc capt">&hellip;</span></span></div>
+            <div class="edrow"><span class="edlab">To</span><span class="mc">ctrl</span><span class="mc">alt</span><span class="mc">shift</span><span class="mc on">cmd</span><span class="kc out mla">C</span></div>
+            <div class="edrow"><span class="edlab">Scope</span><span class="hit"><span class="hn">3</span><span class="chip"><span class="mut">Except excluded</span><span class="caret">&#9662;</span></span></span></div>
             <div class="actions">
               <span class="hit"><span class="hn">4</span><span class="btn dgr">Remove<span class="k2">&#9003;</span></span></span>
-              <span style="margin-left:auto;display:flex;gap:9px">
+              <span class="actrow">
                 <span class="btn">Cancel<span class="k2">esc</span></span>
                 <span class="hit"><span class="hn">5</span><span class="btn pri">Save<span class="k2">&crarr;</span></span></span>
               </span>
@@ -1679,16 +1703,16 @@ body path &middot; 1<br>
 
     <div class="shot">
       <div class="s w520 spec">
-        <div class="group" style="gap:14px">
-          <div class="well" style="margin:0">
+        <div class="group g14">
+          <div class="well m0">
             <div class="wh"><span>Excluded apps</span><span class="num">13</span></div>
             <div class="tags">
               <span class="hit"><span class="hn">1</span><span class="tag">kitty<span class="x">&times;</span></span></span>
               <span class="tag">Terminal<span class="x">&times;</span></span>
               <span class="tag">iTerm2<span class="x">&times;</span></span>
             </div>
-            <div style="display:flex;align-items:center;gap:10px">
-              <span class="hit" style="flex:1"><span class="hn">2</span><span class="field foc" style="width:100%">com.jetbrains.rustrover<span class="cur"></span></span></span>
+            <div class="fx10">
+              <span class="hit fl1"><span class="hn">2</span><span class="field foc w100">com.jetbrains.rustrover<span class="cur"></span></span></span>
               <span class="btn pri">Add<span class="k2">&crarr;</span></span>
             </div>
           </div>
@@ -1738,8 +1762,8 @@ one value &middot; &crarr; edits in place<br>
           </div>
           <div class="srow">
             <span class="snm">value chip</span>
-            <span class="cell"><span class="chip"><span class="num strong">13</span><span style="color:var(--ink-2)">apps</span><span class="caret">&#9662;</span></span><span class="stlab">rest</span></span>
-            <span class="cell"><span class="chip open"><span class="num strong">13</span><span style="color:var(--ink-2)">apps</span><span class="caret">&#9652;</span></span><span class="stlab">open &middot; well expands below</span></span>
+            <span class="cell"><span class="chip"><span class="num strong">13</span><span class="mut">apps</span><span class="caret">&#9662;</span></span><span class="stlab">rest</span></span>
+            <span class="cell"><span class="chip open"><span class="num strong">13</span><span class="mut">apps</span><span class="caret">&#9652;</span></span><span class="stlab">open &middot; well expands below</span></span>
           </div>
           <div class="srow">
             <span class="snm">tag</span>
@@ -1754,12 +1778,12 @@ one value &middot; &crarr; edits in place<br>
           </div>
           <div class="srow" style="align-items:flex-start;flex-wrap:wrap;gap:14px">
             <span class="snm" style="padding-top:14px">row</span>
-            <span class="cell" style="flex:1;min-width:132px"><span class="row" style="width:100%"><span class="lab" style="font-size:var(--fs-md)">Rest</span></span><span class="stlab">no marker</span></span>
-            <span class="cell" style="flex:1;min-width:132px"><span class="row hov" style="width:100%"><span class="lab" style="font-size:var(--fs-md)">Hover</span></span><span class="stlab">wash only</span></span>
-            <span class="cell" style="flex:1;min-width:132px"><span class="row sel" style="width:100%"><span class="lab" style="font-size:var(--fs-md)">Selected</span></span><span class="stlab">amber marker</span></span>
-            <span class="cell" style="flex:1;min-width:132px"><span class="row warn" style="width:100%"><span class="lab" style="font-size:var(--fs-md)">Shadowed</span></span><span class="stlab">warn marker</span></span>
-            <span class="cell" style="flex:1;min-width:132px"><span class="row bad" style="width:100%"><span class="lab" style="font-size:var(--fs-md)">Invalid</span></span><span class="stlab">error marker</span></span>
-            <span class="cell" style="flex:1;min-width:132px"><span class="row dis" style="width:100%"><span class="lab" style="font-size:var(--fs-md)">Locked</span></span><span class="stlab">dimmed, no marker</span></span>
+            <span class="cell g132"><span class="row w100"><span class="lab fmd">Rest</span></span><span class="stlab">no marker</span></span>
+            <span class="cell g132"><span class="row hov w100"><span class="lab fmd">Hover</span></span><span class="stlab">wash only</span></span>
+            <span class="cell g132"><span class="row sel w100"><span class="lab fmd">Selected</span></span><span class="stlab">amber marker</span></span>
+            <span class="cell g132"><span class="row warn w100"><span class="lab fmd">Shadowed</span></span><span class="stlab">warn marker</span></span>
+            <span class="cell g132"><span class="row bad w100"><span class="lab fmd">Invalid</span></span><span class="stlab">error marker</span></span>
+            <span class="cell g132"><span class="row dis w100"><span class="lab fmd">Locked</span></span><span class="stlab">dimmed, no marker</span></span>
           </div>
         </div>
       </div>
@@ -1822,10 +1846,10 @@ one value &middot; &crarr; edits in place<br>
 
     <div class="shot">
       <div class="s w460">
-        <div class="band sub"><span class="t14">Excluded apps</span><span class="chip"><span class="num strong">40</span><span style="color:var(--ink-2)">apps</span></span></div>
+        <div class="band sub"><span class="t14">Excluded apps</span><span class="chip"><span class="num strong">40</span><span class="mut">apps</span></span></div>
         <div class="plane">
           <div class="group">
-            <div class="well" style="margin:0">
+            <div class="well m0">
               <div class="wh"><span>Excluded apps</span><span class="num">40</span></div>
               <div class="tags">
                 <span class="tag">kitty<span class="x">&times;</span></span>
@@ -1860,7 +1884,7 @@ one value &middot; &crarr; edits in place<br>
 
     <div class="shot">
       <div class="s w460" style="height:250px">
-        <div class="band sub"><span class="t14">Key Rules</span><span class="chip"><span class="num strong">42</span><span style="color:var(--ink-2)">rules</span></span></div>
+        <div class="band sub"><span class="t14">Key Rules</span><span class="chip"><span class="num strong">42</span><span class="mut">rules</span></span></div>
         <div class="plane scrollplane" style="padding-top:12px">
           <div class="group">
             <div class="rulehead"><span class="hfrom">From</span><span class="hto">To</span><span>Scope</span></div>
@@ -1876,13 +1900,13 @@ one value &middot; &crarr; edits in place<br>
     </div>
   </div>
 
-  <div class="stage grid" style="margin-top:var(--sp3)">
+  <div class="stage grid mt3">
     <div class="shot">
       <div class="s w460">
         <div class="band sub"><span class="t14">Excluded apps</span></div>
         <div class="plane">
           <div class="group">
-            <div class="row bad"><div class="lg"><div class="lab">Bundle identifier</div></div><span class="val"><span class="field bad" style="width:100%">com.jetbrains<span class="cur"></span></span></span></div>
+            <div class="row bad"><div class="lg"><div class="lab">Bundle identifier</div></div><span class="val"><span class="field bad w100">com.jetbrains<span class="cur"></span></span></span></div>
             <div class="errline"><span class="st err"></span>Needs three parts, like com.jetbrains.rustrover</div>
           </div>
         </div>
@@ -1893,11 +1917,11 @@ one value &middot; &crarr; edits in place<br>
 
     <div class="shot">
       <div class="s w460">
-        <div class="band sub"><span class="t14">Key Remap</span><span class="chip"><span style="color:var(--ink-2)">paused</span></span></div>
+        <div class="band sub"><span class="t14">Key Remap</span><span class="chip"><span class="mut">paused</span></span></div>
         <div class="plane">
           <div class="group">
             <div class="row"><div class="lg"><div class="lab">Enabled</div></div><span class="val"><span class="sw"><span class="k"></span></span></span></div>
-            <div class="row dis"><div class="lg"><div class="lab">Excluded apps</div><div class="desc">Available once remapping is on.</div></div><span class="val"><span class="chip"><span class="num strong">13</span><span style="color:var(--ink-2)">apps</span></span></span></div>
+            <div class="row dis"><div class="lg"><div class="lab">Excluded apps</div><div class="desc">Available once remapping is on.</div></div><span class="val"><span class="chip"><span class="num strong">13</span><span class="mut">apps</span></span></span></div>
             <div class="row dis"><div class="lg"><div class="lab">Passthrough</div></div><span class="val"><span class="sw"><span class="k"></span></span></span></div>
           </div>
         </div>
@@ -1911,7 +1935,7 @@ one value &middot; &crarr; edits in place<br>
         <div class="plane">
           <div class="group">
             <div class="row"><div class="lg"><div class="lab">Codec priority</div><div class="desc">This kind has no editor yet; edit the file to change it.</div></div><span class="val"><span class="chip"><span class="mono trunc">aptX, LDAC</span></span></span></div>
-            <div class="row"><div class="lg"><div class="lab">Adapter</div></div><span class="val"><span style="display:flex;align-items:center;gap:8px"><span class="st idle"></span><span class="t12">not present</span></span></span></div>
+            <div class="row"><div class="lg"><div class="lab">Adapter</div></div><span class="val"><span class="fx8"><span class="st idle"></span><span class="t12">not present</span></span></span></div>
           </div>
         </div>
         <div class="infobar">Read only &middot; opens config.json in your editor</div>
@@ -1921,13 +1945,13 @@ one value &middot; &crarr; edits in place<br>
 
     <div class="shot">
       <div class="s w520">
-        <div class="band sub"><span class="t14">Key Rules</span><span class="chip"><span class="num strong">1</span><span style="color:var(--wrn-ink)">conflict</span></span></div>
+        <div class="band sub"><span class="t14">Key Rules</span><span class="chip"><span class="num strong">1</span><span class="wrn">conflict</span></span></div>
         <div class="plane">
           <div class="group">
             <div class="rulehead"><span class="hfrom">From</span><span class="hto">To</span><span>Scope</span></div>
             <div class="rule"><div class="side from"><span class="combo"><span class="mo">ctrl</span><span>C</span></span></div><div class="side to"><span class="combo out"><span>cmd</span><span>C</span></span></div><span class="scope">Except excluded</span><span class="disc">&rsaquo;</span></div>
-            <div class="rule warn"><div class="side from"><span class="combo"><span class="mo">ctrl</span><span>C</span></span></div><div class="side to"><span class="combo out"><span>cmd</span><span>X</span></span></div><span class="scope" style="color:var(--wrn-ink)">Shadowed</span><span class="disc">&rsaquo;</span></div>
-            <div class="errline" style="color:var(--wrn-ink)"><span class="st busy"></span>The rule above already claims ctrl C, so this one never fires</div>
+            <div class="rule warn"><div class="side from"><span class="combo"><span class="mo">ctrl</span><span>C</span></span></div><div class="side to"><span class="combo out"><span>cmd</span><span>X</span></span></div><span class="scope wrn">Shadowed</span><span class="disc">&rsaquo;</span></div>
+            <div class="errline wrn"><span class="st busy"></span>The rule above already claims ctrl C, so this one never fires</div>
           </div>
         </div>
       </div>
@@ -1935,15 +1959,15 @@ one value &middot; &crarr; edits in place<br>
     </div>
   </div>
 
-  <div class="stage grid" style="margin-top:var(--sp3)">
+  <div class="stage grid mt3">
     <div class="shot">
       <div class="s w460">
         <div class="band sub"><span class="t14">Lights</span></div>
         <div class="plane">
           <div class="group">
-            <div class="row"><div class="lg"><div class="lab">Brightness</div></div><span class="val"><span class="chip"><span class="num strong">0</span><span style="color:var(--ink-2)">%</span></span></span></div>
-            <div class="row"><div class="lg"><div class="lab">Temperature offset</div></div><span class="val"><span class="chip"><span class="num strong">&minus;40</span><span style="color:var(--ink-2)">K</span></span></span></div>
-            <div class="row"><div class="lg"><div class="lab">Transition</div></div><span class="val"><span class="chip"><span class="num strong">1,000,000</span><span style="color:var(--ink-2)">ms</span></span></span></div>
+            <div class="row"><div class="lg"><div class="lab">Brightness</div></div><span class="val"><span class="chip"><span class="num strong">0</span><span class="mut">%</span></span></span></div>
+            <div class="row"><div class="lg"><div class="lab">Temperature offset</div></div><span class="val"><span class="chip"><span class="num strong">&minus;40</span><span class="mut">K</span></span></span></div>
+            <div class="row"><div class="lg"><div class="lab">Transition</div></div><span class="val"><span class="chip"><span class="num strong">1,000,000</span><span class="mut">ms</span></span></span></div>
           </div>
         </div>
         <div class="warnbar"><span class="st busy"></span>Tray unreachable &middot; saved to disk, will sync on reconnect</div>
@@ -1953,11 +1977,11 @@ one value &middot; &crarr; edits in place<br>
 
     <div class="shot">
       <div class="s dark w460 unfoc">
-        <div class="band sub"><span class="t14">Key Remap</span><span class="chip"><span class="num strong">5</span><span style="color:var(--ink-2)">rules</span></span></div>
+        <div class="band sub"><span class="t14">Key Remap</span><span class="chip"><span class="num strong">5</span><span class="mut">rules</span></span></div>
         <div class="plane">
           <div class="group">
             <div class="row"><div class="lg"><div class="lab">Enabled</div></div><span class="val"><span class="sw on"><span class="k"></span></span></span></div>
-            <div class="row sel"><div class="lg"><div class="lab">Excluded apps</div></div><span class="val"><span class="chip"><span class="num strong">13</span><span style="color:var(--ink-2)">apps</span><span class="caret">&#9662;</span></span></span></div>
+            <div class="row sel"><div class="lg"><div class="lab">Excluded apps</div></div><span class="val"><span class="chip"><span class="num strong">13</span><span class="mut">apps</span><span class="caret">&#9662;</span></span></span></div>
             <div class="rulehead"><span class="hfrom">From</span><span class="hto">To</span><span>Scope</span></div>
             <div class="rule"><div class="side from"><span class="combo"><span class="mo">ctrl</span><span>C</span></span></div><div class="side to"><span class="combo out"><span>cmd</span><span>C</span></span></div></div>
           </div>
@@ -1967,11 +1991,11 @@ one value &middot; &crarr; edits in place<br>
     </div>
 
     <div class="shot">
-      <div class="s w460" style="height:230px">
+      <div class="s w460 h230">
         <div class="band sub"><span class="t14">Key Remap</span></div>
         <div class="plane">
           <div class="search foc" style="color:var(--ink)">zzz<span class="cur" style="width:1.5px;height:16px;background:var(--acc);margin-left:2px"></span><span class="slash">esc</span></div>
-          <div class="empty" style="flex:1">
+          <div class="empty fl1">
             <span>Nothing matches zzz</span>
             <span class="t11">5 rules and 2 settings hidden</span>
           </div>
@@ -1981,10 +2005,10 @@ one value &middot; &crarr; edits in place<br>
     </div>
 
     <div class="shot">
-      <div class="s w460" style="height:230px">
+      <div class="s w460 h230">
         <div class="band sub"><span class="t14">Template</span><span class="chip"><span class="num strong">1.0.0</span></span></div>
         <div class="plane">
-          <div class="empty" style="flex:1">
+          <div class="empty fl1">
             <span>This plugin exposes no settings</span>
             <span class="t11">qol-config.toml declares no fields</span>
           </div>
@@ -1995,7 +2019,7 @@ one value &middot; &crarr; edits in place<br>
     </div>
   </div>
 
-  <div class="stage grid" style="margin-top:var(--sp3)">
+  <div class="stage grid mt3">
     <div class="shot">
       <div class="s w500">
         <div class="band sub">
@@ -2005,23 +2029,18 @@ one value &middot; &crarr; edits in place<br>
           </div>
           <span class="t11 num">0 / 148</span>
         </div>
-        <div class="empty" style="padding:44px 20px">
-          <span>No matches</span>
-          <span class="t11">return runs it as a shell command</span>
-        </div>
-        <div class="hints"><span><span class="k">&crarr;</span>run anyway</span><span><span class="k">esc</span>dismiss</span></div>
       </div>
-      <span class="cap">launcher &middot; no results, return still does something</span>
+      <span class="cap">launcher &middot; no results, the bar and nothing else</span>
     </div>
 
     <div class="shot">
-      <div class="s w360" style="height:230px">
-        <div class="band sub"><span class="t14">Sessions</span><span class="chip"><span class="num strong">0</span><span style="color:var(--ink-2)">live</span></span></div>
-        <div class="empty" style="flex:1">
+      <div class="s w360 h230">
+        <div class="band sub"><span class="t14">Sessions</span><span class="chip"><span class="num strong">0</span><span class="mut">live</span></span></div>
+        <div class="empty fl1">
           <span>No sessions running</span>
           <span class="t11">spawned lanes appear here</span>
         </div>
-        <div class="hints"><span style="margin-left:auto"><span class="k">&#8997;S</span>collapse</span></div>
+        <div class="hints"><span class="mla"><span class="k">&#8997;S</span>collapse</span></div>
       </div>
       <span class="cap">cli-sessions &middot; empty</span>
     </div>
@@ -2036,7 +2055,7 @@ one value &middot; &crarr; edits in place<br>
     </div>
 
     <div class="shot">
-      <div class="s strip32" style="width:210px"><span class="st idle"></span><span class="t12" style="flex:1">idle</span><span class="t11 mono">&#8997;S</span></div>
+      <div class="s strip32" style="width:210px"><span class="st idle"></span><span class="t12 fl1">idle</span><span class="t11 mono">&#8997;S</span></div>
       <span class="cap">collapsed strip &middot; nothing running</span>
     </div>
   </div>
@@ -2072,9 +2091,9 @@ one value &middot; &crarr; edits in place<br>
         <div class="band sub"><span class="t14">Key Remap</span><span class="chip"><span class="sk" style="width:34px"></span></span></div>
         <div class="plane">
           <div class="group">
-            <div class="row"><div class="lg" style="gap:7px"><div class="sk tall" style="width:72px"></div><div class="sk" style="width:180px"></div></div><span class="val"><span class="sk" style="width:40px;height:24px;border-radius:999px"></span></span></div>
-            <div class="row"><div class="lg" style="gap:7px"><div class="sk tall" style="width:104px"></div><div class="sk" style="width:150px"></div></div><span class="val"><span class="sk" style="width:64px;height:var(--h-el)"></span></span></div>
-            <div class="row"><div class="lg" style="gap:7px"><div class="sk tall" style="width:88px"></div></div><span class="val"><span class="sk" style="width:52px;height:var(--h-el)"></span></span></div>
+            <div class="row"><div class="lg g7"><div class="sk tall" style="width:72px"></div><div class="sk" style="width:180px"></div></div><span class="val"><span class="sk" style="width:40px;height:24px;border-radius:999px"></span></span></div>
+            <div class="row"><div class="lg g7"><div class="sk tall" style="width:104px"></div><div class="sk" style="width:150px"></div></div><span class="val"><span class="sk" style="width:64px;height:var(--h-el)"></span></span></div>
+            <div class="row"><div class="lg g7"><div class="sk tall" style="width:88px"></div></div><span class="val"><span class="sk" style="width:52px;height:var(--h-el)"></span></span></div>
           </div>
         </div>
       </div>
@@ -2083,15 +2102,15 @@ one value &middot; &crarr; edits in place<br>
 
     <div class="shot">
       <div class="s w460">
-        <div class="band sub"><span class="t14">Key Remap</span><span class="chip"><span style="color:var(--neg)">blocked</span></span></div>
+        <div class="band sub"><span class="t14">Key Remap</span><span class="chip"><span class="neg">blocked</span></span></div>
         <div class="plane">
           <div class="group">
             <div class="row dis"><div class="lg"><div class="lab">Enabled</div><div class="desc">Needs permission to watch the keyboard.</div></div><span class="val"><span class="sw"><span class="k"></span></span></span></div>
           </div>
-          <div class="well" style="margin:0">
-            <div class="wh"><span>Accessibility</span><span style="color:var(--neg)">not granted</span></div>
+          <div class="well m0">
+            <div class="wh"><span>Accessibility</span><span class="neg">not granted</span></div>
             <div class="t12">macOS has to allow qol to read key events. Nothing is remapped until it does.</div>
-            <div style="display:flex;align-items:center;gap:10px">
+            <div class="fx10">
               <span class="cta">Open System Settings</span>
               <span class="chip">Recheck</span>
             </div>
@@ -2104,7 +2123,7 @@ one value &middot; &crarr; edits in place<br>
     <div class="shot">
       <div class="s w520">
         <div class="band sub"><span class="t14">Message quality</span></div>
-        <div class="plane" style="gap:14px">
+        <div class="plane g14">
           <div>
             <div class="dlab" style="padding:0 var(--padx) 6px">Never</div>
             <div class="failbar bad-copy" style="border-top:0"><span class="st err"></span>Error: connect ECONNREFUSED 127.0.0.1:8899</div>
@@ -2120,10 +2139,10 @@ one value &middot; &crarr; edits in place<br>
 
     <div class="shot">
       <div class="s w460">
-        <div class="band sub"><span class="t14">Sessions</span><span class="chip"><span class="num strong">0</span><span style="color:var(--ink-2)">live</span></span></div>
+        <div class="band sub"><span class="t14">Sessions</span><span class="chip"><span class="num strong">0</span><span class="mut">live</span></span></div>
         <div class="plane">
           <div class="group">
-            <div class="row"><div class="lg"><div class="lab">Daemon</div><div class="desc">Last seen 2 minutes ago.</div></div><span class="val"><span style="display:flex;align-items:center;gap:8px"><span class="st err"></span><span class="t12">stopped</span></span></span></div>
+            <div class="row"><div class="lg"><div class="lab">Daemon</div><div class="desc">Last seen 2 minutes ago.</div></div><span class="val"><span class="fx8"><span class="st err"></span><span class="t12">stopped</span></span></span></div>
           </div>
           <div class="empty" style="padding:20px">
             <span class="cta">Start daemon</span>
@@ -2135,15 +2154,15 @@ one value &middot; &crarr; edits in place<br>
     </div>
   </div>
 
-  <div class="stage grid" style="margin-top:var(--sp3)">
+  <div class="stage grid mt3">
     <div class="shot">
       <div class="s w460">
-        <div class="band sub"><span class="t14 trunc">[Kéy Rémäp &#7777;&#7777;]</span><span class="chip"><span class="num strong">5</span><span style="color:var(--ink-2)">rüléš</span></span></div>
+        <div class="band sub"><span class="t14 trunc">[Kéy Rémäp &#7777;&#7777;]</span><span class="chip"><span class="num strong">5</span><span class="mut">rüléš</span></span></div>
         <div class="plane">
           <div class="group">
             <div class="gh"><span class="gt">[Générâl]</span><span class="gn">2</span></div>
             <div class="row"><div class="lg"><div class="lab">[Énâbléd &#7777;&#7777;&#7777;]</div><div class="desc">[Rémâpping rúns whílé thís ís ón &#7777;&#7777;&#7777;&#7777;]</div></div><span class="val"><span class="sw on"><span class="k"></span></span></span></div>
-            <div class="row sel"><div class="lg"><div class="lab">[Éxclúdéd âpplícâtíóns &#7777;&#7777;&#7777;]</div></div><span class="val"><span class="chip"><span class="num strong">13</span><span style="color:var(--ink-2)">âpps</span></span></span></div>
+            <div class="row sel"><div class="lg"><div class="lab">[Éxclúdéd âpplícâtíóns &#7777;&#7777;&#7777;]</div></div><span class="val"><span class="chip"><span class="num strong">13</span><span class="mut">âpps</span></span></span></div>
           </div>
         </div>
       </div>
@@ -2156,7 +2175,7 @@ one value &middot; &crarr; edits in place<br>
         <div class="plane">
           <div class="group">
             <div class="row"><div class="lg"><div class="lab">Tastaturbelegungs&shy;umschaltung</div><div class="desc">Gilt f&uuml;r alle Anwendungen au&szlig;er Terminals.</div></div><span class="val"><span class="sw on"><span class="k"></span></span></span></div>
-            <div class="row"><div class="lg"><div class="lab">&#12461;&#12540;&#12510;&#12483;&#12503;&#12434;&#26377;&#21177;&#12395;&#12377;&#12427;</div><div class="desc">&#12479;&#12540;&#12511;&#12490;&#12523;&#20197;&#22806;&#12391;&#26377;&#21177;&#12391;&#12377;&#12290;</div></div><span class="val"><span class="chip"><span class="num strong">13</span><span style="color:var(--ink-2)">&#20214;</span></span></span></div>
+            <div class="row"><div class="lg"><div class="lab">&#12461;&#12540;&#12510;&#12483;&#12503;&#12434;&#26377;&#21177;&#12395;&#12377;&#12427;</div><div class="desc">&#12479;&#12540;&#12511;&#12490;&#12523;&#20197;&#22806;&#12391;&#26377;&#21177;&#12391;&#12377;&#12290;</div></div><span class="val"><span class="chip"><span class="num strong">13</span><span class="mut">&#20214;</span></span></span></div>
           </div>
         </div>
       </div>
@@ -2165,7 +2184,7 @@ one value &middot; &crarr; edits in place<br>
 
     <div class="shot">
       <div class="s w460" dir="rtl">
-        <div class="band sub"><span class="t14">&#1578;&#1593;&#1610;&#1610;&#1606; &#1575;&#1604;&#1605;&#1601;&#1575;&#1578;&#1610;&#1581;</span><span class="chip"><span class="num strong">5</span><span style="color:var(--ink-2)">&#1602;&#1608;&#1575;&#1593;&#1583;</span></span></div>
+        <div class="band sub"><span class="t14">&#1578;&#1593;&#1610;&#1610;&#1606; &#1575;&#1604;&#1605;&#1601;&#1575;&#1578;&#1610;&#1581;</span><span class="chip"><span class="num strong">5</span><span class="mut">&#1602;&#1608;&#1575;&#1593;&#1583;</span></span></div>
         <div class="plane">
           <div class="group">
             <div class="row"><div class="lg"><div class="lab">&#1605;&#1601;&#1593;&#1617;&#1604;</div><div class="desc">&#1610;&#1593;&#1605;&#1604; &#1575;&#1604;&#1578;&#1593;&#1610;&#1610;&#1606; &#1571;&#1579;&#1606;&#1575;&#1569; &#1578;&#1588;&#1594;&#1610;&#1604;&#1607;.</div></div><span class="val"><span class="sw on"><span class="k"></span></span></span></div>
@@ -2179,11 +2198,11 @@ one value &middot; &crarr; edits in place<br>
 
     <div class="shot">
       <div class="s w460 big">
-        <div class="band sub"><span class="t14">Key Remap</span><span class="chip"><span class="num strong">5</span><span style="color:var(--ink-2)">rules</span></span></div>
+        <div class="band sub"><span class="t14">Key Remap</span><span class="chip"><span class="num strong">5</span><span class="mut">rules</span></span></div>
         <div class="plane">
           <div class="group">
             <div class="row"><div class="lg"><div class="lab">Enabled</div><div class="desc">Remapping runs while this is on.</div></div><span class="val" style="width:auto"><span class="sw on" style="width:52px;height:31px"><span class="k" style="width:26px;height:26px"></span></span></span></div>
-            <div class="row sel"><div class="lg"><div class="lab">Excluded apps</div></div><span class="val" style="width:auto"><span class="chip"><span class="num strong">13</span><span style="color:var(--ink-2)">apps</span></span></span></div>
+            <div class="row sel"><div class="lg"><div class="lab">Excluded apps</div></div><span class="val" style="width:auto"><span class="chip"><span class="num strong">13</span><span class="mut">apps</span></span></span></div>
           </div>
         </div>
       </div>
@@ -2191,10 +2210,10 @@ one value &middot; &crarr; edits in place<br>
     </div>
   </div>
 
-  <div class="stage grid" style="margin-top:var(--sp3)">
+  <div class="stage grid mt3">
     <div class="shot">
       <div class="s w460 hc">
-        <div class="band sub"><span class="t14">Key Remap</span><span class="chip"><span class="num strong">5</span><span style="color:var(--ink-2)">rules</span></span></div>
+        <div class="band sub"><span class="t14">Key Remap</span><span class="chip"><span class="num strong">5</span><span class="mut">rules</span></span></div>
         <div class="plane">
           <div class="group">
             <div class="row"><div class="lg"><div class="lab">Enabled</div><div class="desc">Remapping runs while this is on.</div></div><span class="val"><span class="sw on"><span class="k"></span></span></span></div>
@@ -2228,12 +2247,12 @@ one value &middot; &crarr; edits in place<br>
         <div class="plane">
           <div class="group">
             <div class="rulehead"><span class="hfrom">From</span><span class="hto">To</span><span>Scope</span></div>
-            <div class="rule bad"><div class="side from"><span class="combo"><span class="mo">ctrl</span><span>Y</span></span></div><div class="side to"><span class="combo out"><span>cmd</span><span>shift</span><span>Z</span></span></div><span class="t12" style="color:var(--neg)">Remove this rule?</span><span class="chip">Cancel</span><span class="chip dgr">Remove</span></div>
+            <div class="rule bad"><div class="side from"><span class="combo"><span class="mo">ctrl</span><span>Y</span></span></div><div class="side to"><span class="combo out"><span>cmd</span><span>shift</span><span>Z</span></span></div><span class="t12 neg">Remove this rule?</span><span class="chip">Cancel</span><span class="chip dgr">Remove</span></div>
             <div class="rulehead"><span class="hfrom">From</span><span class="hto">To</span><span>Scope</span></div>
             <div class="rule"><div class="side from"><span class="combo"><span class="mo">ctrl</span><span>C</span></span></div><div class="side to"><span class="combo out"><span>cmd</span><span>C</span></span></div></div>
           </div>
         </div>
-        <div class="infobar">Removed ctrl &#8964; alt &#8592;<span style="margin-left:auto"><span class="chip">Undo</span></span></div>
+        <div class="infobar">Removed ctrl &#8964; alt &#8592;<span class="mla"><span class="chip">Undo</span></span></div>
       </div>
       <span class="cap">destructive confirm in place, undo for 10 seconds</span>
     </div>
@@ -2280,31 +2299,31 @@ one value &middot; &crarr; edits in place<br>
   </div>
 
   <div class="stage grid" style="grid-template-columns:1fr">
-    <div class="shot" style="width:100%">
+    <div class="shot w100">
       <div class="s" style="width:100%;max-width:940px">
-        <div class="band"><div><div class="t18">Eight goals, two routes each</div><div class="t12">Keys counted from the moment the panel is open</div></div><span class="chip"><span class="num strong">avg 3.4</span><span style="color:var(--ink-2)">keys</span></span></div>
+        <div class="band"><div><div class="t18">Eight goals, two routes each</div><div class="t12">Keys counted from the moment the panel is open</div></div><span class="chip"><span class="num strong">avg 3.4</span><span class="mut">keys</span></span></div>
         <div class="plane" style="gap:0;padding:8px var(--padx)">
-          <div class="task"><div class="th2"><span class="tname">Stop remapping now</span><span class="tcount"><b>5</b> keys</span></div><div class="trace"><span style="display:flex;align-items:center;gap:7px"><span class="kc">/</span><span class="lbl">filter</span></span><span class="sep">&rsaquo;</span><span style="display:flex;align-items:center;gap:7px"><span class="kc">e n</span><span class="lbl">type</span></span><span class="sep">&rsaquo;</span><span style="display:flex;align-items:center;gap:7px"><span class="kc">&crarr;</span><span class="lbl">jump</span></span><span class="sep">&rsaquo;</span><span style="display:flex;align-items:center;gap:7px"><span class="kc">space</span><span class="lbl">flip</span></span></div><div class="trace" style="opacity:.62"><span style="display:flex;align-items:center;gap:7px"><span class="kc">&darr;</span><span class="lbl">row 1</span></span><span class="sep">&rsaquo;</span><span style="display:flex;align-items:center;gap:7px"><span class="kc">space</span><span class="lbl">flip</span></span><span class="tcount"><b>2</b> keys</span></div><div class="t11">Enabled is already the first row, so walking wins here.</div></div>
-          <div class="task"><div class="th2"><span class="tname">Exclude Rider</span><span class="tcount"><b>11</b> keys</span></div><div class="trace"><span style="display:flex;align-items:center;gap:7px"><span class="kc">/</span><span class="lbl">filter</span></span><span class="sep">&rsaquo;</span><span style="display:flex;align-items:center;gap:7px"><span class="kc">e x c</span><span class="lbl">type</span></span><span class="sep">&rsaquo;</span><span style="display:flex;align-items:center;gap:7px"><span class="kc">&crarr;</span><span class="lbl">open well</span></span><span class="sep">&rsaquo;</span><span style="display:flex;align-items:center;gap:7px"><span class="kc">R i d e r</span><span class="lbl">type</span></span><span class="sep">&rsaquo;</span><span style="display:flex;align-items:center;gap:7px"><span class="kc">&crarr;</span><span class="lbl">add</span></span></div><div class="trace" style="opacity:.62"><span style="display:flex;align-items:center;gap:7px"><span class="kc">&darr;&darr;</span><span class="lbl">row 2</span></span><span class="sep">&rsaquo;</span><span style="display:flex;align-items:center;gap:7px"><span class="kc">&crarr;</span><span class="lbl">open well</span></span><span class="sep">&rsaquo;</span><span style="display:flex;align-items:center;gap:7px"><span class="kc">R i d e r</span><span class="lbl">type</span></span><span class="sep">&rsaquo;</span><span style="display:flex;align-items:center;gap:7px"><span class="kc">&crarr;</span><span class="lbl">add</span></span><span class="tcount"><b>9</b> keys</span></div><div class="t11">Typing the app name is unavoidable; only the reaching differs.</div></div>
-          <div class="task"><div class="th2"><span class="tname">Retarget ctrl Y to ctrl U</span><span class="tcount"><b>10</b> keys</span></div><div class="trace"><span style="display:flex;align-items:center;gap:7px"><span class="kc">/</span><span class="lbl">filter</span></span><span class="sep">&rsaquo;</span><span style="display:flex;align-items:center;gap:7px"><span class="kc">c t r l y</span><span class="lbl">type</span></span><span class="sep">&rsaquo;</span><span style="display:flex;align-items:center;gap:7px"><span class="kc">&crarr;</span><span class="lbl">edit</span></span><span class="sep">&rsaquo;</span><span style="display:flex;align-items:center;gap:7px"><span class="kc">ctrl U</span><span class="lbl">press</span></span><span class="sep">&rsaquo;</span><span style="display:flex;align-items:center;gap:7px"><span class="kc">&crarr;</span><span class="lbl">save</span></span></div><div class="trace" style="opacity:.62"><span style="display:flex;align-items:center;gap:7px"><span class="kc">&#8984;3</span><span class="lbl">Key Rules</span></span><span class="sep">&rsaquo;</span><span style="display:flex;align-items:center;gap:7px"><span class="kc">&darr;&darr;&darr;</span><span class="lbl">row 3</span></span><span class="sep">&rsaquo;</span><span style="display:flex;align-items:center;gap:7px"><span class="kc">&crarr;</span><span class="lbl">edit</span></span><span class="sep">&rsaquo;</span><span style="display:flex;align-items:center;gap:7px"><span class="kc">ctrl U</span><span class="lbl">press</span></span><span class="sep">&rsaquo;</span><span style="display:flex;align-items:center;gap:7px"><span class="kc">&crarr;</span><span class="lbl">save</span></span><span class="tcount"><b>8</b> keys</span></div><div class="t11">Section numbers beat filtering when you know where it lives.</div></div>
-          <div class="task"><div class="th2"><span class="tname">Delete a mouse rule</span><span class="tcount"><b>5</b> keys</span></div><div class="trace"><span style="display:flex;align-items:center;gap:7px"><span class="kc">&#8984;4</span><span class="lbl">Mouse Rules</span></span><span class="sep">&rsaquo;</span><span style="display:flex;align-items:center;gap:7px"><span class="kc">&darr;</span><span class="lbl">row 1</span></span><span class="sep">&rsaquo;</span><span style="display:flex;align-items:center;gap:7px"><span class="kc">&#9003;</span><span class="lbl">ask</span></span><span class="sep">&rsaquo;</span><span style="display:flex;align-items:center;gap:7px"><span class="kc">&rarr;&crarr;</span><span class="lbl">confirm</span></span></div><div class="t11">Confirm defaults to Cancel, so the fast path is deliberately one key longer.</div></div>
-          <div class="task"><div class="th2"><span class="tname">Add a key rule</span><span class="tcount"><b>2</b> keys</span></div><div class="trace"><span style="display:flex;align-items:center;gap:7px"><span class="kc">&#8984;3</span><span class="lbl">Key Rules</span></span><span class="sep">&rsaquo;</span><span style="display:flex;align-items:center;gap:7px"><span class="kc">&#8984;&crarr;</span><span class="lbl">add</span></span></div><div class="trace" style="opacity:.62"><span style="display:flex;align-items:center;gap:7px"><span class="kc">&#8984;3</span><span class="lbl">Key Rules</span></span><span class="sep">&rsaquo;</span><span style="display:flex;align-items:center;gap:7px"><span class="kc">&uarr;</span><span class="lbl">add row</span></span><span class="sep">&rsaquo;</span><span style="display:flex;align-items:center;gap:7px"><span class="kc">&crarr;</span><span class="lbl">add</span></span><span class="tcount"><b>3</b> keys</span></div><div class="t11">Add is bound directly so it never depends on where the cursor sits.</div></div>
-          <div class="task"><div class="th2"><span class="tname">Find natural scrolling</span><span class="tcount"><b>5</b> keys</span></div><div class="trace"><span style="display:flex;align-items:center;gap:7px"><span class="kc">/</span><span class="lbl">filter</span></span><span class="sep">&rsaquo;</span><span style="display:flex;align-items:center;gap:7px"><span class="kc">n a t</span><span class="lbl">type</span></span><span class="sep">&rsaquo;</span><span style="display:flex;align-items:center;gap:7px"><span class="kc">&crarr;</span><span class="lbl">jump</span></span></div><div class="trace" style="opacity:.62"><span style="display:flex;align-items:center;gap:7px"><span class="kc">&#8984;5</span><span class="lbl">Scroll</span></span><span class="sep">&rsaquo;</span><span style="display:flex;align-items:center;gap:7px"><span class="kc">&darr;</span><span class="lbl">row 1</span></span><span class="tcount"><b>2</b> keys</span></div><div class="t11">Filtering pays off when you do not know which section owns it.</div></div>
-          <div class="task"><div class="th2"><span class="tname">Set Lights brightness</span><span class="tcount"><b>8</b> keys</span></div><div class="trace"><span style="display:flex;align-items:center;gap:7px"><span class="kc">&#8984;K</span><span class="lbl">plugins</span></span><span class="sep">&rsaquo;</span><span style="display:flex;align-items:center;gap:7px"><span class="kc">l i</span><span class="lbl">type</span></span><span class="sep">&rsaquo;</span><span style="display:flex;align-items:center;gap:7px"><span class="kc">&crarr;</span><span class="lbl">open</span></span><span class="sep">&rsaquo;</span><span style="display:flex;align-items:center;gap:7px"><span class="kc">&darr;&darr;</span><span class="lbl">row 2</span></span><span class="sep">&rsaquo;</span><span style="display:flex;align-items:center;gap:7px"><span class="kc">&uarr;&uarr;</span><span class="lbl">step</span></span></div><div class="t11">Crossing plugins reuses the same picker as everything else.</div></div>
-          <div class="task"><div class="th2"><span class="tname">Undo that delete</span><span class="tcount"><b>1</b> keys</span></div><div class="trace"><span style="display:flex;align-items:center;gap:7px"><span class="kc">&#8984;Z</span><span class="lbl">undo</span></span></div><div class="t11">Only valid while the strip is showing, which is exactly its lifetime.</div></div>
+          <div class="task"><div class="th2"><span class="tname">Stop remapping now</span><span class="tcount"><b>5</b> keys</span></div><div class="trace"><span class="fx"><span class="kc">/</span><span class="lbl">filter</span></span><span class="sep">&rsaquo;</span><span class="fx"><span class="kc">e n</span><span class="lbl">type</span></span><span class="sep">&rsaquo;</span><span class="fx"><span class="kc">&crarr;</span><span class="lbl">jump</span></span><span class="sep">&rsaquo;</span><span class="fx"><span class="kc">space</span><span class="lbl">flip</span></span></div><div class="trace faint"><span class="fx"><span class="kc">&darr;</span><span class="lbl">row 1</span></span><span class="sep">&rsaquo;</span><span class="fx"><span class="kc">space</span><span class="lbl">flip</span></span><span class="tcount"><b>2</b> keys</span></div><div class="t11">Enabled is already the first row, so walking wins here.</div></div>
+          <div class="task"><div class="th2"><span class="tname">Exclude Rider</span><span class="tcount"><b>11</b> keys</span></div><div class="trace"><span class="fx"><span class="kc">/</span><span class="lbl">filter</span></span><span class="sep">&rsaquo;</span><span class="fx"><span class="kc">e x c</span><span class="lbl">type</span></span><span class="sep">&rsaquo;</span><span class="fx"><span class="kc">&crarr;</span><span class="lbl">open well</span></span><span class="sep">&rsaquo;</span><span class="fx"><span class="kc">R i d e r</span><span class="lbl">type</span></span><span class="sep">&rsaquo;</span><span class="fx"><span class="kc">&crarr;</span><span class="lbl">add</span></span></div><div class="trace faint"><span class="fx"><span class="kc">&darr;&darr;</span><span class="lbl">row 2</span></span><span class="sep">&rsaquo;</span><span class="fx"><span class="kc">&crarr;</span><span class="lbl">open well</span></span><span class="sep">&rsaquo;</span><span class="fx"><span class="kc">R i d e r</span><span class="lbl">type</span></span><span class="sep">&rsaquo;</span><span class="fx"><span class="kc">&crarr;</span><span class="lbl">add</span></span><span class="tcount"><b>9</b> keys</span></div><div class="t11">Typing the app name is unavoidable; only the reaching differs.</div></div>
+          <div class="task"><div class="th2"><span class="tname">Retarget ctrl Y to ctrl U</span><span class="tcount"><b>10</b> keys</span></div><div class="trace"><span class="fx"><span class="kc">/</span><span class="lbl">filter</span></span><span class="sep">&rsaquo;</span><span class="fx"><span class="kc">c t r l y</span><span class="lbl">type</span></span><span class="sep">&rsaquo;</span><span class="fx"><span class="kc">&crarr;</span><span class="lbl">edit</span></span><span class="sep">&rsaquo;</span><span class="fx"><span class="kc">ctrl U</span><span class="lbl">press</span></span><span class="sep">&rsaquo;</span><span class="fx"><span class="kc">&crarr;</span><span class="lbl">save</span></span></div><div class="trace faint"><span class="fx"><span class="kc">&#8984;3</span><span class="lbl">Key Rules</span></span><span class="sep">&rsaquo;</span><span class="fx"><span class="kc">&darr;&darr;&darr;</span><span class="lbl">row 3</span></span><span class="sep">&rsaquo;</span><span class="fx"><span class="kc">&crarr;</span><span class="lbl">edit</span></span><span class="sep">&rsaquo;</span><span class="fx"><span class="kc">ctrl U</span><span class="lbl">press</span></span><span class="sep">&rsaquo;</span><span class="fx"><span class="kc">&crarr;</span><span class="lbl">save</span></span><span class="tcount"><b>8</b> keys</span></div><div class="t11">Section numbers beat filtering when you know where it lives.</div></div>
+          <div class="task"><div class="th2"><span class="tname">Delete a mouse rule</span><span class="tcount"><b>5</b> keys</span></div><div class="trace"><span class="fx"><span class="kc">&#8984;4</span><span class="lbl">Mouse Rules</span></span><span class="sep">&rsaquo;</span><span class="fx"><span class="kc">&darr;</span><span class="lbl">row 1</span></span><span class="sep">&rsaquo;</span><span class="fx"><span class="kc">&#9003;</span><span class="lbl">ask</span></span><span class="sep">&rsaquo;</span><span class="fx"><span class="kc">&rarr;&crarr;</span><span class="lbl">confirm</span></span></div><div class="t11">Confirm defaults to Cancel, so the fast path is deliberately one key longer.</div></div>
+          <div class="task"><div class="th2"><span class="tname">Add a key rule</span><span class="tcount"><b>2</b> keys</span></div><div class="trace"><span class="fx"><span class="kc">&#8984;3</span><span class="lbl">Key Rules</span></span><span class="sep">&rsaquo;</span><span class="fx"><span class="kc">&#8984;&crarr;</span><span class="lbl">add</span></span></div><div class="trace faint"><span class="fx"><span class="kc">&#8984;3</span><span class="lbl">Key Rules</span></span><span class="sep">&rsaquo;</span><span class="fx"><span class="kc">&uarr;</span><span class="lbl">add row</span></span><span class="sep">&rsaquo;</span><span class="fx"><span class="kc">&crarr;</span><span class="lbl">add</span></span><span class="tcount"><b>3</b> keys</span></div><div class="t11">Add is bound directly so it never depends on where the cursor sits.</div></div>
+          <div class="task"><div class="th2"><span class="tname">Find natural scrolling</span><span class="tcount"><b>5</b> keys</span></div><div class="trace"><span class="fx"><span class="kc">/</span><span class="lbl">filter</span></span><span class="sep">&rsaquo;</span><span class="fx"><span class="kc">n a t</span><span class="lbl">type</span></span><span class="sep">&rsaquo;</span><span class="fx"><span class="kc">&crarr;</span><span class="lbl">jump</span></span></div><div class="trace faint"><span class="fx"><span class="kc">&#8984;5</span><span class="lbl">Scroll</span></span><span class="sep">&rsaquo;</span><span class="fx"><span class="kc">&darr;</span><span class="lbl">row 1</span></span><span class="tcount"><b>2</b> keys</span></div><div class="t11">Filtering pays off when you do not know which section owns it.</div></div>
+          <div class="task"><div class="th2"><span class="tname">Set Lights brightness</span><span class="tcount"><b>8</b> keys</span></div><div class="trace"><span class="fx"><span class="kc">&#8984;K</span><span class="lbl">plugins</span></span><span class="sep">&rsaquo;</span><span class="fx"><span class="kc">l i</span><span class="lbl">type</span></span><span class="sep">&rsaquo;</span><span class="fx"><span class="kc">&crarr;</span><span class="lbl">open</span></span><span class="sep">&rsaquo;</span><span class="fx"><span class="kc">&darr;&darr;</span><span class="lbl">row 2</span></span><span class="sep">&rsaquo;</span><span class="fx"><span class="kc">&uarr;&uarr;</span><span class="lbl">step</span></span></div><div class="t11">Crossing plugins reuses the same picker as everything else.</div></div>
+          <div class="task"><div class="th2"><span class="tname">Undo that delete</span><span class="tcount"><b>1</b> keys</span></div><div class="trace"><span class="fx"><span class="kc">&#8984;Z</span><span class="lbl">undo</span></span></div><div class="t11">Only valid while the strip is showing, which is exactly its lifetime.</div></div>
         </div>
       </div>
       <span class="cap">keystroke cost &middot; walk versus type</span>
     </div>
   </div>
 
-  <div class="stage grid" style="margin-top:var(--sp3)">
+  <div class="stage grid mt3">
     <div class="shot">
       <div class="frame">
         <div class="fcap"><span class="fnum">1</span>row selected, nothing open</div>
-        <div class="s w340" style="--fromw:88px;--tow:124px">
-          <div class="band sub"><span class="t14">Key Rules</span><span class="chip"><span class="num strong">5</span><span style="color:var(--ink-2)">rules</span></span></div>
-          <div class="plane" style="padding:12px"><div class="group"><div class="rulehead"><span class="hfrom">From</span><span class="hto">To</span><span>Scope</span></div>
+        <div class="s w340 rgrid">
+          <div class="band sub"><span class="t14">Key Rules</span><span class="chip"><span class="num strong">5</span><span class="mut">rules</span></span></div>
+          <div class="plane p12"><div class="group"><div class="rulehead"><span class="hfrom">From</span><span class="hto">To</span><span>Scope</span></div>
             <div class="rule sel"><div class="side from"><span class="combo"><span class="mo">ctrl</span><span>Y</span></span></div><div class="side to"><span class="combo out"><span>cmd</span><span>shift</span><span>Z</span></span></div></div></div></div>
         </div>
       </div>
@@ -2313,9 +2332,9 @@ one value &middot; &crarr; edits in place<br>
     <div class="shot">
       <div class="frame">
         <div class="fcap"><span class="fnum">2</span>&crarr; opens the rule editor</div>
-        <div class="s w340" style="--fromw:88px;--tow:124px">
+        <div class="s w340 rgrid">
           <div class="band sub"><span class="t14">Key Rules</span><span class="chip open">capturing</span></div>
-          <div class="plane" style="padding:12px"><div class="group"><div class="well" style="margin:0;gap:8px"><div class="edrow"><span class="edlab">From</span><span class="mc on">ctrl</span><span class="mc">alt</span><span class="mc">shift</span><span class="mc">cmd</span><span class="kc capt" style="margin-left:auto">&hellip;</span></div><div class="edrow"><span class="edlab">To</span><span class="mc">ctrl</span><span class="mc">alt</span><span class="mc">shift</span><span class="mc on">cmd</span><span class="kc out" style="margin-left:auto">Z</span></div></div></div></div>
+          <div class="plane p12"><div class="group"><div class="well flat"><div class="edrow"><span class="edlab">From</span><span class="mc on">ctrl</span><span class="mc">alt</span><span class="mc">shift</span><span class="mc">cmd</span><span class="kc capt mla">&hellip;</span></div><div class="edrow"><span class="edlab">To</span><span class="mc">ctrl</span><span class="mc">alt</span><span class="mc">shift</span><span class="mc on">cmd</span><span class="kc out mla">Z</span></div></div></div></div>
         </div>
       </div>
       <span class="cap">open &middot; From is armed, the amber cap owns the keyboard</span>
@@ -2323,9 +2342,9 @@ one value &middot; &crarr; edits in place<br>
     <div class="shot">
       <div class="frame">
         <div class="fcap"><span class="fnum">3</span>ctrl U lands in the armed cap</div>
-        <div class="s w340" style="--fromw:88px;--tow:124px">
+        <div class="s w340 rgrid">
           <div class="band sub"><span class="t14">Key Rules</span><span class="chip open">unsaved</span></div>
-          <div class="plane" style="padding:12px"><div class="group"><div class="well" style="margin:0;gap:8px"><div class="edrow"><span class="edlab">From</span><span class="mc on">ctrl</span><span class="mc">alt</span><span class="mc">shift</span><span class="mc">cmd</span><span class="kc capt" style="margin-left:auto">U</span></div><div class="edrow"><span class="edlab">To</span><span class="mc">ctrl</span><span class="mc">alt</span><span class="mc">shift</span><span class="mc on">cmd</span><span class="kc out" style="margin-left:auto">Z</span></div></div></div></div>
+          <div class="plane p12"><div class="group"><div class="well flat"><div class="edrow"><span class="edlab">From</span><span class="mc on">ctrl</span><span class="mc">alt</span><span class="mc">shift</span><span class="mc">cmd</span><span class="kc capt mla">U</span></div><div class="edrow"><span class="edlab">To</span><span class="mc">ctrl</span><span class="mc">alt</span><span class="mc">shift</span><span class="mc on">cmd</span><span class="kc out mla">Z</span></div></div></div></div>
         </div>
       </div>
       <span class="cap">held &middot; not saved yet, esc still cancels</span>
@@ -2333,9 +2352,9 @@ one value &middot; &crarr; edits in place<br>
     <div class="shot">
       <div class="frame">
         <div class="fcap"><span class="fnum">4</span>&crarr; commits and returns</div>
-        <div class="s w340" style="--fromw:88px;--tow:124px">
-          <div class="band sub"><span class="t14">Key Rules</span><span class="chip"><span class="num strong">5</span><span style="color:var(--ink-2)">rules</span></span></div>
-          <div class="plane" style="padding:12px"><div class="group"><div class="rulehead"><span class="hfrom">From</span><span class="hto">To</span><span>Scope</span></div>
+        <div class="s w340 rgrid">
+          <div class="band sub"><span class="t14">Key Rules</span><span class="chip"><span class="num strong">5</span><span class="mut">rules</span></span></div>
+          <div class="plane p12"><div class="group"><div class="rulehead"><span class="hfrom">From</span><span class="hto">To</span><span>Scope</span></div>
             <div class="rule sel"><div class="side from"><span class="combo"><span class="mo">ctrl</span><span>U</span></span></div><div class="side to"><span class="combo out"><span>cmd</span><span>shift</span><span>Z</span></span></div></div></div></div>
         </div>
       </div>

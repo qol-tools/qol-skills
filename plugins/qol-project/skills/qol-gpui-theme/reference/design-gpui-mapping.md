@@ -56,14 +56,14 @@ GPUI sources are in `/Users/kaho/repos/private/qol-monorepo`.
 | rail caption | none | none | none | match |
 | rail item height | `--h-ctl` 36 | `PANEL_RAIL_ITEM_HEIGHT` | 36 | match |
 | rail item radius | `--r2` 6 | `RADIUS_CONTROL` | 6 | match |
-| rail item marker | 3px, left -6, full height | `kit::row_state` bar | 3px, left 0, full height | delta, the -6 overhang only |
+| rail item marker | 3px, left 0, full height | `kit::row_state` bar | 3px, left 0, full height | match, the deck dropped its -6 overhang |
 | band height | `--h-band` 64 | `PANEL_BAND_HEIGHT` | 64 | match |
 | band background | `--side` | `render_band` `rail_bg` | same | match |
-| band title | 18 semibold | `TEXT_TITLE` 17 semibold | 17 | delta, 1px |
+| band title | 18 semibold | `TEXT_TITLE` | 18 semibold | match |
 | count chip | 28, r2 6 | `render_count_chip` | 28, r2 6 | match |
 | filter height | `--h-ctl` 36 | `PANEL_FILTER_HEIGHT` | 36 | match |
 | filter radius | `--r4` 11 | `RADIUS_WELL` | 11 | match |
-| filter margin | none (flush) | `PANEL_FILTER_MARGIN` | 20 | delta, code insets 20 |
+| filter margin | 20 top, the deck's own `.search` insets it | `PANEL_FILTER_MARGIN` | 20 | match |
 | group header height | `--h-ctl` 36 | `PANEL_GROUP_HEADER_HEIGHT` | 36 | match |
 | group header text | plain uppercase, `--ink-2` | `render_group_header` | plain uppercase, `label_text` | match |
 | row height | `--h-row` 52 | `PANEL_ROW_HEIGHT` | 52 | match |
@@ -73,9 +73,9 @@ GPUI sources are in `/Users/kaho/repos/private/qol-monorepo`.
 | disabled row | opacity .4 | `DISABLED_OPACITY` | 0.4 | match |
 | toggle on | `--pos` green | `state_on` = `success` | green | match |
 | hint bar height | `--h-bar` 40 | `PANEL_HINT_BAR_HEIGHT` | 40 | match |
-| hint bar labels | task wording | `render_hint_bar` | generic wording | delta, wording only |
-| keycap radius | `--r1` 4 | `RADIUS_KEYCAP` | 3 | delta |
-| keycap text | `--fs-sm` 12.5 | `TEXT_KEYCAP` | 10.5 | delta |
+| hint bar labels | generic wording | `render_hint_bar` | generic wording | match, the panel is shared so it cannot name one plugin's tasks |
+| keycap radius | `--r1` 4 | `RADIUS_KEYCAP` = `RADIUS_TIGHT` | 4 | match |
+| keycap text | `--fs-sm` 12.5 | `TEXT_KEYCAP` = `TEXT_MICRO` | 12.5 | match |
 | keycap font | mono | `font_mono()` | mono | match |
 
 ## qol-shot preview
@@ -89,8 +89,8 @@ Capture: `assets/qol-shot-current.png`, 406 x 292 logical.
 | circle | 46 | `CIRCLE` | 46 | match |
 | circle gap | 14 | `CIRCLE_GAP` | 14 | match |
 | label height | 30 | `LABEL_H` | 30 | match |
-| circle shadow | `--flt` | none | none | delta, add elevation in design |
-| primary circle | `--accsolid` solid | `accent_fill` tint | tinted | delta, solid primary in design |
+| circle shadow | `--flt` | `kit::float_shadow` | float shadow | match |
+| primary circle | `--accsolid` solid | `preview.rs` action loop | the default copy action is solid accent unless it is the armed one | match |
 | resting circle | `--pane` + `--edge` | `action_bg` + `action_border` | same | match |
 | armed circle | accent border + tint | `action_border_selected` + `accent_fill` | same | match |
 | label text | `--ink-2` | `label_text` | `text_secondary` | match |
@@ -105,9 +105,9 @@ Capture: `assets/qol-shot-current.png`, 406 x 292 logical.
 |---|---|---|---|---|
 | compact width | 340 | `COMPACT_WIDTH` | 340 | match |
 | compact height | 76 | `COMPACT_HEIGHT` | 76 | match |
-| tone bar | 3, radius 2 | `toast_root` tone bar | 4, square | delta |
-| title weight | 600 | `render_compact` | 500 | delta |
-| message size | `--fs-sm` 12.5 | `TEXT_CAPTION` | 13.5 | delta |
+| tone bar | 3, radius 2 | `tone_bar` | `SPACE_MARK` 3, `RADIUS_TONE_BAR` 2 | match |
+| title weight | 600 | `render_compact` | semibold | match |
+| message size | `--fs-sm` 12.5 | `TEXT_MICRO` | 12.5 | match |
 | corners | plane via `.s` (0) | `rounded_none()` | 0 | match |
 | tone colors | `--pos` / `--wrn` / `--neg` | `success` / `warning` / `danger` | same | match |
 
@@ -122,14 +122,14 @@ symbols behind the two deltas.
 | window width | 500 | `WINDOW_WIDTH` | capture is 504 wide | match within the capture margin |
 | header height | 42 | `HEADER_HEIGHT` | query line is the header | match |
 | row height | 32 | `ROW_HEIGHT` | nine rows fit the captured height | match |
-| visible rows | 8 | `MAX_VISIBLE` | capture shows 9 | delta, or the capture is unclipped |
+| visible rows | 8 | `MAX_VISIBLE` | 8 | match, the capture was unclipped |
 | query header | the query line is the header, no separate label | `layout.rs` | same | match |
 | count | right of the query, tabular | `layout.rs` | same | match |
 | icon slot | 23 square, `--r1` 4 | `layout.rs` | same | match |
 | kind column | right-aligned, `--fs-sm` 12.5, mono | `layout.rs` | same | match |
-| row selection | plane lift, no accent marker | `kit::row_state` | wash plus a full-height accent bar at the row edge | delta, add the bar to the deck |
+| row selection | wash plus the full-height accent marker | `kit::row_state` | same | match, the marker is universal so the deck adopts it |
 | matched letters | not specified | `layout.rs` | highlighted in accent, bold | missing in design |
-| hint bar | open / reveal / dismiss | `layout.rs` | open / mode / dismiss | delta, wording |
+| hint bar | open / mode / dismiss | `view.rs` `hint_bar` | open / mode / dismiss | match, the deck named a reveal binding the launcher does not have |
 | no-matches state | the query bar on its own, no message and no hint bar | `view.rs` search bar | the bar alone, and its bottom rule is dropped | match |
 | unqueried state | the query bar on its own | `render.rs` | the bar alone; `window_height_for_rows(0)` is `HEADER_HEIGHT` | match |
 
@@ -143,8 +143,8 @@ symbols behind the two deltas.
 | card border | 1px hairline, square corners | `app/render.rs` `card_bg` | 1px `border_subtle`, no radius set | match |
 | card selection | amber ring as a shadow, so nothing reflows | `app/render.rs` `card_bg` | accent border plus `kit::focus_ring`, and both states carry `border_1` so nothing reflows | match |
 | label strip | attached to the card, height from font size | `BASE_LABEL_STRIP_HEIGHT` | 10px font x 2.65 | match |
-| scrim | rgba(10,10,13,.58) | `app/render.rs` backdrop | no scrim, the backdrop paints nothing | delta, add it or drop it from the deck |
-| hint strip | 48, three bindings, centred | `HOTKEY_HINTS_HEIGHT` | 40 | delta, the deck should say 40 |
+| scrim | none | `app/render.rs` backdrop | none | match, the picker is deliberately transparent so the deck drops the scrim |
+| hint strip | 40, three bindings, centred | `HOTKEY_HINTS_HEIGHT` | 40 | match, deck geo corrected |
 
 ## CLI sessions
 
@@ -154,9 +154,9 @@ symbols behind the two deltas.
 | corner margin | 16 | `CORNER_MARGIN` | 16 | match |
 | panel corners | radius 12, one soft shadow | `ui/render.rs` | `RADIUS_WINDOW` plus `kit::float_shadow` | match |
 | band | 52 sub-band | `HEIGHT_SETTING_ROW`, `band_bg` | 52 on the rail surface | match |
-| session row | deck geo says 44, deck markup renders 48 | `HEIGHT_RULE_ROW` | 48 | fix the deck geo to say 48 |
-| status dot | 7px dot, 3px halo, four states | `kit::status_dot` | 7px dot, 3px spread halo, three tones | delta, the deck names four states, the code maps to three |
-| failed row | subtitle takes the danger tone | `ui/render.rs` `subtitle_text` | subtitle stays muted or secondary, no danger tone | delta, add the tone in code |
+| session row | 48 | `HEIGHT_RULE_ROW` | 48 | match, deck geo corrected |
+| status dot | 7px dot, 3px halo, three tones | `kit::status_dot` | 7px dot, 3px spread halo, three tones | match, six statuses map onto three tones |
+| failed row | not drawn | `Status` | there is no failed status | match, the deck drops the state |
 | collapsed strip | 32 tall, same surface and dot | `STRIP_HEIGHT` | 32 | match |
 
 ## Remove app
@@ -165,11 +165,11 @@ symbols behind the two deltas.
 |---|---|---|---|---|
 | window size | 460 x 540 | `WINDOW_WIDTH` / `WINDOW_HEIGHT` | 460 x 540, `RADIUS_WINDOW` corners | match |
 | search height | 40 | `SEARCH_H` | 40 | match |
-| app row | deck geo says 38, deck markup renders 40 | `ROW_H` | 40 | fix the deck geo to say 40 |
+| app row | 40 | `ROW_H` | 40 | match, deck geo corrected |
 | size column | right-aligned, tabular, mono | `removeapp/src/ui/mod.rs` | mono | match |
 | sort order | biggest first | `refilter` | biggest first, then by name | match |
 | confirm bar | names the app, the folder count and the size | `removeapp/src/ui/mod.rs` | same | match |
-| footer height | 34 | `kit::hint_bar`, `HEIGHT_HINT_BAR` | 40 | delta, the deck should say 40 |
+| footer height | 40 | `kit::hint_bar`, `HEIGHT_HINT_BAR` | 40 | match, deck geo corrected |
 
 ## How to read a delta
 
