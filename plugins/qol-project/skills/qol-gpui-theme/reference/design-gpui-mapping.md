@@ -95,7 +95,7 @@ Capture: `assets/qol-shot-current.png`, 406 x 292 logical.
 | armed circle | accent border + tint | `action_border_selected` + `accent_fill` | same | match |
 | label text | `--ink-2` | `label_text` | `text_secondary` | match |
 | label content | armed action name | `PreviewControl::label` | armed action name | match |
-| label position | centred under the armed control | `preview.rs` label row | centred in the panel, ignores which control is armed | delta, follow the armed control |
+| label position | centred in the panel | `preview.rs` label row | centred in the panel | match |
 | control shape | circle, radius 999 | `preview.rs` action button | rounded square, small radius | delta, round the controls |
 | file size | drawn at the right of the label row | not drawn | absent | delta, decide whether to add it or drop it from the deck |
 

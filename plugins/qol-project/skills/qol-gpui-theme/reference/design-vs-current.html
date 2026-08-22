@@ -135,7 +135,7 @@ h1 { font-size: 34px; line-height: 1.15; margin: 12px 0 10px; letter-spacing: -.
 .current .circ.sel { background: var(--accsolid); border-color: var(--acc); color: var(--onsolid); }
 .shotlab { height: var(--shot-lab); width: var(--thumb-w); margin-top: calc(var(--shot-circ) / 2 + 9px); font-size: var(--fs-md); color: var(--ink2); }
 .design .shotlab { position: relative; }
-.design .shotlab .act { position: absolute; top: 50%; left: calc(50% + (var(--armed) - (var(--shot-n) - 1) / 2) * (var(--shot-circ) + var(--shot-gap))); transform: translate(-50%, -50%); white-space: nowrap; }
+.design .shotlab .act { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); white-space: nowrap; }
 .design .shotlab .sz { position: absolute; top: 50%; right: 0; transform: translateY(-50%); }
 .current .shotlab { display: flex; align-items: center; gap: 9px; }
 .current .shotlab .sz { margin-left: auto; }
@@ -387,9 +387,9 @@ body { padding-bottom: 200px; }
               <div class="circ"><svg role="img" aria-label="Pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-5.3-7-11a7 7 0 0 1 14 0c0 5.7-7 11-7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg></div>
             </div>
           </div>
-          <div class="shotlab" data-gpui="action label | LABEL_H 30 | qol-shot/src/ui/preview.rs | deck centres the name under the armed control and shows the size &middot; code centres it in the panel and drops the size"><span class="t12 act">Copy</span><span class="t11 mono sz">2.1 MB</span></div>
+          <div class="shotlab" data-gpui="action label | LABEL_H 30 | qol-shot/src/ui/preview.rs | deck and code both centre the name in the panel &middot; deck shows the size, code does not"><span class="t12 act">Copy</span><span class="t11 mono sz">2.1 MB</span></div>
         </div>
-        <span class="cap">3px thumb radius &middot; elevated circles &middot; one solid primary &middot; name centred under it</span>
+        <span class="cap">3px thumb radius &middot; elevated circles &middot; one solid primary &middot; name centred in the panel</span>
       </div>
       <div class="side">
         <span class="who c">Today &middot; capture</span>
