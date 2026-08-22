@@ -65,7 +65,7 @@ GPUI sources are in `/Users/kaho/repos/private/qol-monorepo`.
 | filter radius | `--r4` 11 | `RADIUS_WELL` | 11 | match |
 | filter margin | none (flush) | `PANEL_FILTER_MARGIN` | 20 | delta, code insets 20 |
 | group header height | `--h-ctl` 36 | `PANEL_GROUP_HEADER_HEIGHT` | 36 | match |
-| group header text | plain uppercase, `--ink-2` | `render_group_header` | accent-ink + underline + mark on open section | delta, code adds accent treatment |
+| group header text | plain uppercase, `--ink-2` | `render_group_header` | plain uppercase, `label_text` | match |
 | row height | `--h-row` 52 | `PANEL_ROW_HEIGHT` | 52 | match |
 | row radius | `--r3` 9 | `RADIUS_CARD` | 9 | match |
 | row marker | full height, clipped to corner | `kit::row_state` bar | 3px, top/bottom 8 | delta, full-height clipped in design |
@@ -85,7 +85,7 @@ Capture: `assets/qol-shot-current.png`, 406 x 292 logical.
 | Design (deck) | Value | GPUI source | Current | Status |
 |---|---|---|---|---|
 | thumb max | 360 × 240 | `MAX_THUMB_W` / `MAX_THUMB_H` | 360 × 240 | match |
-| thumb radius | 3 | none (overflow hidden only) | 0 | delta, add radius |
+| thumb radius | 3 | `RADIUS_KEYCAP` | 3 | match |
 | circle | 46 | `CIRCLE` | 46 | match |
 | circle gap | 14 | `CIRCLE_GAP` | 14 | match |
 | label height | 30 | `LABEL_H` | 30 | match |
@@ -96,8 +96,8 @@ Capture: `assets/qol-shot-current.png`, 406 x 292 logical.
 | label text | `--ink-2` | `label_text` | `text_secondary` | match |
 | label content | armed action name | `PreviewControl::label` | armed action name | match |
 | label position | centred in the panel | `preview.rs` label row | centred in the panel | match |
-| control shape | circle, radius 999 | `preview.rs` action button | rounded square, small radius | delta, round the controls |
-| file size | drawn at the right of the label row | not drawn | absent | delta, decide whether to add it or drop it from the deck |
+| control shape | circle, radius 999 | `preview.rs` action button | circle | match |
+| file size | drawn at the right of the label row | `format_bytes` on the capture file | drawn at the right of the label row | match |
 
 ## Toast
 

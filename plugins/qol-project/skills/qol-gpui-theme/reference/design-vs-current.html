@@ -273,7 +273,7 @@ body { padding-bottom: 200px; }
             <div class="search" data-gpui="filter | view.rs | deck &ldquo;Filter settings and rules&rdquo; · code &ldquo;Filter settings&rdquo;">Filter settings and rules<span class="slash">/</span></div>
             <div class="plane">
               <div class="group">
-                <div class="gh" data-gpui="group header | view.rs | deck plain · code accent underline"><span class="gt">General</span><span class="gn">2 settings</span></div>
+                <div class="gh" data-gpui="group header | view.rs | plain uppercase on both sides"><span class="gt">General</span><span class="gn">2 settings</span></div>
                 <div class="row" data-gpui="toggle | view.rs row | deck switch · code On/Off toggle">
                   <div class="lg"><div class="lab">Enabled</div><div class="desc">Remapping runs while this is on.</div></div>
                   <span class="val"><span class="sw on"><span class="k"></span></span></span>
@@ -286,7 +286,7 @@ body { padding-bottom: 200px; }
               <div class="group">
                 <div class="gh"><span class="gt">Key Rules</span><span class="gn">5 rules</span></div>
                 <div class="rulehead"><span class="hfrom">From</span><span class="hto">To</span><span>Scope</span></div>
-                <div class="rule sel" data-gpui="rule row | view.rs rules | deck combo · code keycap table">
+                <div class="rule sel" data-gpui="rule row | view.rs render_combo | one bordered combo on both sides">
                   <div class="side from"><span class="combo"><span class="mo">ctrl</span><span>C</span></span></div>
                   <div class="side to"><span class="combo out"><span>cmd</span><span>C</span></span></div>
                   <span class="scope">Except excluded</span><span class="disc">&rsaquo;</span>
@@ -377,9 +377,9 @@ body { padding-bottom: 200px; }
       <div class="side">
         <span class="who d">Design</span>
         <div class="panel design shot spec">
-          <div class="thumbwrap" data-gpui="thumb | preview.rs | deck radius 3 · code radius 0">
+          <div class="thumbwrap" data-gpui="thumb | preview.rs RADIUS_KEYCAP | 3px radius on both sides">
             <div class="thumb"><div class="mockwin" style="width:64%;height:62%"><div class="mtb"><i></i><i></i><i></i></div><div class="mln" style="width:48%;height:8px;background:var(--hair2)"></div><div class="mln" style="width:82%"></div><div class="mln" style="width:66%"></div></div></div>
-            <div class="shotcircles" data-gpui="action controls | preview.rs CIRCLE 46 GAP 14 | deck draws circles · code draws rounded squares">
+            <div class="shotcircles" data-gpui="action controls | preview.rs CIRCLE 46 GAP 14 | circles on both sides">
               <div class="circ pri"><svg role="img" aria-label="Copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></div>
               <div class="circ"><svg role="img" aria-label="Copy path" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg></div>
               <div class="circ"><svg role="img" aria-label="Open folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg></div>
@@ -387,7 +387,7 @@ body { padding-bottom: 200px; }
               <div class="circ"><svg role="img" aria-label="Pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-5.3-7-11a7 7 0 0 1 14 0c0 5.7-7 11-7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg></div>
             </div>
           </div>
-          <div class="shotlab" data-gpui="action label | LABEL_H 30 | qol-shot/src/ui/preview.rs | deck and code both centre the name in the panel &middot; deck shows the size, code does not"><span class="t12 act">Copy</span><span class="t11 mono sz">2.1 MB</span></div>
+          <div class="shotlab" data-gpui="action label | LABEL_H 30 | qol-shot/src/ui/preview.rs | centred name plus the file size on both sides"><span class="t12 act">Copy</span><span class="t11 mono sz">2.1 MB</span></div>
         </div>
         <span class="cap">3px thumb radius &middot; elevated circles &middot; one solid primary &middot; name centred in the panel</span>
       </div>
