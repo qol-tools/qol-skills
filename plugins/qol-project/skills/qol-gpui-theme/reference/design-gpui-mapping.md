@@ -53,7 +53,7 @@ GPUI sources are in `/Users/kaho/repos/private/qol-monorepo`.
 | rail width | 196 (`.rail`) | `PANEL_RAIL_WIDTH` | 190 | delta, 6px |
 | rail background | `--side` #f5f2eb | `system.surface_rail` | #f5f2eb | match |
 | rail text | `--sidetx` #57534a | `system.text_rail` | #57534a | match |
-| rail caption | none (removed from deck) | `view.rs` `"SECTIONS"` child | present | delta, remove in code |
+| rail caption | none | none | none | match |
 | rail item height | `--h-ctl` 36 | `PANEL_RAIL_ITEM_HEIGHT` | 36 | match |
 | rail item radius | `--r2` 6 | `RADIUS_CONTROL` | 6 | match |
 | rail item marker | 3px, left -6, full height | `kit::row_state` bar | 3px, left 0, top/bottom 8 | delta, full-height + -6 in design |
