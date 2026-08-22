@@ -126,8 +126,8 @@ symbols behind the two deltas.
 | row selection | plane lift, no accent marker | `layout.rs` | wash plus an amber stub at the window edge | delta, drop the stub or add it to the deck |
 | matched letters | not specified | `layout.rs` | highlighted in accent, bold | missing in design |
 | hint bar | open / reveal / dismiss | `layout.rs` | open / mode / dismiss | delta, wording |
-| no-matches state | "No matches" plus what return does | `layout.rs` | not captured yet | unknown |
-| unqueried state | not drawn | `layout.rs` | placeholder, 0 / 0, empty body, no hint bar | missing in design |
+| no-matches state | the query bar on its own, no message and no hint bar | `layout.rs` | not captured yet | unknown |
+| unqueried state | the query bar on its own | `layout.rs` | placeholder, 0 / 0, plus an empty body strip | delta, drop the strip |
 
 ## Alt-tab picker
 
