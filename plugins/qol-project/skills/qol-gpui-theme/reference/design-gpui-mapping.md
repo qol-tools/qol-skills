@@ -93,6 +93,7 @@ GPUI sources are in `/Users/kaho/repos/private/qol-monorepo`.
 | armed circle | accent border + tint | `action_border_selected` + `accent_fill` | same | match |
 | label text | `--ink-2` | `label_text` | `text_secondary` | match |
 | label content | armed action name | `PreviewControl::label` | armed action name | match |
+| label position | centred under the armed circle | `preview.rs` label row | left-aligned in the bar | delta, follow the armed circle |
 
 ## Toast
 

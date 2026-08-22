@@ -117,7 +117,7 @@ h1 { font-size: 34px; line-height: 1.15; margin: 12px 0 10px; letter-spacing: -.
 .hints .k { margin-right: 6px; }
 .hints .sp { flex: 1; }
 .failbar { display: flex; align-items: center; gap: 10px; padding: 12px var(--gut); font-size: var(--fs-sm); color: var(--neg); background: var(--fill); border-top: 1px solid var(--hair); box-shadow: inset var(--mark) 0 0 var(--neg); flex: none; }
-.panel.shot { --thumb-w: 360px; --thumb-h: 240px; --shot-circ: 46px; --shot-gap: 14px; --shot-lab: 30px; }
+.panel.shot { --thumb-w: 360px; --thumb-h: 240px; --shot-circ: 46px; --shot-gap: 14px; --shot-lab: 30px; --shot-n: 5; --armed: 0; }
 .thumbwrap { position: relative; width: var(--thumb-w); height: var(--thumb-h); }
 .thumb { width: var(--thumb-w); height: var(--thumb-h); border: 1px solid var(--edge); background: linear-gradient(135deg, #343945, #4a4a52 55%, #57503f); display: flex; align-items: center; justify-content: center; }
 .design .thumb { border-radius: 3px; border: none; }
@@ -132,7 +132,12 @@ h1 { font-size: 34px; line-height: 1.15; margin: 12px 0 10px; letter-spacing: -.
 .design .circ { box-shadow: var(--flt); }
 .design .circ.pri { background: var(--accsolid); border-color: var(--accsolid); color: var(--onsolid); }
 .current .circ.sel { background: var(--accsolid); border-color: var(--acc); color: var(--onsolid); }
-.shotlab { height: var(--shot-lab); width: var(--thumb-w); display: flex; align-items: center; gap: 9px; margin-top: calc(var(--shot-circ) / 2 + 9px); font-size: var(--fs-md); color: var(--ink2); }
+.shotlab { height: var(--shot-lab); width: var(--thumb-w); margin-top: calc(var(--shot-circ) / 2 + 9px); font-size: var(--fs-md); color: var(--ink2); }
+.design .shotlab { position: relative; }
+.design .shotlab .act { position: absolute; top: 50%; left: calc(50% + (var(--armed) - (var(--shot-n) - 1) / 2) * (var(--shot-circ) + var(--shot-gap))); transform: translate(-50%, -50%); white-space: nowrap; }
+.design .shotlab .sz { position: absolute; top: 50%; right: 0; transform: translateY(-50%); }
+.current .shotlab { display: flex; align-items: center; gap: 9px; }
+.current .shotlab .sz { margin-left: auto; }
 .t12 { font-size: 12px; color: var(--ink2); }
 .t11 { font-size: 11px; color: var(--ink3); }
 .mono { font-family: "SF Mono", ui-monospace, monospace; letter-spacing: 0; }
@@ -151,6 +156,7 @@ h1 { font-size: 34px; line-height: 1.15; margin: 12px 0 10px; letter-spacing: -.
 .swatchrow { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; padding: 4px 0 0; }
 
 .markable { cursor: pointer; position: relative; }
+.markable.shotcircles { position: absolute; }
 .markable:hover { outline: 2px solid rgba(184,134,11,.45); outline-offset: 1px; }
 .marked { outline: 2px solid var(--accent); outline-offset: 1px; }
 .mbadge { position: absolute; top: -9px; right: -9px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; background: var(--accent); color: #fff; font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; z-index: 5; }
@@ -370,35 +376,35 @@ body { padding-bottom: 200px; }
         <span class="who d">Design</span>
         <div class="panel design shot" style="padding:0;width:396px">
           <div class="thumbwrap" data-gpui="thumb | preview.rs | deck radius 3 · code radius 0">
-            <div class="thumb"><div class="mockwin"><div class="mtb"><i></i><i></i><i></i></div><div class="mln" style="width:48%;height:8px;background:var(--hair2)"></div><div class="mln" style="width:82%"></div><div class="mln" style="width:66%"></div></div></div>
+            <div class="thumb"><div class="mockwin" style="width:64%;height:62%"><div class="mtb"><i></i><i></i><i></i></div><div class="mln" style="width:48%;height:8px;background:var(--hair2)"></div><div class="mln" style="width:82%"></div><div class="mln" style="width:66%"></div></div></div>
             <div class="shotcircles" data-gpui="action circles | preview.rs CIRCLE 46 GAP 14 | deck elevated · code flat">
-              <div class="circ pri"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></div>
-              <div class="circ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg></div>
-              <div class="circ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg></div>
-              <div class="circ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></div>
-              <div class="circ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M12 2a6 6 0 0 0-4.5 9.9l.9 1.1a1.5 1.5 0 0 0 1.1.5h5a1.5 1.5 0 0 0 1.1-.5l.9-1.1A6 6 0 0 0 12 2Z"/></svg></div>
+              <div class="circ pri"><svg role="img" aria-label="Copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></div>
+              <div class="circ"><svg role="img" aria-label="Copy path" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg></div>
+              <div class="circ"><svg role="img" aria-label="Open folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg></div>
+              <div class="circ"><svg role="img" aria-label="Edit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></div>
+              <div class="circ"><svg role="img" aria-label="Pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-5.3-7-11a7 7 0 0 1 14 0c0 5.7-7 11-7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg></div>
             </div>
           </div>
-          <div class="shotlab" data-gpui="action label | preview.rs LABEL_H 30 | deck labels armed action"><span class="t12">Copy</span><span class="t11 mono mla">2.1 MB</span></div>
+          <div class="shotlab" data-gpui="action label | LABEL_H 30 | qol-shot/src/ui/preview.rs | deck centres the name under the armed circle &middot; code left-aligns it in the bar"><span class="t12 act">Copy</span><span class="t11 mono sz">2.1 MB</span></div>
         </div>
-        <span class="cap">3px thumb radius &middot; elevated circles &middot; one solid primary</span>
+        <span class="cap">3px thumb radius &middot; elevated circles &middot; one solid primary &middot; name centred under it</span>
       </div>
       <div class="side">
         <span class="who c">Today &middot; from constants</span>
         <div class="panel current shot" style="padding:0;width:396px">
           <div class="thumbwrap">
-            <div class="thumb"><div class="mockwin"><div class="mtb"><i></i><i></i><i></i></div><div class="mln" style="width:48%;height:8px;background:var(--hair2)"></div><div class="mln" style="width:82%"></div><div class="mln" style="width:66%"></div></div></div>
+            <div class="thumb"><div class="mockwin" style="width:64%;height:62%"><div class="mtb"><i></i><i></i><i></i></div><div class="mln" style="width:48%;height:8px;background:var(--hair2)"></div><div class="mln" style="width:82%"></div><div class="mln" style="width:66%"></div></div></div>
             <div class="shotcircles">
-              <div class="circ sel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></div>
-              <div class="circ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg></div>
-              <div class="circ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg></div>
-              <div class="circ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></div>
-              <div class="circ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M12 2a6 6 0 0 0-4.5 9.9l.9 1.1a1.5 1.5 0 0 0 1.1.5h5a1.5 1.5 0 0 0 1.1-.5l.9-1.1A6 6 0 0 0 12 2Z"/></svg></div>
+              <div class="circ sel"><svg role="img" aria-label="Copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></div>
+              <div class="circ"><svg role="img" aria-label="Copy path" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg></div>
+              <div class="circ"><svg role="img" aria-label="Open folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg></div>
+              <div class="circ"><svg role="img" aria-label="Edit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></div>
+              <div class="circ"><svg role="img" aria-label="Pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-5.3-7-11a7 7 0 0 1 14 0c0 5.7-7 11-7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg></div>
             </div>
           </div>
-          <div class="shotlab"><span class="t12">Copy</span><span class="t11 mono mla">2.1 MB</span></div>
+          <div class="shotlab"><span class="t12 act">Copy</span><span class="t11 mono sz">2.1 MB</span></div>
         </div>
-        <span class="cap">square thumb &middot; flat circles &middot; armed circle amber-tinted</span>
+        <span class="cap">square thumb &middot; flat circles &middot; armed circle amber-tinted &middot; name left-aligned in the bar</span>
       </div>
     </div>
   </div>
