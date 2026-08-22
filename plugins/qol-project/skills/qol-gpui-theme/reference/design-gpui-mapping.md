@@ -49,8 +49,8 @@ GPUI sources are in `/Users/kaho/repos/private/qol-monorepo`.
 
 | Design (deck) | Value | GPUI source | Current | Status |
 |---|---|---|---|---|
-| window width (Key Remap) | 760 (`.w760`) | `PANEL_WIDE_WIDTH` | 680 | delta, design wider; code picks 680/520/420 by content |
-| rail width | 196 (`.rail`) | `PANEL_RAIL_WIDTH` | 190 | delta, 6px |
+| window width (Key Remap) | 760 (`.w760`) | `PANEL_WIDE_WIDTH` | 760 | match |
+| rail width | 196 (`.rail`) | `PANEL_RAIL_WIDTH` | 196 | match |
 | rail background | `--side` #f5f2eb | `system.surface_rail` | #f5f2eb | match |
 | rail text | `--sidetx` #57534a | `system.text_rail` | #57534a | match |
 | rail caption | none | none | none | match |
