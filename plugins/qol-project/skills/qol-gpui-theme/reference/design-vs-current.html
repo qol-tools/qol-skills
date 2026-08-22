@@ -215,6 +215,7 @@ h1 { font-size: 34px; line-height: 1.15; margin: 12px 0 10px; letter-spacing: -.
 .strip32 { height: 32px; flex-direction: row; display: flex; align-items: center; gap: 10px; padding: 0 13px; }
 .hints .k { font-family: var(--mono); font-size: 10.5px; color: var(--ink3); border: 1px solid var(--hair2); border-radius: 3px; padding: 1px 5px; margin-right: 6px; }
 .side .who.c.pend { color: var(--tx-3); border-color: var(--line); }
+.empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 34px 20px; color: var(--ink3); font-size: var(--fs-sm); }
 .slot { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; border: 1.5px dashed var(--line); border-radius: 10px; background-color: var(--bg); background-image: repeating-linear-gradient(135deg, transparent 0 10px, rgba(60,48,26,.035) 10px 20px); color: var(--tx-3); text-align: center; padding: 28px 24px; }
 .slot b { font-size: 13.5px; color: var(--tx-2); font-weight: 600; letter-spacing: -.01em; }
 .slot code { font-family: var(--mono); font-size: 11.5px; color: var(--accent); }
@@ -502,7 +503,8 @@ body { padding-bottom: 200px; }
       </div>
     </div>
   </div>
-  <div class="stage wide">
+  <div class="stage">
+    <div class="cmprow">
     <div class="side">
       <span class="who d">Design</span>
       <div class="panel design w500" data-gpui="launcher window | WINDOW_WIDTH | launcher/src/ui/layout.rs | deck 500 &middot; code not yet audited">
@@ -514,25 +516,47 @@ body { padding-bottom: 200px; }
           <span class="t11 num">6 / 148</span>
         </div>
         <div class="list">
-          <div class="lrow h32 sel" data-gpui="result row | ROW_HEIGHT 32 | launcher/src/ui/layout.rs | deck plane selection, no accent fill &middot; code not yet audited"><span class="ic" style="background:#2f3238;border-color:transparent">&#8250;_</span><span class="nm">Terminal</span><span class="meta" data-gpui="kind column | launcher/src/ui/layout.rs | deck right-aligned kind &middot; code not yet audited">app</span></div>
+          <div class="lrow h32 sel" data-gpui="result row | ROW_HEIGHT 32 | launcher/src/ui/layout.rs | deck plane lift, no marker &middot; code adds an amber stub at the window edge and highlights the matched letters"><span class="ic" style="background:#2f3238;border-color:transparent">&#8250;_</span><span class="nm">Terminal</span><span class="meta" data-gpui="kind column | launcher/src/ui/layout.rs | deck right-aligned kind &middot; code matches">app</span></div>
           <div class="lrow h32"><span class="ic" style="background:#2f7350;border-color:transparent">&#8250;</span><span class="nm">iTerm2</span><span class="meta">app</span></div>
           <div class="lrow h32"><span class="ic" style="background:#8a6208;border-color:transparent">q</span><span class="nm">qol dev &middot; restart tray</span><span class="meta">cmd</span></div>
           <div class="lrow h32"><span class="ic" style="background:#3a639b;border-color:transparent">&#9656;</span><span class="nm">~/repos/private/qol-monorepo</span><span class="meta">dir</span></div>
           <div class="lrow h32"><span class="ic" style="background:#5c626d;border-color:transparent">&#9881;</span><span class="nm">Terminal preferences</span><span class="meta">pref</span></div>
           <div class="lrow h32"><span class="ic" style="background:#8a6208;border-color:transparent">q</span><span class="nm">kitty @ set-colors</span><span class="meta">cmd</span></div>
         </div>
-        <div class="hints" data-gpui="hint bar | launcher/src/ui/layout.rs | deck open/reveal/dismiss &middot; code not yet audited"><span><span class="k">&crarr;</span>open</span><span><span class="k">&#8997;&crarr;</span>reveal</span><span><span class="k">esc</span>dismiss</span></div>
+        <div class="hints" data-gpui="hint bar | launcher/src/ui/layout.rs | deck open / reveal / dismiss &middot; code open / mode / dismiss"><span><span class="k">&crarr;</span>open</span><span><span class="k">&#8997;&crarr;</span>reveal</span><span><span class="k">esc</span>dismiss</span></div>
       </div>
       <span class="cap">500 wide &middot; 8 rows max &middot; icon slot &middot; kind column &middot; hint bar</span>
     </div>
     <div class="side">
-      <span class="who c pend">Today &middot; capture pending</span>
-      <div class="slot" style="width:500px;min-height:330px">
-        <b>No capture yet</b>
-        <span class="how">Run the launcher, screenshot the window at 1:1, save it as
-        <code>assets/launcher-current.png</code> and swap this slot for an <code>&lt;img&gt;</code>.</span>
+      <span class="who c">Today &middot; capture</span>
+      <img src="assets/launcher-current.png" width="504" height="372" style="display:block" alt="The real launcher window on the host, filtered to the query term">
+      <span class="cap">real capture &middot; native 1:1 &middot; 504 &times; 372 &middot; nine rows, so the 32px row height holds &middot; hints read open / mode / dismiss where the deck says open / reveal / dismiss &middot; the selected row carries an amber stub at the window edge that the deck does not have, and highlights the matched letters in accent, which the deck does not specify</span>
+    </div>
+    </div>
+    <div class="cmprow">
+      <div class="side">
+        <span class="who d">Design &middot; no matches</span>
+        <div class="panel design w500" data-gpui="empty state | launcher/src/ui/layout.rs | deck names the state and what return will do &middot; code shows an empty body with no message">
+          <div class="band sub">
+            <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">
+              <span style="color:var(--accink);font-weight:700">&#8250;</span>
+              <span class="mono" style="font-size:15px">zzqq<span style="display:inline-block;width:7px;height:15px;background:var(--acc);vertical-align:-2px;margin-left:2px"></span></span>
+            </div>
+            <span class="t11 num">0 / 148</span>
+          </div>
+          <div class="empty" style="padding:44px 20px">
+            <span>No matches</span>
+            <span class="t11">return runs it as a shell command</span>
+          </div>
+          <div class="hints"><span><span class="k">&crarr;</span>run anyway</span><span><span class="k">esc</span>dismiss</span></div>
+        </div>
+        <span class="cap">the deck designs the queried-with-no-matches state, and keeps return useful</span>
       </div>
-      <span class="cap">the mapping registry has no launcher rows yet, so nothing on the left is claimed as a delta</span>
+      <div class="side">
+        <span class="who c">Today &middot; capture</span>
+        <img src="assets/launcher-empty-current.png" width="507" height="93" style="display:block" alt="The real launcher window before anything is typed">
+        <span class="cap">the code state next to it is the unqueried one, which the deck never draws: placeholder text, 0 / 0, an empty body with no message and no hint bar</span>
+      </div>
     </div>
   </div>
 </div>

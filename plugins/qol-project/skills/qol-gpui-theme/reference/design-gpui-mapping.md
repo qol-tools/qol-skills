@@ -109,20 +109,25 @@ GPUI sources are in `/Users/kaho/repos/private/qol-monorepo`.
 
 ## Launcher
 
-Not yet audited against the code. The design column is read off the deck; nothing here
-is claimed as a delta until someone opens `launcher/src/ui/layout.rs`.
+Read off a host capture, not off the source, so the rows below say what the window
+does rather than what a constant holds. Open `launcher/src/ui/layout.rs` to name the
+symbols behind the two deltas.
 
 | Design (deck) | Value | GPUI source | Current | Status |
 |---|---|---|---|---|
-| window width | 500 | `WINDOW_WIDTH` | not audited | unknown |
-| header height | 42 | `HEADER_HEIGHT` | not audited | unknown |
-| row height | 32 | `ROW_HEIGHT` | not audited | unknown |
-| visible rows | 8 | `MAX_VISIBLE` | not audited | unknown |
-| query header | the query line is the header, no separate label | `layout.rs` | not audited | unknown |
-| icon slot | 23 square, `--r1` 4 | `layout.rs` | not audited | unknown |
-| kind column | right-aligned, `--fs-sm` 12.5, mono | `layout.rs` | not audited | unknown |
-| row selection | plane lift, no accent fill | `layout.rs` | not audited | unknown |
-| hint bar | open / reveal / dismiss | `layout.rs` | not audited | unknown |
+| window width | 500 | `WINDOW_WIDTH` | capture is 504 wide | match within the capture margin |
+| header height | 42 | `HEADER_HEIGHT` | query line is the header | match |
+| row height | 32 | `ROW_HEIGHT` | nine rows fit the captured height | match |
+| visible rows | 8 | `MAX_VISIBLE` | capture shows 9 | delta, or the capture is unclipped |
+| query header | the query line is the header, no separate label | `layout.rs` | same | match |
+| count | right of the query, tabular | `layout.rs` | same | match |
+| icon slot | 23 square, `--r1` 4 | `layout.rs` | same | match |
+| kind column | right-aligned, `--fs-sm` 12.5, mono | `layout.rs` | same | match |
+| row selection | plane lift, no accent marker | `layout.rs` | wash plus an amber stub at the window edge | delta, drop the stub or add it to the deck |
+| matched letters | not specified | `layout.rs` | highlighted in accent, bold | missing in design |
+| hint bar | open / reveal / dismiss | `layout.rs` | open / mode / dismiss | delta, wording |
+| no-matches state | "No matches" plus what return does | `layout.rs` | not captured yet | unknown |
+| unqueried state | not drawn | `layout.rs` | placeholder, 0 / 0, empty body, no hint bar | missing in design |
 
 ## Alt-tab picker
 
