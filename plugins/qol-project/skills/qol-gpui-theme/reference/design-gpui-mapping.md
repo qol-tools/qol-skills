@@ -56,7 +56,7 @@ GPUI sources are in `/Users/kaho/repos/private/qol-monorepo`.
 | rail caption | none | none | none | match |
 | rail item height | `--h-ctl` 36 | `PANEL_RAIL_ITEM_HEIGHT` | 36 | match |
 | rail item radius | `--r2` 6 | `RADIUS_CONTROL` | 6 | match |
-| rail item marker | 3px, left -6, full height | `kit::row_state` bar | 3px, left 0, top/bottom 8 | delta, full-height + -6 in design |
+| rail item marker | 3px, left -6, full height | `kit::row_state` bar | 3px, left 0, full height | delta, the -6 overhang only |
 | band height | `--h-band` 64 | `PANEL_BAND_HEIGHT` | 64 | match |
 | band background | `--side` | `render_band` `rail_bg` | same | match |
 | band title | 18 semibold | `TEXT_TITLE` 17 semibold | 17 | delta, 1px |
@@ -68,7 +68,7 @@ GPUI sources are in `/Users/kaho/repos/private/qol-monorepo`.
 | group header text | plain uppercase, `--ink-2` | `render_group_header` | plain uppercase, `label_text` | match |
 | row height | `--h-row` 52 | `PANEL_ROW_HEIGHT` | 52 | match |
 | row radius | `--r3` 9 | `RADIUS_CARD` | 9 | match |
-| row marker | full height, clipped to corner | `kit::row_state` bar | 3px, top/bottom 8 | delta, full-height clipped in design |
+| row marker | full height, clipped to corner | `kit::row_state` bar | full height, clipped to the row radius | match |
 | row wash | `--wash` | `wash_selected` | same | match |
 | disabled row | opacity .4 | `DISABLED_OPACITY` | 0.4 | match |
 | toggle on | `--pos` green | `state_on` = `success` | green | match |
@@ -127,49 +127,49 @@ symbols behind the two deltas.
 | count | right of the query, tabular | `layout.rs` | same | match |
 | icon slot | 23 square, `--r1` 4 | `layout.rs` | same | match |
 | kind column | right-aligned, `--fs-sm` 12.5, mono | `layout.rs` | same | match |
-| row selection | plane lift, no accent marker | `layout.rs` | wash plus an amber stub at the window edge | delta, drop the stub or add it to the deck |
+| row selection | plane lift, no accent marker | `kit::row_state` | wash plus a full-height accent bar at the row edge | delta, add the bar to the deck |
 | matched letters | not specified | `layout.rs` | highlighted in accent, bold | missing in design |
 | hint bar | open / reveal / dismiss | `layout.rs` | open / mode / dismiss | delta, wording |
-| no-matches state | the query bar on its own, no message and no hint bar | `layout.rs` | not captured yet | unknown |
-| unqueried state | the query bar on its own | `layout.rs` | placeholder, 0 / 0, plus an empty body strip | delta, drop the strip |
+| no-matches state | the query bar on its own, no message and no hint bar | `view.rs` search bar | the bar alone, and its bottom rule is dropped | match |
+| unqueried state | the query bar on its own | `render.rs` | the bar alone; `window_height_for_rows(0)` is `HEADER_HEIGHT` | match |
 
 ## Alt-tab picker
 
 | Design (deck) | Value | GPUI source | Current | Status |
 |---|---|---|---|---|
-| card width | 220 x scale | `BASE_CARD_WIDTH` | not audited | unknown |
-| card scale | 0.5 to 2.5 | `MIN_CARD_SCALE` / `MAX_CARD_SCALE` | not audited | unknown |
-| preview aspect | 16:9 | `picker/layout.rs` | not audited | unknown |
-| card border | 1px hairline, square corners | `picker/layout.rs` | not audited | unknown |
-| card selection | amber ring as a shadow, so nothing reflows | `picker/layout.rs` | not audited | unknown |
-| label strip | attached to the card, height from font size | `picker/layout.rs` | not audited | unknown |
-| scrim | rgba(10,10,13,.58) | `picker/layout.rs` | not audited | unknown |
-| hint strip | 48, three bindings, centred | `HOTKEY_HINTS_HEIGHT` | not audited | unknown |
+| card width | 220 x scale | `BASE_CARD_WIDTH` | 220 | match |
+| card scale | 0.5 to 2.5 | `MIN_CARD_SCALE` / `MAX_CARD_SCALE` | 0.5 to 2.5, default 1.5 | match |
+| preview aspect | 16:9 | `PREVIEW_ASPECT_W` / `PREVIEW_ASPECT_H` | 16:9 | match |
+| card border | 1px hairline, square corners | `app/render.rs` `card_bg` | 1px `border_subtle`, no radius set | match |
+| card selection | amber ring as a shadow, so nothing reflows | `app/render.rs` `card_bg` | accent border plus `kit::focus_ring`, and both states carry `border_1` so nothing reflows | match |
+| label strip | attached to the card, height from font size | `BASE_LABEL_STRIP_HEIGHT` | 10px font x 2.65 | match |
+| scrim | rgba(10,10,13,.58) | `app/render.rs` backdrop | no scrim, the backdrop paints nothing | delta, add it or drop it from the deck |
+| hint strip | 48, three bindings, centred | `HOTKEY_HINTS_HEIGHT` | 40 | delta, the deck should say 40 |
 
 ## CLI sessions
 
 | Design (deck) | Value | GPUI source | Current | Status |
 |---|---|---|---|---|
-| panel size | 360 x 400 | `cli-sessions/src/ui/` | not audited | unknown |
-| corner margin | 16 | `CORNER_MARGIN` | not audited | unknown |
-| panel corners | radius 12, one soft shadow | `cli-sessions/src/ui/` | square and flat | delta, named in the deck notes |
-| band | 52 sub-band | `cli-sessions/src/ui/` | not audited | unknown |
-| session row | deck geo says 44, deck markup renders 48 | `cli-sessions/src/ui/` | not audited | fix the deck first |
-| status dot | 7px dot, 3px halo, four states | `cli-sessions/src/ui/` | not audited | unknown |
-| failed row | subtitle takes the danger tone | `cli-sessions/src/ui/` | not audited | unknown |
-| collapsed strip | 32 tall, same surface and dot | `STRIP_HEIGHT` | not audited | unknown |
+| panel size | 360 x 400 | `ui/run.rs` | 360 x 400 | match |
+| corner margin | 16 | `CORNER_MARGIN` | 16 | match |
+| panel corners | radius 12, one soft shadow | `ui/render.rs` | `RADIUS_WINDOW` plus `kit::float_shadow` | match |
+| band | 52 sub-band | `HEIGHT_SETTING_ROW`, `band_bg` | 52 on the rail surface | match |
+| session row | deck geo says 44, deck markup renders 48 | `HEIGHT_RULE_ROW` | 48 | fix the deck geo to say 48 |
+| status dot | 7px dot, 3px halo, four states | `kit::status_dot` | 7px dot, 3px spread halo, three tones | delta, the deck names four states, the code maps to three |
+| failed row | subtitle takes the danger tone | `ui/render.rs` `subtitle_text` | subtitle stays muted or secondary, no danger tone | delta, add the tone in code |
+| collapsed strip | 32 tall, same surface and dot | `STRIP_HEIGHT` | 32 | match |
 
 ## Remove app
 
 | Design (deck) | Value | GPUI source | Current | Status |
 |---|---|---|---|---|
-| window size | 460 x 540 | `WINDOW_WIDTH` / `WINDOW_HEIGHT` | not audited | unknown |
-| search height | 40 | `SEARCH_H` | not audited | unknown |
-| app row | deck geo says 38, deck markup renders 40 | `ROW_H` | not audited | fix the deck first |
-| size column | right-aligned, tabular, mono | `removeapp/src/ui/mod.rs` | not audited | unknown |
-| sort order | biggest first | `removeapp/src/ui/mod.rs` | not audited | unknown |
-| confirm bar | names the app, the folder count and the size | `FOOTER_H` | not audited | unknown |
-| footer height | 34 | `FOOTER_H` | not audited | unknown |
+| window size | 460 x 540 | `WINDOW_WIDTH` / `WINDOW_HEIGHT` | 460 x 540, `RADIUS_WINDOW` corners | match |
+| search height | 40 | `SEARCH_H` | 40 | match |
+| app row | deck geo says 38, deck markup renders 40 | `ROW_H` | 40 | fix the deck geo to say 40 |
+| size column | right-aligned, tabular, mono | `removeapp/src/ui/mod.rs` | mono | match |
+| sort order | biggest first | `refilter` | biggest first, then by name | match |
+| confirm bar | names the app, the folder count and the size | `removeapp/src/ui/mod.rs` | same | match |
+| footer height | 34 | `kit::hint_bar`, `HEIGHT_HINT_BAR` | 40 | delta, the deck should say 40 |
 
 ## How to read a delta
 
