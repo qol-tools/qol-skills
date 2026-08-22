@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bone &amp; Amber · design vs today</title>
+<style>
+:root {
+  --bg: #fcfbf8; --bg-2: #f6f4ee; --line: rgba(60,48,26,.14); --dot: rgba(60,48,26,.07);
+  --tx: #1a1815; --tx-2: #57534a; --tx-3: #78736a;
+  --accent: #b8860b; --halo: rgba(184,134,11,.22); --ring: 0 0 0 1.5px var(--accent), 0 0 0 4px var(--halo);
+  --h-el: 28px; --h-ctl: 36px; --h-rule: 48px; --h-row: 52px; --h-band: 64px; --h-bar: 40px;
+  --r1: 4px; --r2: 6px; --r3: 9px; --r4: 11px;
+  --fs-cap: 11.5px; --fs-sm: 12.5px; --fs-md: 13.5px; --fs-lg: 15px; --fs-xl: 17px;
+  --gut: 20px; --padx: 16px; --mark: 3px;
+  --sp2: 12px; --sp3: 18px; --sp4: 28px; --sp5: 44px;
+  --mono: "SF Mono", ui-monospace, monospace;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--tx); font-family: "Onest", ui-sans-serif, -apple-system, system-ui, sans-serif; font-size: 15.5px; line-height: 1.6; letter-spacing: -.006em; -webkit-font-smoothing: antialiased; }
+.wrap { max-width: none; width: 100%; margin: 0 auto; padding: 0 28px 96px; }
+.masthead { padding: 72px 0 22px; }
+.kicker { font-size: 12.5px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); }
+h1 { font-size: 34px; line-height: 1.15; margin: 12px 0 10px; letter-spacing: -.02em; }
+.sub { color: var(--tx-2); max-width: 760px; font-size: 15.5px; }
+.sub code, .geo code { font-family: var(--mono); font-size: 12px; }
+.block { padding-top: var(--sp5); }
+.block-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 28px; padding-bottom: 14px; }
+.block-head h2 { font-size: 21px; margin: 0 0 6px; letter-spacing: -.015em; }
+.block-head p { margin: 0; color: var(--tx-2); max-width: 680px; font-size: 14px; }
+.geo { font-family: var(--mono); font-size: 11.5px; color: var(--tx-2); text-align: right; line-height: 1.7; }
+.stage { background: var(--bg-2); background-image: radial-gradient(var(--dot) 1px, transparent 1px); background-size: 24px 24px; border: 1px solid var(--line); border-radius: 10px; padding: var(--sp4); display: flex; flex-direction: column; gap: var(--sp4); overflow-x: auto; }
+.stage.wide { flex-direction: row; align-items: flex-start; justify-content: safe center; gap: 26px; }
+.stage.wide .side { align-items: center; }
+.colcmp { display: flex; flex-direction: column; gap: var(--sp4); }
+.colcmp .side { flex: none; width: 100%; }
+.cmprow { display: flex; flex-direction: row; align-items: flex-start; justify-content: safe center; gap: 26px; overflow-x: auto; }
+.cmprow .side, .stage.wide .side { flex: 1 1 50%; min-width: max-content; }
+.side { flex: none; display: flex; flex-direction: column; gap: 10px; align-items: center; min-width: 0; }
+.side .who { font-size: 11.5px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--bg); color: var(--tx-3); }
+.side .who.d { color: var(--accent); border-color: rgba(184,134,11,.4); }
+.side .who.c { color: #3d9150; border-color: rgba(61,145,80,.4); }
+.side .cap { font-size: 12.5px; color: var(--tx-2); display: flex; flex-wrap: wrap; max-width: 540px; text-align: center; justify-content: center; gap: 4px 8px; line-height: 1.5; }
+.side .cap::before { content: ""; width: 5px; height: 5px; border-radius: 999px; background: var(--accent); flex: none; }
+.design { --pane: #fffefb; --pane2: #faf8f3; --pane3: #efece4; --edge: #e2ded4; --side: #f5f2eb; --sidetx: #57534a; --ink: #1a1815; --ink2: #57534a; --ink3: #78736a; --acc: #b8860b; --accink: #8a6208; --accbg: #fdf5e3; --accsolid: #201d18; --onsolid: #fbf9f4; --pos: #2c8159; --neg: #b5504a; --wrn: #b35c09; --hair: rgba(60,48,26,.12); --hair2: rgba(60,48,26,.2); --fill: rgba(90,72,34,.055); --fill2: rgba(90,72,34,.095); --cast: rgba(60,48,26,.11); --sep: rgba(60,48,26,.085); --accsoft: rgba(184,134,11,.34); --acchalo: rgba(184,134,11,.22); --wash: rgba(60,48,26,.055); --washw: rgba(179,92,9,.075); --washn: rgba(181,80,74,.055); --flt: 0 2px 6px rgba(60,48,26,.1), 0 18px 44px -16px rgba(60,48,26,.34); --ink-2: var(--ink2); --ink-3: var(--ink3); --pane-2: var(--pane2); --pane-3: var(--pane3); --acc-ink: var(--accink); --acc-bg: var(--accbg); --wash-sel: var(--wash); --wash-wrn: var(--washw); --wash-neg: var(--washn); --float: var(--flt); --edge-neg: rgba(181,80,74,.32); --halo-pos: rgba(44,129,89,.16); --halo-wrn: rgba(179,92,9,.16); --halo-neg: rgba(181,80,74,.14); }
+.current { --pane: #fffefb; --pane2: #faf8f3; --pane3: #efece4; --edge: #b2a996; --side: #f5f2eb; --sidetx: #57534a; --ink: #1a1815; --ink2: #4f4b43; --ink3: #6f6a60; --acc: #b8860b; --accink: #8a6208; --accbg: #fdf5e3; --accsolid: #e6d5ab; --onsolid: #8a6208; --pos: #3d9150; --neg: #c34a32; --wrn: #e08a00; --hair: rgba(60,48,26,.12); --hair2: rgba(60,48,26,.2); --fill: rgba(90,72,34,.095); --fill2: rgba(90,72,34,.055); --cast: rgba(60,48,26,.11); --sep: rgba(60,48,26,.085); --accsoft: rgba(184,134,11,.34); --acchalo: rgba(184,134,11,.22); --wash: rgba(60,48,26,.055); --washw: rgba(224,138,0,.075); --washn: rgba(195,74,50,.055); --flt: 0 2px 6px rgba(60,48,26,.1), 0 18px 44px -16px rgba(60,48,26,.34); --ink-2: var(--ink2); --ink-3: var(--ink3); --pane-2: var(--pane2); --pane-3: var(--pane3); --acc-ink: var(--accink); --acc-bg: var(--accbg); --wash-sel: var(--wash); --wash-wrn: var(--washw); --wash-neg: var(--washn); --float: var(--flt); --edge-neg: rgba(195,74,50,.32); --halo-pos: rgba(61,145,80,.16); --halo-wrn: rgba(224,138,0,.16); --halo-neg: rgba(195,74,50,.14); }
+.panel { background: var(--pane); border: 1px solid var(--edge); box-shadow: var(--flt); display: flex; flex-direction: column; overflow: hidden; font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: var(--ink); letter-spacing: -.008em; }
+.panel.design.settings { width: 760px; }
+.panel.current.settings { width: 870px; }
+.band { height: var(--h-band); flex: none; display: flex; align-items: center; justify-content: space-between; gap: var(--gut); padding: 0 var(--gut); border-bottom: 1px solid var(--hair); background: var(--side); }
+.band .bt { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.band .bt b { font-size: 18px; line-height: 1.25; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.band .bt span { font-size: var(--fs-sm); color: var(--sidetx); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.countchip { flex: none; display: flex; align-items: center; gap: 6px; height: var(--h-el); padding: 0 10px; border-radius: var(--r2); background: var(--fill); border: 1px solid var(--hair); font-size: var(--fs-sm); }
+.countchip b { font-weight: 600; color: var(--ink); }
+.countchip span { color: var(--ink2); }
+.body { flex: 1; display: flex; flex-direction: row; min-height: 0; }
+.rail { width: 196px; flex: none; background: var(--side); border-right: 1px solid var(--hair); display: flex; flex-direction: column; padding: 14px 10px; gap: 2px; }
+.rail .cap { padding: 6px 12px 8px; font-size: var(--fs-cap); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--ink3); }
+.rail .item { position: relative; height: var(--h-ctl); display: flex; align-items: center; padding: 0 12px; border-radius: var(--r2); font-size: var(--fs-md); color: var(--sidetx); }
+.rail .item.on { background: var(--wash); color: var(--ink); font-weight: 600; }
+.rail .item.on::before { content: ""; position: absolute; width: var(--mark); border-radius: 999px; background: var(--acc); }
+.design .rail .item.on::before { left: -6px; top: 0; bottom: 0; }
+.current .rail .item.on::before { left: 0; top: 8px; bottom: 8px; }
+.main { flex: 1; min-width: 0; background: var(--pane); display: flex; flex-direction: column; }
+.search { flex: none; display: flex; align-items: center; gap: 10px; height: var(--h-ctl); margin: 20px 20px 0; padding: 0 var(--padx); border-radius: var(--r4); background: var(--fill); border: 1px solid var(--hair); font-size: var(--fs-md); color: var(--ink2); }
+.search .slash { margin-left: auto; font-family: var(--mono); font-size: 10.5px; color: var(--ink2); border: 1px solid var(--hair2); border-radius: 3px; padding: 1px 5px; }
+.plane { flex: 1; min-height: 0; padding: var(--gut); display: flex; flex-direction: column; gap: 28px; }
+.group { display: flex; flex-direction: column; gap: 2px; }
+.gh { display: flex; align-items: baseline; justify-content: space-between; padding: 0 var(--padx) 8px; }
+.gh .gt { font-size: var(--fs-sm); font-weight: 600; letter-spacing: .02em; text-transform: uppercase; color: var(--ink2); }
+.gh .gn { font-size: var(--fs-cap); color: var(--ink3); font-variant-numeric: tabular-nums; background: var(--fill); border-radius: var(--r1); padding: 2px 8px; }
+.current .gh .gt.on { display: inline-flex; align-items: center; gap: 8px; color: var(--accink); border-bottom: 2px solid var(--acc); padding-bottom: 4px; }
+.current .gh .gt.on::before { content: ""; flex: none; width: var(--mark); height: 15px; border-radius: 999px; background: var(--acc); }
+.row { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 24px; min-height: var(--h-row); padding: 12px var(--padx); border-radius: var(--r3); }
+.row.sel, .rule.sel { background: var(--wash); box-shadow: inset 0 0 0 1px var(--hair); }
+.row.sel::before, .rule.sel::before { content: ""; position: absolute; left: 0; width: var(--mark); border-radius: 999px; background: var(--acc); }
+.design .row.sel, .design .rule.sel { overflow: hidden; }
+.design .row.sel::before, .design .rule.sel::before { top: 0; bottom: 0; }
+.current .row.sel::before, .current .rule.sel::before { top: 8px; bottom: 8px; }
+.row .lg { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 3px; }
+.row .lab { font-size: var(--fs-lg); font-weight: 500; letter-spacing: -.012em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row .desc { font-size: var(--fs-md); color: var(--ink2); }
+.row .val { flex: none; display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.sw { width: 40px; height: 24px; flex: none; padding: 2px; display: flex; align-items: center; background: var(--fill2); border-radius: 999px; box-shadow: inset 0 0 0 1px var(--hair); }
+.sw.on { background: var(--pos); justify-content: flex-end; box-shadow: inset 0 0 0 1px rgba(0,0,0,.06); }
+.sw .k { width: 20px; height: 20px; background: #fff; border-radius: 999px; box-shadow: 0 1px 3px var(--cast); }
+.toggle { display: flex; align-items: center; gap: 8px; }
+.toggle .tl { font-size: var(--fs-md); font-weight: 600; color: var(--pos); }
+.toggle .tr { width: 40px; height: 24px; padding: 2px; border-radius: 999px; background: var(--pos); display: flex; justify-content: flex-end; }
+.toggle .tr i { width: 20px; height: 20px; border-radius: 999px; background: var(--pane); }
+.chip { display: flex; align-items: center; gap: 7px; height: var(--h-el); padding: 0 10px; background: var(--fill); border: 1px solid var(--hair); border-radius: var(--r2); font-size: var(--fs-sm); }
+.chip .num { font-weight: 600; color: var(--ink); }
+.chip .caret { color: var(--ink3); font-size: 10px; }
+.kc { display: inline-flex; align-items: center; justify-content: center; min-width: var(--h-el); height: var(--h-el); padding: 0 8px; background: var(--fill); border: 1px solid var(--hair2); border-radius: var(--r1); box-shadow: 0 1px 2px var(--cast); font-family: var(--mono); font-size: var(--fs-sm); color: var(--ink2); flex: none; }
+.current .kc { border-radius: 3px; font-size: 10.5px; }
+.kc.capt { border-color: var(--acc); box-shadow: var(--ring); color: var(--accink); }
+.combo { display: inline-flex; align-items: stretch; height: var(--h-el); border: 1px solid var(--hair2); border-radius: var(--r1); background: var(--pane2); overflow: hidden; font-family: var(--mono); font-size: var(--fs-sm); letter-spacing: 0; flex: none; }
+.combo > span { display: flex; align-items: center; padding: 0 9px; color: var(--ink2); white-space: nowrap; }
+.combo > span + span { border-left: 1px solid var(--hair); }
+.combo > span.mo { color: var(--ink3); }
+.combo.out { background: var(--accbg); border-color: var(--accsoft); }
+.combo.out > span { color: var(--accink); font-weight: 600; }
+.combo.out > span + span { border-left-color: var(--accsoft); }
+.rule { position: relative; display: flex; align-items: center; gap: 7px; min-height: var(--h-rule); padding: 8px var(--padx); border-radius: var(--r3); }
+.rule .side { display: flex; align-items: center; gap: 5px; flex: none; }
+.rule .side.from { width: 128px; flex: none; }
+.rule .side.to { width: 160px; flex: none; }
+.rule .scope { display: inline-flex; align-items: center; justify-content: center; min-width: 128px; height: 24px; font-size: var(--fs-cap); color: var(--ink2); background: var(--fill); border: 1px solid var(--hair); border-radius: var(--r1); padding: 0 8px; flex: none; }
+.rule .disc { color: var(--ink3); font-size: 15px; width: 18px; text-align: center; flex: none; margin-left: auto; }
+.rulehead { display: flex; align-items: center; gap: 7px; padding: 0 var(--padx) 7px; }
+.rulehead .hfrom { width: 128px; flex: none; }
+.rulehead .hto { width: 160px; flex: none; }
+.rulehead span { font-size: var(--fs-cap); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--ink3); }
+.addrow { display: flex; align-items: center; gap: 9px; min-height: 40px; margin-top: 8px; padding: 8px var(--padx); border: 1px dashed var(--hair2); border-radius: var(--r2); color: var(--accink); font-size: var(--fs-md); font-weight: 600; }
+.hints { flex: none; display: flex; align-items: center; gap: 20px; height: var(--h-bar); padding: 0 var(--padx); border-top: 1px solid var(--hair); background: var(--fill); font-size: var(--fs-sm); color: var(--ink2); }
+.hints .k { margin-right: 6px; }
+.hints .sp { flex: 1; }
+.failbar { display: flex; align-items: center; gap: 10px; padding: 12px var(--gut); font-size: var(--fs-sm); color: var(--neg); background: var(--fill); border-top: 1px solid var(--hair); box-shadow: inset var(--mark) 0 0 var(--neg); flex: none; }
+.panel.shot { --thumb-w: 360px; --thumb-h: 240px; --shot-circ: 46px; --shot-gap: 14px; --shot-lab: 30px; }
+.thumbwrap { position: relative; width: var(--thumb-w); height: var(--thumb-h); }
+.thumb { width: var(--thumb-w); height: var(--thumb-h); border: 1px solid var(--edge); background: linear-gradient(135deg, #343945, #4a4a52 55%, #57503f); display: flex; align-items: center; justify-content: center; }
+.design .thumb { border-radius: 3px; border: none; }
+.current .thumb { border-radius: 0; border: none; }
+.mockwin { width: 64%; height: 62%; background: var(--pane2); border-radius: 4px; box-shadow: 0 5px 16px var(--cast); overflow: hidden; display: flex; flex-direction: column; }
+.mockwin .mtb { height: 15px; flex: none; background: var(--fill2); display: flex; gap: 3.5px; align-items: center; padding: 0 7px; }
+.mockwin .mtb i { width: 5px; height: 5px; border-radius: 999px; background: var(--hair2); }
+.mockwin .mln { height: 5px; border-radius: 3px; background: var(--fill2); margin: 6px 9px 0; }
+.shotcircles { position: absolute; left: 0; right: 0; top: calc(var(--thumb-h) - var(--shot-circ) / 2); display: flex; justify-content: center; gap: var(--shot-gap); }
+.circ { width: var(--shot-circ); height: var(--shot-circ); background: var(--pane); border: 1px solid var(--edge); border-radius: 999px; display: flex; align-items: center; justify-content: center; color: var(--ink); }
+.circ svg { width: 19px; height: 19px; }
+.design .circ { box-shadow: var(--flt); }
+.design .circ.pri { background: var(--accsolid); border-color: var(--accsolid); color: var(--onsolid); }
+.current .circ.sel { background: var(--accsolid); border-color: var(--acc); color: var(--onsolid); }
+.shotlab { height: var(--shot-lab); width: var(--thumb-w); display: flex; align-items: center; gap: 9px; margin-top: calc(var(--shot-circ) / 2 + 9px); font-size: var(--fs-md); color: var(--ink2); }
+.t12 { font-size: 12px; color: var(--ink2); }
+.t11 { font-size: 11px; color: var(--ink3); }
+.mono { font-family: "SF Mono", ui-monospace, monospace; letter-spacing: 0; }
+.mla { margin-left: auto; }
+.toast { width: 340px; min-height: 76px; background: var(--pane); border: 1px solid var(--edge); box-shadow: var(--flt); display: flex; flex-direction: row; overflow: hidden; }
+.toast .tone { flex: none; width: 3px; border-radius: 2px; align-self: stretch; background: var(--hair2); }
+.toast.ok .tone { background: var(--pos); }
+.toast .tt { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 16px 18px; }
+.toast .tt b { font-size: var(--fs-lg); font-weight: 600; letter-spacing: -.012em; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.toast .tt span { font-size: var(--fs-sm); color: var(--ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.current .toast .tone { width: 4px; border-radius: 0; }
+.current .toast .tt b { font-weight: 500; }
+.current .toast .tt span { font-size: var(--fs-md); }
+.current .toast { border-radius: 0; }
+.prim { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; justify-content: center; padding: 12px; }
+.swatchrow { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; padding: 4px 0 0; }
+
+.markable { cursor: pointer; position: relative; }
+.markable:hover { outline: 2px solid rgba(184,134,11,.45); outline-offset: 1px; }
+.marked { outline: 2px solid var(--accent); outline-offset: 1px; }
+.mbadge { position: absolute; top: -9px; right: -9px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; background: var(--accent); color: #fff; font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; z-index: 5; }
+.ledger { position: fixed; left: 0; right: 0; bottom: 0; z-index: 50; background: rgba(255,254,251,.97); border-top: 1px solid var(--line); padding: 10px 20px; font-size: 13px; box-shadow: 0 -4px 16px rgba(60,48,26,.10); }
+.ledger .lghead { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.ledger .lghead b { font-size: 13px; letter-spacing: .04em; }
+.ledger .lgbtn { border: 1px solid var(--line); border-radius: 6px; background: var(--elevated); padding: 3px 10px; font-size: 12px; cursor: pointer; }
+.ledger .lgbtn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.ledger .lgbtn:hover { filter: brightness(.97); }
+.ledger ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; max-height: 120px; overflow-y: auto; }
+.ledger li { display: flex; gap: 8px; align-items: baseline; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ledger li .ln { color: var(--accent); font-weight: 700; min-width: 18px; }
+.ledger li .lsym { font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; color: var(--text-primary); }
+.ledger li .lloc { font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: var(--muted); }
+.ledger li .ldlt { color: var(--secondary); }
+.panel .grow { flex: 1; min-width: 0; }
+.panel .fl1 { flex: 1; }
+.panel .mut { color: var(--ink2); }
+.panel .neg { color: var(--neg); }
+.panel .num { font-variant-numeric: tabular-nums; }
+.panel .t14 { font-size: var(--fs-lg); font-weight: 600; letter-spacing: -.012em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.w500 { width: 500px; } .w460 { width: 460px; } .w360 { width: 360px; }
+.band.sub { height: 52px; padding: 0 var(--padx); }
+.chip.sm { height: 22px; font-size: 11px; }
+.chip .strong { font-weight: 600; color: var(--ink); }
+.list { display: flex; flex-direction: column; padding: 6px 0; }
+.lrow { position: relative; display: flex; align-items: center; gap: 12px; padding: 0 var(--padx); border-radius: var(--r2); margin: 0 8px; }
+.lrow .ic { width: 23px; height: 23px; background: var(--fill); border: 1px solid var(--hair); border-radius: var(--r1); flex: none; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #fff; font-weight: 600; }
+.lrow .nm { font-size: var(--fs-md); font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lrow .meta { font-size: var(--fs-sm); color: var(--ink2); font-family: var(--mono); flex: none; font-variant-numeric: tabular-nums; }
+.h32 { height: 32px; } .h40 { height: 40px; } .h48 { height: 48px; }
+.lrow.sel { background: var(--wash); box-shadow: inset 0 0 0 1px var(--hair); overflow: hidden; }
+.lrow.sel::before { content: ""; position: absolute; left: 0; width: var(--mark); border-radius: 999px; background: var(--acc); }
+.design .lrow.sel::before { top: 0; bottom: 0; }
+.current .lrow.sel::before { top: 8px; bottom: 8px; }
+.st { width: 7px; height: 7px; flex: none; border-radius: 999px; }
+.st.ok { background: var(--pos); box-shadow: 0 0 0 3px var(--halo-pos); }
+.st.busy { background: var(--wrn); box-shadow: 0 0 0 3px var(--halo-wrn); }
+.st.err { background: var(--neg); box-shadow: 0 0 0 3px var(--halo-neg); }
+.st.idle { background: var(--ink3); box-shadow: 0 0 0 3px var(--fill2); }
+.grid { display: flex; flex-wrap: wrap; gap: 16px; padding: 36px 40px; }
+.wcard { width: 300px; flex: none; background: var(--pane); border: 1px solid var(--hair); overflow: hidden; position: relative; }
+.wcard .prev { height: 169px; background: linear-gradient(180deg, var(--pane2), var(--pane3)); display: flex; align-items: center; justify-content: center; }
+.wcard .prev .mockwin { width: 82%; height: 76%; }
+.wcard .strip { height: 36px; display: flex; align-items: center; gap: 9px; padding: 0 11px; background: var(--pane); border-top: 1px solid var(--hair); }
+.wcard .strip .ic { width: 17px; height: 17px; background: var(--fill2); border-radius: var(--r1); flex: none; }
+.wcard .strip .lb { font-size: var(--fs-sm); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.design .wcard.sel { box-shadow: 0 0 0 1.5px var(--acc), 0 0 0 4px var(--acchalo); }
+.mockwin.term { background: #17171b; }
+.mockwin.term .mtb { background: rgba(255,255,255,.07); }
+.mockwin.term .mln { background: rgba(255,255,255,.14); }
+.mockwin.term .mln.g { background: rgba(74,168,122,.55); }
+.mockwin.term .mln.a { background: rgba(224,172,63,.5); }
+.mockwin.dim { opacity: .55; }
+.strip32 { height: 32px; flex-direction: row; display: flex; align-items: center; gap: 10px; padding: 0 13px; }
+.hints .k { font-family: var(--mono); font-size: 10.5px; color: var(--ink3); border: 1px solid var(--hair2); border-radius: 3px; padding: 1px 5px; margin-right: 6px; }
+.side .who.c.pend { color: var(--tx-3); border-color: var(--line); }
+.slot { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; border: 1.5px dashed var(--line); border-radius: 10px; background-color: var(--bg); background-image: repeating-linear-gradient(135deg, transparent 0 10px, rgba(60,48,26,.035) 10px 20px); color: var(--tx-3); text-align: center; padding: 28px 24px; }
+.slot b { font-size: 13.5px; color: var(--tx-2); font-weight: 600; letter-spacing: -.01em; }
+.slot code { font-family: var(--mono); font-size: 11.5px; color: var(--accent); }
+.slot .how { font-size: 12.5px; max-width: 320px; line-height: 1.5; }
+body { padding-bottom: 200px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="masthead">
+  <div class="kicker">qol-gpui &middot; design vs implementation</div>
+  <h1>Bone &amp; Amber &middot; design vs today</h1>
+  <p class="sub">
+    One vertical split per component. Left: the design from <code>bone-and-amber-deck.html</code>.
+    Right: the same component as qol-gpui renders it today, from the real constants in
+    <code>qol-theme</code>, <code>kit.rs</code>, <code>settings_panel/view.rs</code>, <code>toast.rs</code>
+    and <code>qol-shot/preview.rs</code>. GPUI surfaces follow the host native theme; this page shows the
+    light appearance, which is what the deck specifies as its primary. Click any element on the design side to
+    mark it for adjustment; the bar at the bottom exports the GPUI task list.
+  </p>
+</div>
+
+<div class="block">
+  <div class="block-head">
+    <div class="left">
+      <h2>Settings panel</h2>
+      <p>The host settings window for a plugin. Differences to look for: the rail caption, the
+      selection marker, the group header of the open section, and the hint bar wording.</p>
+    </div>
+    <div class="right">
+      <div class="geo">
+        rail 190 &middot; band 64 &middot; rows 52 &middot; rules 48<br>
+        light runtime &middot; settings_panel/view.rs
+      </div>
+    </div>
+  </div>
+    <div class="stage wide">
+    <div class="side">
+      <span class="who d">Design</span>
+      <div class="panel design settings" data-gpui="settings window | PANEL_WIDE_WIDTH | settings_panel/mod.rs:21 | deck 760 · code 680">
+        <div class="band">
+          <div class="bt"><b>Key Remap</b><span>Ctrl behaves like Cmd, everywhere except your terminals</span></div>
+          <span class="countchip" data-gpui="band badge | view.rs band | deck &ldquo;5 rules active&rdquo; · code &ldquo;6 settings&rdquo;"><b>5</b><span>rules active</span></span>
+        </div>
+        <div class="body">
+          <div class="rail" data-gpui="rail | PANEL_RAIL_WIDTH | settings_panel/mod.rs:24 | deck 196 · code 190">
+            <div class="item on" data-gpui="rail selection | kit.rs row_state | deck full-height · code inset 8">General</div>
+            <div class="item">Character Rules</div>
+            <div class="item">Key Rules</div>
+            <div class="item">Mouse Rules</div>
+            <div class="item">Scroll Rules</div>
+          </div>
+          <div class="main">
+            <div class="search" data-gpui="filter | view.rs | deck &ldquo;Filter settings and rules&rdquo; · code &ldquo;Filter settings&rdquo;">Filter settings and rules<span class="slash">/</span></div>
+            <div class="plane">
+              <div class="group">
+                <div class="gh" data-gpui="group header | view.rs | deck plain · code accent underline"><span class="gt">General</span><span class="gn">2 settings</span></div>
+                <div class="row" data-gpui="toggle | view.rs row | deck switch · code On/Off toggle">
+                  <div class="lg"><div class="lab">Enabled</div><div class="desc">Remapping runs while this is on.</div></div>
+                  <span class="val"><span class="sw on"><span class="k"></span></span></span>
+                </div>
+                <div class="row sel" data-gpui="selected row | kit.rs marker | deck full-height clipped · code inset 8">
+                  <div class="lg"><div class="lab">Excluded apps</div><div class="desc">Non-global remaps are ignored in these apps.</div></div>
+                  <span class="val"><span class="chip" data-gpui="chip | kit.rs chip | deck &ldquo;13 apps&rdquo; · code &ldquo;13 items&rdquo;"><span class="num">13</span>apps<span class="caret">&#9662;</span></span></span>
+                </div>
+              </div>
+              <div class="group">
+                <div class="gh"><span class="gt">Key Rules</span><span class="gn">5 rules</span></div>
+                <div class="rulehead"><span class="hfrom">From</span><span class="hto">To</span><span>Scope</span></div>
+                <div class="rule sel" data-gpui="rule row | view.rs rules | deck combo · code keycap table">
+                  <div class="side from"><span class="combo"><span class="mo">ctrl</span><span>C</span></span></div>
+                  <div class="side to"><span class="combo out"><span>cmd</span><span>C</span></span></div>
+                  <span class="scope">Except excluded</span><span class="disc">&rsaquo;</span>
+                </div>
+                <div class="rule">
+                  <div class="side from"><span class="combo"><span class="mo">ctrl</span><span>&larr;</span></span></div>
+                  <div class="side to"><span class="combo out"><span>alt</span><span>&larr;</span></span></div>
+                  <span class="scope">Except excluded</span><span class="disc">&rsaquo;</span>
+                </div>
+                <div class="addrow" data-gpui="add rule | view.rs | deck text · code dashed plus">Add rule</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="hints" data-gpui="hint bar | view.rs | deck edit/remove/add/filter · code flip/move/filter/close"><span><span class="kc">&crarr;</span>edit rule</span><span><span class="kc">&#9003;</span>remove</span><span><span class="kc">&#8984;&crarr;</span>add rule</span><span class="sp"></span><span><span class="kc">/</span>filter</span></div>
+        <div class="failbar" data-gpui="failbar | view.rs | deck always visible · code error only">Excluded apps needs app names, not a number. Nothing was saved.</div>
+      </div>
+      <span class="cap">w760 &middot; rail 196 &middot; no caption &middot; full-height marker &middot; plain group headers</span>
+    </div>
+    <div class="side">
+      <span class="who c">Today &middot; capture</span>
+      <div class="panel current settings" style="overflow:visible;box-shadow:none;border:none;background:transparent">
+        <img src="assets/keyremap-settings-current.png" style="display:block;width:870px;height:680px" alt="Real qol-tray settings window for plugin-keyremap, captured from the live host">
+      </div>
+      <span class="cap">real capture &middot; native 1:1 &middot; title bar cropped &middot; window 870 &times; 680 &middot; band/rows share the same constants as the deck, so the vertical grid aligns &middot; rail 190 vs deck 196</span>
+    </div>
+  </div>
+</div>
+
+
+<div class="block">
+  <div class="block-head">
+    <div class="left">
+      <h2>Selection marker</h2>
+      <p>The 3px bar on the left of a selected row, in the states the kit defines.</p>
+    </div>
+  </div>
+  <div class="stage">
+    <div class="cmprow">
+      <div class="side">
+        <span class="who d">Design</span>
+        <div class="panel design" style="width:440px">
+          <div class="plane" style="padding:12px;gap:14px">
+            <div class="group">
+              <div class="row sel" data-gpui="selected row marker | kit::row_state | libs/qol-gpui/src/kit.rs | deck full height clipped to the radius &middot; code 3px stub inset 8"><div class="lg"><div class="lab">Current</div><div class="desc">Full height, clipped to the corner.</div></div></div>
+              <div class="row" data-gpui="warning row | kit::row_state warn | libs/qol-gpui/src/kit.rs | deck wash-wrn .075 &middot; code same wash, marker shape differs" style="background:var(--washw)"><div class="lg"><div class="lab">Needs attention</div><div class="desc">Same shape, warning tone.</div></div></div>
+              <div class="row" data-gpui="invalid row | kit::row_state bad | libs/qol-gpui/src/kit.rs | deck edge-neg .32 hairline &middot; code danger tone at .32" style="background:var(--washn);box-shadow:inset 0 0 0 1px rgba(181,80,74,.32)"><div class="lg"><div class="lab">Invalid</div><div class="desc">Same shape, danger tone.</div></div></div>
+              <div class="row" data-gpui="disabled row | DISABLED_OPACITY | qol-theme | deck .4 &middot; code 0.4, match"><div class="lg"><div class="lab">Disabled</div><div class="desc">Whole row at 40%.</div></div></div>
+            </div>
+          </div>
+        </div>
+        <span class="cap">marker fills the row, corners follow the radius</span>
+      </div>
+      <div class="side">
+        <span class="who c">Today &middot; from constants</span>
+        <div class="panel current" style="width:440px">
+          <div class="plane" style="padding:12px;gap:14px">
+            <div class="group">
+              <div class="row sel"><div class="lg"><div class="lab">Current</div><div class="desc">3px stub, inset 8px top and bottom.</div></div></div>
+              <div class="row" style="background:var(--washw)"><div class="lg"><div class="lab">Needs attention</div><div class="desc">Same stub, warning tone.</div></div></div>
+              <div class="row" style="background:var(--washn);box-shadow:inset 0 0 0 1px rgba(195,74,50,.32)"><div class="lg"><div class="lab">Invalid</div><div class="desc">Same stub, danger tone.</div></div></div>
+              <div class="row" style="opacity:.4"><div class="lg"><div class="lab">Disabled</div><div class="desc">Whole row at 40%.</div></div></div>
+            </div>
+          </div>
+        </div>
+        <span class="cap">stub is <code>top 8</code> / <code>bottom 8</code> in kit.rs</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="block">
+  <div class="block-head">
+    <div class="left">
+      <h2>qol-shot preview</h2>
+      <p>The floating thumbnail after a capture, with its action circles straddling the bottom
+      edge of the image.</p>
+    </div>
+    <div class="right">
+      <div class="geo">
+        CIRCLE 46 &middot; CIRCLE_GAP 14 &middot; LABEL_H 30<br>
+        qol-shot/src/ui/preview.rs
+      </div>
+    </div>
+  </div>
+  <div class="stage">
+    <div class="cmprow">
+      <div class="side">
+        <span class="who d">Design</span>
+        <div class="panel design shot" style="padding:0;width:396px">
+          <div class="thumbwrap" data-gpui="thumb | preview.rs | deck radius 3 · code radius 0">
+            <div class="thumb"><div class="mockwin"><div class="mtb"><i></i><i></i><i></i></div><div class="mln" style="width:48%;height:8px;background:var(--hair2)"></div><div class="mln" style="width:82%"></div><div class="mln" style="width:66%"></div></div></div>
+            <div class="shotcircles" data-gpui="action circles | preview.rs CIRCLE 46 GAP 14 | deck elevated · code flat">
+              <div class="circ pri"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></div>
+              <div class="circ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg></div>
+              <div class="circ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg></div>
+              <div class="circ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></div>
+              <div class="circ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M12 2a6 6 0 0 0-4.5 9.9l.9 1.1a1.5 1.5 0 0 0 1.1.5h5a1.5 1.5 0 0 0 1.1-.5l.9-1.1A6 6 0 0 0 12 2Z"/></svg></div>
+            </div>
+          </div>
+          <div class="shotlab" data-gpui="action label | preview.rs LABEL_H 30 | deck labels armed action"><span class="t12">Copy</span><span class="t11 mono mla">2.1 MB</span></div>
+        </div>
+        <span class="cap">3px thumb radius &middot; elevated circles &middot; one solid primary</span>
+      </div>
+      <div class="side">
+        <span class="who c">Today &middot; from constants</span>
+        <div class="panel current shot" style="padding:0;width:396px">
+          <div class="thumbwrap">
+            <div class="thumb"><div class="mockwin"><div class="mtb"><i></i><i></i><i></i></div><div class="mln" style="width:48%;height:8px;background:var(--hair2)"></div><div class="mln" style="width:82%"></div><div class="mln" style="width:66%"></div></div></div>
+            <div class="shotcircles">
+              <div class="circ sel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></div>
+              <div class="circ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg></div>
+              <div class="circ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg></div>
+              <div class="circ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></div>
+              <div class="circ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M12 2a6 6 0 0 0-4.5 9.9l.9 1.1a1.5 1.5 0 0 0 1.1.5h5a1.5 1.5 0 0 0 1.1-.5l.9-1.1A6 6 0 0 0 12 2Z"/></svg></div>
+            </div>
+          </div>
+          <div class="shotlab"><span class="t12">Copy</span><span class="t11 mono mla">2.1 MB</span></div>
+        </div>
+        <span class="cap">square thumb &middot; flat circles &middot; armed circle amber-tinted</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="block">
+  <div class="block-head">
+    <div class="left">
+      <h2>Toast</h2>
+      <p>The post-action confirmation. Both sides carry a left tone bar; the design uses a 3px
+      rounded bar and semibold title, the implementation a 4px square bar.</p>
+    </div>
+    <div class="right">
+      <div class="geo">
+        compact 340 &times; 76 &middot; toast.rs
+      </div>
+    </div>
+  </div>
+  <div class="stage">
+    <div class="cmprow">
+      <div class="side">
+        <span class="who d">Design</span>
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div class="toast ok design" data-gpui="toast | toast.rs | deck radius 2 + 3px tone · code radius 0 + 4px tone"><div class="tone"></div><div class="tt"><b>Screenshot copied</b><span>1284 &times; 726 &middot; 2.1 MB</span></div></div>
+          <div class="toast design"><div class="tone"></div><div class="tt"><b>Syncing profile</b><span>Push to GitHub</span></div></div>
+        </div>
+        <span class="cap">3px tone bar &middot; radius 2 &middot; title semibold</span>
+      </div>
+      <div class="side">
+        <span class="who c">Today &middot; from constants</span>
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div class="toast ok current"><div class="tone"></div><div class="tt"><b>Screenshot copied</b><span>1284 &times; 726 &middot; 2.1 MB</span></div></div>
+          <div class="toast current"><div class="tone"></div><div class="tt"><b>Syncing profile</b><span>Push to GitHub</span></div></div>
+        </div>
+        <span class="cap">4px square bar &middot; title medium &middot; rounded_none</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="block">
+  <div class="block-head">
+    <div class="left">
+      <h2>Primitives</h2>
+      <p>Keycap, chip, and the focus ring. The design keycap is a 4px-radius 12.5px glyph; the kit
+      renders 3px and 10.5px.</p>
+    </div>
+  </div>
+  <div class="stage">
+    <div class="cmprow">
+      <div class="side">
+        <span class="who d">Design</span>
+        <div class="panel design" style="width:420px;padding:12px">
+          <div class="prim">
+            <span class="kc" data-gpui="keycap | kit.rs RADIUS_KEYCAP TEXT_KEYCAP | deck r4 12.5 · code r3 10.5">/</span>
+            <span class="kc">&crarr;</span>
+            <span class="kc">esc</span>
+            <span class="kc capt">C</span>
+            <span class="chip" data-gpui="chip | kit.rs | deck rounded · code square"><span class="num">13</span>apps</span>
+          </div>
+        </div>
+        <span class="cap">radius r1 4px &middot; mono 12.5px</span>
+      </div>
+      <div class="side">
+        <span class="who c">Today &middot; from constants</span>
+        <div class="panel current" style="width:420px;padding:12px">
+          <div class="prim">
+            <span class="kc">/</span>
+            <span class="kc">&crarr;</span>
+            <span class="kc">esc</span>
+            <span class="kc capt">C</span>
+            <span class="chip"><span class="num">13</span>apps</span>
+          </div>
+        </div>
+        <span class="cap">RADIUS_KEYCAP 3px &middot; mono 10.5px</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<div class="block">
+  <div class="block-head">
+    <div class="left">
+      <h2>Launcher</h2>
+      <p>The query line is the header. Results get an icon slot and a right-aligned kind column,
+      and the selected row lifts to its own plane instead of taking an accent fill.</p>
+    </div>
+    <div class="right">
+      <div class="geo">
+        WINDOW_WIDTH 500 &middot; HEADER_HEIGHT 42<br>
+        ROW_HEIGHT 32 &middot; MAX_VISIBLE 8<br>
+        launcher/src/ui/layout.rs
+      </div>
+    </div>
+  </div>
+  <div class="stage wide">
+    <div class="side">
+      <span class="who d">Design</span>
+      <div class="panel design w500" data-gpui="launcher window | WINDOW_WIDTH | launcher/src/ui/layout.rs | deck 500 &middot; code not yet audited">
+        <div class="band sub" data-gpui="query header | HEADER_HEIGHT 42 | launcher/src/ui/layout.rs | deck the query is the header &middot; code not yet audited">
+          <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">
+            <span style="color:var(--accink);font-weight:700">&#8250;</span>
+            <span class="mono" style="font-size:15px">term<span style="display:inline-block;width:7px;height:15px;background:var(--acc);vertical-align:-2px;margin-left:2px"></span></span>
+          </div>
+          <span class="t11 num">6 / 148</span>
+        </div>
+        <div class="list">
+          <div class="lrow h32 sel" data-gpui="result row | ROW_HEIGHT 32 | launcher/src/ui/layout.rs | deck plane selection, no accent fill &middot; code not yet audited"><span class="ic" style="background:#2f3238;border-color:transparent">&#8250;_</span><span class="nm">Terminal</span><span class="meta" data-gpui="kind column | launcher/src/ui/layout.rs | deck right-aligned kind &middot; code not yet audited">app</span></div>
+          <div class="lrow h32"><span class="ic" style="background:#2f7350;border-color:transparent">&#8250;</span><span class="nm">iTerm2</span><span class="meta">app</span></div>
+          <div class="lrow h32"><span class="ic" style="background:#8a6208;border-color:transparent">q</span><span class="nm">qol dev &middot; restart tray</span><span class="meta">cmd</span></div>
+          <div class="lrow h32"><span class="ic" style="background:#3a639b;border-color:transparent">&#9656;</span><span class="nm">~/repos/private/qol-monorepo</span><span class="meta">dir</span></div>
+          <div class="lrow h32"><span class="ic" style="background:#5c626d;border-color:transparent">&#9881;</span><span class="nm">Terminal preferences</span><span class="meta">pref</span></div>
+          <div class="lrow h32"><span class="ic" style="background:#8a6208;border-color:transparent">q</span><span class="nm">kitty @ set-colors</span><span class="meta">cmd</span></div>
+        </div>
+        <div class="hints" data-gpui="hint bar | launcher/src/ui/layout.rs | deck open/reveal/dismiss &middot; code not yet audited"><span><span class="k">&crarr;</span>open</span><span><span class="k">&#8997;&crarr;</span>reveal</span><span><span class="k">esc</span>dismiss</span></div>
+      </div>
+      <span class="cap">500 wide &middot; 8 rows max &middot; icon slot &middot; kind column &middot; hint bar</span>
+    </div>
+    <div class="side">
+      <span class="who c pend">Today &middot; capture pending</span>
+      <div class="slot" style="width:500px;min-height:330px">
+        <b>No capture yet</b>
+        <span class="how">Run the launcher, screenshot the window at 1:1, save it as
+        <code>assets/launcher-current.png</code> and swap this slot for an <code>&lt;img&gt;</code>.</span>
+      </div>
+      <span class="cap">the mapping registry has no launcher rows yet, so nothing on the left is claimed as a delta</span>
+    </div>
+  </div>
+</div>
+
+<div class="block">
+  <div class="block-head">
+    <div class="left">
+      <h2>Alt-tab picker</h2>
+      <p>The live preview is the content, so the chrome gets out of its way: a 1px card, an amber
+      ring for the selection, and the label strip attached to the card rather than floating under it.</p>
+    </div>
+    <div class="right">
+      <div class="geo">
+        BASE_CARD_WIDTH 220 &times; scale &middot; 16:9 preview<br>
+        HOTKEY_HINTS_HEIGHT 48 &middot; scale 0.5 &hellip; 2.5<br>
+        alt-tab/src/picker/layout.rs
+      </div>
+    </div>
+  </div>
+  <div class="stage">
+    <div class="colcmp">
+      <div class="side">
+        <span class="who d">Design</span>
+        <div class="panel design" style="background:rgba(10,10,13,.58);box-shadow:none;width:100%" data-gpui="picker scrim | alt-tab/src/picker/layout.rs | deck rgba(10,10,13,.58) &middot; code not yet audited">
+          <div class="grid">
+            <div class="wcard sel" data-gpui="card selection | alt-tab/src/picker/layout.rs | deck amber ring as a shadow, no reflow &middot; code not yet audited">
+              <div class="prev"><div class="mockwin term"><div class="mtb"><i></i><i></i><i></i></div><div class="mln g" style="width:52%"></div><div class="mln" style="width:78%"></div><div class="mln" style="width:64%"></div><div class="mln a" style="width:38%"></div><div class="mln" style="width:70%"></div></div></div>
+              <div class="strip" data-gpui="label strip | alt-tab/src/picker/layout.rs | deck attached to the card, height from font size &middot; code not yet audited"><span class="ic"></span><span class="lb">qol-monorepo &middot; kitty</span></div>
+            </div>
+            <div class="wcard" data-gpui="window card | BASE_CARD_WIDTH 220 | alt-tab/src/picker/layout.rs | deck 1px card, square corners &middot; code not yet audited">
+              <div class="prev"><div class="mockwin"><div class="mtb"><i></i><i></i><i></i></div><div class="mln" style="width:44%;height:8px;background:var(--hair2)"></div><div class="mln" style="width:86%"></div><div class="mln" style="width:80%"></div><div class="mln" style="width:58%"></div></div></div>
+              <div class="strip"><span class="ic"></span><span class="lb">Bone and Amber &middot; Firefox</span></div>
+            </div>
+            <div class="wcard">
+              <div class="prev"><div class="mockwin dim"><div class="mtb"><i></i><i></i><i></i></div><div class="mln" style="width:70%"></div><div class="mln" style="width:52%"></div></div></div>
+              <div class="strip"><span class="ic"></span><span class="lb">Messages</span></div>
+            </div>
+          </div>
+          <div class="hints" style="justify-content:center;gap:26px" data-gpui="hotkey hints | HOTKEY_HINTS_HEIGHT 48 | alt-tab/src/picker/layout.rs | deck three bindings, centred &middot; code not yet audited">
+            <span><span class="k">&#8997;&#8677;</span>next</span>
+            <span><span class="k">&#8997;&#8679;&#8677;</span>previous</span>
+            <span><span class="k">W</span>close window</span>
+          </div>
+        </div>
+        <span class="cap">ring not border, so nothing reflows as selection moves</span>
+      </div>
+      <div class="side">
+        <span class="who c pend">Today &middot; capture pending</span>
+        <div class="slot" style="width:100%;min-height:260px">
+          <b>No capture yet</b>
+          <span class="how">Hold the alt-tab hotkey, capture the full overlay, save it as
+          <code>assets/alt-tab-current.png</code> and swap this slot for an <code>&lt;img&gt;</code>.</span>
+        </div>
+        <span class="cap">capture at the default card scale so the 220px base width is readable</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="block">
+  <div class="block-head">
+    <div class="left">
+      <h2>CLI sessions</h2>
+      <p>A corner panel that lives on screen, so quietness matters more than anything. Status is a
+      square plus one line of state, and the collapsed strip keeps the same square.</p>
+    </div>
+    <div class="right">
+      <div class="geo">
+        360 &times; 400 &middot; row 44 &middot; CORNER_MARGIN 16<br>
+        collapsed STRIP_HEIGHT 32<br>
+        cli-sessions/src/ui/
+      </div>
+    </div>
+  </div>
+  <div class="stage">
+    <div class="cmprow">
+      <div class="side">
+        <span class="who d">Design</span>
+        <div class="panel design w360" style="height:400px" data-gpui="sessions panel | cli-sessions/src/ui/ | deck 360 &times; 400, radius 12, one soft shadow &middot; code square and flat">
+          <div class="band sub" data-gpui="panel band | cli-sessions/src/ui/ | deck 52 sub-band &middot; code not yet audited">
+            <div class="t14">Sessions</div>
+            <span class="chip sm"><span class="num strong">4</span><span class="mut">live</span></span>
+          </div>
+          <div class="list" style="flex:1;overflow:hidden">
+            <div class="lrow h48 sel" data-gpui="session row | cli-sessions/src/ui/ | deck row 48 in the deck markup, geo says 44 &middot; code not yet audited">
+              <span class="st ok" data-gpui="status dot | cli-sessions/src/ui/ | deck 7px dot + 3px halo, four states &middot; code not yet audited"></span>
+              <span class="grow"><div class="nm" style="font-weight:600">fix-view-r2</div><div class="t12">editing view.rs &middot; 1m 12s</div></span>
+            </div>
+            <div class="lrow h48"><span class="st busy"></span><span class="grow"><div class="nm">surf-picker</div><div class="t12">waiting for review</div></span></div>
+            <div class="lrow h48"><span class="st ok"></span><span class="grow"><div class="nm">surf-kit</div><div class="t12">reading color_wheel.rs</div></span></div>
+            <div class="lrow h48"><span class="st err"></span><span class="grow"><div class="nm">surf-rest</div><div class="t11 neg">exited 1</div></span></div>
+            <div class="lrow h48"><span class="st idle"></span><span class="grow"><div class="nm mut">kr-persist</div><div class="t11">closed 4m ago</div></span></div>
+          </div>
+          <div class="hints"><span><span class="k">&crarr;</span>focus</span><span><span class="k">&#8984;W</span>close</span><span class="mla"><span class="k">&#8997;S</span>collapse</span></div>
+        </div>
+        <div class="panel design strip32" style="width:210px" data-gpui="collapsed strip | STRIP_HEIGHT 32 | cli-sessions/src/ui/ | deck same surface, same dot, same type &middot; code not yet audited"><span class="st ok"></span><span class="t12 fl1">4 live &middot; 1 failed</span><span class="t11 mono">&#8997;S</span></div>
+        <span class="cap">expanded 360 &times; 400 &middot; collapsed 32 tall &middot; four states, four dots</span>
+      </div>
+      <div class="side">
+        <span class="who c pend">Today &middot; capture pending</span>
+        <div class="slot" style="width:360px;min-height:400px">
+          <b>No capture yet</b>
+          <span class="how">Capture the panel expanded and collapsed, save them as
+          <code>assets/cli-sessions-current.png</code> and swap this slot for an <code>&lt;img&gt;</code>.</span>
+        </div>
+        <span class="cap">the deck geo says row 44 while the deck markup renders 48, so settle that before calling any row-height delta</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="block">
+  <div class="block-head">
+    <div class="left">
+      <h2>Remove app</h2>
+      <p>A destructive picker, so it earns one thing the others do not: an explicit confirm bar that
+      spells out what is about to go. Sizes are right-aligned tabular.</p>
+    </div>
+    <div class="right">
+      <div class="geo">
+        WINDOW_WIDTH 460 &middot; WINDOW_HEIGHT 540<br>
+        SEARCH_H 40 &middot; ROW_H 38 &middot; FOOTER_H 34<br>
+        removeapp/src/ui/mod.rs
+      </div>
+    </div>
+  </div>
+  <div class="stage">
+    <div class="cmprow">
+      <div class="side">
+        <span class="who d">Design</span>
+        <div class="panel design w460" style="height:540px" data-gpui="removeapp window | WINDOW_WIDTH / WINDOW_HEIGHT | plugins/removeapp/src/ui/mod.rs | deck 460 &times; 540 &middot; code not yet audited">
+          <div style="padding:12px 12px 0"><div class="search" style="height:40px;margin:0" data-gpui="search field | SEARCH_H 40 | plugins/removeapp/src/ui/mod.rs | deck inset 12 on three sides &middot; code not yet audited">Search installed apps<span class="slash">/</span></div></div>
+          <div class="list" style="flex:1;overflow:hidden;padding-top:12px">
+            <div class="lrow h40 sel" data-gpui="app row | ROW_H | plugins/removeapp/src/ui/mod.rs | deck geo says 38, deck markup renders 40 &middot; code not yet audited"><span class="ic" style="background:#3a76c2;border-color:transparent">D</span><span class="nm">Docker Desktop</span><span class="meta" data-gpui="size column | plugins/removeapp/src/ui/mod.rs | deck right-aligned tabular, biggest first &middot; code not yet audited">2.4 GB</span></div>
+            <div class="lrow h40"><span class="ic" style="background:#3a6fa8;border-color:transparent">X</span><span class="nm">Xcode</span><span class="meta">14.2 GB</span></div>
+            <div class="lrow h40"><span class="ic" style="background:#2f7350;border-color:transparent">A</span><span class="nm">Android Studio</span><span class="meta">1.8 GB</span></div>
+            <div class="lrow h40"><span class="ic" style="background:#a85c22;border-color:transparent">P</span><span class="nm">Postman</span><span class="meta">640 MB</span></div>
+            <div class="lrow h40"><span class="ic" style="background:#5468b8;border-color:transparent">V</span><span class="nm">VirtualBox</span><span class="meta">421 MB</span></div>
+            <div class="lrow h40"><span class="ic" style="background:#7a4f9e;border-color:transparent">S</span><span class="nm">Slack</span><span class="meta">312 MB</span></div>
+            <div class="lrow h40"><span class="ic" style="background:#3a639b;border-color:transparent">Z</span><span class="nm">Zoom</span><span class="meta">198 MB</span></div>
+          </div>
+          <div class="failbar" style="align-items:center;padding:14px 16px" data-gpui="confirm bar | FOOTER_H 34 | plugins/removeapp/src/ui/mod.rs | deck names the folders and the size &middot; code not yet audited">
+            <span class="st err"></span>
+            <span class="grow">
+              <div style="font-size:13.5px;font-weight:600;letter-spacing:-.012em">Remove Docker Desktop</div>
+              <div style="font-size:12px;color:var(--ink2)">App, caches and 3 support folders &middot; 2.4 GB</div>
+            </span>
+            <span class="kc" style="color:var(--neg);border-color:var(--hair2)">&#8984;&#9003;</span>
+          </div>
+          <div class="hints"><span><span class="k">&crarr;</span>select</span><span><span class="k">&#8984;&#9003;</span>remove</span><span class="mla num">7 / 214</span></div>
+        </div>
+        <span class="cap">460 &times; 540 &middot; tabular sizes &middot; confirm bar states the damage</span>
+      </div>
+      <div class="side">
+        <span class="who c pend">Today &middot; capture pending</span>
+        <div class="slot" style="width:460px;min-height:540px">
+          <b>No capture yet</b>
+          <span class="how">Open Remove App, capture the window at 1:1, save it as
+          <code>assets/removeapp-current.png</code> and swap this slot for an <code>&lt;img&gt;</code>.</span>
+        </div>
+        <span class="cap">the plugin is back on main as of the revert, so this one is capturable today</span>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="ledger" id="ledger" hidden>
+  <div class="lghead">
+    <b>Marked design elements</b>
+    <span id="lgcount" style="color:var(--muted)"></span>
+    <span style="flex:1"></span>
+    <button class="lgbtn primary" id="lgcopy">Copy tasks</button>
+    <button class="lgbtn" id="lgclear">Clear</button>
+  </div>
+  <ul id="lglist"></ul>
+</div>
+<script>
+(function () {
+  var KEY = 'qol-design-marks';
+  var marks = [];
+  try { marks = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch (e) { marks = []; }
+  var ledger = document.getElementById('ledger');
+  var list = document.getElementById('lglist');
+  var count = document.getElementById('lgcount');
+  var els = Array.prototype.slice.call(document.querySelectorAll('[data-gpui]'));
+  els.forEach(function (el) { el.classList.add('markable'); });
+  function parse(v) {
+    var p = v.split('|').map(function (s) { return s.trim(); });
+    return { label: p[0] || '', sym: p[1] || '', loc: p[2] || '', dlt: p[3] || '' };
+  }
+  function elKey(el) { return el.getAttribute('data-gpui'); }
+  function indexOfKey(k) {
+    for (var i = 0; i < marks.length; i++) if (marks[i].key === k) return i;
+    return -1;
+  }
+  function render() {
+    els.forEach(function (el) {
+      var k = elKey(el);
+      var on = indexOfKey(k) !== -1;
+      el.classList.toggle('marked', on);
+      var b = el.querySelector('.mbadge');
+      if (on && !b) {
+        b = document.createElement('i');
+        b.className = 'mbadge';
+        el.appendChild(b);
+      }
+      if (b) b.textContent = on ? String(indexOfKey(k) + 1) : '';
+    });
+    list.innerHTML = '';
+    marks.forEach(function (m, i) {
+      var li = document.createElement('li');
+      var n = document.createElement('span'); n.className = 'ln'; n.textContent = String(i + 1);
+      var s = document.createElement('span'); s.className = 'lsym'; s.textContent = m.sym;
+      var l = document.createElement('span'); l.className = 'lloc'; l.textContent = m.loc;
+      var d = document.createElement('span'); d.className = 'ldlt'; d.textContent = m.dlt;
+      li.appendChild(n); li.appendChild(s); li.appendChild(l); li.appendChild(d);
+      list.appendChild(li);
+    });
+    count.textContent = marks.length ? marks.length + ' marked' : '';
+    ledger.hidden = marks.length === 0;
+  }
+  document.addEventListener('click', function (e) {
+    var t = e.target.closest ? e.target.closest('[data-gpui]') : null;
+    if (!t || t === ledger || ledger.contains(t)) return;
+    var k = elKey(t);
+    var i = indexOfKey(k);
+    if (i === -1) {
+      var info = parse(k);
+      marks.push({ key: k, label: info.label, sym: info.sym, loc: info.loc, dlt: info.dlt });
+    } else {
+      marks.splice(i, 1);
+    }
+    try { localStorage.setItem(KEY, JSON.stringify(marks)); } catch (e) {}
+    render();
+  });
+  document.getElementById('lgclear').addEventListener('click', function () {
+    marks = [];
+    try { localStorage.removeItem(KEY); } catch (e) {}
+    render();
+  });
+  document.getElementById('lgcopy').addEventListener('click', function () {
+    var lines = ['DESIGN TASKS (from design-vs-current.html)'];
+    marks.forEach(function (m) {
+      lines.push('- [ ] ' + m.label + ' · ' + m.sym + ' · ' + m.loc + ' · ' + m.dlt);
+    });
+    var text = lines.join('\n');
+    function done() { count.textContent = 'copied ' + marks.length; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { fallback(); });
+    } else { fallback(); }
+    function fallback() {
+      var ta = document.createElement('textarea');
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); done(); } catch (e) {}
+      document.body.removeChild(ta);
+    }
+  });
+  render();
+})();
+</script>
+
+</body>
+</html>
