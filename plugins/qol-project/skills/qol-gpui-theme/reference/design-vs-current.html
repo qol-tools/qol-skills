@@ -379,7 +379,7 @@ body { padding-bottom: 200px; }
         <div class="panel design shot spec">
           <div class="thumbwrap" data-gpui="thumb | preview.rs | deck radius 3 · code radius 0">
             <div class="thumb"><div class="mockwin" style="width:64%;height:62%"><div class="mtb"><i></i><i></i><i></i></div><div class="mln" style="width:48%;height:8px;background:var(--hair2)"></div><div class="mln" style="width:82%"></div><div class="mln" style="width:66%"></div></div></div>
-            <div class="shotcircles" data-gpui="action circles | preview.rs CIRCLE 46 GAP 14 | deck elevated · code flat">
+            <div class="shotcircles" data-gpui="action controls | preview.rs CIRCLE 46 GAP 14 | deck draws circles · code draws rounded squares">
               <div class="circ pri"><svg role="img" aria-label="Copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></div>
               <div class="circ"><svg role="img" aria-label="Copy path" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg></div>
               <div class="circ"><svg role="img" aria-label="Open folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg></div>
@@ -387,26 +387,14 @@ body { padding-bottom: 200px; }
               <div class="circ"><svg role="img" aria-label="Pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-5.3-7-11a7 7 0 0 1 14 0c0 5.7-7 11-7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg></div>
             </div>
           </div>
-          <div class="shotlab" data-gpui="action label | LABEL_H 30 | qol-shot/src/ui/preview.rs | deck centres the name under the armed circle &middot; code left-aligns it in the bar"><span class="t12 act">Copy</span><span class="t11 mono sz">2.1 MB</span></div>
+          <div class="shotlab" data-gpui="action label | LABEL_H 30 | qol-shot/src/ui/preview.rs | deck centres the name under the armed control and shows the size &middot; code centres it in the panel and drops the size"><span class="t12 act">Copy</span><span class="t11 mono sz">2.1 MB</span></div>
         </div>
         <span class="cap">3px thumb radius &middot; elevated circles &middot; one solid primary &middot; name centred under it</span>
       </div>
       <div class="side">
-        <span class="who c">Today &middot; from constants</span>
-        <div class="panel current shot spec">
-          <div class="thumbwrap">
-            <div class="thumb"><div class="mockwin" style="width:64%;height:62%"><div class="mtb"><i></i><i></i><i></i></div><div class="mln" style="width:48%;height:8px;background:var(--hair2)"></div><div class="mln" style="width:82%"></div><div class="mln" style="width:66%"></div></div></div>
-            <div class="shotcircles">
-              <div class="circ sel"><svg role="img" aria-label="Copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></div>
-              <div class="circ"><svg role="img" aria-label="Copy path" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg></div>
-              <div class="circ"><svg role="img" aria-label="Open folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg></div>
-              <div class="circ"><svg role="img" aria-label="Edit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></div>
-              <div class="circ"><svg role="img" aria-label="Pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-5.3-7-11a7 7 0 0 1 14 0c0 5.7-7 11-7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg></div>
-            </div>
-          </div>
-          <div class="shotlab"><span class="t12 act">Copy</span><span class="t11 mono sz">2.1 MB</span></div>
-        </div>
-        <span class="cap">square thumb &middot; flat circles &middot; armed circle amber-tinted &middot; name left-aligned in the bar</span>
+        <span class="who c">Today &middot; capture</span>
+        <img src="assets/qol-shot-current.png" width="406" height="292" style="display:block" alt="The real qol-shot preview window on the host, armed on the leftmost action">
+        <span class="cap">real capture &middot; 406 &times; 292 logical &middot; the 46px size and 14px gap hold, but the controls are rounded squares where the deck draws circles &middot; the armed one is amber-tinted &middot; the name sits centred in the panel rather than under the armed control, and the file size is not drawn at all</span>
       </div>
     </div>
   </div>

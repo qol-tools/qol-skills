@@ -80,6 +80,8 @@ GPUI sources are in `/Users/kaho/repos/private/qol-monorepo`.
 
 ## qol-shot preview
 
+Capture: `assets/qol-shot-current.png`, 406 x 292 logical.
+
 | Design (deck) | Value | GPUI source | Current | Status |
 |---|---|---|---|---|
 | thumb max | 360 × 240 | `MAX_THUMB_W` / `MAX_THUMB_H` | 360 × 240 | match |
@@ -93,7 +95,9 @@ GPUI sources are in `/Users/kaho/repos/private/qol-monorepo`.
 | armed circle | accent border + tint | `action_border_selected` + `accent_fill` | same | match |
 | label text | `--ink-2` | `label_text` | `text_secondary` | match |
 | label content | armed action name | `PreviewControl::label` | armed action name | match |
-| label position | centred under the armed circle | `preview.rs` label row | left-aligned in the bar | delta, follow the armed circle |
+| label position | centred under the armed control | `preview.rs` label row | centred in the panel, ignores which control is armed | delta, follow the armed control |
+| control shape | circle, radius 999 | `preview.rs` action button | rounded square, small radius | delta, round the controls |
+| file size | drawn at the right of the label row | not drawn | absent | delta, decide whether to add it or drop it from the deck |
 
 ## Toast
 
