@@ -127,7 +127,8 @@ h1 { font-size: 34px; line-height: 1.15; margin: 12px 0 10px; letter-spacing: -.
 .mockwin .mtb i { width: 5px; height: 5px; border-radius: 999px; background: var(--hair2); }
 .mockwin .mln { height: 5px; border-radius: 3px; background: var(--fill2); margin: 6px 9px 0; }
 .shotcircles { position: absolute; left: 0; right: 0; top: calc(var(--thumb-h) - var(--shot-circ) / 2); display: flex; justify-content: center; gap: var(--shot-gap); }
-.circ { width: var(--shot-circ); height: var(--shot-circ); background: var(--pane); border: 1px solid var(--edge); border-radius: 999px; display: flex; align-items: center; justify-content: center; color: var(--ink); }
+.panel.spec { padding: 22px 24px; box-shadow: none; width: max-content; }
+.circ { width: var(--shot-circ); height: var(--shot-circ); background: var(--pane); border: 1px solid var(--hair); border-radius: 999px; display: flex; align-items: center; justify-content: center; color: var(--ink2); }
 .circ svg { width: 19px; height: 19px; }
 .design .circ { box-shadow: var(--flt); }
 .design .circ.pri { background: var(--accsolid); border-color: var(--accsolid); color: var(--onsolid); }
@@ -138,8 +139,8 @@ h1 { font-size: 34px; line-height: 1.15; margin: 12px 0 10px; letter-spacing: -.
 .design .shotlab .sz { position: absolute; top: 50%; right: 0; transform: translateY(-50%); }
 .current .shotlab { display: flex; align-items: center; gap: 9px; }
 .current .shotlab .sz { margin-left: auto; }
-.t12 { font-size: 12px; color: var(--ink2); }
-.t11 { font-size: 11px; color: var(--ink3); }
+.t12 { font-size: var(--fs-sm); color: var(--ink2); }
+.t11 { font-size: var(--fs-cap); color: var(--ink3); }
 .mono { font-family: "SF Mono", ui-monospace, monospace; letter-spacing: 0; }
 .mla { margin-left: auto; }
 .toast { width: 340px; min-height: 76px; background: var(--pane); border: 1px solid var(--edge); box-shadow: var(--flt); display: flex; flex-direction: row; overflow: hidden; }
@@ -374,7 +375,7 @@ body { padding-bottom: 200px; }
     <div class="cmprow">
       <div class="side">
         <span class="who d">Design</span>
-        <div class="panel design shot" style="padding:0;width:396px">
+        <div class="panel design shot spec">
           <div class="thumbwrap" data-gpui="thumb | preview.rs | deck radius 3 · code radius 0">
             <div class="thumb"><div class="mockwin" style="width:64%;height:62%"><div class="mtb"><i></i><i></i><i></i></div><div class="mln" style="width:48%;height:8px;background:var(--hair2)"></div><div class="mln" style="width:82%"></div><div class="mln" style="width:66%"></div></div></div>
             <div class="shotcircles" data-gpui="action circles | preview.rs CIRCLE 46 GAP 14 | deck elevated · code flat">
@@ -391,7 +392,7 @@ body { padding-bottom: 200px; }
       </div>
       <div class="side">
         <span class="who c">Today &middot; from constants</span>
-        <div class="panel current shot" style="padding:0;width:396px">
+        <div class="panel current shot spec">
           <div class="thumbwrap">
             <div class="thumb"><div class="mockwin" style="width:64%;height:62%"><div class="mtb"><i></i><i></i><i></i></div><div class="mln" style="width:48%;height:8px;background:var(--hair2)"></div><div class="mln" style="width:82%"></div><div class="mln" style="width:66%"></div></div></div>
             <div class="shotcircles">
