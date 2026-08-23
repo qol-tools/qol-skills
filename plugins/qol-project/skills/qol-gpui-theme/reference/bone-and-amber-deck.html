@@ -436,7 +436,7 @@ table.plan td .n { font-family: "IBM Plex Mono", ui-monospace, monospace; font-s
 .uni .rail .item.on { background: var(--wash-sel); box-shadow: none; color: var(--ink); font-weight: 600; }
 .uni .rail .item.on::before { display: none; }
 .uni .deck { flex: 1; min-width: 0; display: flex; position: relative; z-index: 1; margin-left: -98px; }
-.uni .main.plane { position: relative; z-index: 1; background: var(--pane); border: 1px solid var(--hair); border-left: 1.5px solid var(--primary); border-right: none; border-radius: var(--r3) 0 0 var(--r3); margin-left: -98px; padding: 18px 20px 18px 18px; box-shadow: -12px 0 26px -18px var(--cast); }
+.uni .main.plane { position: relative; z-index: 1; background: var(--pane); border: 1px solid var(--hair); border-left: 1.5px solid var(--primary); border-right: none; border-radius: var(--r3) 0 0 var(--r3); margin-left: -98px; padding: 18px 20px 18px 18px; box-shadow: -12px 0 26px -18px var(--cast); padding-top: 0; }
 .uni .deck .main.plane { margin-left: 0; }
 .uni .plane .row { height: var(--h-row); min-height: 0; padding-top: 0; padding-bottom: 0; }
 .uni .plane .row .lg > * { flex: none; }
@@ -446,14 +446,19 @@ table.plan td .n { font-family: "IBM Plex Mono", ui-monospace, monospace; font-s
 .uni .plane .row.deep .val { width: auto; gap: 10px; }
 .uni .plane .group > .gh { height: var(--h-ctl); align-items: flex-end; margin: 0 -20px 5px -18px; padding: 0 20px 6px 8px; background: var(--fill); border-bottom: 1px solid var(--sep); }
 .uni .plane .group > .gh .gt { color: var(--ink-head); }
-.uni .plane .group + .group { margin-top: 22px; }
 .uni .plane .row.rule2 { justify-content: flex-start; }
 .uni .plane .row.rule2 > .combo { flex: none; }
 .uni .plane .row.rule2 .arw { flex: 1; text-align: center; font-size: 19px; font-weight: 700; color: var(--ink-3); line-height: 1; }
 .uni .plane .row.rule2 .val { width: auto; flex: none; }
+.uni .plane { gap: 4px; }
+.uni .plane .group { gap: 4px; }
+.uni .plane > .group:first-child > .gh { border-top-left-radius: var(--r3); }
+.uni.filt .plane > .group:first-child > .gh { border-top-left-radius: 0; }
+.uni .plane .group + .group { margin-top: 0; }
+.uni .body { min-height: 482px; }
 .uni.filt .rail { display: none; }
 .uni.filt .main.plane { margin-left: 0; padding-top: 56px; }
-.uni .fbar { position: absolute; left: 0; right: 0; top: 0; z-index: 3; background: var(--pane); padding: 12px 16px 8px; }
+.uni .fbar { position: absolute; left: 0; right: 0; top: 0; z-index: 3; background: var(--pane); padding: 12px 16px 8px; border-top-left-radius: var(--r3); }
 .uni .fbar .search { background: var(--pane); border-color: var(--primary-edge); color: var(--ink); }
 .uni .crumb { display: flex; align-items: center; gap: 6px; font-size: var(--fs-cap); color: var(--ink-3); margin-bottom: 1px; }
 .uni .crumb .up { color: var(--ink-3); }
@@ -1088,7 +1093,7 @@ no literal colour in a component<br>
       <p>
         A group whose single row carries the same name as the group is two labels for one thing.
         The band is dropped and the row stands on its own. Key remap loses four headers this way,
-        Character rules and Key rules among them, and the panel reads shorter for it.
+        Character rules among them, and the panel reads shorter for it.
       </p>
     </div>
     <div class="note">
