@@ -193,7 +193,19 @@ what ships today.
 | row chevron | 19px in a 20px column | `render_entry_chevron` | `TEXT_CAPTION` 13.5 in a `px_1p5` column | delta, the chevron grows |
 | button colours | one `--primary` family (amber) and one `--secondary` family (neutral chrome), every chip, keycap, combo, tag, field and switch drawn from them | `kit` component builders | `palette.accent` plus per-component literals | delta, the deck names the families |
 | going back | escape only, so both arrows stay free for stepping a value | `intent`, `list_intent`, `section_menu_intent` | escape is the only key mapped to Close in all three | match |
-| geometry | 760 wide, rail 196, band 64 | `PANEL_WIDE_WIDTH` / `PANEL_RAIL_WIDTH` | 760 / 196 | match |
+| rail while a panel is open | dimmed to 50%, blurred 0.6px, masked to 25% under the panel, no right border, no fill | `settings_panel/view.rs` rail | full-strength rail with a fill and a right border | missing in code |
+| panel | a card over the rail: overlaps it by 98, full window height, out to the right edge, `--r3` on the left corners only | `settings_panel/view.rs` body | rail and pane sit side by side, no overlap | missing in code |
+| panel left edge | 1.5px `--primary`, the rest of the frame a hairline | `settings_panel/view.rs` body | no edge | missing in code |
+| selected row | breaks out to the panel's left edge, 4px `--primary` mark inset 8 top and bottom, rounded on its inner end only | `paint_selection` | mark is flush and square, row keeps its inset | delta |
+| row height | every row 52, no exceptions | `rows.rs` row | rows grow with their content | delta |
+| openable row | no description, name one step up at `--fs-xl` 17 semibold, count chip plus chevron | `settings_panel/view.rs` row | same size as any other row, keeps its description | missing in code |
+| group heading | at the panel's left edge, hairline underline the panel's full width, `--ink-head` | `render_section_header` | inset with the rows, no rule | delta |
+| depth | a new card slides over the parent, 10-12px of each ancestor still showing at the left | `settings_panel/view.rs` | no nesting, a section replaces the body | missing in code |
+| depth colour | every edge at every depth is the one `--primary`; depth reads as offset and shadow | `palette` | n/a | rule for the implementation |
+| key names | lower case on both sides of a rule, arrow centred between them, 19px bold | `render_rule_row` | modifier lower, key upper, arrow trailing right | delta |
+| breadcrumb | ancestors in the band above the title, caption size, `--ink-3` | `settings_panel/view.rs` band | no breadcrumb | missing in code |
+| hint bar on the way in | escape names the place it returns you to, not the key you pressed | `kit::hint_bar` | n/a | missing in code |
+| geometry | 760 wide, rail 196, band 64, panel overlap 98, row 52 | `PANEL_WIDE_WIDTH` / `PANEL_RAIL_WIDTH` | 760 / 196 | delta, two new constants |
 
 ## How to read a delta
 

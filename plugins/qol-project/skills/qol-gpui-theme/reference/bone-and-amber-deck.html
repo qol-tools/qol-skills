@@ -109,7 +109,7 @@ table.plan td .n { font-family: "IBM Plex Mono", ui-monospace, monospace; font-s
   --pane: #fffefb; --pane-2: #faf8f3; --pane-3: #efece4;
   --edge: #e2ded4;
   --side: #f5f2eb; --sidetx: #57534a;
-  --ink: #1a1815; --ink-2: #57534a; --ink-3: #78736a;
+  --ink: #1a1815; --ink-2: #57534a; --ink-3: #78736a; --ink-head: #4b473e;
   --primary: #b8860b; --primary-ink: #8a6208; --primary-bg: #fdf5e3; --secondary-solid: #201d18; --on-secondary: #fbf9f4;
   --secondary-bg: var(--fill); --secondary-edge: var(--hair); --secondary-bg-strong: var(--fill2); --secondary-edge-strong: var(--hair2);
   --wrn-ink: #9e5510; --btn-cast: 0 1px 2px rgba(32,29,24,.22);
@@ -138,7 +138,7 @@ table.plan td .n { font-family: "IBM Plex Mono", ui-monospace, monospace; font-s
   --pane: #16171a; --pane-2: #1d1e22; --pane-3: #25262b;
   --edge: #2a2b31;
   --side: #101114; --sidetx: #9a978f;
-  --ink: #f3f2f0; --ink-2: #b3b1ac; --ink-3: #8b8880;
+  --ink: #f3f2f0; --ink-2: #b3b1ac; --ink-3: #8b8880; --ink-head: #c6c3bd;
   --primary: #e0ac3f; --primary-ink: #eec468; --primary-bg: #2a2214; --secondary-solid: #f2f0eb; --on-secondary: #16171a;
   --wrn-ink: #eb9d55; --btn-cast: 0 1px 3px rgba(0,0,0,.5);
   --pos: #4aa87a; --neg: #d98479; --wrn: #e8964a;
@@ -429,6 +429,35 @@ table.plan td .n { font-family: "IBM Plex Mono", ui-monospace, monospace; font-s
 .states .snm { width: 96px; flex: none; font-size: var(--fs-sm); font-weight: 600; color: var(--ink-2); }
 .states .cell { display: flex; flex-direction: column; gap: 7px; align-items: flex-start; }
 .states .cell .stlab { font-size: var(--fs-cap); color: var(--ink-3); }
+.s.uni { --h-row: 52px; }
+.uni .body { background: var(--side); }
+.uni .rail { padding: 14px 0; background: transparent; border-right: none; opacity: .5; filter: blur(.6px); -webkit-mask-image: linear-gradient(to right, #000 32%, rgba(0,0,0,.25) 50%); mask-image: linear-gradient(to right, #000 32%, rgba(0,0,0,.25) 50%); }
+.uni .rail .item { border-radius: 0; padding: 0 22px; }
+.uni .rail .item.on { background: var(--wash-sel); box-shadow: none; color: var(--ink); font-weight: 600; }
+.uni .rail .item.on::before { display: none; }
+.uni .deck { flex: 1; min-width: 0; display: flex; position: relative; z-index: 1; margin-left: -98px; }
+.uni .main.plane { position: relative; z-index: 1; background: var(--pane); border: 1px solid var(--hair); border-left: 1.5px solid var(--primary); border-right: none; border-radius: var(--r3) 0 0 var(--r3); margin-left: -98px; padding: 18px 20px 18px 18px; box-shadow: -12px 0 26px -18px var(--cast); }
+.uni .deck .main.plane { margin-left: 0; }
+.uni .plane .row { height: var(--h-row); min-height: 0; padding-top: 0; padding-bottom: 0; }
+.uni .plane .row .lg > * { flex: none; }
+.uni .plane .row.sel { margin-left: -18px; padding-left: 34px; border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.uni .plane .row.sel::before { top: 8px; bottom: 8px; left: -1.5px; width: 4px; background: var(--primary); border-radius: 0 99px 99px 0; }
+.uni .plane .row.deep .lab { font-size: var(--fs-xl); font-weight: 600; letter-spacing: -.018em; }
+.uni .plane .row.deep .val { width: auto; gap: 10px; }
+.uni .plane .group > .gh { margin: 0 -20px 5px -18px; padding: 0 20px 7px 18px; border-bottom: 1px solid var(--sep); }
+.uni .plane .group > .gh .gt { color: var(--ink-head); }
+.uni .plane .group + .group { margin-top: 22px; }
+.uni .plane .row.rule2 { justify-content: flex-start; }
+.uni .plane .row.rule2 > .combo { flex: none; }
+.uni .plane .row.rule2 .arw { flex: 1; text-align: center; font-size: 19px; font-weight: 700; color: var(--ink-3); line-height: 1; }
+.uni .plane .row.rule2 .val { width: auto; flex: none; }
+.uni .crumb { display: flex; align-items: center; gap: 6px; font-size: var(--fs-cap); color: var(--ink-3); margin-bottom: 1px; }
+.uni .crumb .up { color: var(--ink-3); }
+.uni.d1 .deck::before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 12px; background: var(--pane); border: 1px solid var(--hair); border-left: 1.5px solid var(--primary); border-radius: var(--r3) 0 0 var(--r3); }
+.uni.d1 .deck .main.plane { margin-left: 10px; }
+.uni.d2 .deck::before { content: ""; position: absolute; left: 0; top: 14px; bottom: 14px; width: 10px; background: var(--pane); border: 1px solid var(--hair); border-left: 1.5px solid var(--primary); border-radius: var(--r3) 0 0 var(--r3); }
+.uni.d2 .deck::after { content: ""; position: absolute; left: 9px; top: 7px; bottom: 7px; width: 10px; background: var(--pane); border: 1px solid var(--hair); border-left: 1.5px solid var(--primary); border-radius: var(--r3) 0 0 var(--r3); }
+.uni.d2 .deck .main.plane { margin-left: 18px; }
 @media (prefers-reduced-motion: no-preference) { .row, .rule, .lrow, .rail .item, .chip, .tag, .kc { transition: background 140ms ease, box-shadow 140ms ease, border-color 140ms ease; } }
 @media (max-width: 900px) { .wrap { padding: 0 20px 64px; } .stage { padding: var(--sp3) var(--sp2); } .masthead { padding: 64px 0 var(--sp4); } }
 </style>
@@ -871,79 +900,114 @@ no literal colour in a component<br>
     <div class="left">
       <h2>One settings window</h2>
       <p>
-        Every plugin's settings live in the same window. The rail, which used to list one plugin's
-        sections, now lists the plugins themselves, and the band names whichever one you are on. The
-        body is unchanged: the selected plugin's groups, one scroll. There is no filter field taking
-        up a row: typing anything searches every plugin at once, which is what the hint bar says.
-        Opening Bluetooth from the tray moves the selection instead of opening a second window.
+        Every plugin's settings live in the same window. The rail lists the plugins, not one plugin's
+        sections, and it steps back while you work: dimmed, softly blurred, fading out under the
+        panel that sits over its right half. The panel is a card that runs the full height of the
+        window and out to its right edge, held by a single amber line down its left side. The row you
+        are on breaks out to that same edge and carries a short amber mark, rounded on its inner end.
+        There is no filter field taking up a row: typing searches every plugin at once. Opening
+        Bluetooth from the tray moves the selection instead of opening a second window.
       </p>
     </div>
     <div class="right">
       <h3>Geometry</h3>
       <div class="geo">
         760 wide &middot; rail 196 &middot; band 64<br>
-        rail scrolls past 12 entries<br>
-        qol pinned first, then A&ndash;Z<br>
-        no new component
+        panel overlaps the rail by 98<br>
+        every row 52 tall, no exceptions<br>
+        qol pinned first, then A&ndash;Z
       </div>
     </div>
   </div>
 
   <div class="stage">
     <div class="shot">
-      <div class="s w760">
-        <div class="band">
-          <div>
-            <div class="t18">Key Remap</div>
-            <div class="t12">Ctrl behaves like Cmd, everywhere except your terminals</div>
-          </div>
-        </div>
+      <div class="s w760 uni">
+        <div class="band"><div><div class="t18">Key Remap</div><div class="t12">Ctrl behaves like Cmd, everywhere except your terminals</div></div></div>
         <div class="body">
-          <div class="rail">
-            <div class="item">qol</div>
-            <div class="item">Alt tab</div>
-            <div class="item">Bluetooth</div>
-            <div class="item">CLI sessions</div>
-            <div class="item">Controllers</div>
-            <div class="item">IDE checkout</div>
-            <div class="item on">Key remap</div>
-            <div class="item">Launcher</div>
-            <div class="item">Lights</div>
-            <div class="item">Monitor</div>
-            <div class="item">OS themes</div>
-            <div class="item">Pointz</div>
-          </div>
+          <div class="rail"><div class="item">qol</div><div class="item">Alt tab</div><div class="item">Bluetooth</div><div class="item">CLI sessions</div><div class="item">Controllers</div><div class="item">IDE checkout</div><div class="item on">Key remap</div><div class="item">Launcher</div><div class="item">Lights</div><div class="item">Monitor</div><div class="item">OS themes</div><div class="item">Pointz</div></div>
           <div class="main plane">
-
             <div class="group">
-              <div class="gh"><span class="gt">General</span><span class="gn">2 settings</span></div>
+              <div class="gh"><span class="gt">General</span><span class="gn">4 settings</span></div>
               <div class="row">
                 <div class="lg"><div class="lab">Enabled</div><div class="desc">Remapping runs while this is on.</div></div>
                 <span class="val"><span class="sw on"><span class="k"></span></span></span>
               </div>
-              <div class="row sel">
-                <div class="lg"><div class="lab">Excluded apps</div><div class="desc">Non-global remaps are ignored in these apps.</div></div>
-                <span class="val"><span class="chip"><span class="num strong">13</span><span class="mut">apps</span><span class="caret">&#9662;</span></span></span>
+              <div class="row deep sel">
+                <div class="lg"><div class="lab">Excluded apps</div></div>
+                <span class="val"><span class="chip"><span class="num strong">13</span><span class="mut">apps</span></span><span class="disc">&rsaquo;</span></span>
+              </div>
+              <div class="row">
+                <div class="lg"><div class="lab">Swap on external keyboards</div><div class="desc">Only while a USB keyboard is attached.</div></div>
+                <span class="val"><span class="sw"><span class="k"></span></span></span>
               </div>
             </div>
-
             <div class="group">
-              <div class="gh"><span class="gt">Key Rules</span><span class="gn">5 rules</span></div>
-              <div class="rule">
-                <div class="side from"><span class="combo"><span class="mo">ctrl</span><span>C</span></span></div><div class="side to"><span class="combo out"><span>cmd</span><span>C</span></span></div>
-                <span class="scope">Except excluded</span><span class="disc">&rsaquo;</span>
+              <div class="gh"><span class="gt">Key rules</span><span class="gn">5 rules</span></div>
+              <div class="row deep">
+                <div class="lg"><div class="lab">Global rules</div></div>
+                <span class="val"><span class="chip"><span class="num strong">5</span><span class="mut">rules</span></span><span class="disc">&rsaquo;</span></span>
               </div>
-              <div class="rule">
-                <div class="side from"><span class="combo"><span class="mo">ctrl</span><span>&larr;</span></span></div><div class="side to"><span class="combo out"><span>alt</span><span>&larr;</span></span></div>
-                <span class="scope">Except excluded</span><span class="disc">&rsaquo;</span>
+              <div class="row deep">
+                <div class="lg"><div class="lab">Per-app rules</div></div>
+                <span class="val"><span class="chip"><span class="num strong">0</span><span class="mut">apps</span></span><span class="disc">&rsaquo;</span></span>
               </div>
             </div>
-
           </div>
         </div>
-        <div class="hints"><span><span class="k">&crarr;</span>edit rule</span><span><span class="k">&uarr;&darr;</span>move</span><span><span class="k">esc</span>plugin list</span><span class="mla"><span class="k">type</span>search every plugin</span></div>
+        <div class="hints"><span><span class="k">&crarr;</span>open</span><span><span class="k">&uarr;&darr;</span>move</span><span><span class="k">esc</span>plugin list</span><span class="mla"><span class="k">type</span>search every plugin</span></div>
       </div>
-      <span class="cap">the rail carries the plugins, the band names the one you are on</span>
+      <span class="cap">the rail carries the plugins, the panel sits over it and holds the focus</span>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="shot">
+      <div class="s w760 uni d1">
+        <div class="band"><div><div class="crumb"><span class="up">Key remap</span><span class="sep">&rsaquo;</span></div><div class="t18">Excluded apps</div></div><span class="chip"><span class="num strong">13</span><span class="mut">apps</span></span></div>
+        <div class="body">
+          <div class="rail"><div class="item">qol</div><div class="item">Alt tab</div><div class="item">Bluetooth</div><div class="item">CLI sessions</div><div class="item">Controllers</div><div class="item">IDE checkout</div><div class="item on">Key remap</div><div class="item">Launcher</div><div class="item">Lights</div><div class="item">Monitor</div><div class="item">OS themes</div><div class="item">Pointz</div></div>
+          <div class="deck">
+            <div class="main plane child">
+              <div class="group">
+                <div class="gh"><span class="gt">Excluded</span><span class="gn">13 apps</span></div>
+                <div class="row"><div class="lg"><div class="lab">Terminal</div></div><span class="val"><span class="t11 mono">com.apple.Terminal</span></span></div>
+                <div class="row sel"><div class="lg"><div class="lab">iTerm</div></div><span class="val"><span class="t11 mono">com.googlecode.iterm2</span></span></div>
+                <div class="row"><div class="lg"><div class="lab">kitty</div></div><span class="val"><span class="t11 mono">net.kovidgoyal.kitty</span></span></div>
+                <div class="row"><div class="lg"><div class="lab">Alacritty</div></div><span class="val"><span class="t11 mono">org.alacritty</span></span></div>
+                <div class="row"><div class="lg"><div class="lab">Ghostty</div></div><span class="val"><span class="t11 mono">com.mitchellh.ghostty</span></span></div>
+                <div class="addrow">+ Add an app</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="hints"><span><span class="k">&crarr;</span>edit</span><span><span class="k">&uarr;&darr;</span>move</span><span><span class="k">esc</span>back to Key remap</span><span class="mla"><span class="k">type</span>search every plugin</span></div>
+      </div>
+      <span class="cap">one level down: the parent stays behind, 12px of it still showing</span>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="shot">
+      <div class="s w760 uni d2">
+        <div class="band"><div><div class="crumb"><span class="up">Key remap</span><span class="sep">&rsaquo;</span><span class="up">Excluded apps</span><span class="sep">&rsaquo;</span></div><div class="t18">iTerm</div></div><span class="chip"><span class="num strong">2</span><span class="mut">rules</span></span></div>
+        <div class="body">
+          <div class="rail"><div class="item">qol</div><div class="item">Alt tab</div><div class="item">Bluetooth</div><div class="item">CLI sessions</div><div class="item">Controllers</div><div class="item">IDE checkout</div><div class="item on">Key remap</div><div class="item">Launcher</div><div class="item">Lights</div><div class="item">Monitor</div><div class="item">OS themes</div><div class="item">Pointz</div></div>
+          <div class="deck">
+            <div class="main plane child">
+              <div class="group">
+                <div class="gh"><span class="gt">Rules</span><span class="gn">2 rules</span></div>
+                <div class="row"><div class="lg"><div class="lab">Ignore global rules</div><div class="desc">Ctrl stays Ctrl inside this app.</div></div><span class="val"><span class="sw on"><span class="k"></span></span></span></div>
+                <div class="row rule2 sel"><span class="combo"><span class="mo">ctrl</span><span>d</span></span><span class="arw">&rarr;</span><span class="val"><span class="combo out"><span class="mo">cmd</span><span>d</span></span></span></div>
+                <div class="row rule2"><span class="combo"><span class="mo">ctrl</span><span>w</span></span><span class="arw">&rarr;</span><span class="val"><span class="combo out"><span class="mo">cmd</span><span>w</span></span></span></div>
+                <div class="addrow">+ Add a rule</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="hints"><span><span class="k">&crarr;</span>edit</span><span><span class="k">&uarr;&darr;</span>move</span><span><span class="k">esc</span>back to Excluded apps</span><span class="mla"><span class="k">type</span>search every plugin</span></div>
+      </div>
+      <span class="cap">two levels down: another card on the stack, same amber on every edge</span>
     </div>
   </div>
 
@@ -975,19 +1039,36 @@ no literal colour in a component<br>
 
   <div class="notes">
     <div class="note">
-      <h3>Nothing new was drawn</h3>
+      <h3>A row that opens carries no description</h3>
       <p>
-        Band, rail, group heading, row, search and hint bar are the components already in this deck.
-        The only change is what the rail is a list of. A plugin that gains a setting tomorrow appears
-        without a line of UI code, exactly as it does today.
+        Every row in the panel is the same 52 tall. A row that only holds a value keeps its
+        description under the name. A row you can open drops the description and wears its name a
+        size larger, so the two kinds are told apart by weight rather than by a mark, and nothing has
+        to be clipped to fit.
       </p>
     </div>
     <div class="note">
-      <h3>Sections were already groups</h3>
+      <h3>Depth is offset, never colour</h3>
       <p>
-        The body has always stacked a plugin's groups in one scroll, so nothing has to move out of
-        the way when the rail changes hands. The rail entries a plugin used to own become its group
-        headings, which is where the deck already put them.
+        Opening a row slides a new card over the one behind it, leaving a sliver of the parent
+        showing at the left. Dive again and there are two slivers. Every amber line on the window, at
+        any depth, is the one <code>--primary</code>, so the selection never changes colour for being
+        deeper in.
+      </p>
+    </div>
+    <div class="note">
+      <h3>Escape is the only way back</h3>
+      <p>
+        Both arrows stay free to step a value, so left never leaves a screen. Escape climbs one
+        level, and from the top it closes the window. The hint bar names the place escape returns
+        you to, not the key that got you here.
+      </p>
+    </div>
+    <div class="note">
+      <h3>Key names are lower case</h3>
+      <p>
+        A rule reads <code>ctrl d &rarr; cmd d</code>, both sides the same, with the arrow centred
+        between them. No mixing a lower-case modifier with an upper-case key.
       </p>
     </div>
     <div class="note">
