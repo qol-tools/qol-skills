@@ -865,6 +865,151 @@ no literal colour in a component<br>
   </div>
 </section>
 
+<!-- ================= UNIFIED SETTINGS ================= -->
+<section class="block">
+  <div class="block-head">
+    <div class="left">
+      <h2>One settings window</h2>
+      <p>
+        Every plugin's settings live in the same window. The rail, which used to list one plugin's
+        sections, now lists the plugins themselves, and the band names whichever one you are on. The
+        body is unchanged: the selected plugin's groups, one scroll. Opening Bluetooth from the tray
+        moves the selection instead of opening a second window.
+      </p>
+    </div>
+    <div class="right">
+      <h3>Geometry</h3>
+      <div class="geo">
+        760 wide &middot; rail 196 &middot; band 64<br>
+        rail scrolls past 12 entries<br>
+        qol pinned first, then A&ndash;Z<br>
+        no new component
+      </div>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="shot">
+      <div class="s w760">
+        <div class="band">
+          <div>
+            <div class="t18">Key Remap</div>
+            <div class="t12">Ctrl behaves like Cmd, everywhere except your terminals</div>
+          </div>
+          <span class="chip"><span class="num strong">5</span><span class="mut">rules active</span></span>
+        </div>
+        <div class="body">
+          <div class="rail">
+            <div class="item">qol</div>
+            <div class="item">Alt tab</div>
+            <div class="item">Bluetooth</div>
+            <div class="item">CLI sessions</div>
+            <div class="item">Controllers</div>
+            <div class="item">IDE checkout</div>
+            <div class="item on">Key remap</div>
+            <div class="item">Launcher</div>
+            <div class="item">Lights</div>
+            <div class="item">Monitor</div>
+            <div class="item">OS themes</div>
+            <div class="item">Pointz</div>
+          </div>
+          <div class="main plane">
+
+            <div class="search">Filter every plugin<span class="slash">/</span></div>
+
+            <div class="group">
+              <div class="gh"><span class="gt">General</span><span class="gn">2 settings</span></div>
+              <div class="row">
+                <div class="lg"><div class="lab">Enabled</div><div class="desc">Remapping runs while this is on.</div></div>
+                <span class="val"><span class="sw on"><span class="k"></span></span></span>
+              </div>
+              <div class="row sel">
+                <div class="lg"><div class="lab">Excluded apps</div><div class="desc">Non-global remaps are ignored in these apps.</div></div>
+                <span class="val"><span class="chip"><span class="num strong">13</span><span class="mut">apps</span><span class="caret">&#9662;</span></span></span>
+              </div>
+            </div>
+
+            <div class="group">
+              <div class="gh"><span class="gt">Key Rules</span><span class="gn">5 rules</span></div>
+              <div class="rule">
+                <div class="side from"><span class="combo"><span class="mo">ctrl</span><span>C</span></span></div><div class="side to"><span class="combo out"><span>cmd</span><span>C</span></span></div>
+                <span class="scope">Except excluded</span><span class="disc">&rsaquo;</span>
+              </div>
+              <div class="rule">
+                <div class="side from"><span class="combo"><span class="mo">ctrl</span><span>&larr;</span></span></div><div class="side to"><span class="combo out"><span>alt</span><span>&larr;</span></span></div>
+                <span class="scope">Except excluded</span><span class="disc">&rsaquo;</span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+        <div class="hints"><span><span class="k">&crarr;</span>edit rule</span><span><span class="k">&uarr;&darr;</span>move</span><span><span class="k">&larr;</span>plugin list</span><span class="mla"><span class="k">/</span>filter</span></div>
+      </div>
+      <span class="cap">the rail carries the plugins, the band names the one you are on</span>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="shot">
+      <div class="s w520">
+        <div class="band sub"><span class="t14">All plugins</span><span class="chip"><span class="num strong">2</span><span class="mut">matches</span></span></div>
+        <div class="plane">
+          <div class="search foc" style="color:var(--ink)">reconnect<span class="cur" style="width:1.5px;height:16px;background:var(--acc);margin-left:2px"></span><span class="slash">esc</span></div>
+          <div class="group">
+            <div class="gh"><span class="gt">Bluetooth</span><span class="gn">1 match</span></div>
+            <div class="row sel">
+              <div class="lg"><div class="lab">Reconnect on wake</div></div>
+              <span class="val"><span class="sw on"><span class="k"></span></span></span>
+            </div>
+          </div>
+          <div class="group">
+            <div class="gh"><span class="gt">Controllers</span><span class="gn">1 match</span></div>
+            <div class="row">
+              <div class="lg"><div class="lab">Reconnect timeout</div></div>
+              <span class="val"><span class="chip"><span class="num strong">30</span><span class="mut">s</span></span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <span class="cap">filtering leaves the rail and groups by plugin instead</span>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div class="note">
+      <h3>Nothing new was drawn</h3>
+      <p>
+        Band, rail, group heading, row, search and hint bar are the components already in this deck.
+        The only change is what the rail is a list of. A plugin that gains a setting tomorrow appears
+        without a line of UI code, exactly as it does today.
+      </p>
+    </div>
+    <div class="note">
+      <h3>Sections were already groups</h3>
+      <p>
+        The body has always stacked a plugin's groups in one scroll, so nothing has to move out of
+        the way when the rail changes hands. The rail entries a plugin used to own become its group
+        headings, which is where the deck already put them.
+      </p>
+    </div>
+    <div class="note">
+      <h3>The filter is the only cross-plugin view</h3>
+      <p>
+        Typing drops the rail and groups the hits by plugin, because a query like
+        <code>reconnect</code> is the one time you want two plugins on screen at once. Escape puts
+        the rail back where it was.
+      </p>
+    </div>
+    <div class="note">
+      <h3>Only plugins with a contract appear</h3>
+      <p>
+        Fifteen of the sixteen ship a <code>qol-config.toml</code>. removeapp has none, so it has no
+        rail entry rather than an entry that opens an empty pane.
+      </p>
+    </div>
+  </div>
+</section>
+
 <!-- ================= LAUNCHER ================= -->
 <section class="block">
   <div class="block-head">

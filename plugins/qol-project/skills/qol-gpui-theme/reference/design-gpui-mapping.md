@@ -171,6 +171,23 @@ symbols behind the two deltas.
 | confirm bar | names the app, the folder count and the size | `removeapp/src/ui/mod.rs` | same | match |
 | footer height | 40 | `kit::hint_bar`, `HEIGHT_HINT_BAR` | 40 | match, deck geo corrected |
 
+## One settings window
+
+The deck is ahead of the code here on purpose: this section is the agreed target, not a record of
+what ships today.
+
+| Design (deck) | Value | GPUI source | Current | Status |
+|---|---|---|---|---|
+| rail contents | one entry per plugin, qol pinned first then A-Z | `settings_panel/view.rs` rail | one entry per section of a single plugin | missing in code |
+| band | names the selected plugin and its description | `settings_panel/view.rs` band | names the only plugin the panel was built for | missing in code |
+| body | the selected plugin's groups, one scroll | `rows::sections_from_resolved` | already groups in one scroll | match |
+| window count | one, for every plugin | `SettingsWindowHost::replace` | one panel swapped per plugin | missing in code |
+| panel model | many sources in one panel | `SettingsPanel { plugin_id, contract, heading }` | exactly one plugin per panel | missing in code |
+| rail entry per plugin | only plugins with a `qol-config.toml` | `load_plugin_panel` | bails when a plugin has no contract | match, the rule already exists |
+| filter | drops the rail, groups hits by plugin | `settings_panel/view.rs` filter | filters one plugin's rows | missing in code |
+| left arrow | moves to the plugin list, never leaves the window | `section_menu_intent` | left is a no-op in the rail, escape closes | match |
+| geometry | 760 wide, rail 196, band 64 | `PANEL_WIDE_WIDTH` / `PANEL_RAIL_WIDTH` | 760 / 196 | match |
+
 ## How to read a delta
 
 1. Change the design first in the deck, because the deck is the spec.
