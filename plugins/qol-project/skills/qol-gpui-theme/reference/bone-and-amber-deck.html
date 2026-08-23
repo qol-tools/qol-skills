@@ -444,13 +444,17 @@ table.plan td .n { font-family: "IBM Plex Mono", ui-monospace, monospace; font-s
 .uni .plane .row.sel::before { top: 8px; bottom: 8px; left: -1.5px; width: 4px; background: var(--primary); border-radius: 0 99px 99px 0; }
 .uni .plane .row.deep .lab { font-size: var(--fs-xl); font-weight: 600; letter-spacing: -.018em; }
 .uni .plane .row.deep .val { width: auto; gap: 10px; }
-.uni .plane .group > .gh { margin: 0 -20px 5px -18px; padding: 0 20px 7px 18px; border-bottom: 1px solid var(--sep); }
+.uni .plane .group > .gh { height: var(--h-ctl); align-items: flex-end; margin: 0 -20px 5px -18px; padding: 0 20px 6px 8px; background: var(--fill); border-bottom: 1px solid var(--sep); }
 .uni .plane .group > .gh .gt { color: var(--ink-head); }
 .uni .plane .group + .group { margin-top: 22px; }
 .uni .plane .row.rule2 { justify-content: flex-start; }
 .uni .plane .row.rule2 > .combo { flex: none; }
 .uni .plane .row.rule2 .arw { flex: 1; text-align: center; font-size: 19px; font-weight: 700; color: var(--ink-3); line-height: 1; }
 .uni .plane .row.rule2 .val { width: auto; flex: none; }
+.uni.filt .rail { display: none; }
+.uni.filt .main.plane { margin-left: 0; padding-top: 56px; }
+.uni .fbar { position: absolute; left: 0; right: 0; top: 0; z-index: 3; background: var(--pane); padding: 12px 16px 8px; }
+.uni .fbar .search { background: var(--pane); border-color: var(--primary-edge); color: var(--ink); }
 .uni .crumb { display: flex; align-items: center; gap: 6px; font-size: var(--fs-cap); color: var(--ink-3); margin-bottom: 1px; }
 .uni .crumb .up { color: var(--ink-3); }
 .uni.d1 .deck::before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 12px; background: var(--pane); border: 1px solid var(--hair); border-left: 1.5px solid var(--primary); border-radius: var(--r3) 0 0 var(--r3); }
@@ -905,8 +909,10 @@ no literal colour in a component<br>
         panel that sits over its right half. The panel is a card that runs the full height of the
         window and out to its right edge, held by a single amber line down its left side. The row you
         are on breaks out to that same edge and carries a short amber mark, rounded on its inner end.
-        There is no filter field taking up a row: typing searches every plugin at once. Opening
-        Bluetooth from the tray moves the selection instead of opening a second window.
+        Each group's name sits in a faint band that runs the full width of the card, its text
+        closer to the card edge than the rows underneath it. There is no filter field taking up a
+        row: typing searches every plugin at once. Opening Bluetooth from the tray moves the
+        selection instead of opening a second window.
       </p>
     </div>
     <div class="right">
@@ -955,7 +961,7 @@ no literal colour in a component<br>
             </div>
           </div>
         </div>
-        <div class="hints"><span><span class="k">&crarr;</span>open</span><span><span class="k">&uarr;&darr;</span>move</span><span><span class="k">esc</span>plugin list</span><span class="mla"><span class="k">type</span>search every plugin</span></div>
+        <div class="hints"><span><span class="k">&crarr;</span>open</span><span><span class="k">&uarr;&darr;</span>move</span><span><span class="k">type</span>search every plugin</span><span class="mla"><span class="k">esc</span>close</span></div>
       </div>
       <span class="cap">the rail carries the plugins, the panel sits over it and holds the focus</span>
     </div>
@@ -1013,27 +1019,47 @@ no literal colour in a component<br>
 
   <div class="stage">
     <div class="shot">
-      <div class="s w520">
-        <div class="band sub"><span class="t14">All plugins</span><span class="chip"><span class="num strong">2</span><span class="mut">matches</span></span></div>
-        <div class="plane">
-          <div class="search foc" style="color:var(--ink)">reconnect<span class="cur" style="width:1.5px;height:16px;background:var(--primary);margin-left:2px"></span><span class="slash">esc</span></div>
-          <div class="group">
-            <div class="gh"><span class="gt">Bluetooth</span><span class="gn">1 match</span></div>
-            <div class="row sel">
-              <div class="lg"><div class="lab">Reconnect on wake</div></div>
-              <span class="val"><span class="sw on"><span class="k"></span></span></span>
+      <div class="s w760 uni filt">
+        <div class="band"><div><div class="t18">Key Remap</div><div class="t12">Ctrl behaves like Cmd, everywhere except your terminals</div></div></div>
+        <div class="body">
+          <div class="rail"><div class="item">qol</div><div class="item">Alt tab</div><div class="item">Bluetooth</div><div class="item">CLI sessions</div><div class="item">Controllers</div><div class="item">IDE checkout</div><div class="item on">Key remap</div><div class="item">Launcher</div><div class="item">Lights</div><div class="item">Monitor</div><div class="item">OS themes</div><div class="item">Pointz</div></div>
+          <div class="main plane">
+            <div class="fbar"><div class="search foc" style="color:var(--ink)">reconnect<span class="cur" style="width:1.5px;height:16px;background:var(--primary);margin-left:2px"></span></div></div>
+            <div class="group">
+              <div class="gh"><span class="gt">Bluetooth</span><span class="gn">1 match</span></div>
+              <div class="row sel">
+                <div class="lg"><div class="lab">Reconnect on wake</div></div>
+                <span class="val"><span class="sw on"><span class="k"></span></span></span>
+              </div>
             </div>
-          </div>
-          <div class="group">
-            <div class="gh"><span class="gt">Controllers</span><span class="gn">1 match</span></div>
-            <div class="row">
-              <div class="lg"><div class="lab">Reconnect timeout</div></div>
-              <span class="val"><span class="chip"><span class="num strong">30</span><span class="mut">s</span></span></span>
+            <div class="group">
+              <div class="gh"><span class="gt">Controllers</span><span class="gn">1 match</span></div>
+              <div class="row">
+                <div class="lg"><div class="lab">Reconnect timeout</div></div>
+                <span class="val"><span class="chip"><span class="num strong">30</span><span class="mut">s</span></span></span>
+              </div>
             </div>
           </div>
         </div>
+        <div class="hints"><span><span class="k">&crarr;</span>open</span><span><span class="k">&uarr;&darr;</span>move</span><span class="mla"><span class="k">esc</span>back to plugins</span></div>
       </div>
-      <span class="cap">filtering leaves the rail and groups by plugin instead</span>
+      <span class="cap">typing drops the rail; the query bar is the card's own cream with one amber edge</span>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="shot">
+      <div class="s w760 uni filt">
+        <div class="band"><div><div class="t18">Key Remap</div><div class="t12">Ctrl behaves like Cmd, everywhere except your terminals</div></div></div>
+        <div class="body">
+          <div class="rail"><div class="item">qol</div><div class="item">Alt tab</div><div class="item">Bluetooth</div><div class="item">CLI sessions</div><div class="item">Controllers</div><div class="item">IDE checkout</div><div class="item on">Key remap</div><div class="item">Launcher</div><div class="item">Lights</div><div class="item">Monitor</div><div class="item">OS themes</div><div class="item">Pointz</div></div>
+          <div class="main plane">
+            <div class="fbar"><div class="search foc" style="color:var(--ink)">zzzz<span class="cur" style="width:1.5px;height:16px;background:var(--primary);margin-left:2px"></span></div></div>
+          </div>
+        </div>
+        <div class="hints"><span><span class="k">&crarr;</span>open</span><span><span class="k">&uarr;&darr;</span>move</span><span class="mla"><span class="k">esc</span>back to plugins</span></div>
+      </div>
+      <span class="cap">a query that matches nothing stays a query: an empty card, never the panel again</span>
     </div>
   </div>
 
@@ -1042,9 +1068,27 @@ no literal colour in a component<br>
       <h3>A row that opens carries no description</h3>
       <p>
         Every row in the panel is the same 52 tall. A row that only holds a value keeps its
-        description under the name. A row you can open drops the description and wears its name a
-        size larger, so the two kinds are told apart by weight rather than by a mark, and nothing has
-        to be clipped to fit.
+        description under the name, on one line: a description too long for the row is clipped with
+        an ellipsis, because the row height never moves to make room for it. A row you can open
+        drops the description and wears its name a size larger, so the two kinds are told apart by
+        weight rather than by a mark.
+      </p>
+    </div>
+    <div class="note">
+      <h3>A block control rests at 52 like everything else</h3>
+      <p>
+        A gamepad map, a QR code, a list and an array of objects are all taller than a row when they
+        are open. At rest each one shows only its header line, so it measures 52 like its
+        neighbours, and it grows only once you have stepped into it. The window is always sized
+        against the resting height, so entering a control never resizes the window.
+      </p>
+    </div>
+    <div class="note">
+      <h3>A header that only repeats its row is not drawn</h3>
+      <p>
+        A group whose single row carries the same name as the group is two labels for one thing.
+        The band is dropped and the row stands on its own. Key remap loses four headers this way,
+        Character rules and Key rules among them, and the panel reads shorter for it.
       </p>
     </div>
     <div class="note">
@@ -1076,7 +1120,11 @@ no literal colour in a component<br>
       <p>
         There is no filter field to find. Typing anything at all drops the rail and groups the hits
         by plugin, because a query like <code>reconnect</code> is the one time you want two plugins
-        on screen at once. The hint bar is what says so, and escape puts the rail back.
+        on screen at once. The bar floats over the top of the card in the card's own cream, held by
+        a single amber edge and an amber caret, so it reads as the thing you are typing into rather
+        than a well sunk into the panel. A query that matches nothing is still a query: the card
+        goes empty and stays empty. It never falls back to the plugin you were on. The hint bar is
+        what says all of this, and escape puts the rail back.
       </p>
     </div>
     <div class="note">
