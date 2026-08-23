@@ -90,7 +90,7 @@ Capture: `assets/qol-shot-current.png`, 406 x 292 logical.
 | circle gap | 14 | `CIRCLE_GAP` | 14 | match |
 | label height | 30 | `LABEL_H` | 30 | match |
 | circle shadow | `--flt` | `kit::float_shadow` | float shadow | match |
-| primary circle | `--accsolid` solid | `preview.rs` action loop | the default copy action is solid accent unless it is the armed one | match |
+| primary circle | `--secondary-solid` solid | `preview.rs` action loop | the default copy action is solid accent unless it is the armed one | match |
 | resting circle | `--pane` + `--edge` | `action_bg` + `action_border` | same | match |
 | armed circle | accent border + tint | `action_border_selected` + `accent_fill` | same | match |
 | label text | `--ink-2` | `label_text` | `text_secondary` | match |
@@ -189,6 +189,9 @@ what ships today.
 | typing affordance | the hint bar names it: `type` search every plugin | `kit::hint_bar` | the hint bar names `/` filter | delta |
 | hint keycap | 24 square minimum, panel fill, hairline, 1px cast, caption size | `kit::keycap` | 5px/1px padding, no fill, no shadow, `TEXT_KEYCAP` | delta, the cap grows to a real key |
 | rail selection | identical to a body row: `--r3`, `--wash-sel`, hairline inset, accent mark clipped by the corner | `render_section_menu_item` -> `paint_selection` | shares `paint_selection` but rounds at `RADIUS_CONTROL` 6 while rows round at `RADIUS_CARD` 9 | delta, the rail moves to 9 |
+| band chip | none, a plugin holds more state than one count can stand for | `settings_panel/view.rs` band | no chip in the band today | match |
+| row chevron | 19px in a 20px column | `render_entry_chevron` | `TEXT_CAPTION` 13.5 in a `px_1p5` column | delta, the chevron grows |
+| button colours | one `--primary` family (amber) and one `--secondary` family (neutral chrome), every chip, keycap, combo, tag, field and switch drawn from them | `kit` component builders | `palette.accent` plus per-component literals | delta, the deck names the families |
 | going back | escape only, so both arrows stay free for stepping a value | `intent`, `list_intent`, `section_menu_intent` | escape is the only key mapped to Close in all three | match |
 | geometry | 760 wide, rail 196, band 64 | `PANEL_WIDE_WIDTH` / `PANEL_RAIL_WIDTH` | 760 / 196 | match |
 
