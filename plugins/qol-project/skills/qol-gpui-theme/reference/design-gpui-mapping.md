@@ -188,6 +188,7 @@ what ships today.
 | filter | drops the rail, groups hits by plugin | `settings_panel/view.rs` filter | filters one plugin's rows | missing in code |
 | typing affordance | the hint bar names it: `type` search every plugin | `kit::hint_bar` | the hint bar names `/` filter | delta |
 | hint keycap | 24 square minimum, panel fill, hairline, 1px cast, caption size | `kit::keycap` | 5px/1px padding, no fill, no shadow, `TEXT_KEYCAP` | delta, the cap grows to a real key |
+| rail selection | identical to a body row: `--r3`, `--wash-sel`, hairline inset, accent mark clipped by the corner | `render_section_menu_item` -> `paint_selection` | shares `paint_selection` but rounds at `RADIUS_CONTROL` 6 while rows round at `RADIUS_CARD` 9 | delta, the rail moves to 9 |
 | left arrow | moves to the plugin list, never leaves the window | `section_menu_intent` | left is a no-op in the rail, escape closes | match |
 | geometry | 760 wide, rail 196, band 64 | `PANEL_WIDE_WIDTH` / `PANEL_RAIL_WIDTH` | 760 / 196 | match |
 
