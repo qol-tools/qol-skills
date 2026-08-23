@@ -253,7 +253,7 @@ table.plan td .n { font-family: "IBM Plex Mono", ui-monospace, monospace; font-s
 .rule.sel .scope { background: var(--fill); border-color: var(--hair); }
 .disc { color: var(--ink-3); font-size: 15px; width: 18px; text-align: center; flex: none; margin-left: auto; }
 .btn { display: inline-flex; align-items: center; gap: 8px; height: var(--h-ctl); padding: 0 13px; border-radius: var(--r2); font-size: var(--fs-sm); font-weight: 600; border: 1px solid var(--hair); background: var(--pane); color: var(--ink); }
-.btn .k2, .hints .k, .search .slash, .kindtag { font-family: "SF Mono", ui-monospace, monospace; font-size: 10.5px; font-weight: 400; color: var(--ink-3); border: 1px solid var(--hair2); border-radius: 3px; padding: 1px 5px; letter-spacing: 0; }
+.btn .k2, .search .slash, .kindtag { font-family: "SF Mono", ui-monospace, monospace; font-size: 10.5px; font-weight: 400; color: var(--ink-3); border: 1px solid var(--hair2); border-radius: 3px; padding: 1px 5px; letter-spacing: 0; }
 .btn.pri { background: var(--accsolid); border-color: var(--accsolid); color: var(--onsolid); box-shadow: var(--btn-cast); }
 .btn.pri .k2 { color: var(--onsolid); background: rgba(140,140,140,.3); border-color: transparent; }
 .btn.dgr { color: var(--neg); border-color: var(--edge-neg); background: transparent; }
@@ -304,7 +304,7 @@ table.plan td .n { font-family: "IBM Plex Mono", ui-monospace, monospace; font-s
 .st.err { background: var(--neg); box-shadow: 0 0 0 3px var(--halo-neg); }
 .st.idle { background: var(--ink-3); box-shadow: 0 0 0 3px var(--fill2); }
 .hints { display: flex; align-items: center; gap: 20px; padding: 0 var(--padx); height: var(--h-bar); border-top: 1px solid var(--hair); background: var(--fill); flex: none; font-size: var(--fs-sm); color: var(--ink-2); }
-.hints .k { margin-right: 6px; }
+.hints .k { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; margin-right: 9px; padding: 0 7px; background: var(--pane); border: 1px solid var(--hair2); border-radius: var(--r1); box-shadow: 0 1px 2px var(--cast); font-family: "SF Mono", ui-monospace, monospace; font-size: var(--fs-cap); color: var(--ink-2); }
 .failbar { display: flex; align-items: center; gap: 10px; padding: 12px var(--gut); font-size: var(--fs-sm); color: var(--neg); background: var(--fill); border-top: 1px solid var(--hair); box-shadow: inset var(--mark) 0 0 var(--neg); flex: none; }
 .grid { display: flex; flex-wrap: wrap; gap: 16px; padding: 36px 40px; }
 .wcard { width: 300px; flex: none; background: var(--pane); border: 1px solid var(--hair); border-radius: 0; overflow: hidden; }
@@ -639,7 +639,7 @@ no literal colour in a component<br>
       <thead><tr><th>Component</th><th>Defined once as</th><th>Geometry from</th><th>Appears in</th></tr></thead>
       <tbody>
         <tr><td>Key combination</td><td><span class="n">.combo</span></td><td><span class="n">--h-el 28</span></td><td>rules, capture field, hints, launcher</td></tr>
-        <tr><td>Key hint chip</td><td><span class="n">.k2</span></td><td><span class="n">10.5px / --hair2</span></td><td>buttons, hint bars, search slash</td></tr>
+        <tr><td>Key hint chip</td><td><span class="n">.k2</span></td><td><span class="n">10.5px / --hair2</span></td><td>buttons and the search slash</td></tr>
         <tr><td>Button</td><td><span class="n">.btn</span></td><td><span class="n">--h-ctl 36</span></td><td>every window with an action</td></tr>
         <tr><td>Value chip</td><td><span class="n">.chip</span></td><td><span class="n">--h-el 28</span></td><td>settings rows, editors, confirm bars</td></tr>
         <tr><td>Text field</td><td><span class="n">.field</span></td><td><span class="n">--h-ctl 36</span></td><td>capture, rename, search</td></tr>
@@ -873,8 +873,9 @@ no literal colour in a component<br>
       <p>
         Every plugin's settings live in the same window. The rail, which used to list one plugin's
         sections, now lists the plugins themselves, and the band names whichever one you are on. The
-        body is unchanged: the selected plugin's groups, one scroll. Opening Bluetooth from the tray
-        moves the selection instead of opening a second window.
+        body is unchanged: the selected plugin's groups, one scroll. There is no filter field taking
+        up a row: typing anything searches every plugin at once, which is what the hint bar says.
+        Opening Bluetooth from the tray moves the selection instead of opening a second window.
       </p>
     </div>
     <div class="right">
@@ -915,8 +916,6 @@ no literal colour in a component<br>
           </div>
           <div class="main plane">
 
-            <div class="search">Filter every plugin<span class="slash">/</span></div>
-
             <div class="group">
               <div class="gh"><span class="gt">General</span><span class="gn">2 settings</span></div>
               <div class="row">
@@ -943,7 +942,7 @@ no literal colour in a component<br>
 
           </div>
         </div>
-        <div class="hints"><span><span class="k">&crarr;</span>edit rule</span><span><span class="k">&uarr;&darr;</span>move</span><span><span class="k">&larr;</span>plugin list</span><span class="mla"><span class="k">/</span>filter</span></div>
+        <div class="hints"><span><span class="k">&crarr;</span>edit rule</span><span><span class="k">&uarr;&darr;</span>move</span><span><span class="k">&larr;</span>plugin list</span><span class="mla"><span class="k">type</span>search every plugin</span></div>
       </div>
       <span class="cap">the rail carries the plugins, the band names the one you are on</span>
     </div>
@@ -995,9 +994,9 @@ no literal colour in a component<br>
     <div class="note">
       <h3>The filter is the only cross-plugin view</h3>
       <p>
-        Typing drops the rail and groups the hits by plugin, because a query like
-        <code>reconnect</code> is the one time you want two plugins on screen at once. Escape puts
-        the rail back where it was.
+        There is no filter field to find. Typing anything at all drops the rail and groups the hits
+        by plugin, because a query like <code>reconnect</code> is the one time you want two plugins
+        on screen at once. The hint bar is what says so, and escape puts the rail back.
       </p>
     </div>
     <div class="note">

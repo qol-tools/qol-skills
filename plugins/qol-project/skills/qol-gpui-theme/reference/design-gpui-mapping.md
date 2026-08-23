@@ -184,7 +184,10 @@ what ships today.
 | window count | one, for every plugin | `SettingsWindowHost::replace` | one panel swapped per plugin | missing in code |
 | panel model | many sources in one panel | `SettingsPanel { plugin_id, contract, heading }` | exactly one plugin per panel | missing in code |
 | rail entry per plugin | only plugins with a `qol-config.toml` | `load_plugin_panel` | bails when a plugin has no contract | match, the rule already exists |
+| filter field | none, typing is the filter | `settings_panel/view.rs` filter row | a filter row sits above the groups | delta, the deck drops the field |
 | filter | drops the rail, groups hits by plugin | `settings_panel/view.rs` filter | filters one plugin's rows | missing in code |
+| typing affordance | the hint bar names it: `type` search every plugin | `kit::hint_bar` | the hint bar names `/` filter | delta |
+| hint keycap | 24 square minimum, panel fill, hairline, 1px cast, caption size | `kit::keycap` | 5px/1px padding, no fill, no shadow, `TEXT_KEYCAP` | delta, the cap grows to a real key |
 | left arrow | moves to the plugin list, never leaves the window | `section_menu_intent` | left is a no-op in the rail, escape closes | match |
 | geometry | 760 wide, rail 196, band 64 | `PANEL_WIDE_WIDTH` / `PANEL_RAIL_WIDTH` | 760 / 196 | match |
 
