@@ -33,12 +33,13 @@ function run(payload) {
     });
 }
 
-test('bridge topics are role-based and bind lanes to pi with deepseek-v4-flash', () => {
+test('bridge topics are role-based and bind lanes to pi with the configured model', () => {
     assert.ok(BRIDGE_TOPIC_PATTERN.test('delegate this to an implementation agent'));
     assert.ok(BRIDGE_TOPIC_PATTERN.test('bridge two terminals'));
     assert.ok(BRIDGE_TOPIC_PATTERN.test('the architect should review the handoff'));
     assert.match(BRIDGE_CONTEXT, /tool "pi"/);
-    assert.match(BRIDGE_CONTEXT, /deepseek-v4-flash/);
+    assert.match(BRIDGE_CONTEXT, /sessions\.toml allow list/);
+    assert.doesNotMatch(BRIDGE_CONTEXT, /deepseek|glm/i);
     assert.match(BRIDGE_CONTEXT, /tool "claude" is never spawned/);
 });
 
@@ -61,8 +62,8 @@ test('the tier rule fires on any prompt inside a qol workspace', () => {
     assert.ok(!shouldInjectTierRule({ hook_event_name: 'PreToolUse', prompt: 'fix padding', cwd: qolCwd }));
     assert.ok(!shouldInjectTierRule({ prompt: '[qol session bridge]\nact as the implementer', cwd: qolCwd }));
     assert.match(TIER_RULE, /flash tier/);
-    assert.doesNotMatch(TIER_RULE, /gpt|codex|kimi|fable/i);
-    assert.match(TIER_RULE, /model: "deepseek-v4-flash"/);
+    assert.doesNotMatch(TIER_RULE, /gpt|codex|kimi|fable|deepseek|glm/i);
+    assert.match(TIER_RULE, /allowed_models/);
     assert.match(TIER_RULE, /tool: "pi"/);
     assert.match(TIER_RULE, /never through a raw harness spawn/);
     assert.match(TIER_RULE, /session_spawn/);
@@ -168,7 +169,7 @@ test('matching prompts receive the event-driven feature loop', () => {
         assert.match(context, /session_bridge/);
         assert.match(context, /session_loop_close/);
         assert.match(context, /on the flash tier/);
-        assert.match(context, /Spawned lanes always run tool "pi" with model "deepseek-v4-flash"/);
+        assert.match(context, /Spawned lanes always run tool "pi" with a model from the sessions\.toml allow list/);
         assert.match(context, /verdict synthesis, and the final report happen in-session/);
         assert.match(context, /qol-workflow:git-trees/);
         assert.match(context, /qol-workflow:commit/);
