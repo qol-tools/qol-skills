@@ -286,20 +286,20 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
     description:
       "Launch a tagged harness for a registered tool in a new terminal tab, or reuse the single live session already carrying the key when its tool matches. The key makes retries idempotent: a key held by a different tool conflicts, multiple matches are ambiguous, and a launched session is returned only once it is live, tagged, and described as the requested tool. Surface is tab or os-window; the default comes from the spawn_surface config, then tab. Delivery is background-only: the task is embedded in the launch and the round is open when the call returns; lanes always close when the watcher confirms completion, and sessions without a spawn identity are never closed. Decide up front how many lanes the work needs: one lane takes key and task, while a set takes `lanes`, one entry per lane, and comes back as a single combined report instead of one wake per lane.",
     parameters: Type.Object({
+      tool: Type.String({ description: "Registered CLI tool to spawn (codex, claude, pi, kimi)" }),
       cwd: Type.String({ description: "Working directory for the spawned session" }),
-      group: Type.Optional(Type.String({ description: "Optional group name; registers the lane as a member of a grouped-research set so completed rounds aggregate into one combined wake under the sessions data dir when every member completes" })),
       key: Type.Optional(Type.String({ description: "Stable spawn key for a single lane; makes retries idempotent. Use `lanes` instead when the work needs more than one" })),
+      surface: Type.Optional(Type.String({ description: "tab or os-window; defaults to the spawn_surface config, then tab" })),
+      model: Type.Optional(Type.String({ description: "Model override for the spawned session. Omit it: the spawn_model config already names the tier this host launches at, and allowed_models refuses anything else, because tiers are billed per token and only the person paying picks one" })),
+      title: Type.Optional(Type.String({ description: "Tab title for the spawned session; defaults to the lane key" })),
+      task: Type.Optional(Type.String({ description: "Bounded first-round task embedded in the launch; the round is open when the call returns and session_bridge (no task) waits for it. Required for a single lane; use `lanes` instead when the work splits across several" })),
       lanes: Type.Optional(Type.Array(Type.Object({
       key: Type.String({ description: "Stable spawn key for this lane; unique within the set" }),
       task: Type.String({ description: "Bounded first-round task for this lane" }),
       title: Type.Optional(Type.String({ description: "Tab title for this lane; defaults to its key" })),
     }), { description: "Whole set of lanes to launch in one call, one entry per lane, sized to the work the set has to cover. Replaces key, task and title. Two or more lanes are grouped automatically, so the set wakes you once with one combined report instead of once per lane; pass `group` only to name that set yourself. Spawning a second ungrouped lane while another is still running is refused for exactly this reason" })),
-      model: Type.Optional(Type.String({ description: "Model override for the spawned session. Omit it: the spawn_model config already names the tier this host launches at, and allowed_models refuses anything else, because tiers are billed per token and only the person paying picks one" })),
+      group: Type.Optional(Type.String({ description: "Optional group name; registers the lane as a member of a grouped-research set so completed rounds aggregate into one combined wake under the sessions data dir when every member completes" })),
       resume: Type.Optional(Type.Boolean({ description: "Force a resume of the harness's persisted session for this key when a new terminal is launched. Resume is automatic when the spawn ledger holds a session id for the key (same tool and cwd); resume: false opts out. The spawn outcome reports resume and resume_detail" })),
-      surface: Type.Optional(Type.String({ description: "tab or os-window; defaults to the spawn_surface config, then tab" })),
-      task: Type.Optional(Type.String({ description: "Bounded first-round task embedded in the launch; the round is open when the call returns and session_bridge (no task) waits for it. Required for a single lane; use `lanes` instead when the work splits across several" })),
-      title: Type.Optional(Type.String({ description: "Tab title for the spawned session; defaults to the lane key" })),
-      tool: Type.String({ description: "Registered CLI tool to spawn (codex, claude, pi, kimi)" }),
     }),
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       const args = ["spawn", "--tool", params.tool, "--cwd", params.cwd];
@@ -339,14 +339,14 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
     description:
       "Launch a detached architect that owns a problem end to end and never reports back. Use it when a second problem surfaces mid-session and chasing it yourself would cost you the thread you are already holding: fork it away and carry on. The fork is the root of a new tree, not a lane - no round is opened on it, no completion marker is embedded in its launch, and session_bridge refuses it. The brief is written to a file under the sessions data dir and the launch points the fork at that path, so a long problem statement survives argv limits and stays readable after the screen scrolls. A fork carries its own model and, where the tool supports one, its own effort level, so a problem that needs a stronger tier than the forking session gets one. The fork is recorded and listable; nothing else links it back.",
     parameters: Type.Object({
-      brief: Type.String({ description: "Required problem statement. Write it for someone with none of your context: what is wrong, what you already know, what done looks like" }),
+      tool: Type.Optional(Type.String({ description: "Registered CLI tool to fork; defaults to claude" })),
       cwd: Type.String({ description: "Working directory for the detached architect" }),
-      effort: Type.Optional(Type.String({ description: "Reasoning effort for tools that take one (claude): low, medium, high, xhigh, max" })),
       key: Type.String({ description: "Stable, unused key naming the new tree; a key already held by a live session is refused because a fork always starts fresh" }),
       model: Type.String({ description: "Required model for the fork; assess the problem and pick the tier that can finish it rather than inheriting your own" }),
-      surface: Type.Optional(Type.String({ description: "tab or os-window; defaults to the spawn_surface config, then tab" })),
+      effort: Type.Optional(Type.String({ description: "Reasoning effort for tools that take one (claude): low, medium, high, xhigh, max" })),
+      brief: Type.String({ description: "Required problem statement. Write it for someone with none of your context: what is wrong, what you already know, what done looks like" }),
       title: Type.Optional(Type.String({ description: "Tab title for the fork; defaults to the key" })),
-      tool: Type.Optional(Type.String({ description: "Registered CLI tool to fork; defaults to claude" })),
+      surface: Type.Optional(Type.String({ description: "tab or os-window; defaults to the spawn_surface config, then tab" })),
     }),
     async execute(_toolCallId, params, signal, _onUpdate) {
       const args = ["fork", "--tool", params.tool ?? "claude", "--cwd", params.cwd, "--key", params.key, "--model", params.model];
@@ -367,9 +367,9 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
     description:
       "Deliver one bounded task to a session and return immediately with the round recorded and open, so several lanes can run in parallel before any of them is awaited. The generated completion signal is embedded in the submitted prompt. Refuses when a round is already pending on that session. Wait for the completion with session_bridge on the same session (omit its task), then review and close the loop as usual. Submitted rounds close the lane terminal automatically when the watcher confirms completion: lanes always close, and sessions without a spawn identity are never closed.",
     parameters: Type.Object({
-      acknowledge_marker: Type.Optional(Type.String({ description: "Completion marker from the last reviewed completed bridge; required to submit a new round instead of recovering the prior response" })),
       session: Type.String({ description: "Stable session token from sessions_list" }),
       task: Type.String({ description: "Bounded implementation task to submit exactly once" }),
+      acknowledge_marker: Type.Optional(Type.String({ description: "Completion marker from the last reviewed completed bridge; required to submit a new round instead of recovering the prior response" })),
     }),
     async execute(_toolCallId, params, signal, _onUpdate) {
       const args = ["submit", params.session, "--task", params.task];
@@ -417,14 +417,14 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
     description:
       "Close the architect-owned feature loop through an explicit state transition and render the canonical final report. Use outcome `accepted` only after personally verifying the complete user request; use `paused` only for a user redirect or genuine blocker. An accepted close also closes every completed sibling lane of the same loop (same initiator) and returns their final reports in the receipt's `sibling_lanes`.",
     parameters: Type.Object({
-      before: Type.String({ description: "User-visible behavior before this work" }),
+      outcome: Type.String({ description: "Terminal loop outcome: accepted or paused" }),
+      session: Type.String({ description: "Stable session token from the completed final bridge" }),
       completion_marker: Type.String({ description: "Completion marker from the final reviewed bridge" }),
       landed: Type.String({ description: "Concise description of what landed or completed so far" }),
+      before: Type.String({ description: "User-visible behavior before this work" }),
       now: Type.String({ description: "User-visible behavior after this work" }),
-      outcome: Type.String({ description: "Terminal loop outcome: accepted or paused" }),
-      remaining: Type.String({ description: "None, or the concrete blocker or unfinished scope" }),
-      session: Type.String({ description: "Stable session token from the completed final bridge" }),
       verification: Type.String({ description: "Concrete checks and live evidence" }),
+      remaining: Type.String({ description: "None, or the concrete blocker or unfinished scope" }),
     }),
     async execute(_toolCallId, params, signal, _onUpdate) {
       const request = { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "session_loop_close", arguments: params } };
