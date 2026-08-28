@@ -10,6 +10,7 @@
     "./plugins/qol-code-review/skills/",
     "./plugins/qol-debug/skills/",
     "./plugins/qol-langs/skills/",
+    "./plugins/qol-memory/skills/",
     "./plugins/qol-plugin-alt-tab/skills/",
     "./plugins/qol-plugin-bluetooth/skills/",
     "./plugins/qol-plugin-cli-sessions/skills/",
@@ -32,6 +33,11 @@
     "./plugins/qol-workflow-nodes/skills/"
   ],
   "hooks": [
+    {
+      "event": "SessionStart",
+      "matcher": ".*",
+      "command": "node plugins/qol-memory/bin/inject-qol-memory-continue.cjs"
+    },
     {
       "event": "PreToolUse",
       "matcher": "Edit|Write|NotebookEdit",
@@ -71,11 +77,6 @@
       "event": "SessionStart",
       "matcher": "startup|resume|clear",
       "command": "node plugins/qol-project/bin/inject-qol-cli-context.cjs"
-    },
-    {
-      "event": "SessionStart",
-      "matcher": ".*",
-      "command": "node plugins/qol-project/bin/inject-qol-memory-continue.cjs"
     },
     {
       "event": "UserPromptSubmit",

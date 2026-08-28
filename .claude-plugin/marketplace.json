@@ -117,7 +117,7 @@
       "name": "qol-project",
       "description": "Project-level conventions for the qol-tools ecosystem: mission invariants, org layout, shared CI/release contracts, cross-platform architecture guardrails, shared library placement, plugin templates, and clean OS development environments for portability validation. Ships PreToolUse hooks that block architecture-contract violations plus a UserPromptSubmit hook that reminds Claude to consult qol-mission when prompts mention design/scope/issue terms in a qol-tools repo.",
       "source": "./plugins/qol-project",
-      "version": "0.8.31",
+      "version": "0.8.32",
       "author": {
         "name": "KMRH47"
       }
@@ -217,6 +217,15 @@
       "description": "Personal productivity rule for KMRH47: when work repeats or performance work needs before/after evidence, convert it into deterministic workflow nodes, measurement ledgers, explicit inputs, outputs, reports, and composable orchestrators instead of burning human memory and agent tokens.",
       "source": "./plugins/qol-workflow-nodes",
       "version": "0.2.3",
+      "author": {
+        "name": "KMRH47"
+      }
+    },
+    {
+      "name": "qol-memory",
+      "description": "Long-context memory for agent sessions: ask settled facts from prior sessions, capture new ones, and get the units that landed since your last session in this directory.",
+      "source": "./plugins/qol-memory",
+      "version": "0.1.0",
       "author": {
         "name": "KMRH47"
       }

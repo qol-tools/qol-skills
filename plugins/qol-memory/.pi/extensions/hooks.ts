@@ -5,17 +5,13 @@ import path from "node:path";
 const PLUGIN_DIR = path.resolve(__dirname, "../..");
 
 const PRE_TOOL_USE_HOOKS = [
-    { matcher: "Edit|Write|MultiEdit|NotebookEdit", script: "bin/check-qol-arch-code.cjs" },
-    { matcher: "Edit|Write|MultiEdit|NotebookEdit", script: "bin/check-qol-arch-cross-platform.cjs" },
-    { matcher: "Edit|Write|MultiEdit|NotebookEdit", script: "bin/check-qol-arch-cicd.cjs" },
 ];
 
 const USER_PROMPT_SUBMIT_HOOKS = [
-    { script: "bin/qol-mission-reminder.cjs" },
 ];
 
 const SESSION_START_CONTEXT_HOOKS = [
-    { script: "bin/inject-qol-cli-context.cjs" },
+    { script: "bin/inject-qol-memory-continue.cjs" },
 ];
 
 let stashedContext = "";
@@ -81,51 +77,6 @@ function matchedToolName(matcher, toolName) {
 }
 
 export default function (pi: ExtensionAPI) {
-  if (PRE_TOOL_USE_HOOKS.length > 0) {
-    pi.on("tool_call", async (event, _ctx) => {
-      if (!event.toolName) {
-        return;
-      }
-
-      const hook = PRE_TOOL_USE_HOOKS.find(
-        (h) => h.matcher && matchedToolName(h.matcher, event.toolName)
-      );
-
-      if (!hook) {
-        return;
-      }
-
-      const input = JSON.stringify({
-        tool_name: matchedToolName(hook.matcher, event.toolName),
-        tool_input: event.input ?? {},
-      });
-      const result = runHook(hook.script, input);
-
-      if (result.blocked) {
-        return { block: true, reason: result.reason };
-      }
-    });
-  }
-
-  if (USER_PROMPT_SUBMIT_HOOKS.length > 0) {
-    pi.on("before_agent_start", async (event, _ctx) => {
-      let extraContext = "";
-
-      for (const hook of USER_PROMPT_SUBMIT_HOOKS) {
-        const cwd = event.systemPromptOptions?.cwd ?? "";
-        const input = JSON.stringify({ cwd, prompt: event.prompt });
-        const result = runHook(hook.script, input);
-
-        if (result.context) {
-          extraContext += "\n\n" + result.context;
-        }
-      }
-
-      if (extraContext) {
-        return { systemPrompt: (event.systemPrompt ?? "") + extraContext };
-      }
-    });
-  }
 
   if (SESSION_START_CONTEXT_HOOKS.length > 0) {
     pi.on("session_start", async (event, ctx) => {

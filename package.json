@@ -13,6 +13,7 @@
       "./plugins/*/skills"
     ],
     "extensions": [
+      "./plugins/qol-memory/.pi/extensions",
       "./plugins/qol-plugin-alt-tab/.pi/extensions",
       "./plugins/qol-plugin-lights/.pi/extensions",
       "./plugins/qol-project/.pi/extensions",

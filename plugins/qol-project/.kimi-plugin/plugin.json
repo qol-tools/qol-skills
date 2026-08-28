@@ -1,6 +1,6 @@
 {
   "name": "qol-project",
-  "version": "0.8.31",
+  "version": "0.8.32",
   "description": "Project-level conventions for the qol-tools ecosystem: mission invariants, org layout, shared CI/release contracts, cross-platform architecture guardrails, shared library placement, plugin templates, and clean OS development environments for portability validation. Ships PreToolUse hooks that block architecture-contract violations plus a UserPromptSubmit hook that reminds Claude to consult qol-mission when prompts mention design/scope/issue terms in a qol-tools repo.",
   "author": {
     "name": "KMRH47"
@@ -28,11 +28,6 @@
       "event": "SessionStart",
       "matcher": "startup|resume|clear",
       "command": "node bin/inject-qol-cli-context.cjs"
-    },
-    {
-      "event": "SessionStart",
-      "matcher": ".*",
-      "command": "node bin/inject-qol-memory-continue.cjs"
     },
     {
       "event": "UserPromptSubmit",

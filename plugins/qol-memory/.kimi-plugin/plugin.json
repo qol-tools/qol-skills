@@ -1,0 +1,18 @@
+{
+  "name": "qol-memory",
+  "version": "0.1.0",
+  "description": "Long-context memory for agent sessions: ask settled facts from prior sessions, capture new ones, and get the units that landed since your last session in this directory.",
+  "author": {
+    "name": "KMRH47"
+  },
+  "skills": [
+    "./skills/"
+  ],
+  "hooks": [
+    {
+      "event": "SessionStart",
+      "matcher": ".*",
+      "command": "node bin/inject-qol-memory-continue.cjs"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "description": "Session-start recall of the memory units that landed since the last session in this directory.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e 'const fs=require(\"node:fs\"),cp=require(\"node:child_process\"),path=require(\"node:path\"),os=require(\"node:os\");const [plugin,rel]=process.argv.slice(1);const input=fs.readFileSync(0);let root=process.env.CLAUDE_PLUGIN_ROOT||process.env.CODEX_PLUGIN_ROOT||\"\";if(!root){const cache=path.join(process.env.CODEX_HOME||path.join(os.homedir(),\".codex\"),\"plugins\",\"cache\");const found=[];try{for(const market of fs.readdirSync(cache)){const dir=path.join(cache,market,plugin);if(!fs.existsSync(dir))continue;for(const version of fs.readdirSync(dir)){const candidate=path.join(dir,version);if(fs.existsSync(path.join(candidate,rel)))found.push([fs.statSync(candidate).mtimeMs,candidate]);}}}catch{}root=found.sort((a,b)=>a[0]-b[0]).pop()?.[1]||\"\";}if(!root)process.exit(0);const file=path.join(root,rel);if(!fs.existsSync(file))process.exit(0);const result=cp.spawnSync(process.execPath,[file],{input});if(result.stdout)process.stdout.write(result.stdout);if(result.stderr)process.stderr.write(result.stderr);process.exit(result.status??0);' qol-memory bin/inject-qol-memory-continue.cjs"
+          }
+        ]
+      }
+    ]
+  }
+}

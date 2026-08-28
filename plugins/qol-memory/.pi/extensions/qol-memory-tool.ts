@@ -1,9 +1,12 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { Type } from "typebox";
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { join, basename, dirname } from "node:path";
 import { appendFileSync, readFileSync, mkdirSync, existsSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+const { postJson } = require("../../bin/qol-tray-http.cjs");
 
 function memoryStore(): string {
   if (process.env.QOL_MEMORY_STORE && process.env.QOL_MEMORY_STORE.length) return process.env.QOL_MEMORY_STORE;
@@ -69,7 +72,7 @@ function redact(text: string): string {
     .replace(/\.env[\s\S]*/g, ".env [REDACTED]");
 }
 
-function appendUnit(ctx: any, kind: "user" | "compaction", ts: string, text: string, files?: string[]) {
+async function appendUnit(ctx: any, kind: "user" | "compaction", ts: string, text: string, files?: string[]) {
   if (CAPTURE_DISABLED) return;
   const sessionFile = ctx.sessionManager.getSessionFile() ?? null;
   const file = sessionFile ? basename(sessionFile) : null;
@@ -79,6 +82,10 @@ function appendUnit(ctx: any, kind: "user" | "compaction", ts: string, text: str
     unit.filesRead = files;
     unit.filesModified = files;
   }
+  try {
+    const result = await postJson("/api/plugins/qol-memory/actions/capture", { unit }, 2000);
+    if (result && result.status >= 200 && result.status < 300) return;
+  } catch {}
   try {
     mkdirSync(memoryStore(), { recursive: true });
     appendFileSync(UNITS_PATH, JSON.stringify(unit) + "\n");
@@ -105,67 +112,6 @@ export default function (pi: ExtensionAPI) {
       distillDebounce.set(sid, now);
       setImmediate(() => spawnDistill(["--session", sid, "--live"]));
     }
-  });
-
-  pi.registerTool({
-    name: "qol_memory_retrieve",
-    label: "QoL Memory Retrieve",
-    description:
-      "Retrieve past-work memory: what we decided, how we fixed things, corpus facts. Ask when the user references past sessions, decisions, or fixes you don't remember. Returns a verdict (answered/candidates/no-memory) with provenance. This is a recall tool - the answer is a fact from past transcripts, not a suggestion.",
-    parameters: Type.Object({
-      query: Type.String({ description: "What to recall, e.g. 'how did we fix the m4a1 anchoring'" }),
-    }),
-    async execute(toolCallId, params, signal, onUpdate, ctx) {
-      const store = memoryStore();
-      const manifest = join(store, "manifest.json");
-      let askPath = "";
-      try {
-        const m = JSON.parse(readFileSync(manifest, "utf8"));
-        if (m && m.ask_mjs) askPath = m.ask_mjs;
-      } catch {}
-      if (!askPath && process.env.QOL_MEMORY_ASK) askPath = process.env.QOL_MEMORY_ASK;
-      if (!askPath) {
-        return { content: [{ type: "text", text: "memory unavailable: no qol-memory manifest at " + manifest }], details: {} };
-      }
-      const args = [askPath, String(params.query || ""), "--brief", "--log-source", "tool"];
-      const sid = ctx.sessionManager.getSessionId();
-      if (sid) args.push("--exclude-session", sid);
-      const cwd = ctx.sessionManager.getCwd();
-      if (cwd) args.push("--log-cwd", cwd);
-      try { appendFileSync("/tmp/qol-memory-tool-calls.log", new Date().toISOString() + " TOOL " + JSON.stringify(args) + "\n"); } catch {}
-      const r = spawnSync("node", args, {
-        encoding: "utf8", timeout: 6000,
-      });
-      if (r.status !== 0 || !r.stdout) {
-        return { content: [{ type: "text", text: "memory error: ask.mjs failed" }], details: {} };
-      }
-      let d;
-      try { d = JSON.parse(r.stdout); } catch {
-        return { content: [{ type: "text", text: "memory error: bad ask.mjs output" }], details: {} };
-      }
-      const lines: string[] = [];
-      if (d.verdict === "answered" && d.answer) {
-        const a = d.answer;
-        const text = a.text || "";
-        const cap = a.source_kind === "decision" ? 280 : 240;
-        const truncated = text.length >= cap && !/[.!?\u2026"]\s*$/.test(text.trim());
-        lines.push(`VERDICT: answered (${d.confidence})${truncated ? " - FACT IS TRUNCATED, retrieve again for the full note" : ""}`);
-        lines.push(`FACT: ${text}${truncated ? " [truncated]" : ""}`);
-        lines.push(`PROVENANCE: key ${a.key}, ${a.source_kind}, ${a.source_ts || "?"}`);
-        if (a.superseded && a.superseded.length) {
-          lines.push(`SUPERSEDES: ${a.superseded.map((s: any) => s.text).join(" | ")}`);
-        }
-      } else if (d.verdict === "candidates") {
-        lines.push(`VERDICT: candidates (${d.confidence}) - no decisive fact, hints only`);
-        for (const c of (d.recalled || []).slice(0, 3)) {
-          lines.push(`HINT: key ${c.key}, ${c.source_kind}, ${c.source_ts || "?"}`);
-        }
-      } else {
-        lines.push(`VERDICT: no-memory - nothing in the corpus answers this. Be honest about not knowing.`);
-      }
-      if (d.non_default_gates) lines.push("WARNING: non-default gates applied");
-      return { content: [{ type: "text", text: lines.join("\n") }], details: {} };
-    },
   });
 
   const catchallMarker = join(memoryStore(), ".distill-catchall.ts");

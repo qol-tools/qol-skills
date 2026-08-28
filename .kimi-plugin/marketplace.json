@@ -98,6 +98,10 @@
     {
       "id": "qol-workflow-nodes",
       "source": "../plugins/qol-workflow-nodes"
+    },
+    {
+      "id": "qol-memory",
+      "source": "../plugins/qol-memory"
     }
   ]
 }
