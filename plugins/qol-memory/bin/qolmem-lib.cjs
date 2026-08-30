@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 
-const { existsSync, readFileSync } = require("node:fs");
+const { existsSync, readFileSync, readdirSync, statSync, writeFileSync } = require("node:fs");
 const { homedir } = require("node:os");
 const { join } = require("node:path");
 
@@ -10,6 +10,7 @@ const MIN_QUERY = 4;
 const CAP = 3;
 const BURST_MS = 15000;
 const UNANSWERED = new Set(["no-memory", "candidates"]);
+const RECEIPT_RE = /^qolmem-gen.*\.receipt\.json$/;
 
 function storeDir() {
   if (process.env.QOL_MEMORY_STORE && process.env.QOL_MEMORY_STORE.length) {
@@ -26,6 +27,63 @@ function storeDir() {
     if (existsSync(join(dir, "retrievals.jsonl"))) return dir;
   }
   return null;
+}
+
+function lanesDir() {
+  if (process.env.QOL_SESSIONS_LANES_DIR && process.env.QOL_SESSIONS_LANES_DIR.length) {
+    return process.env.QOL_SESSIONS_LANES_DIR;
+  }
+  if (process.platform === "darwin") {
+    return join(homedir(), "Library", "Application Support", "qol-tray", "sessions", "lanes");
+  }
+  const xdg = process.env.XDG_DATA_HOME;
+  const base = xdg && xdg.length ? xdg : join(homedir(), ".local", "share");
+  return join(base, "qol-tray", "sessions", "lanes");
+}
+
+function collectReceipts() {
+  let names;
+  try {
+    names = readdirSync(lanesDir());
+  } catch {
+    return [];
+  }
+  const candidates = [];
+  for (const name of names) {
+    if (!RECEIPT_RE.test(name)) continue;
+    const full = join(lanesDir(), name);
+    let stats;
+    try {
+      stats = statSync(full);
+    } catch {
+      continue;
+    }
+    if (!stats.isFile()) continue;
+    candidates.push({ full, mtime: stats.mtimeMs });
+  }
+  candidates.sort((a, b) => a.mtime - b.mtime);
+  const out = [];
+  for (const candidate of candidates) {
+    const seenPath = candidate.full + ".seen";
+    if (existsSync(seenPath)) continue;
+    let receipt;
+    try {
+      receipt = JSON.parse(readFileSync(candidate.full, "utf8"));
+    } catch {
+      continue;
+    }
+    const report = typeof receipt.report === "string" ? receipt.report : "";
+    let summary = "qolmem: answering lane finished, report: " + report;
+    try {
+      const matches = [...readFileSync(report, "utf8").matchAll(/^qolmem: .*/gm)];
+      if (matches.length) summary = matches[matches.length - 1][0];
+    } catch {}
+    try {
+      writeFileSync(seenPath, "");
+    } catch {}
+    out.push({ summary, report });
+  }
+  return out;
 }
 
 function normalizeQuery(query) {
@@ -77,4 +135,4 @@ function unansweredQueue() {
   return survived.slice(0, CAP).map((e) => ({ query: e.query, ts: e.ts }));
 }
 
-module.exports = { storeDir, unansweredQueue };
+module.exports = { storeDir, unansweredQueue, lanesDir, collectReceipts };

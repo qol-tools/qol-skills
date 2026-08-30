@@ -5,10 +5,11 @@ const assert = require('node:assert');
 const http = require('node:http');
 const path = require('node:path');
 const os = require('node:os');
-const { mkdtempSync, writeFileSync } = require('node:fs');
+const { existsSync, mkdtempSync, writeFileSync } = require('node:fs');
 const { spawn } = require('node:child_process');
 
 const HOOK = path.join(__dirname, '..', 'bin', 'inject-qol-memory-continue.cjs');
+const GEN_HOOK = path.join(__dirname, '..', 'bin', 'qolmem-gen.cjs');
 const CWD = '/sandbox/proj';
 const SID = '019f8e9c-aaaa-0000-0000-000000000001';
 
@@ -21,6 +22,7 @@ function makeStore(events) {
 }
 
 const EMPTY_STORE = makeStore();
+const EMPTY_LANES = mkdtempSync(path.join(os.tmpdir(), 'qolmem-lanes-'));
 
 function listen(server) {
   return new Promise((resolve, reject) => {
@@ -52,14 +54,11 @@ function captureServer(handler) {
   return { server, state };
 }
 
-function run(port, payload, env) {
+function spawnHook(hook, payload, env) {
   return new Promise((resolve, reject) => {
-    const child = spawn('node', [HOOK], {
+    const child = spawn('node', [hook], {
       env: {
         ...process.env,
-        QOL_MEMORY_STORE: EMPTY_STORE,
-        QOL_TRAY_BASE_URL: 'http://127.0.0.1:' + port,
-        QOL_TRAY_HTTP_TOKEN: 't',
         ...(env || {}),
       },
     });
@@ -73,6 +72,35 @@ function run(port, payload, env) {
     child.on('close', (code) => resolve({ status: code, stdout, stderr }));
     child.stdin.end(JSON.stringify(payload));
   });
+}
+
+function run(port, payload, env) {
+  return spawnHook(HOOK, payload, {
+    QOL_MEMORY_STORE: EMPTY_STORE,
+    QOL_SESSIONS_LANES_DIR: EMPTY_LANES,
+    QOL_TRAY_BASE_URL: 'http://127.0.0.1:' + port,
+    QOL_TRAY_HTTP_TOKEN: 't',
+    ...(env || {}),
+  });
+}
+
+function makeLanes(reportText) {
+  const lanes = mkdtempSync(path.join(os.tmpdir(), 'qolmem-lanes-'));
+  const report = path.join(lanes, 'qolmem-gen-report.md');
+  if (reportText !== null) {
+    writeFileSync(report, reportText);
+  }
+  writeFileSync(
+    path.join(lanes, 'qolmem-gen_019f.receipt.json'),
+    JSON.stringify({
+      label: 'qolmem-gen',
+      session: '019f8e9c',
+      completed_at: new Date().toISOString(),
+      markerless: false,
+      report,
+    }),
+  );
+  return lanes;
 }
 
 test('injected stage yields the SessionStart hook JSON with the block as additionalContext', async () => {
@@ -227,6 +255,101 @@ test('QOL_MEMORY_CONTINUE_DISABLE=1 stays silent even with a queue', async () =>
     assert.strictEqual(r.status, 0);
     assert.strictEqual(r.stdout, '');
     assert.strictEqual(state.requests, 0);
+  } finally {
+    await stop(server);
+  }
+});
+
+test('session start surfaces an unseen receipt summary and writes the seen sidecar', async () => {
+  const lanes = makeLanes('# Refill report\nqolmem: 2 captured, 1 unanswerable\n');
+  const { server } = captureServer((res) => {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ stage: 'quiet' }));
+  });
+  const port = await listen(server);
+  try {
+    const r = await run(port, { cwd: CWD, session_id: SID }, { QOL_SESSIONS_LANES_DIR: lanes });
+    assert.strictEqual(r.status, 0);
+    assert.deepStrictEqual(JSON.parse(r.stdout), {
+      hookSpecificOutput: {
+        hookEventName: 'SessionStart',
+        additionalContext: 'qolmem: 2 captured, 1 unanswerable',
+      },
+      systemMessage: 'qolmem: 2 captured, 1 unanswerable',
+    });
+    assert.ok(existsSync(path.join(lanes, 'qolmem-gen_019f.receipt.json.seen')));
+  } finally {
+    await stop(server);
+  }
+});
+
+test('a second session start stays silent once the receipt is seen', async () => {
+  const lanes = makeLanes('qolmem: 2 captured, 1 unanswerable\n');
+  const { server } = captureServer((res) => {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ stage: 'quiet' }));
+  });
+  const port = await listen(server);
+  try {
+    const first = await run(port, { cwd: CWD, session_id: SID }, { QOL_SESSIONS_LANES_DIR: lanes });
+    assert.strictEqual(first.status, 0);
+    assert.notStrictEqual(first.stdout, '');
+    const second = await run(port, { cwd: CWD, session_id: SID }, { QOL_SESSIONS_LANES_DIR: lanes });
+    assert.strictEqual(second.status, 0);
+    assert.strictEqual(second.stdout, '');
+  } finally {
+    await stop(server);
+  }
+});
+
+test('qolmem-gen with a non-matching prompt surfaces one unseen receipt and exits 0', async () => {
+  const lanes = makeLanes('qolmem: 2 captured, 1 unanswerable\n');
+  const r = await spawnHook(GEN_HOOK, { prompt: 'hello there', cwd: CWD }, {
+    QOL_MEMORY_STORE: EMPTY_STORE,
+    QOL_SESSIONS_LANES_DIR: lanes,
+  });
+  assert.strictEqual(r.status, 0);
+  assert.deepStrictEqual(JSON.parse(r.stdout), {
+    hookSpecificOutput: {
+      hookEventName: 'UserPromptSubmit',
+      additionalContext: 'qolmem: 2 captured, 1 unanswerable',
+    },
+    systemMessage: 'qolmem: 2 captured, 1 unanswerable',
+  });
+});
+
+test('a receipt whose report file is missing falls back to the generic summary', async () => {
+  const lanes = makeLanes(null);
+  const { server } = captureServer((res) => {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ stage: 'quiet' }));
+  });
+  const port = await listen(server);
+  try {
+    const r = await run(port, { cwd: CWD, session_id: SID }, { QOL_SESSIONS_LANES_DIR: lanes });
+    assert.strictEqual(r.status, 0);
+    const parsed = JSON.parse(r.stdout);
+    assert.strictEqual(
+      parsed.systemMessage,
+      'qolmem: answering lane finished, report: ' + path.join(lanes, 'qolmem-gen-report.md'),
+    );
+  } finally {
+    await stop(server);
+  }
+});
+
+test('a decoy qolmem line at line start loses to the later real count line', async () => {
+  const lanes = makeLanes('qolmem: N captured, M unanswerable\nqolmem: 2 captured, 1 unanswerable\n');
+  const { server } = captureServer((res) => {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ stage: 'quiet' }));
+  });
+  const port = await listen(server);
+  try {
+    const r = await run(port, { cwd: CWD, session_id: SID }, { QOL_SESSIONS_LANES_DIR: lanes });
+    assert.strictEqual(r.status, 0);
+    const parsed = JSON.parse(r.stdout);
+    assert.strictEqual(parsed.systemMessage, 'qolmem: 2 captured, 1 unanswerable');
   } finally {
     await stop(server);
   }

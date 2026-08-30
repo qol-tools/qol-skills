@@ -2,7 +2,7 @@
 
 const fs = require('node:fs');
 const { postJson } = require('./qol-tray-http.cjs');
-const { unansweredQueue } = require('./qolmem-lib.cjs');
+const { collectReceipts, unansweredQueue } = require('./qolmem-lib.cjs');
 
 function parseInput(raw) {
   try {
@@ -41,14 +41,16 @@ async function run() {
   const input = parseInput(raw);
   if (!input) return;
   if (process.env.QOL_MEMORY_CONTINUE_DISABLE === '1') return;
+  const receiptText = collectReceipts().map((r) => r.summary).join('\n');
   const queue = unansweredQueue();
   const count = queue.length;
   const countLine = count > 0
     ? `qol-memory: ${count} unanswered launcher questions - type: qolmem gen`
     : '';
-  const systemMessage = count > 0
-    ? `qol-memory: ${count} unanswered launcher questions - answer them with \`qolmem gen\``
-    : '';
+  const systemMessage = [
+    count > 0 ? `qol-memory: ${count} unanswered launcher questions - answer them with \`qolmem gen\`` : '',
+    receiptText,
+  ].filter(Boolean).join('\n');
   let result;
   try {
     result = await postJson(
@@ -57,7 +59,8 @@ async function run() {
       1500,
     );
   } catch {
-    if (countLine) emitAdditionalContext(countLine, systemMessage);
+    const context = [countLine, receiptText].filter(Boolean).join('\n');
+    if (context) emitAdditionalContext(context, systemMessage);
     return;
   }
   if (
@@ -70,10 +73,15 @@ async function run() {
     && typeof result.body.block === 'string'
     && result.body.block
   ) {
-    emitAdditionalContext(countLine ? result.body.block + '\n' + countLine : result.body.block, systemMessage);
+    const context = [
+      countLine ? result.body.block + '\n' + countLine : result.body.block,
+      receiptText,
+    ].filter(Boolean).join('\n');
+    emitAdditionalContext(context, systemMessage);
     return;
   }
-  if (countLine) emitAdditionalContext(countLine, systemMessage);
+  const context = [countLine, receiptText].filter(Boolean).join('\n');
+  if (context) emitAdditionalContext(context, systemMessage);
 }
 
 run().catch(() => {});

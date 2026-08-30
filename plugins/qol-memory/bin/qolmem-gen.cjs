@@ -5,7 +5,7 @@ const { spawnSync } = require("node:child_process");
 const { readFileSync } = require("node:fs");
 const { homedir } = require("node:os");
 const { join } = require("node:path");
-const { unansweredQueue } = require("./qolmem-lib.cjs");
+const { collectReceipts, unansweredQueue } = require("./qolmem-lib.cjs");
 
 const GEN_RE = /^\s*qolmem(\s+gen)?\s*$/i;
 const SPAWN_MODEL_RE = /^\s*spawn_model\s*=\s*"([^"]+)"/m;
@@ -47,34 +47,48 @@ try {
 if (!payload || typeof payload !== "object") process.exit(0);
 
 const prompt = typeof payload.prompt === "string" ? payload.prompt : "";
+const receipts = collectReceipts();
+const receiptText = receipts.map((r) => r.summary).join("\n");
+if (receipts.length && !GEN_RE.test(prompt)) {
+  process.stdout.write(JSON.stringify({
+    systemMessage: receiptText,
+    hookSpecificOutput: {
+      hookEventName: "UserPromptSubmit",
+      additionalContext: receiptText,
+    },
+  }) + "\n");
+  process.exit(0);
+}
 if (!GEN_RE.test(prompt)) process.exit(0);
 
+const receiptPrefix = receipts.length ? receiptText + "\n" : "";
 const queue = unansweredQueue();
-if (!queue.length) block("qolmem: no unanswered questions.");
+if (!queue.length) block(receiptPrefix + "qolmem: no unanswered questions.");
 
 const model = spawnModel();
-if (!model) block("qolmem: no spawn_model in sessions.toml.");
+if (!model) block(receiptPrefix + "qolmem: no spawn_model in sessions.toml.");
 
 const cwd = typeof payload.cwd === "string" && payload.cwd.length ? payload.cwd : process.cwd();
 
 const questions = queue.map((q, i) => `${i + 1}. ${q.query}`).join("\n");
 const brief = `You are the answerer for a qol-memory refill run.
 
-For each numbered question below, find the true answer in this repository: read the README first, then docs and skills, then code, verifying every claim in code.
+Rules:
+1. Treat every numbered question independently; never let one answer or one failure color another.
+2. For each question: read README.md first, then docs/ and skills, then code; every claim must be verified in a file you actually opened, and the report must cite that file path per question.
+3. Store each found answer with the qol-memory capture MCP tool (capture), text = ONE self-contained sentence that restates the question's own key words and carries exact paths, commands, or names, cwd = '${cwd}'. The restating matters: retrieval requires every question word to appear. Do not use a qol-memory shell command; only the MCP tool exists.
+4. If, and only if, the repository truly does not answer a question, capture nothing for it and write one line naming the files you checked and why they do not answer it.
+5. End the report with exactly one line: qolmem: N captured, M unanswerable (N and M are counts). Never use the em-dash character.
 
-${questions}
+Questions:
+${questions}`;
 
-For each question, store its answer by running:
-qol-memory capture --text '<one self-contained sentence carrying exact paths, commands, or names>' --cwd '${cwd}'
-One capture per question. If the repository does not answer a question, capture nothing for it and say so.
-Report results in this terminal. Never use the em-dash character.`;
-
-const result = spawnSync("qol", ["sessions", "fork", "--tool", "pi", "--cwd", cwd, "--key", `qolmem-gen-${Date.now()}`, "--model", model, "--title", "qolmem-gen", "--brief", brief], { timeout: 30000 });
+const result = spawnSync("qol", ["sessions", "spawn", "--tool", "pi", "--cwd", cwd, "--key", `qolmem-gen-${Date.now()}`, "--model", model, "--title", "qolmem-gen", "--task", brief, "--background", "--silent-wake"], { timeout: 30000 });
 
 if (result.status === 0) {
-  block(`qolmem: answering lane launched for ${queue.length} question(s).`);
+  block(receiptPrefix + `qolmem: answering lane launched for ${queue.length} question(s); results arrive silently on a later prompt.`);
 }
 
 const tail = String(result.stderr || "").trim().slice(-200);
 const detail = tail || (result.error && result.error.message) || "";
-block(`qolmem: fork failed: ${detail}`);
+block(receiptPrefix + `qolmem: spawn failed: ${detail}`);
