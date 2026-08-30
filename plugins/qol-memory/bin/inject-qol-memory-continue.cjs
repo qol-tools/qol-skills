@@ -47,7 +47,7 @@ async function run() {
     ? `qol-memory: ${count} unanswered launcher questions - type: qolmem gen`
     : '';
   const systemMessage = count > 0
-    ? `qol-memory: ${count} unanswered launcher questions - type qolmem gen to answer them`
+    ? `qol-memory: ${count} unanswered launcher questions - answer them with \`qolmem gen\``
     : '';
   let result;
   try {
