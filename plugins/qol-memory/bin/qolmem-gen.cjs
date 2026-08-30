@@ -76,7 +76,7 @@ const brief = `You are the answerer for a qol-memory refill run.
 Rules:
 1. Treat every numbered question independently; never let one answer or one failure color another.
 2. For each question: read README.md first, then docs/ and skills, then code; every claim must be verified in a file you actually opened, and the report must cite that file path per question.
-3. Store each found answer with the qol-memory capture MCP tool (capture), text = ONE self-contained sentence that restates the question's own key words and carries exact paths, commands, or names, cwd = '${cwd}'. The restating matters: retrieval requires every question word to appear. Do not use a qol-memory shell command; only the MCP tool exists.
+3. Store each found answer with the qol-memory capture MCP tool (capture), cwd = '${cwd}'. text = exactly two sentences: sentence one is the bare answer alone, 48 characters or fewer (a name, a path, a number, a short phrase; never a restating of the question); sentence two restates the question's own key words and carries the exact paths, commands, or names that prove the answer. Both parts matter: retrieval requires every question word to appear, and the launcher shows sentence one as the bold lead. Do not use a qol-memory shell command; only the MCP tool exists.
 4. If, and only if, the repository truly does not answer a question, capture nothing for it and write one line naming the files you checked and why they do not answer it.
 5. End the report with exactly one line: qolmem: N captured, M unanswerable (N and M are counts). Never use the em-dash character.
 
