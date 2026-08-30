@@ -20,13 +20,15 @@ function parseInput(raw) {
   return null;
 }
 
-function emitAdditionalContext(text) {
-  process.stdout.write(JSON.stringify({
+function emitAdditionalContext(additionalContext, systemMessage) {
+  const payload = {
     hookSpecificOutput: {
       hookEventName: 'SessionStart',
-      additionalContext: text,
+      additionalContext,
     },
-  }) + '\n');
+  };
+  if (systemMessage) payload.systemMessage = systemMessage;
+  process.stdout.write(JSON.stringify(payload) + '\n');
 }
 
 async function run() {
@@ -40,8 +42,12 @@ async function run() {
   if (!input) return;
   if (process.env.QOL_MEMORY_CONTINUE_DISABLE === '1') return;
   const queue = unansweredQueue();
-  const countLine = queue.length > 0
-    ? `qol-memory: ${queue.length} unanswered launcher questions - type: qolmem gen`
+  const count = queue.length;
+  const countLine = count > 0
+    ? `qol-memory: ${count} unanswered launcher questions - type: qolmem gen`
+    : '';
+  const systemMessage = count > 0
+    ? `qol-memory: ${count} unanswered launcher questions - type qolmem gen to answer them`
     : '';
   let result;
   try {
@@ -51,7 +57,7 @@ async function run() {
       1500,
     );
   } catch {
-    if (countLine) emitAdditionalContext(countLine);
+    if (countLine) emitAdditionalContext(countLine, systemMessage);
     return;
   }
   if (
@@ -64,10 +70,10 @@ async function run() {
     && typeof result.body.block === 'string'
     && result.body.block
   ) {
-    emitAdditionalContext(countLine ? result.body.block + '\n' + countLine : result.body.block);
+    emitAdditionalContext(countLine ? result.body.block + '\n' + countLine : result.body.block, systemMessage);
     return;
   }
-  if (countLine) emitAdditionalContext(countLine);
+  if (countLine) emitAdditionalContext(countLine, systemMessage);
 }
 
 run().catch(() => {});

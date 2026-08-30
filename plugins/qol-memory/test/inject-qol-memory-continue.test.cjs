@@ -162,6 +162,7 @@ test('injected block gains the queue count line', async () => {
         hookEventName: 'SessionStart',
         additionalContext: '[qol-memory continue] 2 unit(s) landed\nqol-memory: 1 unanswered launcher questions - type: qolmem gen',
       },
+      systemMessage: 'qol-memory: 1 unanswered launcher questions - type qolmem gen to answer them',
     });
   } finally {
     await stop(server);
@@ -186,6 +187,7 @@ test('daemon abstain with a non-empty queue emits the count line alone', async (
         hookEventName: 'SessionStart',
         additionalContext: 'qol-memory: 2 unanswered launcher questions - type: qolmem gen',
       },
+      systemMessage: 'qol-memory: 2 unanswered launcher questions - type qolmem gen to answer them',
     });
   } finally {
     await stop(server);
