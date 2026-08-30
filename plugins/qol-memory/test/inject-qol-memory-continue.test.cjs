@@ -4,11 +4,23 @@ const test = require('node:test');
 const assert = require('node:assert');
 const http = require('node:http');
 const path = require('node:path');
+const os = require('node:os');
+const { mkdtempSync, writeFileSync } = require('node:fs');
 const { spawn } = require('node:child_process');
 
 const HOOK = path.join(__dirname, '..', 'bin', 'inject-qol-memory-continue.cjs');
 const CWD = '/sandbox/proj';
 const SID = '019f8e9c-aaaa-0000-0000-000000000001';
+
+function makeStore(events) {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'qolmem-store-'));
+  if (events) {
+    writeFileSync(path.join(dir, 'retrievals.jsonl'), events.map((e) => JSON.stringify(e)).join('\n') + '\n');
+  }
+  return dir;
+}
+
+const EMPTY_STORE = makeStore();
 
 function listen(server) {
   return new Promise((resolve, reject) => {
@@ -45,6 +57,7 @@ function run(port, payload, env) {
     const child = spawn('node', [HOOK], {
       env: {
         ...process.env,
+        QOL_MEMORY_STORE: EMPTY_STORE,
         QOL_TRAY_BASE_URL: 'http://127.0.0.1:' + port,
         QOL_TRAY_HTTP_TOKEN: 't',
         ...(env || {}),
@@ -124,6 +137,91 @@ test('QOL_MEMORY_CONTINUE_DISABLE=1 prints nothing without contacting the server
   const port = await listen(server);
   try {
     const r = await run(port, { cwd: CWD, session_id: SID }, { QOL_MEMORY_CONTINUE_DISABLE: '1' });
+    assert.strictEqual(r.status, 0);
+    assert.strictEqual(r.stdout, '');
+    assert.strictEqual(state.requests, 0);
+  } finally {
+    await stop(server);
+  }
+});
+
+test('injected block gains the queue count line', async () => {
+  const store = makeStore([
+    { source: 'launcher', query: 'how does the queue work', ts: new Date().toISOString(), verdict: 'no-memory' },
+  ]);
+  const { server } = captureServer((res) => {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ stage: 'injected', block: '[qol-memory continue] 2 unit(s) landed' }));
+  });
+  const port = await listen(server);
+  try {
+    const r = await run(port, { cwd: CWD, session_id: SID }, { QOL_MEMORY_STORE: store });
+    assert.strictEqual(r.status, 0);
+    assert.deepStrictEqual(JSON.parse(r.stdout), {
+      hookSpecificOutput: {
+        hookEventName: 'SessionStart',
+        additionalContext: '[qol-memory continue] 2 unit(s) landed\nqol-memory: 1 unanswered launcher questions - type: qolmem gen',
+      },
+    });
+  } finally {
+    await stop(server);
+  }
+});
+
+test('daemon abstain with a non-empty queue emits the count line alone', async () => {
+  const store = makeStore([
+    { source: 'launcher', query: 'how does the queue work', ts: new Date(Date.now() - 120000).toISOString(), verdict: 'no-memory' },
+    { source: 'launcher', query: 'where is the tray menu', ts: new Date(Date.now() - 60000).toISOString(), verdict: 'candidates' },
+  ]);
+  const { server } = captureServer((res) => {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ stage: 'quiet' }));
+  });
+  const port = await listen(server);
+  try {
+    const r = await run(port, { cwd: CWD, session_id: SID }, { QOL_MEMORY_STORE: store });
+    assert.strictEqual(r.status, 0);
+    assert.deepStrictEqual(JSON.parse(r.stdout), {
+      hookSpecificOutput: {
+        hookEventName: 'SessionStart',
+        additionalContext: 'qol-memory: 2 unanswered launcher questions - type: qolmem gen',
+      },
+    });
+  } finally {
+    await stop(server);
+  }
+});
+
+test('daemon abstain with an empty queue stays silent', async () => {
+  const store = makeStore();
+  const { server } = captureServer((res) => {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ stage: 'quiet' }));
+  });
+  const port = await listen(server);
+  try {
+    const r = await run(port, { cwd: CWD, session_id: SID }, { QOL_MEMORY_STORE: store });
+    assert.strictEqual(r.status, 0);
+    assert.strictEqual(r.stdout, '');
+  } finally {
+    await stop(server);
+  }
+});
+
+test('QOL_MEMORY_CONTINUE_DISABLE=1 stays silent even with a queue', async () => {
+  const store = makeStore([
+    { source: 'launcher', query: 'how does the queue work', ts: new Date().toISOString(), verdict: 'no-memory' },
+  ]);
+  const { server, state } = captureServer((res) => {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ stage: 'injected', block: 'should not be used' }));
+  });
+  const port = await listen(server);
+  try {
+    const r = await run(port, { cwd: CWD, session_id: SID }, {
+      QOL_MEMORY_STORE: store,
+      QOL_MEMORY_CONTINUE_DISABLE: '1',
+    });
     assert.strictEqual(r.status, 0);
     assert.strictEqual(r.stdout, '');
     assert.strictEqual(state.requests, 0);

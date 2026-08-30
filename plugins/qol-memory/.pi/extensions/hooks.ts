@@ -8,6 +8,7 @@ const PRE_TOOL_USE_HOOKS = [
 ];
 
 const USER_PROMPT_SUBMIT_HOOKS = [
+    { script: "bin/qolmem-gen.cjs" },
 ];
 
 const SESSION_START_CONTEXT_HOOKS = [
@@ -77,6 +78,26 @@ function matchedToolName(matcher, toolName) {
 }
 
 export default function (pi: ExtensionAPI) {
+
+  if (USER_PROMPT_SUBMIT_HOOKS.length > 0) {
+    pi.on("before_agent_start", async (event, _ctx) => {
+      let extraContext = "";
+
+      for (const hook of USER_PROMPT_SUBMIT_HOOKS) {
+        const cwd = event.systemPromptOptions?.cwd ?? "";
+        const input = JSON.stringify({ cwd, prompt: event.prompt });
+        const result = runHook(hook.script, input);
+
+        if (result.context) {
+          extraContext += "\n\n" + result.context;
+        }
+      }
+
+      if (extraContext) {
+        return { systemPrompt: (event.systemPrompt ?? "") + extraContext };
+      }
+    });
+  }
 
   if (SESSION_START_CONTEXT_HOOKS.length > 0) {
     pi.on("session_start", async (event, ctx) => {

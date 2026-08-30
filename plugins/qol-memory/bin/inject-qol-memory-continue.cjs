@@ -2,6 +2,7 @@
 
 const fs = require('node:fs');
 const { postJson } = require('./qol-tray-http.cjs');
+const { unansweredQueue } = require('./qolmem-lib.cjs');
 
 function parseInput(raw) {
   try {
@@ -19,6 +20,15 @@ function parseInput(raw) {
   return null;
 }
 
+function emitAdditionalContext(text) {
+  process.stdout.write(JSON.stringify({
+    hookSpecificOutput: {
+      hookEventName: 'SessionStart',
+      additionalContext: text,
+    },
+  }) + '\n');
+}
+
 async function run() {
   let raw = '';
   try {
@@ -29,6 +39,10 @@ async function run() {
   const input = parseInput(raw);
   if (!input) return;
   if (process.env.QOL_MEMORY_CONTINUE_DISABLE === '1') return;
+  const queue = unansweredQueue();
+  const countLine = queue.length > 0
+    ? `qol-memory: ${queue.length} unanswered launcher questions - type: qolmem gen`
+    : '';
   let result;
   try {
     result = await postJson(
@@ -37,6 +51,7 @@ async function run() {
       1500,
     );
   } catch {
+    if (countLine) emitAdditionalContext(countLine);
     return;
   }
   if (
@@ -49,13 +64,10 @@ async function run() {
     && typeof result.body.block === 'string'
     && result.body.block
   ) {
-    process.stdout.write(JSON.stringify({
-      hookSpecificOutput: {
-        hookEventName: 'SessionStart',
-        additionalContext: result.body.block,
-      },
-    }) + '\n');
+    emitAdditionalContext(countLine ? result.body.block + '\n' + countLine : result.body.block);
+    return;
   }
+  if (countLine) emitAdditionalContext(countLine);
 }
 
 run().catch(() => {});
