@@ -94,6 +94,41 @@ function firstToken(norm) {
   return norm.split(" ")[0];
 }
 
+function claimsFile() {
+  const dir = storeDir();
+  return dir ? join(dir, "qolmem-claims.json") : null;
+}
+
+function readClaims() {
+  const file = claimsFile();
+  if (!file) return {};
+  try {
+    const parsed = JSON.parse(readFileSync(file, "utf8"));
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function claimQueries(queries) {
+  const file = claimsFile();
+  if (!file) return;
+  const claims = readClaims();
+  const now = Date.now();
+  for (const query of queries) {
+    const norm = normalizeQuery(typeof query === "string" ? query : query?.query ?? "");
+    if (norm.length < MIN_QUERY) continue;
+    claims[norm] = now;
+  }
+  const cutoff = now - WINDOW_MS;
+  for (const [norm, ts] of Object.entries(claims)) {
+    if (!Number.isFinite(ts) || ts < cutoff) delete claims[norm];
+  }
+  try {
+    writeFileSync(file, JSON.stringify(claims) + "\n");
+  } catch {}
+}
+
 function unansweredQueue() {
   const dir = storeDir();
   if (!dir) return [];
@@ -124,7 +159,11 @@ function unansweredQueue() {
     if (prev && prev.ts > ts) continue;
     latest.set(norm, { norm, query: event.query, ts, verdict: event.verdict });
   }
-  const entries = [...latest.values()].filter((e) => UNANSWERED.has(e.verdict));
+  const claims = Object.entries(readClaims());
+  const claimed = (e) => claims.some(([norm, ts]) =>
+    ts >= e.ts && (norm === e.norm || norm.startsWith(e.norm) || e.norm.startsWith(norm))
+  );
+  const entries = [...latest.values()].filter((e) => UNANSWERED.has(e.verdict) && !claimed(e));
   const prefixKept = entries.filter((e) => !entries.some((other) => other.norm.length > e.norm.length && other.norm.startsWith(e.norm)));
   const survived = prefixKept.filter((e) => !prefixKept.some((other) =>
     firstToken(other.norm) === firstToken(e.norm) &&
@@ -135,4 +174,4 @@ function unansweredQueue() {
   return survived.slice(0, CAP).map((e) => ({ query: e.query, ts: e.ts }));
 }
 
-module.exports = { storeDir, unansweredQueue, lanesDir, collectReceipts };
+module.exports = { storeDir, unansweredQueue, claimQueries, lanesDir, collectReceipts };

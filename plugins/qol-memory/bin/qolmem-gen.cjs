@@ -5,7 +5,7 @@ const { spawnSync } = require("node:child_process");
 const { readFileSync, readdirSync, existsSync } = require("node:fs");
 const { homedir } = require("node:os");
 const { join, dirname } = require("node:path");
-const { collectReceipts, unansweredQueue } = require("./qolmem-lib.cjs");
+const { collectReceipts, unansweredQueue, claimQueries } = require("./qolmem-lib.cjs");
 
 const GEN_RE = /^\s*qolmem(\s+gen)?\s*$/i;
 
@@ -119,6 +119,7 @@ ${questions}`;
 const result = spawnSync("qol", ["sessions", "spawn", "--tool", "pi", "--cwd", cwd, "--key", `qolmem-gen-${Date.now()}`, "--model", model, "--title", "qolmem-gen", "--task", brief, "--background", "--silent-wake"], { timeout: 30000 });
 
 if (result.status === 0) {
+  claimQueries(queue);
   block(receiptPrefix + `qolmem: answering lane launched for ${queue.length} question(s); results arrive silently on a later prompt.`);
 }
 
