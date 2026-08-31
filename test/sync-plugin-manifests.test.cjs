@@ -1144,3 +1144,25 @@ test("skips the tool extension drift check when the generator is missing", () =>
   assert.match(result.stderr, /qol not found on PATH; skipping qol-sessions extensions\/hooks\.ts drift check \(advisory\)/);
   assert.ok(!fs.existsSync(path.join(root, "plugins", "qol-sessions", "extensions")));
 });
+
+test("pi extension transforms the prompt a hook rewrote", async () => {
+  const { handlers, ctx, setHookResult } = evalPromptSubmitBlock(
+    generatedPromptSubmitExtension(),
+  );
+
+  setHookResult({ blocked: false, updatedPrompt: "what the heck is this junk" });
+
+  const decision = await handlers.input({ text: "wtf is this shit" }, ctx);
+
+  assert.deepEqual(decision, { action: "transform", text: "what the heck is this junk" });
+});
+
+test("pi extension leaves an untouched prompt alone", async () => {
+  const { handlers, ctx, setHookResult } = evalPromptSubmitBlock(
+    generatedPromptSubmitExtension(),
+  );
+
+  setHookResult({ blocked: false });
+
+  assert.equal(await handlers.input({ text: "ship it" }, ctx), undefined);
+});

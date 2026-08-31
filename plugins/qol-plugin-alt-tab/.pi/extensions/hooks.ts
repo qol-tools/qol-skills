@@ -35,6 +35,7 @@ function runHook(script, input) {
 
   let context;
   let systemMessage;
+  let updatedPrompt;
 
   if (stdout) {
     try {
@@ -58,10 +59,11 @@ function runHook(script, input) {
 
       context = decision?.additionalContext;
       systemMessage = parsed?.systemMessage;
+      updatedPrompt = decision?.updatedPrompt;
     } catch (_ignored) {}
   }
 
-  return { blocked: false, context, systemMessage };
+  return { blocked: false, context, systemMessage, updatedPrompt };
 }
 
 function matchedToolName(matcher, toolName) {

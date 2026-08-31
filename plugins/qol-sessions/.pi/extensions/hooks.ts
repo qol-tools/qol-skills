@@ -41,6 +41,7 @@ function runHook(script, input) {
 
   let context;
   let systemMessage;
+  let updatedPrompt;
 
   if (stdout) {
     try {
@@ -64,10 +65,11 @@ function runHook(script, input) {
 
       context = decision?.additionalContext;
       systemMessage = parsed?.systemMessage;
+      updatedPrompt = decision?.updatedPrompt;
     } catch (_ignored) {}
   }
 
-  return { blocked: false, context, systemMessage };
+  return { blocked: false, context, systemMessage, updatedPrompt };
 }
 
 function matchedToolName(matcher, toolName) {
@@ -90,14 +92,19 @@ export default function (pi: ExtensionAPI) {
   if (USER_PROMPT_SUBMIT_HOOKS.length > 0) {
     pi.on("input", async (event, ctx) => {
       let extraContext = "";
+      let prompt = event.text;
 
       for (const hook of USER_PROMPT_SUBMIT_HOOKS) {
-        const input = JSON.stringify({ cwd: ctx.cwd ?? "", prompt: event.text });
+        const input = JSON.stringify({ cwd: ctx.cwd ?? "", prompt });
         const result = runHook(hook.script, input);
 
         if (result.blocked) {
           ctx.ui?.notify?.(result.reason, "warning");
           return { action: "handled" };
+        }
+
+        if (typeof result.updatedPrompt === "string") {
+          prompt = result.updatedPrompt;
         }
 
         if (result.context) {
@@ -106,6 +113,10 @@ export default function (pi: ExtensionAPI) {
       }
 
       pendingPromptContext = extraContext;
+
+      if (prompt !== event.text) {
+        return { action: "transform", text: prompt };
+      }
     });
 
     pi.on("before_agent_start", async (event, _ctx) => {

@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 
@@ -8,17 +8,12 @@ const PRE_TOOL_USE_HOOKS = [
 ];
 
 const USER_PROMPT_SUBMIT_HOOKS = [
-    { script: "bin/qolmem-gen.cjs" },
+    { script: "bin/soften-prompt.cjs" },
 ];
 
-const SESSION_START_CONTEXT_HOOKS = [
-    { script: "bin/inject-qol-memory-continue.cjs" },
+const STOP_GUARD_HOOKS = [
+    { script: "bin/soften-transcript.cjs" },
 ];
-
-let stashedContext = "";
-let stashedSessionFile = "";
-let injectedSessionFile = "";
-const startupWidgetKeys: string[] = [];
 
 let pendingPromptContext = "";
 
@@ -84,6 +79,14 @@ function matchedToolName(matcher, toolName) {
     .find((name) => name.toLowerCase() === toolName.toLowerCase());
 }
 
+function stopGuardInput(ctx: ExtensionContext) {
+  return JSON.stringify({
+    transcript_path: ctx.sessionManager.getSessionFile() ?? "",
+    cwd: process.cwd(),
+    hook_event_name: "Stop",
+  });
+}
+
 export default function (pi: ExtensionAPI) {
 
   if (USER_PROMPT_SUBMIT_HOOKS.length > 0) {
@@ -127,53 +130,32 @@ export default function (pi: ExtensionAPI) {
     });
   }
 
-  if (SESSION_START_CONTEXT_HOOKS.length > 0) {
-    pi.on("session_start", async (event, ctx) => {
-      const sessionFile = ctx.sessionManager.getSessionFile() ?? "";
-      const sessionId = ctx.sessionManager.getSessionId();
-      let context = "";
+  if (STOP_GUARD_HOOKS.length > 0) {
+    pi.on("session_before_switch", async (_event, ctx) => {
+      const input = stopGuardInput(ctx);
 
-      for (const hook of SESSION_START_CONTEXT_HOOKS) {
-        const result = runHook(hook.script, JSON.stringify({
-          session_id: sessionId,
-          cwd: ctx.sessionManager.getCwd(),
-          session_file: sessionFile,
-          reason: event.reason ?? "",
-        }));
+      for (const hook of STOP_GUARD_HOOKS) {
+        const result = runHook(hook.script, input);
 
-        if (result.systemMessage) {
-          const key = "qol-hook:" + hook.script;
-          startupWidgetKeys.push(key);
-          ctx.ui?.setWidget?.(key, result.systemMessage.split("\n"));
+        if (result.blocked) {
+          return { cancel: true };
         }
-
-        if (result.context) {
-          context += "\n\n" + result.context;
-        }
-      }
-
-      if (context) {
-        stashedContext = context;
-        stashedSessionFile = sessionFile;
-      } else if (sessionFile !== stashedSessionFile) {
-        stashedContext = "";
-        stashedSessionFile = sessionFile;
       }
     });
 
-    pi.on("before_agent_start", async (event, ctx) => {
-      const sessionFile = ctx.sessionManager.getSessionFile() ?? "";
+    pi.on("session_shutdown", async (event, ctx) => {
+      if (event.reason !== "quit") {
+        return;
+      }
 
-      if (
-        stashedContext
-        && sessionFile === stashedSessionFile
-        && sessionFile !== injectedSessionFile
-      ) {
-        injectedSessionFile = sessionFile;
-        for (const key of startupWidgetKeys.splice(0)) {
-          ctx.ui?.setWidget?.(key, undefined);
+      const input = stopGuardInput(ctx);
+
+      for (const hook of STOP_GUARD_HOOKS) {
+        const result = runHook(hook.script, input);
+
+        if (result.blocked) {
+          ctx.ui.notify(result.reason, "warning");
         }
-        return { systemPrompt: (event.systemPrompt ?? "") + "\n\n" + stashedContext };
       }
     });
   }
