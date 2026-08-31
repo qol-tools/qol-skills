@@ -8,7 +8,8 @@ const { join } = require("node:path");
 const WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
 const MIN_QUERY = 4;
 const CAP = 3;
-const BURST_MS = 15000;
+const TYPING_GAP_MS = 5000;
+const TYPING_MIN_PREFIX = 4;
 const UNANSWERED = new Set(["no-memory", "candidates"]);
 const RECEIPT_RE = /^qolmem-gen.*\.receipt\.json$/;
 
@@ -90,8 +91,11 @@ function normalizeQuery(query) {
   return query.toLowerCase().replace(/\s+/g, " ").trim().replace(/\?+$/, "").trim();
 }
 
-function firstToken(norm) {
-  return norm.split(" ")[0];
+function sharedPrefix(a, b) {
+  const limit = Math.min(a.length, b.length);
+  let i = 0;
+  while (i < limit && a[i] === b[i]) i += 1;
+  return i;
 }
 
 function claimsFile() {
@@ -156,20 +160,25 @@ function unansweredQueue() {
     const norm = normalizeQuery(event.query);
     if (norm.length < MIN_QUERY) continue;
     const prev = latest.get(norm);
+    const times = prev ? prev.times : [];
+    times.push(ts);
     if (prev && prev.ts > ts) continue;
-    latest.set(norm, { norm, query: event.query, ts, verdict: event.verdict });
+    latest.set(norm, { norm, query: event.query, ts, times, verdict: event.verdict });
   }
   const claims = Object.entries(readClaims());
   const claimed = (e) => claims.some(([norm, ts]) =>
     ts >= e.ts && (norm === e.norm || norm.startsWith(e.norm) || e.norm.startsWith(norm))
   );
-  const entries = [...latest.values()].filter((e) => UNANSWERED.has(e.verdict) && !claimed(e));
-  const prefixKept = entries.filter((e) => !entries.some((other) => other.norm.length > e.norm.length && other.norm.startsWith(e.norm)));
-  const survived = prefixKept.filter((e) => !prefixKept.some((other) =>
-    firstToken(other.norm) === firstToken(e.norm) &&
-    Math.abs(other.ts - e.ts) <= BURST_MS &&
-    (other.norm.length > e.norm.length || (other.norm.length === e.norm.length && other.ts > e.ts))
-  ));
+  const all = [...latest.values()];
+  const superseded = (e) => all.some((other) => {
+    if (other.norm === e.norm) return false;
+    if (other.norm.length > e.norm.length && other.norm.startsWith(e.norm)) return true;
+    if (!e.times.some((mine) => other.times.some((theirs) => theirs > mine && theirs - mine <= TYPING_GAP_MS))) {
+      return false;
+    }
+    return sharedPrefix(e.norm, other.norm) >= Math.max(TYPING_MIN_PREFIX, Math.min(e.norm.length, other.norm.length) / 2);
+  });
+  const survived = all.filter((e) => UNANSWERED.has(e.verdict) && !claimed(e) && !superseded(e));
   survived.sort((a, b) => b.ts - a.ts);
   return survived.slice(0, CAP).map((e) => ({ query: e.query, ts: e.ts }));
 }
