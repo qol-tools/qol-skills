@@ -1,11 +1,50 @@
 ---
 name: git-push
-description: Use when the user asks to push a repo or branch, or asks you to decide whether to push. Verifies local branch state, syncs with the remote using git pull --rebase before pushing, and handles divergence safely for the qol workspace repos.
+description: Use when the user asks to push a repo or branch, or asks you to decide whether to push. Reviews the unpushed commits for iteration chains and squashes them before they leave the machine, verifies local branch state, syncs with the remote using git pull --rebase before pushing, and handles divergence safely for the qol workspace repos.
 ---
 
 # git-push
 
 Use this skill when the user asks to push a branch or update a remote.
+
+## The squash ritual, before every push
+
+Run this every single time, on every repo, before any verification or pull. A
+push is the moment iteration becomes permanent, and it is the last moment the
+history is still yours to shape.
+
+```bash
+git log --format="%h %ad %s" --date=format:"%m-%d %H:%M" origin/<branch>..<branch>
+```
+
+Read the list and group it. A group is one deliverable that got iterated on: a
+`feat` followed by its `fix`es, a chain of `fix`es on the same file or the same
+symptom, a `refactor` that only exists to make the next commit work. Six commits
+named `fix(launcher): ...` an hour apart are not six deliveries, they are one
+delivery and five corrections nobody outside this machine ever needs to see.
+
+Fold each group into one commit whose subject describes the finished behaviour,
+not the last correction. Independent deliveries stay separate; do not squash a
+monitor fix into a launcher feature because they happen to be adjacent.
+
+```bash
+git tag -f backup/pre-squash-$(date +%F)          # recovery point, unpushed history is still rewritable
+git rebase -i origin/<branch>                     # pick the group head, fixup the rest
+git diff --stat backup/pre-squash-$(date +%F) <branch>   # MUST be empty: squashing changes history, never the tree
+```
+
+`git rebase -i` needs a real editor. When none is available, script it:
+
+```bash
+GIT_SEQUENCE_EDITOR='cp /path/to/todo.txt' GIT_EDITOR=true git rebase -i origin/<branch>
+```
+
+Reword any group head whose subject only described its first attempt. Then
+verify the tree is byte-identical to the backup tag, and only then continue with
+the verification workflow below. If the diff is not empty, reset to the tag and
+start over.
+
+Squash only unpushed commits. Once a commit is on the remote, it stays.
 
 ## Never push without an explicit ask
 
@@ -36,7 +75,7 @@ driver with a manual lockfile conflict resolution.
 
 ## Workflow
 
-1. Check the repository root, branch, upstream, worktree location, and dirty state. Confirm that `main` is in the main clone or that a feature branch is in its worktree.
+1. Run the squash ritual above on the unpushed range, then check the repository root, branch, upstream, worktree location, and dirty state. Confirm that `main` is in the main clone or that a feature branch is in its worktree.
 2. Confirm the requested repository and branch. Call out unrelated dirty changes before any pull, rebase, or push.
 3. **Run the repo-native verification workflow first.** If the repo has a native verification command (`qol check` in qol-tools repos, or an equivalent project script), run that exact workflow before raw tool commands.
 4. **Run the CI-equivalent lint and test suite for the affected scope.** Prefer the repository's affected-target planner or documented verification command. For a standalone Rust repo without a more specific workflow, use:
@@ -55,7 +94,7 @@ driver with a manual lockfile conflict resolution.
 9. Fetch immediately after the push and compare `HEAD` with `origin/<branch>`. Release automation may create a version-only descendant commit as soon as the push lands.
 10. If the remote is strictly ahead by expected automation commits, run `git pull --ff-only` and verify the checkout is clean and synchronized. If histories diverged or the remote commit is unexpected, stop and report instead of guessing.
 
-**NEVER push based on partial verification. NEVER fix-commit-push iteratively. Get it right locally first.**
+**NEVER push based on partial verification. NEVER fix-commit-push iteratively. Get it right locally first, and never push a `feat, fix, fix, fix` chain that should have been one commit.**
 
 ## Guardrails
 
