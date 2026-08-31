@@ -107,22 +107,34 @@ export default function (pi: ExtensionAPI) {
   }
 
   if (USER_PROMPT_SUBMIT_HOOKS.length > 0) {
-    pi.on("before_agent_start", async (event, _ctx) => {
+    pi.on("input", async (event, ctx) => {
       let extraContext = "";
 
       for (const hook of USER_PROMPT_SUBMIT_HOOKS) {
-        const cwd = event.systemPromptOptions?.cwd ?? "";
-        const input = JSON.stringify({ cwd, prompt: event.prompt });
+        const input = JSON.stringify({ cwd: ctx.cwd ?? "", prompt: event.text });
         const result = runHook(hook.script, input);
+
+        if (result.blocked) {
+          ctx.ui?.notify?.(result.reason, "warning");
+          return { action: "handled" };
+        }
 
         if (result.context) {
           extraContext += "\n\n" + result.context;
         }
       }
 
-      if (extraContext) {
-        return { systemPrompt: (event.systemPrompt ?? "") + extraContext };
+      pendingPromptContext = extraContext;
+    });
+
+    pi.on("before_agent_start", async (event, _ctx) => {
+      if (!pendingPromptContext) {
+        return;
       }
+
+      const extraContext = pendingPromptContext;
+      pendingPromptContext = "";
+      return { systemPrompt: (event.systemPrompt ?? "") + extraContext };
     });
   }
 }

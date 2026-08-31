@@ -1,7 +1,7 @@
 {
   "name": "qol-project",
   "description": "Project-level conventions for the qol-tools ecosystem: mission invariants, org layout, shared CI/release contracts, cross-platform architecture guardrails, shared library placement, plugin templates, and clean OS development environments for portability validation. Ships PreToolUse hooks that block architecture-contract violations plus a UserPromptSubmit hook that reminds Claude to consult qol-mission when prompts mention design/scope/issue terms in a qol-tools repo.",
-  "version": "0.8.35",
+  "version": "0.8.36",
   "author": {
     "name": "KMRH47"
   }

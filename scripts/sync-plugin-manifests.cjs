@@ -637,6 +637,7 @@ function piExtensionContent(root, pluginName, failures) {
     lines.push('let stashedSessionFile = "";');
     lines.push('let injectedSessionFile = "";');
   lines.push("const startupWidgetKeys: string[] = [];");
+  lines.push('let pendingPromptContext = "";');
   }
 
   lines.push("");
@@ -746,22 +747,34 @@ function piExtensionContent(root, pluginName, failures) {
   if (userPromptSubmit.length > 0) {
     lines.push("");
     lines.push("  if (USER_PROMPT_SUBMIT_HOOKS.length > 0) {");
-    lines.push('    pi.on("before_agent_start", async (event, _ctx) => {');
+    lines.push('    pi.on("input", async (event, ctx) => {');
     lines.push('      let extraContext = "";');
     lines.push("");
     lines.push("      for (const hook of USER_PROMPT_SUBMIT_HOOKS) {");
-    lines.push('        const cwd = event.systemPromptOptions?.cwd ?? "";');
-    lines.push("        const input = JSON.stringify({ cwd, prompt: event.prompt });");
+    lines.push('        const input = JSON.stringify({ cwd: ctx.cwd ?? "", prompt: event.text });');
     lines.push("        const result = runHook(hook.script, input);");
+    lines.push("");
+    lines.push("        if (result.blocked) {");
+    lines.push('          ctx.ui?.notify?.(result.reason, "warning");');
+    lines.push('          return { action: "handled" };');
+    lines.push("        }");
     lines.push("");
     lines.push("        if (result.context) {");
     lines.push('          extraContext += "\\n\\n" + result.context;');
     lines.push("        }");
     lines.push("      }");
     lines.push("");
-    lines.push("      if (extraContext) {");
-    lines.push('        return { systemPrompt: (event.systemPrompt ?? "") + extraContext };');
+    lines.push("      pendingPromptContext = extraContext;");
+    lines.push("    });");
+    lines.push("");
+    lines.push('    pi.on("before_agent_start", async (event, _ctx) => {');
+    lines.push("      if (!pendingPromptContext) {");
+    lines.push("        return;");
     lines.push("      }");
+    lines.push("");
+    lines.push("      const extraContext = pendingPromptContext;");
+    lines.push('      pendingPromptContext = "";');
+    lines.push('      return { systemPrompt: (event.systemPrompt ?? "") + extraContext };');
     lines.push("    });");
     lines.push("  }");
   }

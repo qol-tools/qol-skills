@@ -792,6 +792,84 @@ test("root kimi manifest drops skills and hooks that no longer exist", () => {
   assert.equal(rootManifest.hooks, undefined, "no fixture plugin ships hooks");
 });
 
+function generatedPromptSubmitExtension() {
+  const root = makeRepo();
+  writeAlphaHooks(root, {
+    hooks: {
+      UserPromptSubmit: [
+        {
+          hooks: [
+            { type: "command", command: "node -e 'const fs=require(\"node:fs\");' alpha bin/qolmem-gen.cjs" },
+          ],
+        },
+      ],
+    },
+  });
+
+  execFileSync("node", [script, "--root", root], { stdio: "pipe" });
+
+  return fs.readFileSync(
+    path.join(root, "plugins", "alpha", ".pi", "extensions", "hooks.ts"),
+    "utf8",
+  );
+}
+
+function evalPromptSubmitBlock(source) {
+  const start = source.indexOf('    pi.on("input"');
+  const end = source.lastIndexOf("  }");
+  const code =
+    `let pendingPromptContext = "";\n`
+    + source.slice(start, end)
+    + `\nreturn { pendingPromptContext: () => pendingPromptContext };`;
+
+  const handlers = {};
+  const pi = { on: (event, fn) => { handlers[event] = fn; } };
+  const hooks = [{ script: "bin/qolmem-gen.cjs" }];
+  let hookResult = {};
+  const runHook = () => hookResult;
+  const notified = [];
+
+  const api = new Function("pi", "runHook", "USER_PROMPT_SUBMIT_HOOKS", code)(pi, runHook, hooks);
+  const ctx = {
+    cwd: "/cwd",
+    ui: { notify: (message, type) => notified.push([message, type]) },
+  };
+
+  return { handlers, api, ctx, notified, setHookResult: (r) => { hookResult = r; } };
+}
+
+test("pi extension stops the turn when a prompt hook blocks", async () => {
+  const { handlers, ctx, notified, setHookResult } = evalPromptSubmitBlock(
+    generatedPromptSubmitExtension(),
+  );
+
+  setHookResult({ blocked: true, reason: "answering lane launched" });
+
+  const decision = await handlers.input({ text: "qolmem gen" }, ctx);
+
+  assert.deepEqual(decision, { action: "handled" });
+  assert.deepEqual(notified, [["answering lane launched", "warning"]]);
+});
+
+test("pi extension injects an unblocked prompt hook's context into the next turn", async () => {
+  const { handlers, ctx, setHookResult } = evalPromptSubmitBlock(
+    generatedPromptSubmitExtension(),
+  );
+
+  setHookResult({ context: "REMINDER" });
+
+  assert.equal(await handlers.input({ text: "hello" }, ctx), undefined);
+
+  const first = await handlers.before_agent_start({ systemPrompt: "BASE" }, ctx);
+  assert.equal(first.systemPrompt, "BASE\n\nREMINDER");
+
+  assert.equal(
+    await handlers.before_agent_start({ systemPrompt: "BASE" }, ctx),
+    undefined,
+    "context is injected once per submitted prompt",
+  );
+});
+
 function generatedPiExtension(root, matcher) {
   writeAlphaHooks(root, {
     hooks: {
