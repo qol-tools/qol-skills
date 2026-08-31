@@ -840,11 +840,20 @@ test("pi extension forwards the real tool name and input", () => {
   assert.doesNotMatch(source, /tool_name: "Bash"/);
 });
 
-test("pi extension shows the hook systemMessage to the user at session start", () => {
-  const source = generatedSessionStartExtension();
+test("pi extension shows every systemMessage line until the first turn", async () => {
+  const { handlers, widgets, setHookResult, ctx } = evalSessionStartBlock(generatedSessionStartExtension());
 
-  assert.match(source, /systemMessage = parsed\?\.systemMessage;/);
-  assert.match(source, /ctx\.ui\?\.notify\?\.\(result\.systemMessage, "info"\);/);
+  setHookResult({ context: "BLOCK", systemMessage: "first line\nsecond line" });
+  await handlers.session_start({ reason: "startup" }, ctx("s1.jsonl"));
+
+  assert.deepEqual(
+    widgets["qol-hook:bin/inject-qol-memory-continue.cjs"],
+    ["first line", "second line"],
+  );
+
+  await handlers.before_agent_start({ systemPrompt: "BASE" }, ctx("s1.jsonl"));
+
+  assert.equal(widgets["qol-hook:bin/inject-qol-memory-continue.cjs"], undefined);
 });
 
 test("pi extension runs every hook matching the tool, not just the first", () => {
@@ -896,6 +905,7 @@ function evalSessionStartBlock(source) {
     `let stashedContext = "";\n`
     + `let stashedSessionFile = "";\n`
     + `let injectedSessionFile = "";\n`
+    + `const startupWidgetKeys = [];\n`
     + block
     + `\nreturn { stashedContext: () => stashedContext, stashedSessionFile: () => stashedSessionFile, injectedSessionFile: () => injectedSessionFile };`;
 
@@ -906,11 +916,16 @@ function evalSessionStartBlock(source) {
   const runHook = () => hookResult;
 
   const api = new Function("pi", "runHook", "SESSION_START_CONTEXT_HOOKS", code)(pi, runHook, hooks);
-  const ctx = (file) => ({ sessionManager: { getSessionFile: () => file, getSessionId: () => "id", getCwd: () => "/cwd" } });
+  const widgets = {};
+  const ctx = (file) => ({
+    sessionManager: { getSessionFile: () => file, getSessionId: () => "id", getCwd: () => "/cwd" },
+    ui: { setWidget: (key, content) => { widgets[key] = content; } },
+  });
 
   return {
     handlers,
     api,
+    widgets,
     setHookResult: (r) => { hookResult = r; },
     ctx,
   };

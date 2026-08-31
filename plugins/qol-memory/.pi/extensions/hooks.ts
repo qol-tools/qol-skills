@@ -18,6 +18,7 @@ const SESSION_START_CONTEXT_HOOKS = [
 let stashedContext = "";
 let stashedSessionFile = "";
 let injectedSessionFile = "";
+const startupWidgetKeys: string[] = [];
 
 function runHook(script, input) {
   const scriptPath = path.join(PLUGIN_DIR, script);
@@ -116,7 +117,9 @@ export default function (pi: ExtensionAPI) {
         }));
 
         if (result.systemMessage) {
-          ctx.ui?.notify?.(result.systemMessage, "info");
+          const key = "qol-hook:" + hook.script;
+          startupWidgetKeys.push(key);
+          ctx.ui?.setWidget?.(key, result.systemMessage.split("\n"));
         }
 
         if (result.context) {
@@ -142,6 +145,9 @@ export default function (pi: ExtensionAPI) {
         && sessionFile !== injectedSessionFile
       ) {
         injectedSessionFile = sessionFile;
+        for (const key of startupWidgetKeys.splice(0)) {
+          ctx.ui?.setWidget?.(key, undefined);
+        }
         return { systemPrompt: (event.systemPrompt ?? "") + "\n\n" + stashedContext };
       }
     });

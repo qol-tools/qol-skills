@@ -636,6 +636,7 @@ function piExtensionContent(root, pluginName, failures) {
     lines.push('let stashedContext = "";');
     lines.push('let stashedSessionFile = "";');
     lines.push('let injectedSessionFile = "";');
+  lines.push("const startupWidgetKeys: string[] = [];");
   }
 
   lines.push("");
@@ -782,7 +783,9 @@ function piExtensionContent(root, pluginName, failures) {
     lines.push("        }));");
     lines.push("");
     lines.push("        if (result.systemMessage) {");
-    lines.push('          ctx.ui?.notify?.(result.systemMessage, "info");');
+    lines.push('          const key = "qol-hook:" + hook.script;');
+    lines.push("          startupWidgetKeys.push(key);");
+    lines.push('          ctx.ui?.setWidget?.(key, result.systemMessage.split("\\n"));');
     lines.push("        }");
     lines.push("");
     lines.push("        if (result.context) {");
@@ -808,6 +811,9 @@ function piExtensionContent(root, pluginName, failures) {
     lines.push("        && sessionFile !== injectedSessionFile");
     lines.push("      ) {");
     lines.push("        injectedSessionFile = sessionFile;");
+    lines.push("        for (const key of startupWidgetKeys.splice(0)) {");
+    lines.push("          ctx.ui?.setWidget?.(key, undefined);");
+    lines.push("        }");
     lines.push('        return { systemPrompt: (event.systemPrompt ?? "") + "\\n\\n" + stashedContext };');
     lines.push("      }");
     lines.push("    });");
