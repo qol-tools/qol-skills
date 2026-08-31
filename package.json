@@ -19,7 +19,6 @@
       "./plugins/qol-project/.pi/extensions",
       "./plugins/qol-sessions/.pi/extensions",
       "./plugins/qol-sessions/extensions",
-      "./plugins/qol-softwords/.pi/extensions",
       "./plugins/qol-tray/.pi/extensions",
       "./plugins/qol-workflow/.pi/extensions",
       "./plugins/qol-workflow-nodes/.pi/extensions"

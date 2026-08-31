@@ -26,7 +26,6 @@
     "./plugins/qol-project/skills/",
     "./plugins/qol-sessions/skills/",
     "./plugins/qol-shot/skills/",
-    "./plugins/qol-softwords/skills/",
     "./plugins/qol-trace-discipline/skills/",
     "./plugins/qol-tray/skills/",
     "./plugins/qol-voice/skills/",
@@ -94,14 +93,6 @@
     {
       "event": "Stop",
       "command": "node plugins/qol-sessions/bin/guard-session-feature-loop.cjs"
-    },
-    {
-      "event": "UserPromptSubmit",
-      "command": "node plugins/qol-softwords/bin/soften-prompt.cjs"
-    },
-    {
-      "event": "Stop",
-      "command": "node plugins/qol-softwords/bin/soften-transcript.cjs"
     },
     {
       "event": "SessionStart",

@@ -102,10 +102,6 @@
     {
       "id": "qol-memory",
       "source": "../plugins/qol-memory"
-    },
-    {
-      "id": "qol-softwords",
-      "source": "../plugins/qol-softwords"
     }
   ]
 }
