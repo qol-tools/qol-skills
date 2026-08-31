@@ -38,6 +38,7 @@ function runHook(script, input) {
   }
 
   let context;
+  let systemMessage;
 
   if (stdout) {
     try {
@@ -60,10 +61,11 @@ function runHook(script, input) {
       }
 
       context = decision?.additionalContext;
+      systemMessage = parsed?.systemMessage;
     } catch (_ignored) {}
   }
 
-  return { blocked: false, context };
+  return { blocked: false, context, systemMessage };
 }
 
 function matchedToolName(matcher, toolName) {

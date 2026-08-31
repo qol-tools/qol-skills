@@ -662,6 +662,7 @@ function piExtensionContent(root, pluginName, failures) {
   lines.push("  }");
   lines.push("");
   lines.push("  let context;");
+  lines.push("  let systemMessage;");
   lines.push("");
   lines.push("  if (stdout) {");
   lines.push("    try {");
@@ -684,10 +685,11 @@ function piExtensionContent(root, pluginName, failures) {
   lines.push("      }");
   lines.push("");
   lines.push("      context = decision?.additionalContext;");
+  lines.push("      systemMessage = parsed?.systemMessage;");
   lines.push("    } catch (_ignored) {}");
   lines.push("  }");
   lines.push("");
-  lines.push("  return { blocked: false, context };");
+  lines.push("  return { blocked: false, context, systemMessage };");
   lines.push("}");
   lines.push("");
   lines.push("function matchedToolName(matcher, toolName) {");
@@ -778,6 +780,10 @@ function piExtensionContent(root, pluginName, failures) {
     lines.push("          session_file: sessionFile,");
     lines.push('          reason: event.reason ?? "",');
     lines.push("        }));");
+    lines.push("");
+    lines.push("        if (result.systemMessage) {");
+    lines.push('          ctx.ui?.notify?.(result.systemMessage, "info");');
+    lines.push("        }");
     lines.push("");
     lines.push("        if (result.context) {");
     lines.push('          context += "\\n\\n" + result.context;');

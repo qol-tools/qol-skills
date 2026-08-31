@@ -45,6 +45,7 @@ function runHook(script, input) {
   }
 
   let context;
+  let systemMessage;
 
   if (stdout) {
     try {
@@ -67,10 +68,11 @@ function runHook(script, input) {
       }
 
       context = decision?.additionalContext;
+      systemMessage = parsed?.systemMessage;
     } catch (_ignored) {}
   }
 
-  return { blocked: false, context };
+  return { blocked: false, context, systemMessage };
 }
 
 function matchedToolName(matcher, toolName) {
@@ -141,6 +143,10 @@ export default function (pi: ExtensionAPI) {
           session_file: sessionFile,
           reason: event.reason ?? "",
         }));
+
+        if (result.systemMessage) {
+          ctx.ui?.notify?.(result.systemMessage, "info");
+        }
 
         if (result.context) {
           context += "\n\n" + result.context;

@@ -840,6 +840,13 @@ test("pi extension forwards the real tool name and input", () => {
   assert.doesNotMatch(source, /tool_name: "Bash"/);
 });
 
+test("pi extension shows the hook systemMessage to the user at session start", () => {
+  const source = generatedSessionStartExtension();
+
+  assert.match(source, /systemMessage = parsed\?\.systemMessage;/);
+  assert.match(source, /ctx\.ui\?\.notify\?\.\(result\.systemMessage, "info"\);/);
+});
+
 test("pi extension runs every hook matching the tool, not just the first", () => {
   const source = generatedPiExtension(makeRepo(), "Bash");
 
