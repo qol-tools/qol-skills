@@ -7,6 +7,7 @@ const { join } = require("node:path");
 
 const WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
 const MIN_QUERY = 4;
+const QUESTION_RE = /^(how|what|why|where|when|which|who|whose|can|could|does|do|did|is|are|was|were|should|would|will)\b/;
 const CAP = 3;
 const TYPING_GAP_MS = 5000;
 const TYPING_MIN_PREFIX = 4;
@@ -122,6 +123,7 @@ function claimQueries(queries) {
   for (const query of queries) {
     const norm = normalizeQuery(typeof query === "string" ? query : query?.query ?? "");
     if (norm.length < MIN_QUERY) continue;
+    if (!QUESTION_RE.test(norm) && !/\?$/.test(event.query.trim())) continue;
     claims[norm] = now;
   }
   const cutoff = now - WINDOW_MS;
@@ -159,6 +161,7 @@ function unansweredQueue() {
     if (!Number.isFinite(ts) || ts < cutoff) continue;
     const norm = normalizeQuery(event.query);
     if (norm.length < MIN_QUERY) continue;
+    if (!QUESTION_RE.test(norm) && !/\?$/.test(event.query.trim())) continue;
     const prev = latest.get(norm);
     const times = prev ? prev.times : [];
     times.push(ts);

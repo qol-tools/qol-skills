@@ -53,3 +53,21 @@ test("a retyped question after the typing gap is not treated as an edit", () => 
 
   assert.equal(queue.length, 2);
 });
+
+test("a lookup that is not phrased as a question is never queued", () => {
+  const store = mkdtempSync(join(tmpdir(), "qolmem-token-"));
+  keystroke(store, "kcd2", 0);
+  keystroke(store, "trail animation", 30000);
+  keystroke(store, "how to run kcd2", 60000);
+
+  const queue = freshLib(store).unansweredQueue().map((entry) => entry.query);
+
+  assert.deepEqual(queue, ["how to run kcd2"]);
+});
+
+test("an explicit question mark counts even without a question word", () => {
+  const store = mkdtempSync(join(tmpdir(), "qolmem-mark-"));
+  keystroke(store, "trail animation?", 0);
+
+  assert.equal(freshLib(store).unansweredQueue().length, 1);
+});
