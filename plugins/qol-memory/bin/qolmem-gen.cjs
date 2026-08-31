@@ -44,9 +44,13 @@ function readStdin() {
   }
 }
 
+// Exiting 2 makes the host render "operation blocked by hook" followed by the
+// hook's entire command, and this hook is wired as a long inline resolver, so
+// a one-line status arrived buried in a screenful of shell. The JSON decision
+// blocks the prompt the same way and prints only the reason.
 function block(message) {
-  process.stderr.write(message + "\n");
-  process.exit(2);
+  process.stdout.write(JSON.stringify({ decision: "block", reason: message }) + "\n");
+  process.exit(0);
 }
 
 function spawnModel() {
