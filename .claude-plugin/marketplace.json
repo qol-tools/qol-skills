@@ -225,7 +225,7 @@
       "name": "qol-memory",
       "description": "Long-context memory for agent sessions: ask settled facts from prior sessions, capture new ones, and get the units that landed since your last session in this directory.",
       "source": "./plugins/qol-memory",
-      "version": "0.1.12",
+      "version": "0.1.13",
       "author": {
         "name": "KMRH47"
       }

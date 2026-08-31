@@ -174,4 +174,32 @@ function unansweredQueue() {
   return survived.slice(0, CAP).map((e) => ({ query: e.query, ts: e.ts }));
 }
 
-module.exports = { storeDir, unansweredQueue, claimQueries, lanesDir, collectReceipts };
+async function dropAnswered(queue, timeoutMs = 1500) {
+  if (!queue.length) return queue;
+  let postJson;
+  try {
+    ({ postJson } = require("./qol-tray-http.cjs"));
+  } catch {
+    return queue;
+  }
+  const verdicts = await Promise.all(queue.map(async (entry) => {
+    try {
+      const result = await postJson(
+        "/api/plugins/qol-memory/queries/ask",
+        { query: entry.query, brief: true, no_log: true },
+        timeoutMs,
+      );
+      if (!result || typeof result.status !== "number") return null;
+      if (result.status < 200 || result.status >= 300) return null;
+      return result.body && typeof result.body === "object" ? result.body : null;
+    } catch {
+      return null;
+    }
+  }));
+  return queue.filter((entry, i) => {
+    const body = verdicts[i];
+    return !(body && body.verdict === "answered" && body.answer);
+  });
+}
+
+module.exports = { storeDir, unansweredQueue, claimQueries, dropAnswered, lanesDir, collectReceipts };

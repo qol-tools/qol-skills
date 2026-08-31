@@ -2,7 +2,7 @@
 
 const fs = require('node:fs');
 const { postJson } = require('./qol-tray-http.cjs');
-const { collectReceipts, unansweredQueue } = require('./qolmem-lib.cjs');
+const { collectReceipts, unansweredQueue, dropAnswered } = require('./qolmem-lib.cjs');
 
 function parseInput(raw) {
   try {
@@ -42,7 +42,7 @@ async function run() {
   if (!input) return;
   if (process.env.QOL_MEMORY_CONTINUE_DISABLE === '1') return;
   const receiptText = collectReceipts().map((r) => r.summary).join('\n');
-  const queue = unansweredQueue();
+  const queue = await dropAnswered(unansweredQueue());
   const count = queue.length;
   const countLine = count > 0
     ? `qol-memory: ${count} unanswered launcher questions - type: qolmem gen`
