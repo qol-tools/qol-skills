@@ -18,6 +18,8 @@ const USER_PROMPT_SUBMIT_HOOKS = [
     { script: "bin/qol-monorepo-rules-context.cjs" },
 ];
 
+let pendingPromptContext = "";
+
 function runHook(script, input) {
   const scriptPath = path.join(PLUGIN_DIR, script);
 

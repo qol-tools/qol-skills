@@ -15,6 +15,8 @@ const STOP_GUARD_HOOKS = [
     { script: "bin/guard-session-feature-loop.cjs" },
 ];
 
+let pendingPromptContext = "";
+
 function runHook(script, input) {
   const scriptPath = path.join(PLUGIN_DIR, script);
 

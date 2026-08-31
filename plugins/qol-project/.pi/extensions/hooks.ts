@@ -22,6 +22,7 @@ let stashedContext = "";
 let stashedSessionFile = "";
 let injectedSessionFile = "";
 const startupWidgetKeys: string[] = [];
+
 let pendingPromptContext = "";
 
 function runHook(script, input) {

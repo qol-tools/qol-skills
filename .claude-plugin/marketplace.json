@@ -9,7 +9,7 @@
       "name": "qol-plugin-alt-tab",
       "description": "Specialist agent and skills for the qol-tray alt-tab plugin: GPUI window list, X11/macOS preview capture, AX/CG discovery, daemon lifecycle, settings UI, release flow, and a SubagentStop hook that auto-curates agent MEMORY.md.",
       "source": "./plugins/qol-plugin-alt-tab",
-      "version": "0.3.6",
+      "version": "0.3.7",
       "author": {
         "name": "KMRH47"
       }
@@ -54,7 +54,7 @@
       "name": "qol-plugin-lights",
       "description": "Specialist agent and skills for the qol-tray lights plugin: backend adapters (Zigbee2MQTT first), ZNP serial stack, daemon/runtime split, auto-config settings UI, and a SubagentStop hook that auto-curates agent MEMORY.md.",
       "source": "./plugins/qol-plugin-lights",
-      "version": "0.2.9",
+      "version": "0.2.10",
       "author": {
         "name": "KMRH47"
       }
@@ -90,7 +90,7 @@
       "name": "qol-tray",
       "description": "Host-app plugin for qol-tray: specialist agents (frontend, backend) plus deep skills for core architecture (qol-tray-core), Rust internals, UI systems, dev logging, world canvas, Profile feature, release flow, and apps-testing. Includes hooks for routing edits to the right specialist agent and reflecting agent learnings.",
       "source": "./plugins/qol-tray",
-      "version": "0.6.14",
+      "version": "0.6.15",
       "author": {
         "name": "KMRH47"
       }
@@ -99,7 +99,7 @@
       "name": "qol-workflow",
       "description": "Cross-cutting workflow conventions for any qol-tools repo: commit message conventions (with the no-attribution hard rule), git push and worktree workflows, and universal coding guidelines. Ships PreToolUse hooks that (1) inject commit context, (2) block AI-attribution lines, (3) block branch-creation/switching inside a qol-* main clone (worktrees-only rule), (4) deny per-tool `match` branches added to shared CLI-sessions code (the naming/backends law).",
       "source": "./plugins/qol-workflow",
-      "version": "0.4.19",
+      "version": "0.4.20",
       "author": {
         "name": "KMRH47"
       }
@@ -117,7 +117,7 @@
       "name": "qol-project",
       "description": "Project-level conventions for the qol-tools ecosystem: mission invariants, org layout, shared CI/release contracts, cross-platform architecture guardrails, shared library placement, plugin templates, and clean OS development environments for portability validation. Ships PreToolUse hooks that block architecture-contract violations plus a UserPromptSubmit hook that reminds Claude to consult qol-mission when prompts mention design/scope/issue terms in a qol-tools repo.",
       "source": "./plugins/qol-project",
-      "version": "0.8.36",
+      "version": "0.8.37",
       "author": {
         "name": "KMRH47"
       }
@@ -189,7 +189,7 @@
       "name": "qol-sessions",
       "description": "Architect-to-implementer feature loop for independent terminals with event-signalled rounds, explicit closure, and a canonical final report.",
       "source": "./plugins/qol-sessions",
-      "version": "0.5.47",
+      "version": "0.5.48",
       "author": {
         "name": "KMRH47"
       }
@@ -216,7 +216,7 @@
       "name": "qol-workflow-nodes",
       "description": "Personal productivity rule for KMRH47: when work repeats or performance work needs before/after evidence, convert it into deterministic workflow nodes, measurement ledgers, explicit inputs, outputs, reports, and composable orchestrators instead of burning human memory and agent tokens.",
       "source": "./plugins/qol-workflow-nodes",
-      "version": "0.2.6",
+      "version": "0.2.7",
       "author": {
         "name": "KMRH47"
       }
@@ -225,7 +225,7 @@
       "name": "qol-memory",
       "description": "Long-context memory for agent sessions: ask settled facts from prior sessions, capture new ones, and get the units that landed since your last session in this directory.",
       "source": "./plugins/qol-memory",
-      "version": "0.1.11",
+      "version": "0.1.12",
       "author": {
         "name": "KMRH47"
       }

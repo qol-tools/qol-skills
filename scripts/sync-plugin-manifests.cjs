@@ -636,8 +636,12 @@ function piExtensionContent(root, pluginName, failures) {
     lines.push('let stashedContext = "";');
     lines.push('let stashedSessionFile = "";');
     lines.push('let injectedSessionFile = "";');
-  lines.push("const startupWidgetKeys: string[] = [];");
-  lines.push('let pendingPromptContext = "";');
+    lines.push("const startupWidgetKeys: string[] = [];");
+  }
+
+  if (userPromptSubmit.length > 0) {
+    lines.push("");
+    lines.push('let pendingPromptContext = "";');
   }
 
   lines.push("");

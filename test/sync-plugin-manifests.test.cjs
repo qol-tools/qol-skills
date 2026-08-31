@@ -838,6 +838,13 @@ function evalPromptSubmitBlock(source) {
   return { handlers, api, ctx, notified, setHookResult: (r) => { hookResult = r; } };
 }
 
+test("pi extension declares its prompt state without a session-start hook", () => {
+  const source = generatedPromptSubmitExtension();
+
+  assert.match(source, /^let pendingPromptContext = "";$/m);
+  assert.doesNotMatch(source, /startupWidgetKeys/);
+});
+
 test("pi extension stops the turn when a prompt hook blocks", async () => {
   const { handlers, ctx, notified, setHookResult } = evalPromptSubmitBlock(
     generatedPromptSubmitExtension(),
