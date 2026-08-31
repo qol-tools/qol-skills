@@ -834,9 +834,17 @@ test("pi extension matches every tool name in an alternation matcher", () => {
 test("pi extension forwards the real tool name and input", () => {
   const source = generatedPiExtension(makeRepo(), "Edit|Write|MultiEdit");
 
-  assert.match(source, /tool_name: matchedToolName\(hook\.matcher, event\.toolName\)/);
+  assert.match(source, /const matched = hook\.matcher\n\s*&& matchedToolName\(hook\.matcher, event\.toolName\);/);
+  assert.match(source, /tool_name: matched,/);
   assert.match(source, /tool_input: event\.input \?\? \{\}/);
   assert.doesNotMatch(source, /tool_name: "Bash"/);
+});
+
+test("pi extension runs every hook matching the tool, not just the first", () => {
+  const source = generatedPiExtension(makeRepo(), "Bash");
+
+  assert.match(source, /for \(const hook of PRE_TOOL_USE_HOOKS\) \{/);
+  assert.doesNotMatch(source, /PRE_TOOL_USE_HOOKS\.find\(/);
 });
 
 test("pi extension blocks on a JSON permission denial", () => {

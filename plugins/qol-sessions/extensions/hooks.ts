@@ -300,6 +300,7 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
     }), { description: "Whole set of lanes to launch in one call, one entry per lane, sized to the work the set has to cover. Replaces key, task and title. Two or more lanes are grouped automatically, so the set wakes you once with one combined report instead of once per lane; pass `group` only to name that set yourself. Spawning a second ungrouped lane while another is still running is refused for exactly this reason" })),
       group: Type.Optional(Type.String({ description: "Optional group name; registers the lane as a member of a grouped-research set so completed rounds aggregate into one combined wake under the sessions data dir when every member completes" })),
       resume: Type.Optional(Type.Boolean({ description: "Force a resume of the harness's persisted session for this key when a new terminal is launched. Resume is automatic when the spawn ledger holds a session id for the key (same tool and cwd); resume: false opts out. The spawn outcome reports resume and resume_detail" })),
+      silent_wake: Type.Optional(Type.Boolean({ description: "skip the parent wake message; the lane report and a receipt json are still written and the lane terminal still closes" })),
     }),
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       const args = ["spawn", "--tool", params.tool, "--cwd", params.cwd];
@@ -445,7 +446,7 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
     name: "session_close",
     label: "Close an implementation session",
     description:
-      "Terminate a spawned implementation session's terminal after its feature loop is closed. Refuses the calling terminal, sessions without a spawn identity, and sessions whose loop is still open; close the loop via session_loop_close first.",
+      "Terminate a spawned implementation session's terminal. This is the one-call recovery for a hung lane: an open round is discarded with the close, and closing a terminal that is already gone succeeds. Refuses the calling terminal, sessions without a spawn identity, and a lane holding a completed round awaiting review; review that round and use session_loop_close.",
     parameters: Type.Object({
       session: Type.String({ description: "Stable session token of the spawned implementation session to close" }),
     }),

@@ -87,22 +87,23 @@ export default function (pi: ExtensionAPI) {
         return;
       }
 
-      const hook = PRE_TOOL_USE_HOOKS.find(
-        (h) => h.matcher && matchedToolName(h.matcher, event.toolName)
-      );
+      for (const hook of PRE_TOOL_USE_HOOKS) {
+        const matched = hook.matcher
+          && matchedToolName(hook.matcher, event.toolName);
 
-      if (!hook) {
-        return;
-      }
+        if (!matched) {
+          continue;
+        }
 
-      const input = JSON.stringify({
-        tool_name: matchedToolName(hook.matcher, event.toolName),
-        tool_input: event.input ?? {},
-      });
-      const result = runHook(hook.script, input);
+        const input = JSON.stringify({
+          tool_name: matched,
+          tool_input: event.input ?? {},
+        });
+        const result = runHook(hook.script, input);
 
-      if (result.blocked) {
-        return { block: true, reason: result.reason };
+        if (result.blocked) {
+          return { block: true, reason: result.reason };
+        }
       }
     });
   }
