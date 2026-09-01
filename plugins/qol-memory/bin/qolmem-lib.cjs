@@ -13,6 +13,7 @@ const TYPING_GAP_MS = 5000;
 const TYPING_MIN_PREFIX = 4;
 const UNANSWERED = new Set(["no-memory", "candidates"]);
 const RECEIPT_RE = /^qolmem-gen.*\.receipt\.json$/;
+const STOPWORDS = new Set(["what", "which", "how", "why", "who", "when", "where", "is", "are", "was", "were", "the", "a", "an", "of", "in", "to", "do", "does", "did", "can", "could", "should", "would", "will"]);
 
 function storeDir() {
   if (process.env.QOL_MEMORY_STORE && process.env.QOL_MEMORY_STORE.length) {
@@ -92,6 +93,12 @@ function normalizeQuery(query) {
   return query.toLowerCase().replace(/\s+/g, " ").trim().replace(/\?+$/, "").trim();
 }
 
+function contentWords(norm) {
+  const words = norm.split(" ").filter(Boolean);
+  if (words.length && QUESTION_RE.test(words[0])) words.shift();
+  return words.filter((w) => !STOPWORDS.has(w));
+}
+
 function sharedPrefix(a, b) {
   const limit = Math.min(a.length, b.length);
   let i = 0;
@@ -121,10 +128,16 @@ function claimQueries(queries) {
   const claims = readClaims();
   const now = Date.now();
   for (const query of queries) {
-    const norm = normalizeQuery(typeof query === "string" ? query : query?.query ?? "");
-    if (norm.length < MIN_QUERY) continue;
-    if (!QUESTION_RE.test(norm) && !/\?$/.test(event.query.trim())) continue;
-    claims[norm] = now;
+    const surfaces = typeof query === "string"
+      ? [query]
+      : [query?.query ?? "", ...(Array.isArray(query?.variants) ? query.variants : [])];
+    for (const surface of surfaces) {
+      if (typeof surface !== "string") continue;
+      const norm = normalizeQuery(surface);
+      if (norm.length < MIN_QUERY) continue;
+      if (!QUESTION_RE.test(norm) && !/\?$/.test(surface.trim())) continue;
+      claims[norm] = now;
+    }
   }
   const cutoff = now - WINDOW_MS;
   for (const [norm, ts] of Object.entries(claims)) {
@@ -183,7 +196,21 @@ function unansweredQueue() {
   });
   const survived = all.filter((e) => UNANSWERED.has(e.verdict) && !claimed(e) && !superseded(e));
   survived.sort((a, b) => b.ts - a.ts);
-  return survived.slice(0, CAP).map((e) => ({ query: e.query, ts: e.ts }));
+  const groups = [];
+  for (const entry of survived) {
+    const words = contentWords(entry.norm);
+    const group = words.length
+      ? groups.find((g) => g.words.length === words.length && words.every((w) => g.words.includes(w)))
+      : null;
+    if (group) {
+      group.variants.push(entry.query);
+      if (entry.ts > group.ts) group.ts = entry.ts;
+      if (entry.query.length > group.query.length) group.query = entry.query;
+    } else {
+      groups.push({ words, query: entry.query, ts: entry.ts, variants: [entry.query] });
+    }
+  }
+  return groups.slice(0, CAP).map((g) => ({ query: g.query, ts: g.ts, variants: g.variants }));
 }
 
 async function dropAnswered(queue, timeoutMs = 1500) {
@@ -208,10 +235,17 @@ async function dropAnswered(queue, timeoutMs = 1500) {
       return null;
     }
   }));
-  return queue.filter((entry, i) => {
+  const dropped = [];
+  const kept = queue.filter((entry, i) => {
     const body = verdicts[i];
-    return !(body && body.verdict === "answered" && body.answer);
+    if (body && body.verdict === "answered" && body.answer) {
+      dropped.push(entry);
+      return false;
+    }
+    return true;
   });
+  if (dropped.length) claimQueries(dropped);
+  return kept;
 }
 
 module.exports = { storeDir, unansweredQueue, claimQueries, dropAnswered, lanesDir, collectReceipts };

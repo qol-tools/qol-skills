@@ -54,6 +54,16 @@ test("a question asked again after its claim comes back", () => {
   assert.equal(lib.unansweredQueue().length, 1, "a fresh ask outranks an older claim");
 });
 
+test("claiming a batch with a bare question-mark query writes its claim", () => {
+  const store = mkdtempSync(join(tmpdir(), "qolmem-mark-claim-"));
+  retrievals(store, ["trail animation?"]);
+  const lib = freshLib(store);
+
+  lib.claimQueries(lib.unansweredQueue());
+
+  assert.deepEqual(lib.unansweredQueue(), []);
+});
+
 const http = require("node:http");
 
 function askServer(verdictFor) {
@@ -79,6 +89,20 @@ function stop(server) {
   return new Promise((resolve) => server.close(resolve));
 }
 
+test("two questions differing only in the interrogative collapse to one entry", () => {
+  const store = mkdtempSync(join(tmpdir(), "qolmem-collapse-"));
+  retrievals(store, ["what language is qol composed of"], -120000);
+  retrievals(store, ["which language is qol composed of"], -60000);
+  const lib = freshLib(store);
+
+  const queue = lib.unansweredQueue();
+  assert.equal(queue.length, 1);
+
+  lib.claimQueries(queue);
+
+  assert.deepEqual(lib.unansweredQueue(), [], "claiming the entry covers both spellings");
+});
+
 test("a question the store can now answer leaves the queue", async () => {
   const store = mkdtempSync(join(tmpdir(), "qolmem-drop-"));
   retrievals(store, ["what language is qol monorepo"]);
@@ -99,6 +123,27 @@ test("a question the store can now answer leaves the queue", async () => {
     assert.deepEqual(kept.map((e) => e.query), ["how to run kcd2 in debug mode"]);
     assert.equal(asked.length, 2);
     assert.equal(asked[0].no_log, true, "a re-ask must not append a retrieval event");
+  } finally {
+    await stop(server);
+    delete process.env.QOL_TRAY_BASE_URL;
+    delete process.env.QOL_TRAY_HTTP_TOKEN;
+  }
+});
+
+test("a dropped question is claimed so it never refills the queue", async () => {
+  const store = mkdtempSync(join(tmpdir(), "qolmem-drop-claim-"));
+  retrievals(store, ["what language is qol monorepo"]);
+  const lib = freshLib(store);
+  const { server } = askServer(() => ({ verdict: "answered", confidence: "medium", answer: { text: "Rust" } }));
+  const port = await listen(server);
+  process.env.QOL_TRAY_BASE_URL = `http://127.0.0.1:${port}`;
+  process.env.QOL_TRAY_HTTP_TOKEN = "t";
+
+  try {
+    const kept = await lib.dropAnswered(lib.unansweredQueue());
+
+    assert.deepEqual(kept, []);
+    assert.deepEqual(lib.unansweredQueue(), [], "the dropped question stays out of the queue");
   } finally {
     await stop(server);
     delete process.env.QOL_TRAY_BASE_URL;
