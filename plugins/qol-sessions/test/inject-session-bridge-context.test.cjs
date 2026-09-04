@@ -206,7 +206,8 @@ test('the skill requires an event-driven review loop through feature acceptance'
     assert.match(skill, /one event-driven transaction per implementation round/);
     assert.match(skill, /Every round is fire-and-forget/);
     assert.match(skill, /never pass `task` to `session_bridge`/);
-    assert.match(skill, /Collect that round with one `session_bridge` call/);
+    assert.match(skill, /completed spawned-lane wake arrives after the watcher has closed the lane and its pending checkpoint/);
+    assert.match(skill, /review that report directly and do not call `session_bridge`/);
     assert.match(skill, /the watcher's wake message is the only resume signal/);
     assert.match(skill, /proves neither delivery nor implementation activity/);
     assert.match(skill, /Never announce that the target is connected, resumed, active, or complete unless `session_bridge` reports that lifecycle state/);
@@ -216,12 +217,12 @@ test('the skill requires an event-driven review loop through feature acceptance'
     assert.match(skill, /recover an interrupted round/);
     assert.match(skill, /returns `submitted=false`/);
     assert.match(skill, /`completion_marker` as `acknowledge_marker`/);
-    assert.match(skill, /No new round may be delivered until this explicit acknowledgement matches/);
+    assert.match(skill, /checkpoint remains available for acknowledgement by `session_loop_close`/);
     assert.match(skill, /`session_spawn` is keyed, not heuristic/);
     assert.match(skill, /immediately usable by `session_bridge`/);
     assert.match(skill, /Treat every token returned by `sessions_list` or `session_spawn` as an opaque, instance-bound capability/);
     assert.match(skill, /Never inspect terminal sockets, override backend environment variables/);
-    assert.match(skill, /then return to step 3/);
+    assert.match(skill, /Then return to step 3/);
     assert.match(skill, /call `session_loop_close` with the final response's `session` and `completion_marker`/);
     assert.match(skill, /CLI-session integration installs the continuation hooks/);
     assert.match(skill, /Agents never create, spawn, or poll hooks themselves/);
