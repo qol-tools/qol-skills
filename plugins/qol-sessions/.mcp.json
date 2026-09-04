@@ -3,6 +3,7 @@
     "qol-sessions": {
       "command": "qol",
       "args": ["sessions", "mcp"],
+      "env_vars": ["KITTY_WINDOW_ID", "KITTY_LISTEN_ON"],
       "tool_timeout_sec": 86410
     }
   }
