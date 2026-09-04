@@ -42,7 +42,7 @@ A lane never runs above the architect's own tier.
 
 1. Establish acceptance criteria from $ARGUMENTS, asking the user only when different readings would change the work.
 2. Scout unknown facts with read-only research lanes launched as one grouped set, then synthesize their combined report before writing anything.
-3. Write one spec document that every lane reads, naming exact paths, per-file ownership, signatures, gates, and the acceptance list.
+3. Write one spec document that every lane reads, naming exact paths, per-file ownership, signatures, gates, and the acceptance list. The spec never asserts a claim about files the change does not touch from scout inference alone: for each string literal the change removes or alters, run one fixed-string grep over the workspace (on static fragments when the literal is assembled dynamically) and assign every hit to a lane's owned file set. These checks supplement the step 6 gate and never replace it.
 4. Fan out one lane per disjoint file set in one spawn call with lanes, each carrying a lane brief as defined below.
 5. End the turn after delivery and resume only on the wake.
 6. Collect each lane, read every changed file against the spec personally, run the gate once for the whole round covering build, test, lint, format, and the repository's own checks, and dispatch correction rounds until the criteria hold.
