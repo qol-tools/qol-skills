@@ -36,6 +36,12 @@ GPUI sources are in `/Users/kaho/repos/private/qol-monorepo`.
 | `--mark` | 3 | `SPACE_MARK` | 3 | match |
 | `--gut` | 20 | `SPACE_GUTTER` | 20 | match |
 | `--padx` | 16 | `SPACE_PAD` | 16 | match |
+| `--s-stack` | 2 | `SPACE_STACK` | 2 | match |
+| `--s-tight` | 4 | `SPACE_TIGHT` | 4 | match |
+| `--s-snug` | 6 | `SPACE_SNUG` | 6 | match |
+| `--s-inset` | 8 | `SPACE_INSET` | 8 | match |
+| `--s-cell` | 12 | `SPACE_CELL` | 12 | match |
+| deck spacings 3/5/7/9/10/13/14/24 | | the ladder | snapped to the ladder on 2026-09-05 | note |
 | accent light | #b8860b | `LIGHT_REFERENCE.orange_400` | #b8860b | match |
 | accent dark | #e0ac3f | `DARK_REFERENCE.orange_400` | #e0ac3f | match |
 | accent ink | #8a6208 | `LIGHT_REFERENCE.accent_ink` | #8a6208 | match |
@@ -60,7 +66,7 @@ GPUI sources are in `/Users/kaho/repos/private/qol-monorepo`.
 | band height | `--h-band` 64 | `PANEL_BAND_HEIGHT` | 64 | match |
 | band background | `--side` | `render_band` `rail_bg` | same | match |
 | band title | 18 semibold | `TEXT_TITLE` | 18 semibold | match |
-| count chip | 28, r2 6 | `render_count_chip` | 28, r2 6 | match |
+| count chip | 28, r2 6, px 8 | `Kit::count_chip` | 28, r2 6, px 8 | match |
 | filter height | `--h-ctl` 36 | `PANEL_FILTER_HEIGHT` | 36 | match |
 | filter radius | `--r4` 11 | `RADIUS_WELL` | 11 | match |
 | filter margin | 20 top, the deck's own `.search` insets it | `PANEL_FILTER_MARGIN` | 20 | match |
@@ -72,8 +78,8 @@ GPUI sources are in `/Users/kaho/repos/private/qol-monorepo`.
 | row wash | `--wash` | `wash_selected` | same | match |
 | disabled row | opacity .4 | `DISABLED_OPACITY` | 0.4 | match |
 | toggle on | `--pos` green | `state_on` = `success` | green | match |
-| hint bar height | `--h-bar` 40 | `PANEL_HINT_BAR_HEIGHT` | 40 | match |
-| hint bar labels | generic wording | `render_hint_bar` | generic wording | match, the panel is shared so it cannot name one plugin's tasks |
+| hint bar height | `--h-bar` 40 | `Kit::hint_bar` | `HEIGHT_HINT_BAR` 40 | match |
+| hint bar labels | generic wording | `Kit::hint_bar` / `Kit::hint` | generic wording | match, the panel is shared so it cannot name one plugin's tasks |
 | keycap radius | `--r1` 4 | `RADIUS_KEYCAP` = `RADIUS_TIGHT` | 4 | match |
 | keycap text | `--fs-sm` 12.5 | `TEXT_KEYCAP` = `TEXT_MICRO` | 12.5 | match |
 | keycap font | mono | `font_mono()` | mono | match |
@@ -170,6 +176,23 @@ symbols behind the two deltas.
 | sort order | biggest first | `refilter` | biggest first, then by name | match |
 | confirm bar | names the app, the folder count and the size | `removeapp/src/ui/mod.rs` | same | match |
 | footer height | 40 | `kit::hint_bar`, `HEIGHT_HINT_BAR` | 40 | match, deck geo corrected |
+
+## Core settings tools
+
+The core tools (`__core-shortcuts`, `__core-hotkeys`, hosted as `CustomPanelView`)
+and the plugin contract panel render through the same register.
+
+| Design (deck) | Value | GPUI source | Current | Status |
+|---|---|---|---|---|
+| page body | `.plane` | `components::settings_page()` | same | match |
+| group header | `.group > .gh` | `SettingsGroupHeader` + `Kit::count_chip_small` | same | match |
+| setting row / rule row / add row | `.row`, `.rule`, `.addrow` | `SettingsRow` | same | match |
+| label group | `.row .lg` | `components::settings_label_group` | same | match |
+| key combination | `.combo` | `SettingsKeyCombination` | same | match |
+| registration chip | `.chip` | `Kit::chip`, warning tone | same | match |
+| save row | `.rule` + `.k2` | `SettingsRow::rule` + `settings_label` + `Kit::keycap` | same | match |
+| empty/loading message | `.empty` | `components::settings_message` | same | match |
+| editor slide | `.uni.d1` / `.uni.d2` deck | `deck::render` | same | match |
 
 ## One settings window
 

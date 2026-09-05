@@ -113,7 +113,13 @@ theme supplies values. Never write a state twice, once per theme.
 
 ## Ladders
 
-- **Spacing** `--gut 20` outer gutter, `--padx 16` inner padding, `--mark 3` state bar.
+- **Spacing** `--s-stack 2` label over its description, `--s-tight 4` between rows,
+  `--s-snug 6` keycap inset and keycap-to-label gap, `--s-inset 8` row and chip inset
+  and value-cell gap, `--s-cell 12` control inset and row label-to-value gap,
+  `--padx 16` inner padding, `--gut 20` outer gutter. `--mark 3` is a bar width, not
+  a spacing. In gpui code every rung is a `qol_theme::SPACE_*` constant, and gpui's
+  rem helpers (`gap_2`, `px_3`, `py_1` ...) are banned in settings scope because they
+  hide the number.
 - **Height** `--h-el 28` inline element, `--h-ctl 36` control, `--h-rule 48` rule row,
   `--h-row 52` setting row, `--h-bar 40` hint bar, `--h-band 64` title band
   (sub-band 52). List entries are 32 / 40 / 48 depending on density.
@@ -165,6 +171,69 @@ teaches the user nothing.
 Two components that look alike are one component with a modifier. A second copy of
 a recipe is the drift that produced every visual inconsistency this system was
 built to end.
+
+## Settings surfaces: one register, two hosts
+
+The plugin contract panel and the qol core tools (`__core-shortcuts`,
+`__core-hotkeys`, hosted as `CustomPanelView`) draw from the same register. A
+component that exists for only one of them is a defect. This is the code truth for
+that register; the table above is the general one.
+
+| Component | Symbol | Geometry |
+|---|---|---|
+| Page body | `components::settings_page()` | `flex_1 min_h_0 flex flex_col`, px `SPACE_PAD`, pb `SPACE_PAD`, gap `SPACE_TIGHT` |
+| Group header | `SettingsGroupHeader` | h `HEIGHT_CONTROL`, ml/mr `-SPACE_PAD`, pl `SPACE_INSET`, pr `SPACE_PAD`, pb `SPACE_SNUG`, gap `SPACE_CELL`; count via `Kit::count_chip_small` |
+| Setting row | `SettingsRow::setting` | h `HEIGHT_SETTING_ROW`, px `SPACE_INSET`, py `SPACE_TIGHT`, gap `SPACE_CELL` |
+| Rule / add row | `SettingsRow::rule` / `::add` | h `HEIGHT_RULE_ROW`, same insets, rounded `RADIUS_CONTROL` |
+| Label group | `components::settings_label_group(label, Option<description>, palette)` | `flex_1 min_w_0 flex flex_col`, gap `SPACE_STACK`; `settings_label` + optional `settings_description` |
+| Value group | `settings_value_group()` | gap `SPACE_INSET` |
+| Toggle | `SettingsToggle` | 40 x 24 track (`HEIGHT_INLINE - 4`), knob inset `SPACE_STACK` |
+| Select value chip | `SettingsSelectValue` | px `SPACE_INSET`, py `SPACE_TIGHT`, gap `SPACE_INSET`, rounded `RADIUS_CONTROL` |
+| Text field | `SettingsTextField` | h `HEIGHT_CONTROL`, px `SPACE_CELL`, rounded `RADIUS_CONTROL` |
+| Key combination | `SettingsKeyCombination` | h `HEIGHT_INLINE`, px `SPACE_INSET`, rounded `RADIUS_CONTROL` |
+| Feedback bar | `SettingsFeedback` | mark `SPACE_MARK` wide, px `SPACE_GUTTER`, py `SPACE_INSET` |
+| Message | `components::settings_message(text, danger: bool, palette)` | `flex_1 flex items_center justify_center`, `TEXT_BODY`, colour `status_muted` or `status_danger` when danger; returns `Div` |
+| Count chip | `Kit::count_chip(count, label)` | h `HEIGHT_INLINE` (28), px `SPACE_INSET`, gap `SPACE_SNUG`, rounded `RADIUS_CONTROL`, border 1 hairline, bg `washes.fill_resting`, `TEXT_MICRO`, count SEMIBOLD text_primary, label text_secondary |
+| Count chip small | `Kit::count_chip_small(count, label)` | same recipe at h 22 and `TEXT_NANO` |
+| Keycap | `Kit::keycap` | px `SPACE_SNUG`, py `SPACE_STACK`, rounded `RADIUS_KEYCAP`, border 1 hairline_strong, mono `TEXT_KEYCAP` |
+| Hint bar | `Kit::hint_bar()` | h `HEIGHT_HINT_BAR`, px `SPACE_PAD`, gap `SPACE_GUTTER`, border_t hairline, bg `washes.fill_hover`, `TEXT_MICRO` text_secondary |
+| Hint | `Kit::hint(key, label)` | gap `SPACE_SNUG`: keycap + label |
+| Rail caption | `components::rail_caption` | h `HEIGHT_CONTROL`, px `SPACE_CELL` |
+| Buttons | `Kit::button_primary/ghost/danger` | px `SPACE_CELL`, py `SPACE_SNUG` |
+| Dropdown menu | `dropdown.rs` | menu p `SPACE_SNUG`, item px `SPACE_INSET`, item gap `SPACE_INSET` |
+
+Rules for settings scope:
+
+- **R1** No gpui rem spacing helper (`gap_N`, `p_N`, `px_N`, `py_N`, `pt_N`, `pb_N`,
+  `pl_N`, `pr_N`, `m_N`, `mx_N`, `my_N`, `mt_N`, `mb_N`, `ml_N`, `mr_N`, including
+  the `p5` halves). Every spacing is `px(SPACE_*)`.
+- **R2** No local spacing constant (a `const` whose name contains PAD, GAP, INSET,
+  GUTTER or MARGIN and holds a number). Reference `SPACE_*` directly. Widths and
+  sizes (`TOGGLE_TRACK_WIDTH`, `FIELD_MIN_WIDTH`, `PANEL_*_WIDTH`,
+  `CRUMB_MAX_WIDTH`, `RAIL_CARD_OVERLAP`, `SWATCH_SIZE`, `MENU_MIN_WIDTH`) are
+  geometry, not spacing, and stay.
+- **R3** One recipe per component. Recipes live in `settings_panel/components.rs`
+  (settings-only) or `kit.rs` (shared by every surface). Other settings-scope files
+  compose recipes; they do not call `text_size`, `text_color`, `font_weight`,
+  `font_family`, `bg`, `border`, `border_color`, `rounded`, `shadow` on their own.
+- **R4** Colour in settings scope comes from `SettingsPanelPalette` fields
+  (`palette.*`), `kit.washes.*`, or a Kit recipe. Never `kit.palette.<field>`
+  outside `kit.rs` and `components.rs`.
+- **R5** Core tools and plugin panels render through the same components. A
+  component that exists for only one of them is a defect.
+
+Settings scope is `libs/qol-gpui/src/settings_panel/**`,
+`libs/qol-gpui/src/gamepad/**`, `libs/qol-gpui/src/kit.rs`, `dropdown.rs`,
+`hint_bar.rs`, `deck.rs`, and `apps/qol-tray/src/settings_surface/**`.
+
+The guard tests live in `libs/qol-theme/tests/theme.rs`:
+`gpui_surfaces_do_not_use_rem_spacing_helpers`,
+`gpui_spacing_literals_stay_on_the_space_ladder`,
+`settings_surfaces_declare_no_local_spacing_constants`,
+`settings_surfaces_compose_shared_components`,
+`settings_surfaces_take_colour_from_the_settings_palette`. Each ratchets a
+recorded debt list, and clearing an entry means deleting it from the list in the
+same change.
 
 ## Behaviour that carries visual weight
 
@@ -241,15 +310,20 @@ proposed, not slipped into an unrelated change.
 - Colour-blind check: no state is signalled by hue alone. Every semantic colour is
   paired with a shape, a position or a word.
 - Hit targets are at least 24px, counting the row rather than the glyph inside it.
-- Grep the surface for colour literals and for sizes that are not on a ladder. Both
+- Grep the surface for colour literals and for sizes that are not on a ladder, and
+  the settings scope for rem spacing helpers and off-ladder gaps and paddings. All
   should return nothing.
 
 ## Changing the theme
 
-The theme is versioned. This is V2, agreed 2026-08-21, after an audit that found
+The theme is versioned. This is V2.1. V2 was agreed 2026-08-21, after an audit that found
 the focus ring defined six times and invisible in all six, a height class that set
 a different height than its name, a state that existed only in the light theme, and
 twenty distinct type sizes across two rival scales.
+
+V2.1, agreed 2026-09-05: the spacing ladder was added and the settings register was
+unified - page body, label group, message, count chip, keycap, hint bar and
+dropdown insets each have one recipe shared by plugin panels and the core tools.
 
 A change to any token, ladder or state definition is a new version: update this
 file first, then the deck, then the code, in that order. A change that lands in one
