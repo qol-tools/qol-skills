@@ -90,7 +90,7 @@
       "name": "qol-tray",
       "description": "Host-app plugin for qol-tray: specialist agents (frontend, backend) plus deep skills for core architecture (qol-tray-core), Rust internals, UI systems, dev logging, world canvas, Profile feature, release flow, and apps-testing. Includes hooks for routing edits to the right specialist agent and reflecting agent learnings.",
       "source": "./plugins/qol-tray",
-      "version": "0.6.16",
+      "version": "0.6.17",
       "author": {
         "name": "KMRH47"
       }
@@ -117,7 +117,7 @@
       "name": "qol-project",
       "description": "Project-level conventions for the qol-tools ecosystem: mission invariants, org layout, shared CI/release contracts, cross-platform architecture guardrails, shared library placement, plugin templates, and clean OS development environments for portability validation. Ships PreToolUse hooks that block architecture-contract violations plus a UserPromptSubmit hook that reminds Claude to consult qol-mission when prompts mention design/scope/issue terms in a qol-tools repo.",
       "source": "./plugins/qol-project",
-      "version": "0.8.42",
+      "version": "0.8.43",
       "author": {
         "name": "KMRH47"
       }

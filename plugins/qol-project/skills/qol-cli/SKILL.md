@@ -33,6 +33,23 @@ explicit in the command planner. Verify selection with a temporary workspace
 containing an unrelated broken binary and with renamed package/binary fixtures.
 Recheck these contracts when changing Cargo invocation or target discovery.
 
+## Repeated staged checks
+
+Retain a verified, detached checkout in the check-owned cache so unchanged files
+keep their mtimes across staged checks. Snapshot identity must be deterministic
+for the captured source HEAD and index tree. Reuse never skips checks: retain
+source/index drift checks, complete staged-tree verification, hook and Git routing
+isolation, and the single-owner lock. Remove ignored and untracked generated files
+inside the owned checkout before reuse; rebuild a checkout with nonstandard index
+flags rather than letting skip-worktree or assume-unchanged hide mutations.
+Refuse an unregistered or foreign directory at the cache path.
+
+Git owns checkout and cleanup semantics ([checkout](https://git-scm.com/docs/git-checkout),
+[clean](https://git-scm.com/docs/git-clean), [commit-tree](https://git-scm.com/docs/git-commit-tree)).
+Verify unchanged mtimes, changed staged inputs, contaminated cache recovery,
+partial staging, and real Cargo freshness when changing this flow or upgrading
+Git. Record materialization mode and duration in the existing check report.
+
 ## Ownership Model
 
 - `qol` is the terminal CLI and owns the command parser.

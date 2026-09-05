@@ -156,6 +156,32 @@ Use dense case tables, not one-off examples. Each row should cover a distinct br
 
 ## Test mechanics
 
+### Workspace test execution
+
+Prefer Nextest for unit and integration execution when it is installed, followed
+by `cargo test --doc` with the same affected-package, feature, and `--locked`
+arguments. Cargo remains the local fallback only when the Nextest executable is
+absent. An installed runner that fails discovery or execution must fail the gate;
+never retry through Cargo to hide that failure.
+
+Keep automatic retries disabled, ignore configured default filters, preserve
+the existing ignored-test selection, and allow selected packages with no tests.
+Run both phases through the check command's existing cancellation and process
+containment owner, with separate report entries. CI installs the version pinned
+in its owning workflow; revalidate CLI compatibility and test inventory when
+that pin or the runner commands change.
+
+Before adopting a runner change, compare complete gates on the same source,
+package selection, features, and warm Cargo cache. Verify discovered test names,
+ignored tests, documentation tests, and nonzero failure propagation. Process
+isolation can remove unnecessary fixture serialization, but shared filesystem
+resources must still be isolated by each test's actual ownership contract.
+
+References: [Cargo execution model](https://doc.rust-lang.org/cargo/commands/cargo-test.html),
+[Nextest scheduling](https://nexte.st/docs/design/how-it-works/),
+[Nextest options](https://nexte.st/docs/running/), and
+[separate documentation tests](https://nexte.st/).
+
 - **Table-driven shape.** Consolidate similar cases into one test with a cases array:
 
   ```rust
