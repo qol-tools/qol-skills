@@ -284,6 +284,8 @@ components.rs.
   cuts a state in half.
 - **Errors** never show a raw error string. No errno, no status code, no stack. Say
   what happened and what the user can do.
+- **Live values** show the moment a query answers, a row never waits for the next
+  poll tick, and the spinner appears only when the answer is late.
 - **Busy** is the spinner, alone in a value cell and beside a caption everywhere
   else. Text never animates.
 
@@ -334,8 +336,10 @@ proposed, not slipped into an unrelated change.
   selection ring so selecting a row cannot shift its contents.
 - There is no CSS grid. Every layout in this system is flex, which it was designed
   for.
-- A repeating animation repaints the whole window every vsync. Spinners and status
-  dots are the only things allowed to run one.
+- A gpui repeat animation repaints the whole window every vsync, so no surface
+  runs one. Spinners and status dots tick from the shared `ActivityAnimation`
+  timer clock (100 ms for the braille spinner, 30 Hz for a fade), which is the
+  only running motion allowed.
 
 ## Verifying
 

@@ -208,6 +208,13 @@ editors) closes on an outside click the same way. The settings card's left mouse
 leaves the rail (`set_source_menu(false)` then `reconcile_focus`) before the row click
 runs, so a mouse-opened dropdown never sits under rail focus.
 
+Motion: no surface runs a gpui repeat animation. `ActivityAnimation` is the
+shared timer clock; build it with `.interval(..)` (100 ms for the braille
+spinner, the 30 Hz default for an opacity fade) and read phase from
+`progress_of(cycle)`. `Spinner` and `pulse_dot` are its consumers, and the wake
+channel in `start_runtime_poll` hands a query-backed row its answer the moment a
+batch lands, so the spinner only appears when the answer is late.
+
 Busy: the spinner is the only motion for work that has not finished.
 `qol_gpui::Spinner` runs eight braille frames at 14px over an 800ms cycle, and
 `Busy` pairs it with a caption. A value cell waiting on a query shows the
