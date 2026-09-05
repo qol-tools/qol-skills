@@ -22,6 +22,17 @@ Do not treat this skill as a command database. A `qol-project` SessionStart hook
 - Before changing command behavior, inspect `tools/qol-cli/src/main.rs`, `tools/qol-cli/src/cli.rs`, and the relevant file under `tools/qol-cli/src/commands`.
 - After changing `tools/qol-cli`, run `qol setup` before trusting the installed `qol` binary.
 
+## Named build selection
+
+Resolve named builds from Cargo workspace metadata and plugin manifests, never
+from a maintained product-name list or an alias for the workspace root. Select
+the owning package explicitly so duplicate binary names cannot build unrelated
+packages. Preserve that package's declared development features; Cargo rejects
+qualified feature flags for unselected packages. Keep whole-workspace builds
+explicit in the command planner. Verify selection with a temporary workspace
+containing an unrelated broken binary and with renamed package/binary fixtures.
+Recheck these contracts when changing Cargo invocation or target discovery.
+
 ## Ownership Model
 
 - `qol` is the terminal CLI and owns the command parser.
