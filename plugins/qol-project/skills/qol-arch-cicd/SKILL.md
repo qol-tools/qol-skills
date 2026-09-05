@@ -94,6 +94,22 @@ cargo clippy --target x86_64-pc-windows-gnu --all-targets --all-features -- -D w
 cargo clippy --target x86_64-apple-darwin --all-targets --all-features -- -D warnings
 ```
 
+## Build-script dependency boundaries
+
+Keep foundational build-script helpers outside the `workspace-hack` dependency
+chain. Its application-wide feature union can make a small identity emitter wait
+for unrelated networking, image, and GPU crates. Declare helper exclusions in
+`.config/hakari.toml` under `final-excludes.workspace-members`; retain their
+transitive feature contributions for application consumers. Hakari owns dependency
+removal through `cargo hakari manage-deps`, and generated manifests and Cargo.lock
+must remain current. Do not remove application feature unification wholesale.
+
+The [Hakari configuration contract](https://docs.rs/cargo-hakari/latest/cargo_hakari/config/index.html#final-excludes)
+defines these exclusion semantics. Revalidate them when upgrading cargo-hakari or
+changing a helper's dependencies. Compare fresh-target builds with identical
+profiles and compiler-cache settings, and verify both helper tests and application
+builds. Report helper timings separately from whole-workspace improvements.
+
 ## Sibling skills
 
 - **`qol-arch-code`** - code layout (the strategy pattern). This skill makes sure the layout *gets exercised on every OS in CI*.
