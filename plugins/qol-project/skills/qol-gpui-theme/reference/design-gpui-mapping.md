@@ -201,6 +201,13 @@ Focus: the panel owns it. `SettingsPanelView::focus_target()` names the handle
 `reconcile_focus` applies it. Custom bodies never focus themselves; they publish
 a handle and paint from `is_focused`.
 
+Menus: `Dropdown::render_clickable` and `render_items_clickable` take a dismiss closure
+next to the click closure, and the shared menu calls it from `on_mouse_down_out`, so
+every consumer (select and multi-select rows, list-card action menus, the core tool
+editors) closes on an outside click the same way. The settings card's left mouse-down
+leaves the rail (`set_source_menu(false)` then `reconcile_focus`) before the row click
+runs, so a mouse-opened dropdown never sits under rail focus.
+
 Busy: the spinner is the only motion for work that has not finished.
 `qol_gpui::Spinner` runs eight braille frames at 14px over an 800ms cycle, and
 `Busy` pairs it with a caption. A value cell waiting on a query shows the

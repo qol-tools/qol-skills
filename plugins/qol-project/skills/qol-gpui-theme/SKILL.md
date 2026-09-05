@@ -270,6 +270,9 @@ components.rs.
 - **Enter** edits one value in place; several values open an editor. The hint bar
   names it.
 - **Escape** closes the innermost thing, never discards silently.
+- **A click outside a menu** closes it, and the click still lands where it was aimed. In a
+  settings panel a click on the body also takes the cursor from the rail, so the next
+  Escape closes the innermost thing there, never the window.
 - **Arrow keys** move the amber bar. The bar is the cursor and it never lives in two
   lists at once.
 - **Clickable** means a border or a fill. Flat text is never a button.
