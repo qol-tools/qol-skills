@@ -190,8 +190,9 @@ and the plugin contract panel render through the same register.
 | label group | `.row .lg` | `components::settings_label_group` | same | match |
 | key combination | `.combo` | `SettingsKeyCombination` | same | match |
 | registration chip | `.chip` | `Kit::chip`, warning tone | same | match |
-| save row | `.rule` + `.k2` | `SettingsRow::rule` + `settings_label` + `Kit::keycap` | same | match |
-| empty/loading message | `.empty` | `components::settings_message` | same | match |
+| save row | `.rule` + `.k2` | `SettingsRow::rule` + `settings_label` + `Kit::keycap`, swapped for `settings_action_spinner` while saving | same | match |
+| empty message | `.empty` | `components::settings_message` | same | match |
+| loading body | `.empty` with spinner | `components::settings_busy_message` | same | match |
 | editor slide | `.uni.d1` / `.uni.d2` deck | `deck::render` | same | match |
 
 Focus: the panel owns it. `SettingsPanelView::focus_target()` names the handle
@@ -199,6 +200,17 @@ Focus: the panel owns it. `SettingsPanelView::focus_target()` names the handle
 `Focusable::focus_handle` exposes it to the surface and host, and
 `reconcile_focus` applies it. Custom bodies never focus themselves; they publish
 a handle and paint from `is_focused`.
+
+Busy: the spinner is the only motion for work that has not finished.
+`qol_gpui::Spinner` runs eight braille frames at 14px over an 800ms cycle, and
+`Busy` pairs it with a caption. A value cell waiting on a query shows the
+spinner alone, status rows included; a status value that is null shows an en
+dash, not loading. A toast for an operation still running is marked
+`Toast::busy()` and spins before its title. The save row swaps its keycap for
+the action spinner while saving. The three recipes are `settings_query_spinner`,
+`settings_action_spinner` and `settings_busy_message`; plugin rows and the core
+tools compose the same three, and no settings-scope file builds a spinner any
+other way.
 
 ## One settings window
 

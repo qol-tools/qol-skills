@@ -167,6 +167,7 @@ teaches the user nothing.
 | List entry | `.lrow` | 32 / 40 / 48 | launcher, sessions, remove app |
 | Status dot | `.st` | 7px + 3px halo | sessions, toasts, health rows |
 | Uppercase section label | one recipe | `--fs-cap`, 600, `.04em` | rail caption, editor label, rule head, dialog label |
+| Busy | `qol_gpui::Spinner`, `Busy` with a caption | 14px braille glyph, 800ms cycle | value cells, loading bodies, toasts, banners |
 
 Two components that look alike are one component with a modifier. A second copy of
 a recipe is the drift that produced every visual inconsistency this system was
@@ -232,6 +233,18 @@ Rules for settings scope:
   Nothing else in settings scope calls `window.focus`. A custom body publishes
   its `FocusHandle` on `CustomPanelView` and paints its selection from
   `is_focused`, which is the reconciled truth of the same decision.
+- **R7** One progress cue. `qol_gpui::Spinner` (eight braille frames, 14px, an
+  800ms cycle) is the only motion for work that has not finished, and `Busy`
+  pairs it with a caption. Text never pretends to be motion: a running phrase
+  never ends in an ellipsis. In settings scope spinners are built only through
+  `components::settings_query_spinner` (waiting on a plugin query,
+  `status_muted`), `components::settings_action_spinner` (an action the user
+  started, `state_on`) and `components::settings_busy_message` (a whole body
+  loading, same frame as `settings_message`). A value cell waiting on a query
+  shows the spinner alone, status rows included. A status value that is null
+  shows an en dash, not loading. A toast for an operation still running is
+  marked `Toast::busy()` and spins before its title. The core tools save row
+  swaps its keycap for the action spinner while saving.
 
 Settings scope is `libs/qol-gpui/src/settings_panel/**`,
 `libs/qol-gpui/src/gamepad/**`, `libs/qol-gpui/src/kit.rs`, `dropdown.rs`,
@@ -243,9 +256,14 @@ The guard tests live in `libs/qol-theme/tests/theme.rs`:
 `settings_surfaces_declare_no_local_spacing_constants`,
 `settings_surfaces_compose_shared_components`,
 `settings_surfaces_take_colour_from_the_settings_palette`,
-`settings_surfaces_have_one_focus_owner`. Each ratchets a recorded debt list,
-and clearing an entry means deleting it from the list in the same change; the
-focus test holds settings scope at exactly one `window.focus` call.
+`settings_surfaces_have_one_focus_owner`,
+`gpui_surfaces_draw_progress_with_the_spinner`,
+`settings_surfaces_build_spinners_through_components`. Each ratchets a recorded
+debt list, and clearing an entry means deleting it from the list in the same
+change; the focus test holds settings scope at exactly one `window.focus` call,
+the progress test holds every gpui surface at zero ellipsis-terminated running
+phrases, and the spinner test holds settings scope to spinners built in
+components.rs.
 
 ## Behaviour that carries visual weight
 
@@ -263,6 +281,8 @@ focus test holds settings scope at exactly one `window.focus` call.
   cuts a state in half.
 - **Errors** never show a raw error string. No errno, no status code, no stack. Say
   what happened and what the user can do.
+- **Busy** is the spinner, alone in a value cell and beside a caption everywhere
+  else. Text never animates.
 
 ## Relationship to qol-theme and kit.rs
 
@@ -338,6 +358,8 @@ unified - page body, label group, message, count chip, keycap, hint bar and
 dropdown insets each have one recipe shared by plugin panels and the core tools.
 V2.1 also names the single focus owner for settings surfaces (R6), after a core
 tool reopened from the launcher lost its selection to a second focus path.
+V2.1 also adds R7, one progress cue, after the PointZerver pairing code row
+spelled loading in text forever while every other row spun.
 
 A change to any token, ladder or state definition is a new version: update this
 file first, then the deck, then the code, in that order. A change that lands in one
