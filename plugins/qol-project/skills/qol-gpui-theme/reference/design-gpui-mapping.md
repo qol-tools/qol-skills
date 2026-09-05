@@ -194,6 +194,12 @@ and the plugin contract panel render through the same register.
 | empty/loading message | `.empty` | `components::settings_message` | same | match |
 | editor slide | `.uni.d1` / `.uni.d2` deck | `deck::render` | same | match |
 
+Focus: the panel owns it. `SettingsPanelView::focus_target()` names the handle
+(rail, contract body or the custom body's `CustomPanelView::focus_handle`),
+`Focusable::focus_handle` exposes it to the surface and host, and
+`reconcile_focus` applies it. Custom bodies never focus themselves; they publish
+a handle and paint from `is_focused`.
+
 ## One settings window
 
 The deck is ahead of the code here on purpose: this section is the agreed target, not a record of

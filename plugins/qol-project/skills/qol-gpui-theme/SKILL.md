@@ -221,6 +221,17 @@ Rules for settings scope:
   outside `kit.rs` and `components.rs`.
 - **R5** Core tools and plugin panels render through the same components. A
   component that exists for only one of them is a defect.
+- **R6** Focus has one owner. `SettingsPanelView` decides where keyboard focus
+  lives from its own state: the rail while the source menu is open, the contract
+  body while a plugin page is open, the custom body while a core tool is open.
+  `focus_target()` resolves that decision to one `FocusHandle`;
+  `Focusable::focus_handle` returns it, so the surface and the host focus it on
+  open, replace and reveal without knowing which body is up; and
+  `reconcile_focus` (called from every transition and from render) moves gpui
+  focus onto that target whenever focus sits inside the panel but not on it.
+  Nothing else in settings scope calls `window.focus`. A custom body publishes
+  its `FocusHandle` on `CustomPanelView` and paints its selection from
+  `is_focused`, which is the reconciled truth of the same decision.
 
 Settings scope is `libs/qol-gpui/src/settings_panel/**`,
 `libs/qol-gpui/src/gamepad/**`, `libs/qol-gpui/src/kit.rs`, `dropdown.rs`,
@@ -231,9 +242,10 @@ The guard tests live in `libs/qol-theme/tests/theme.rs`:
 `gpui_spacing_literals_stay_on_the_space_ladder`,
 `settings_surfaces_declare_no_local_spacing_constants`,
 `settings_surfaces_compose_shared_components`,
-`settings_surfaces_take_colour_from_the_settings_palette`. Each ratchets a
-recorded debt list, and clearing an entry means deleting it from the list in the
-same change.
+`settings_surfaces_take_colour_from_the_settings_palette`,
+`settings_surfaces_have_one_focus_owner`. Each ratchets a recorded debt list,
+and clearing an entry means deleting it from the list in the same change; the
+focus test holds settings scope at exactly one `window.focus` call.
 
 ## Behaviour that carries visual weight
 
@@ -324,6 +336,8 @@ twenty distinct type sizes across two rival scales.
 V2.1, agreed 2026-09-05: the spacing ladder was added and the settings register was
 unified - page body, label group, message, count chip, keycap, hint bar and
 dropdown insets each have one recipe shared by plugin panels and the core tools.
+V2.1 also names the single focus owner for settings surfaces (R6), after a core
+tool reopened from the launcher lost its selection to a second focus path.
 
 A change to any token, ladder or state definition is a new version: update this
 file first, then the deck, then the code, in that order. A change that lands in one
