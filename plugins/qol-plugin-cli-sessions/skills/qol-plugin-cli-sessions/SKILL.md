@@ -55,7 +55,7 @@ Every harness-specific behavior - naming, title grammars, metadata extraction, s
 
 **Change attention policy:** edit the phase reading and the status transition together, and cover the transition with cases rather than a live terminal.
 
-**Change the panel:** keep the overview keyboard-first. It is an interactive gpui surface, so it must use a normal, focusable window kind and the shared overlay configuration; non-focusable window kinds silently leak keystrokes to whatever is underneath.
+**Change the panel:** keep the overview keyboard-first. It is an interactive gpui surface, so it must use `SurfaceKind::OverlayPanel` (normal, focusable, with the shared overlay state applied inside the reveal gate); non-focusable window kinds silently leak keystrokes to whatever is underneath, and a plain `SurfaceKind::Panel` drops the always-on-top behavior.
 
 ## Invariants
 
