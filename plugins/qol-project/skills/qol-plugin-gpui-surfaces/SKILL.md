@@ -7,16 +7,16 @@ description: "Use when giving a qol plugin a native gpui surface - a contract-dr
 
 qol plugins feel "installed" when their UI is native: summoned from the
 launcher, centered on the active monitor, keyboard-first, gone on ESC.
-The shared kit in `libs/qol-gpui` makes that a wiring job, not a
+The shared kit in `libs/gpui` makes that a wiring job, not a
 windowing project. **Never hand-roll plugin windows; extend the kit.**
 Contract-driven settings are hosted by qol-tray; custom pickers, overlays,
 and toasts remain plugin-owned.
 
-## The shared kit (libs/qol-gpui)
+## The shared kit (libs/gpui)
 
 | Piece | File | What it owns |
 | --- | --- | --- |
-| `Surface` builder | `surface.rs` | Window creation for `SurfaceKind::Toast` (PopUp, unfocused, corner-anchored, optional timeout) and `SurfaceKind::Panel` (Normal, focused, monitor-centered, designed-size locked) |
+| `Surface` builder | `surface.rs` | Window creation for `SurfaceKind::Toast` (PopUp, unfocused, corner-anchored, optional timeout), `SurfaceKind::Panel` (Normal, focused, monitor-centered, designed-size locked) and `SurfaceKind::OverlayPanel` (the same contract plus the shared overlay state) |
 | `SurfaceDismisser` | `surface.rs` | Close from anywhere (key handler, click, timer). Deferred out of event dispatch - see invariants |
 | `Toast` + `ToastHost` | `toast.rs` | Theme-backed passive messages with semantic tones, timed or persistent lifetime, optional activation, replacement, and dismissal |
 | `SettingsWindowHost` | `settings_panel/` | Retains exactly one settings window and implements open, focus-same-plugin, replace-with-another-plugin, and park/reveal across Escape |
@@ -46,6 +46,13 @@ task-switcher window. Mark only non-interactive top chrome with the shared
 where child clicks would start window moves. Retained settings panels may
 change their declared size programmatically when replacing content; the shared
 surface layer must update the native size constraint with that change.
+
+`SurfaceKind::OverlayPanel` is the same window contract plus the shared overlay
+configuration, applied by the reveal path while the window is still hidden
+(`configure_overlay_window`: `_NET_WM_STATE_ABOVE`, `SKIP_TASKBAR`,
+`SKIP_PAGER`, decorations off, fixed size). Select it for a panel that must stay
+above other windows; CLI Sessions is the reference consumer. Reveal, focus
+reassert, collapse/expand resize and dismissal all stay on the shared path.
 
 ## Contract settings are host-owned
 
@@ -235,6 +242,13 @@ selects) are documented in `qol-project:qol-shared-libs`.
   title and native window ID.
 - **Interactive surfaces are `WindowKind::Normal`** on Linux; PopUp maps
   to a non-focusable NOTIFICATION and keystrokes leak to the terminal.
+- **Overlay panels use `SurfaceKind::OverlayPanel`, never a local overlay
+  call.** A plugin that must stay above other windows selects the kind; the
+  shared reveal path applies `configure_overlay_window`
+  (`_NET_WM_STATE_ABOVE`, `SKIP_TASKBAR`, `SKIP_PAGER`, decorations off,
+  fixed size) while the window is still hidden. Calling
+  `configure_overlay_window` directly bypasses the reveal gate and the
+  kind-aware focus reassert; CLI Sessions is the reference consumer.
 - **Window dismissals are deferred.** `SurfaceDismisser::dismiss` runs via
   `cx.defer`; a re-entrant `WindowHandle::update` from inside that window's own
   event dispatch fails silently. Destructive dismissals are one-shot. Retained

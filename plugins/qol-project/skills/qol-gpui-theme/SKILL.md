@@ -247,8 +247,8 @@ Rules for settings scope:
   marked `Toast::busy()` and spins before its title. The core tools save row
   swaps its keycap for the action spinner while saving.
 
-Settings scope is `libs/qol-gpui/src/settings_panel/**`,
-`libs/qol-gpui/src/gamepad/**`, `libs/qol-gpui/src/kit.rs`, `dropdown.rs`,
+Settings scope is `libs/gpui/src/settings_panel/**`,
+`libs/gpui/src/gamepad/**`, `libs/gpui/src/kit.rs`, `dropdown.rs`,
 `hint_bar.rs`, `deck.rs`, and `apps/qol-tray/src/settings_surface/**`.
 
 The guard tests live in `libs/qol-theme/tests/theme.rs`:
@@ -297,7 +297,7 @@ sides are named here so the delta is visible instead of argued about.
 
 `libs/qol-theme/src/lib.rs` owns the palette as `SystemPalette`, built from
 `LIGHT_REFERENCE` / `DARK_REFERENCE`. That is the SSOT for colour; never introduce
-a colour literal in `libs/qol-gpui`.
+a colour literal in `libs/gpui`.
 
 Known deltas from V2, each one a decision waiting to be made rather than a bug to
 fix silently:
