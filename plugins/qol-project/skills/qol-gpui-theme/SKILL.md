@@ -168,6 +168,7 @@ teaches the user nothing.
 | Status dot | `.st` | 7px + 3px halo | sessions, toasts, health rows |
 | Uppercase section label | one recipe | `--fs-cap`, 600, `.04em` | rail caption, editor label, rule head, dialog label |
 | Busy | `qol_gpui::Spinner`, `Busy` with a caption | 14px braille glyph, 800ms cycle | value cells, loading bodies, toasts, banners |
+| Action circle | `Kit::action_circle(size, state)` inside `Kit::action_row` | `ACTION_CIRCLE_SIZE` 46, `HEIGHT_CONTROL` 36 or `HEIGHT_INLINE` 28, gap `ACTION_CIRCLE_GAP` 14; Resting, Primary, Armed, Disabled | qol-shot preview, editor, pinned image |
 
 Two components that look alike are one component with a modifier. A second copy of
 a recipe is the drift that produced every visual inconsistency this system was

@@ -26,7 +26,7 @@ Never keep a second action/platform/tool inventory in this skill.
 | `src/config/` | Contract-backed capture settings. |
 | `src/platform/` | Target-selected native capture, display, clipboard, selector, conversion, and system integration. |
 | `src/platform/macos_swift/` | Swift implementation compiled as part of the macOS adapter. |
-| `src/ui/` | GPUI selector, preview, pinned image, capture-status adapter, settings fallback, and shortcuts. Shared transient-surface rendering lives in `qol-gpui`. |
+| `src/ui/` | GPUI selector, preview, editor, pinned image, capture-status adapter, settings fallback, and shortcuts. Shared transient-surface rendering lives in `qol-gpui`. |
 
 Keep OS implementation files under `platform/<os>/`; keep cross-platform capture policy in `capture/` and UI behavior in `ui/`.
 
@@ -43,7 +43,12 @@ Keep OS implementation files under `platform/<os>/`; keep cross-platform capture
 
 ## GPUI surface rules
 
-Preview, pinned, and selector surfaces share the qol-gpui surface boundary.
+Preview, editor, pinned, and selector surfaces share the qol-gpui surface boundary.
+Preview, editor, and pinned actions are `Kit::action_circle` rows; the editor chrome
+is `Kit::header`, `Kit::segmented_group` with `Kit::segment`, and `Kit::hint_bar`,
+never a local button, header, or hint recipe. Shared actions keep one key table
+across surfaces (`c` copy, `p` copy path, `o` open folder, Esc closes); a surface
+adds letters only for actions the others do not offer.
 Capture and recording status messages use the shared `Toast` and `ToastHost`;
 qol-shot owns only stage policy, semantic tone, safety-barrier invocation, and
 trace context. A retained or keepalive window must be compositor-safe,
