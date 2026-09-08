@@ -18,7 +18,7 @@ Bespoke documentation for gpui, built through hands-on exploration.
 ## Project Setup
 
 Copy the GPUI dependency declarations from the nearest maintained workspace
-consumer, preferably `libs/qol-gpui/Cargo.toml`. `Cargo.toml` and `Cargo.lock`
+consumer, preferably `libs/gpui/Cargo.toml`. `Cargo.toml` and `Cargo.lock`
 own the selected versions; do not pin a second copy in this skill.
 
 Requires: Rust stable, macOS or Linux.
@@ -350,7 +350,7 @@ cargo test --test integration_tests  # Integration test file
 ## Shared plugin surfaces
 
 Toasts, settings panels, and dropdowns for qol plugins come from the shared
-kit in `libs/qol-gpui` - do not hand-roll windows per plugin. Normal
+kit in `libs/gpui` - do not hand-roll windows per plugin. Normal
 contract-driven settings actions are hosted by qol-tray through one retained
 `SettingsWindowHost`; plugin-owned GPUI applications are for custom surfaces
 and explicit fallbacks. Ownership, routing, and verification live in
