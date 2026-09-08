@@ -23,7 +23,7 @@ const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const MANIFEST_DIRS = ['.claude-plugin', '.codex-plugin', '.kimi-plugin'];
+const MANIFEST_DIRS = ['.claude-plugin', '.codex-plugin', '.kimi-plugin', '.pi-plugin'];
 const NON_CONTENT_DIRS = [...MANIFEST_DIRS, 'test'];
 
 function parseArgs(argv) {

@@ -69,6 +69,7 @@ test('manifest and test edits do not count as shipped content', () => {
   const cases = [
     ['.codex-plugin/plugin.json', '{"name":"alpha"}'],
     ['.kimi-plugin/plugin.json', '{"name":"alpha"}'],
+    ['.pi-plugin/plugin.json', '{"name":"alpha"}'],
     ['test/alpha.test.cjs', '// test'],
   ];
 
