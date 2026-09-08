@@ -363,12 +363,19 @@ This keeps plugin code independent of dependency churn, host assets, and
 rendering backends. Source-check the selected crate before changing the shared
 wrapper.
 
+Text input is `qol_gpui::text_edit::{TextField, TextFieldElement}`. One field
+owns cursor, anchor, motion, delete and paste; the element renders the caret,
+selection, placeholder and horizontal window. Editable settings fields compose
+`SettingsTextField::editable` so the chrome stays in the shared component.
+Never write a second cursor or selection model in a plugin.
+
 ## Ghost popup architecture (per-monitor, never cross-monitor move)
 
 The alt-tab picker and the launcher each keep a hidden "ghost" window warm so the
-next show is instant. The active-monitor decision is owned by qol-runtime
-(`pick_active_monitor`); plugins hold zero monitor state and must not re-derive
-it.
+next show is instant. The active-monitor decision is owned by `qol_gpui::monitor`:
+one cache and three named precedence policies (active-first, focus-first,
+cached-first). Plugins hold zero monitor state and must not re-derive it; name
+the policy you want at the call site.
 
 The hard rule: a warm ghost is **one pre-placed hidden window per monitor**, and
 following the active monitor is a **visibility choice** (show the target, hide

@@ -55,6 +55,10 @@ trace context. A retained or keepalive window must be compositor-safe,
 non-focusable when hidden, absent from Alt-Tab, and never appear as an empty
 black/transparent desktop window.
 
+Warm windows come from one pool keyed by window kind plus monitor topology plus
+size. An entry whose topology no longer matches the live set is dropped, never
+reused; do not add a second warm-window cache beside the pool.
+
 Selector viewport bounds and physical monitor bounds are distinct coordinate
 spaces. Every monitor-relative transient uses the shared `qol-gpui` placement
 contract with physical monitor bounds, then converts the result to window-local

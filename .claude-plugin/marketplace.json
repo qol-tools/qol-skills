@@ -72,7 +72,7 @@
       "name": "qol-shot",
       "description": "Skills for the qol-shot plugin: qol-tray screenshot and screen-recording flow (ffmpeg, X11 display capture).",
       "source": "./plugins/qol-shot",
-      "version": "0.1.3",
+      "version": "0.1.4",
       "author": {
         "name": "KMRH47"
       }
@@ -108,7 +108,7 @@
       "name": "qol-langs",
       "description": "Personal-experience wells for languages and frameworks used in qol-tools: rust-conventions, gpui-conventions, preact-conventions. Workspace-specific style and gotchas, NOT canonical library docs \u2014 for those, use context7.",
       "source": "./plugins/qol-langs",
-      "version": "0.3.6",
+      "version": "0.3.7",
       "author": {
         "name": "KMRH47"
       }
