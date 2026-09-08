@@ -68,6 +68,13 @@ Use the same review semantics in Claude Code and Codex, but adapt execution to w
   - broad repository context only for architecture/release questions that require it
 - For workflow/release changes, capture workflow permissions, triggers, and guard conditions explicitly.
 - Record command constraints that could affect review validity (network, root access, credentials, caches).
+- Run the shallow-wrapper detector on the captured scope before any reviewer is spawned, and never rely on a lane to notice a pass-through function:
+
+  ```bash
+  node "<skill-dir>/scripts/shallow-wrappers.cjs" --root <tree> --diff <diff-file> --json <out>/shallow-wrappers.json
+  ```
+
+  Its output is deterministic input, not a lane opinion. Every listed function and renamed re-export is copied verbatim into the redundancy lane's brief and appears in the final output under "Shallow wrappers" with a disposition: `delete` (callers call the owner, adaptation moves into the owner or the caller) or `keep` with the reason (foreign trait impl, FFI boundary, public API kept for compatibility). A trait-impl delegation is `keep` only when the trait is not owned by this workspace. Zero entries is stated as `none (detector ran on N files)`.
 
 ## Command index (reviewer entry points)
 
@@ -180,6 +187,7 @@ Confidence levels:
 - A `required_action` is always a proposal, never a verdict: behavioral assumptions embedded in a suggested fix, such as timing heuristics or claims about when the user acts, are challenged against the evidence before adoption.
 - "Author claims confirmed" is always reported separately from findings, so independently verified statements stay distinguishable from the author's narrative.
 - Every finding ships a 30-second user-actionable reproduction naming the expected outcome, or names who must run it and what to report back when the repro needs the live desktop session.
+- The review is not complete until every shallow-wrapper detector entry carries a disposition; a missing detector run or an entry without a disposition makes the verdict `invalid`.
 - A shallow function is a finding, never accepted as a refactor: a function whose body is one call to another function, with at most Option unwrapping, trimming, cloning, or renaming around it, is deleted, its callers call the owner directly, and the adaptation moves into the owner or the caller. After a migration onto a shared owner, every rewritten local function that now only forwards is dead API, and its duplicate test table folds into the owner's.
 - A dedup or consolidation patch is measured, never trusted: the review reports production, test, and doc line deltas separately, states where net production growth went, and reconciles it against the copies the patch claims to remove. A copy the audit named by line that still exists is a finding even when the delivery table scopes it away.
 
@@ -282,6 +290,7 @@ Review board result:
 - Confirmed low: <findings only>
 - Notes: <informational findings>
 - Contextual quick wins: <capped non-blocking opportunities or "none">
+- Shallow wrappers: <detector entries, each with delete|keep and reason, or "none (detector ran on N files)">
 - Must fix before commit: <items>
 - Deferred follow-ups: <items>
 - Risks now accepted by design: <items or "none">
@@ -320,6 +329,16 @@ Also include a machine-parseable block for downstream CI or follow-up agents:
   ],
   "deferred_followups": [],
   "contextual_quick_wins": [],
+  "shallow_wrappers": [
+    {
+      "file": "path/to/file",
+      "line": 31,
+      "name": "normalize_color",
+      "callee": "qol_color::normalize_hex",
+      "disposition": "delete|keep",
+      "reason": "why it stays, when kept"
+    }
+  ],
   "accepted_risks": [],
   "verification": []
 }
