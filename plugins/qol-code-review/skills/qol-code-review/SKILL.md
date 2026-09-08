@@ -80,7 +80,7 @@ Use these as deterministic review commands. Each command name maps to one review
 - `quality-reviewer`: readability, naming, diagnostics, maintainability, and consistency with repo conventions.
 - `requirements-reviewer`: explicit requirement coverage, acceptance criteria, and assumption gaps.
 - `contextual-quick-wins-reviewer`: low-risk, low-cost improvements adjacent to the patch.
-- `redundancy-reviewer`: duplication and reuse checks, redundant state/logic checks, and unnecessary parallelism.
+- `redundancy-reviewer`: duplication and reuse checks, shallow wrappers and delegate-only survivors, redundant state/logic checks, and unnecessary parallelism.
 - `history-reviewer`: backward compatibility, migration/deprecation continuity, and docs/changelog alignment.
 - `style-reviewer`: context-aware style fit in target area (e.g., `qol-tray` UI vs CLI conventions).
 - `optimization-reviewer`: cache misses, duplicate parsing, dependency churn, and hotspot complexity.
@@ -112,7 +112,7 @@ Core reviewers:
 Specialized reviewers:
 
 - `contextual-quick-wins-reviewer`: contextual nice-to-haves, unidentified quick wins, cheap diagnostics, small test gaps, local-operator ergonomics, and low-risk cleanup opportunities. This reviewer cannot block; cap output at 5 items and require each item to be actionable in one sitting.
-- `redundancy-reviewer`: whether this already exists, whether existing helpers/patterns should be reused, duplicate logic/state/checks, and unjustified parallel mechanisms.
+- `redundancy-reviewer`: whether this already exists, whether existing helpers/patterns should be reused, shallow wrappers and delegate-only survivors left behind by a migration, duplicate logic/state/checks, and unjustified parallel mechanisms. Mandatory for refactor, dedup, and consolidation patches.
 - `history-reviewer`: behavioral continuity, compatibility with old paths, migration/deprecation consistency, changelog/doc alignment, and regression risk against prior behavior.
 - `style-reviewer`: context-specific style fit for the touched area, including local UI/CLI language, naming, density, component shape, diagnostics tone, and repo-specific conventions.
 - `optimization-reviewer`: duplicate passes, cache misses, dependency churn, over-eager invalidation, complexity hotspots.
@@ -180,6 +180,8 @@ Confidence levels:
 - A `required_action` is always a proposal, never a verdict: behavioral assumptions embedded in a suggested fix, such as timing heuristics or claims about when the user acts, are challenged against the evidence before adoption.
 - "Author claims confirmed" is always reported separately from findings, so independently verified statements stay distinguishable from the author's narrative.
 - Every finding ships a 30-second user-actionable reproduction naming the expected outcome, or names who must run it and what to report back when the repro needs the live desktop session.
+- A shallow function is a finding, never accepted as a refactor: a function whose body is one call to another function, with at most Option unwrapping, trimming, cloning, or renaming around it, is deleted, its callers call the owner directly, and the adaptation moves into the owner or the caller. After a migration onto a shared owner, every rewritten local function that now only forwards is dead API, and its duplicate test table folds into the owner's.
+- A dedup or consolidation patch is measured, never trusted: the review reports production, test, and doc line deltas separately, states where net production growth went, and reconciles it against the copies the patch claims to remove. A copy the audit named by line that still exists is a finding even when the delivery table scopes it away.
 
 Actionability gates:
 

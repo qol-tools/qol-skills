@@ -25,7 +25,7 @@ Use these checklists to tailor agent prompts. Do not paste every item into every
 - Identify touched surfaces: runtime code, UI, CLI, CI/release, docs, scripts, manifests, migrations, tests.
 - Choose the smallest reviewer set that covers real risk; avoid running every persona by default.
 - Escalate to security/release/adversarial when refs, permissions, shell execution, secrets, artifacts, migrations, or data loss are in scope.
-- Add style/redundancy/history only when the patch touches established local patterns, compatibility paths, or duplicate mechanisms.
+- Always run redundancy for refactor, dedup, or consolidation patches; add style/history only when the patch touches established local patterns, compatibility paths, or duplicate mechanisms.
 - Report the selected reviewers and one-line rationale for each.
 
 ## Security
@@ -67,6 +67,10 @@ Use these checklists to tailor agent prompts. Do not paste every item into every
 - Distinguish useful defense-in-depth from noise: redundancy is justified only when it adds fault tolerance or clearer diagnostics.
 - Prefer extending established local patterns over adding a second abstraction.
 - Byte-identical blocks pasted into multiple call sites are always flagged, even when the duplication predates the patch; one shared helper is required when the copies differ only in names.
+- Shallow wrappers: a function whose body is one call to another function, with only Option unwrapping, trimming, cloning, or renaming around it, is flagged; the caller calls the owner directly and the adaptation moves into the owner or the caller. A re-export under a second name counts.
+- Delegate-only survivors: after a migration onto a shared owner, grep every local function the patch rewrote; any that now only forwards is removed together with its duplicate test table, which folds into the owner's table.
+- Reuse before adding: for every new helper, name the existing owner that was searched for (shared libs, sibling crates, skills) and why it did not fit; a new helper that re-implements an owner's validator or parser with a different edge case is a divergence finding, not a new owner.
+- Consolidation arithmetic: for a dedup patch, count production, test, and doc lines separately and state where net production growth went; new-owner API with no caller is dead surface, and named copies that survive are findings.
 
 ## History / Compatibility
 
