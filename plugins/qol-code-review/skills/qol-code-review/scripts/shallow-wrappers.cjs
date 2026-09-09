@@ -128,7 +128,7 @@ function run(options) {
         const added = addedLinesFromDiff(text);
         targets = [...added.entries()].filter(([file]) => file.endsWith('.rs')).map(([file, set]) => ({ file, set }));
     } else {
-        targets = options.files.map((file) => ({ file: path.relative(options.root, path.resolve(options.root, file)), set: null }));
+        targets = options.files.map((file) => ({ file: path.relative(options.root, path.resolve(options.root, file)).split(path.sep).join('/'), set: null }));
     }
     const report = { root: options.root, scanned: 0, wrappers: [], reexports: [] };
     for (const target of targets) {
