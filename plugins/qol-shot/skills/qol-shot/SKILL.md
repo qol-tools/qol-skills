@@ -34,6 +34,7 @@ Keep OS implementation files under `platform/<os>/`; keep cross-platform capture
 
 - Screenshot and recording actions are idempotent and serialize ownership of native capture resources.
 - The screenshot thumbnail is the primary post-selection response. Carry only bounded thumbnail pixels into GPUI, then release full-resolution crop/encoding from the preview-presented event; preview failure releases it immediately. Saved/status feedback remains asynchronous, while failures may replace the preview path with shared status UI.
+- Preview copy and copy-path actions are gated on the saved PNG, so the full-resolution encode latency is user-visible copy latency. Keep the PNG codec dependency chain in the workspace dev profile's `opt-level = 2` list; an unoptimized codec makes dev-build copies land hundreds of milliseconds late.
 - The daemon record action remains a toggle during its visible countdown. A second invocation aborts the countdown before capture state, processes, or output exist, then reports cancellation through the shared capture-status surface.
 - Cancellation, failure, daemon shutdown, and normal completion all remove overlays, release input grabs, and restore desktop state.
 - Selection geometry is converted through explicit coordinate spaces; never mix logical, physical, desktop, and display-local coordinates implicitly.
