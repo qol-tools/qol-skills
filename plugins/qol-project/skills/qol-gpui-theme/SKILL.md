@@ -134,7 +134,8 @@ and both were shipped bugs.
 
 | State | Defined once as | Reused by | How you tell it apart |
 |---|---|---|---|
-| Current | `--wash-sel` + `--acc` bar | row, rule, list entry, rail item, card | amber bar, neutral wash, hairline frame |
+| Current | `--wash-sel` + `--acc` bar | list entry, card, every surface outside the settings panel | amber bar, neutral wash, hairline frame |
+| Current, in the settings panel | the accent mixed 45% over the surface base, primary ink | rail item, setting row, rule row | a filled band edge to edge, square, no bar; ink on it lifts to 90% of primary so a description still clears the floor |
 | Needs attention | `--wash-wrn` + `--wrn` bar | row, rule, list entry, warning bar, busy dot | orange bar over a warm wash, no frame |
 | Invalid | `--wash-neg` + `--neg` bar | row, rule, list entry, field, failure bar | red bar and a red frame around the whole row |
 | Focused | `--accsoft` border + `--ring` | field, keycap capture, combo, chip, card, pad button | a solid amber edge inside a soft halo, nothing else halos |
@@ -184,13 +185,15 @@ that register; the table above is the general one.
 | Component | Symbol | Geometry |
 |---|---|---|
 | Page body | `components::settings_page()` | `flex_1 min_h_0 flex flex_col`, px `SPACE_PAD`, pb `SPACE_PAD`, gap `SPACE_TIGHT` |
-| Group header | `SettingsGroupHeader` | h `HEIGHT_CONTROL`, ml/mr `-SPACE_PAD`, pl `SPACE_INSET`, pr `SPACE_PAD`, pb `SPACE_SNUG`, gap `SPACE_CELL`; count via `Kit::count_chip_small` |
-| Setting row | `SettingsRow::setting` | h `HEIGHT_SETTING_ROW`, px `SPACE_INSET`, py `SPACE_TIGHT`, gap `SPACE_CELL` |
+| Group header | `SettingsGroupHeader` | the masthead: `flex_col`, w_full, pt `SPACE_PAD`, pb `SPACE_SNUG`, gap `SPACE_STACK`, display face SEMIBOLD; name `TEXT_DISPLAY` line-height 1.0, colophon `TEXT_NANO` line-height 1.2 |
+| Rail masthead | `components::rail_caption` | h `HEIGHT_BAND`, px `SPACE_CELL`, py `SPACE_SNUG`, gap `SPACE_STACK`; name `TEXT_MASTHEAD` line-height 1.0, colophon `TEXT_NANO` line-height 1.2 |
+| Crumb trail | `components::settings_crumb_trail` | display face SEMIBOLD `TEXT_CAPTION`, line-height 20, separator `/` at px `SPACE_TIGHT` |
+| Setting row | `SettingsRow::setting` | h `HEIGHT_SETTING_ROW`, px `SPACE_INSET`, py `SPACE_TIGHT`, gap `SPACE_CELL`; `.separated(true)` draws the top hairline |
 | Rule / add row | `SettingsRow::rule` / `::add` | h `HEIGHT_RULE_ROW`, same insets, rounded `RADIUS_CONTROL` |
 | Label group | `components::settings_label_group(label, Option<description>, palette)` | `flex_1 min_w_0 flex flex_col`, gap `SPACE_STACK`; `settings_label` + optional `settings_description` |
 | Value group | `settings_value_group()` | gap `SPACE_INSET` |
 | Toggle | `SettingsToggle` | 40 x 24 track (`HEIGHT_INLINE - 4`), knob inset `SPACE_STACK` |
-| Select value chip | `SettingsSelectValue` | px `SPACE_INSET`, py `SPACE_TIGHT`, gap `SPACE_INSET`, rounded `RADIUS_CONTROL` |
+| Select value chip | `SettingsSelectValue` | px `SPACE_INSET`, py `SPACE_TIGHT`, gap `SPACE_INSET`, rounded `RADIUS_CONTROL`, min `FIELD_MIN_WIDTH` 180, max `VALUE_MAX_WIDTH` 280, label truncated |
 | Text field | `SettingsTextField` | h `HEIGHT_CONTROL`, px `SPACE_CELL`, rounded `RADIUS_CONTROL` |
 | Key combination | `SettingsKeyCombination` | h `HEIGHT_INLINE`, px `SPACE_INSET`, rounded `RADIUS_CONTROL` |
 | Feedback bar | `SettingsFeedback` | mark `SPACE_MARK` wide, px `SPACE_GUTTER`, py `SPACE_INSET` |
@@ -200,9 +203,8 @@ that register; the table above is the general one.
 | Keycap | `Kit::keycap` | px `SPACE_SNUG`, py `SPACE_STACK`, rounded `RADIUS_KEYCAP`, border 1 hairline_strong, mono `TEXT_KEYCAP` |
 | Hint bar | `Kit::hint_bar()` | h `HEIGHT_HINT_BAR`, px `SPACE_PAD`, gap `SPACE_GUTTER`, border_t hairline, bg `washes.fill_hover`, `TEXT_MICRO` text_secondary |
 | Hint | `Kit::hint(key, label)` | gap `SPACE_SNUG`: keycap + label |
-| Rail caption | `components::rail_caption` | h `HEIGHT_CONTROL`, px `SPACE_CELL` |
 | Buttons | `Kit::button_primary/ghost/danger` | px `SPACE_CELL`, py `SPACE_SNUG` |
-| Dropdown menu | `dropdown.rs` | menu p `SPACE_SNUG`, item px `SPACE_INSET`, item gap `SPACE_INSET` |
+| Dropdown menu | `dropdown.rs` | menu p `SPACE_SNUG`, item px `SPACE_INSET`, item gap `SPACE_INSET`, min `MENU_MIN_WIDTH` 214, max `MENU_MAX_WIDTH` 280, label truncated |
 
 Rules for settings scope:
 
@@ -247,6 +249,82 @@ Rules for settings scope:
   marked `Toast::busy()` and spins before its title. The core tools save row
   swaps its keycap for the action spinner while saving.
 
+- **R8** Every heading in a settings surface is the masthead, and its colophon
+  says what that group is for. See "The masthead, the colophon and the trail"
+  below; it is locked copy and geometry, not a starting point.
+
+### The masthead, the colophon and the trail
+
+Locked 2026-09-12 after twelve canvas rounds. Do not redesign any line of this
+without the user asking for it by name.
+
+1. **One masthead, three sizes.** The rail section head, the page heading and
+   every group head are the same component: a lowercase name in the display
+   face (`qol_theme::font_display()`, Saira SemiCondensed SemiBold) over a
+   colophon in accent ink. The rail sits at `TEXT_MASTHEAD`, a group at
+   `TEXT_DISPLAY`. Nothing else may draw a heading.
+2. **The colophon says what the thing is for.** Never a count, never "N
+   settings", never "N fields". A count in a colophon has been rejected by the
+   user more than once: it is a defect, not a fallback. Page and group
+   colophons are lowercase (the component lowercases them) and come from the
+   contract's `[section.*] description`, so a qol-owned contract section
+   without a description is the bug. Fix the contract, never the renderer.
+   The rail masthead is the one exception and carries identity instead of
+   purpose, uppercased: the core version, the installed plugin count.
+3. **The cursor is what amber marks.** `SettingsGroupHeader` is quiet by
+   default, name and colophon both `status_muted`, and a caller earns the ink
+   name and the accent colophon by declaring the cursor with `.current(true)`:
+   the body holds focus and this group holds the selection. Both halves are
+   required, so no page accents a head while the cursor is in the rail, and a
+   core tool page passes its own `body_focused`. One amber place per page,
+   and a head that forgets to ask reads as quiet instead of as the cursor.
+   The masthead name carries `line_height(relative(1.15))`, which is what
+   keeps a descender ("plugins") off the clip edge. The
+   rail obeys the same law: while the cursor is in the body the rail carries
+   no accent at all, so its colophons drop to `text_muted` and the selected
+   item's fill is mixed from `text_muted` instead of the accent
+   (`rail_bg_selected_quiet`). The rail
+   section the selection is not in also drops to `RAIL_SECTION_OPACITY`
+   (0.55), which is what makes the live section read as the live one.
+4. **A masthead closes with a hairline, and nothing else in the body has
+   one.** Every masthead ends in `components::masthead_rule`, a 1px
+   `washes.hairline`: the full width of a group head `SPACE_SNUG` under its
+   colophon, and absolute along the bottom edge of the rail caption band so
+   `HEIGHT_BAND` still holds its text. Nothing else: rows are not
+   underlined, no group is boxed, separation everywhere else is whitespace.
+   The crumb band keeps its bottom hairline, which is window chrome, not a
+   body rule. Row hairlines were tried on 2026-09-12 and rejected by the
+   user; do not bring them back. The masthead rule was asked for by name the
+   same day.
+
+5. **The trail is lowercase names with slashes.** `settings_crumb_trail` at
+   `TEXT_CAPTION` in the display face: earlier crumbs `status_muted` and
+   truncated at `CRUMB_MAX_WIDTH`, the last crumb `section_text`, separators
+   `/` at `SPACE_TIGHT` padding and `status_muted` at alpha `0x70`. The band
+   holding it is `HEIGHT_SETTING_ROW` tall, not `HEIGHT_BAND`, and it carries
+   the trail and nothing else: no count chip, no subtitle, no rule under it.
+6. **The card's left edge is the only amber line on a page.** `SPACE_MARK`
+   wide, `RADIUS_CARD` on the left, drawn by `kit::accent_left_edge` at every
+   depth: root card, deck slivers and the front card of a deck all use
+   `deck::CARD_ACCENT`. No internal spine, no second amber rule.
+7. **The page card slides over the rail.** Opening a source slides the card
+   left by `RAIL_CARD_OVERLAP` (98) while the rail dims to `RAIL_DIM` (0.5)
+   under `kit::rail_scrim`. Dim plus scrim is the cue; do not add a fake blur.
+   Recheck backdrop-blur support in the workspace-selected GPUI source before
+   replacing this treatment with native blur.
+8. **One push, one pop, every depth.** `deck::slide` drives the card motion
+   whether the rail is open or closed, at depth 0 and inside a deck. A card
+   that appears without that slide is a wiring bug. A transition animates only
+   while it is in flight (`transition_in_flight` against its tracker): once it
+   has run, every render draws the settled state, so a card that comes back
+   when a page above it closes never replays its slide or its amber edge.
+   Closing is a drawer: the page being closed stays mounted and slides off to
+   the right through `deck::drawer` while the page underneath is rendered at
+   the same time (`render_level` picks which level the body builds from), and
+   the stack pops when the slide ends or on the next key. Known gap: the core
+   tool editors (`native_tools`) still close instantly. Their drawer rendered
+   an empty card, and that is unsolved.
+
 Settings scope is `libs/gpui/src/settings_panel/**`,
 `libs/gpui/src/gamepad/**`, `libs/gpui/src/kit.rs`, `dropdown.rs`,
 `hint_bar.rs`, `deck.rs`, and `apps/qol-tray/src/settings_surface/**`.
@@ -281,10 +359,23 @@ components.rs.
   confirmed.
 - **Primary** is `--accsolid` on `--onsolid`, one per window. Ink, not amber.
 - **Elevation** is `--float`, and only something that actually floats casts it.
+  In code that is `kit::float_shadow`, two casts at alpha `0x0d` 1px down over
+  a 2px blur and alpha `0x14` 8px down over a 20px blur. It was heavier and the
+  user called the glow excessive on 2026-09-12; keep it a hint of lift.
+- **A control never sizes itself to its content.** A select, its menu and a
+  text field sit between a default width and a maximum and truncate what does
+  not fit, so a long value can never squeeze the label that names it.
+- **The panel re-reads the theme every frame.** `Render` takes both the palette
+  and the `Kit` fresh, so changing the accent repaints the open surface at
+  once. A cached `Kit` is how half a panel kept the old accent.
 - **Separation** is a `--sep` hairline, suppressed beside any washed row so it never
   cuts a state in half.
 - **Errors** never show a raw error string. No errno, no status code, no stack. Say
   what happened and what the user can do.
+- **A group arrives with its head.** Scrolling to the first row of a group
+  reveals that group's masthead too: `SelectionScroll::follow` takes the head
+  as a lead item and scrolls up to it unless the row would leave the viewport.
+  A page that stops scrolling with a head half cut off is a bug.
 - **Live values** show the moment a query answers, a row never waits for the next
   poll tick, and the spinner appears only when the answer is late.
 - **Busy** is the spinner, alone in a value cell and beside a caption everywhere
