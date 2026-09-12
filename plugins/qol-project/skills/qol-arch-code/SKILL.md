@@ -5,6 +5,12 @@ description: Use when designing or refactoring Rust plugins/libs that need clean
 
 # qol-arch-code: Plugin and Cross-Platform Code Layout
 
+For extracting confirmed components from a large module, follow the
+[component extraction workflow](references/component-extraction.md). It provides
+disjoint lane ownership, a deterministic scope/LOC checker, and preservation
+review before the repository verification gate. Use it for structural extraction;
+deduplication and behavior changes are separate objectives.
+
 ## Principle
 
 **Don't sprinkle `#[cfg(target_os)]` through business code.** Compartmentalize platform differences behind a trait or struct facade, with one implementation per OS unless a specific feature capability has its own backend split. Business code calls the abstraction; cfg gates exist only at the wiring layer in `mod.rs`.
