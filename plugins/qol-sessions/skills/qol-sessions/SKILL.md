@@ -121,6 +121,18 @@ The reasoning loop must be idle while implementation runs. Delivery ends the arc
 
 The caller remains the architect and reviewer. The target implements. The target's claim of completion is evidence for step 5, not an acceptance decision. These are responsibilities, never hard-coded products, models, session names, or vendors.
 
+## Verification policy
+
+Verification is the architect's mechanical operation, never lane work.
+After every writer for a scope lands, the architect may invoke repository-owned deterministic formatter and check commands for that scope in-session; no agent turn is spent reproducing formatter output.
+A deterministic formatter run is mechanical verification, not semantic implementation, and licenses no other write.
+Invocations write only the explicitly owned paths for the scope, never follow module graphs or repository defaults beyond them, and never stage or overwrite unrelated edits.
+Checks stay centralized and serialized after fan-in unless isolation is tool-enforced; lane prose asserting isolation never authorizes a lane to run verification commands.
+Tests remain required for acceptance; lint-only or format-only evidence must name every omitted step.
+A machine report establishes a pass only with exact command argv, exit status, scope, and source fingerprint; stale or incomplete reports establish nothing.
+Lane completion, check completion, and architect acceptance are separate states.
+This policy adds no automatic acceptance, retry loop, arbitrary shell hook, or budget widening.
+
 ## Loop retrospective
 
 Every accepted `session_loop_close` is followed by one retrospective pass, run by the architect without waiting for a user prompt.
