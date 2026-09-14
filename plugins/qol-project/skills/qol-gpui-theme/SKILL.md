@@ -135,11 +135,11 @@ and both were shipped bugs.
 | State | Defined once as | Reused by | How you tell it apart |
 |---|---|---|---|
 | Current | `--wash-sel` + `--acc` bar | list entry, card, every surface outside the settings panel | amber bar, neutral wash, hairline frame |
-| Current, in the settings panel | the accent mixed 45% over the surface base, primary ink | rail item, setting row, rule row | a filled band edge to edge, square, no bar; ink on it lifts to 90% of primary so a description still clears the floor |
+| Current, in the settings panel | the band ground: the accent mixed `RAIL_FILL_MIX` (45%) over `accent_fill_base`, hovered as the band hover ground | rail item, setting row, rule row | a filled band edge to edge, square, no bar; the accent turns to ink, and a description clears the floor on `soft` |
 | Needs attention | `--wash-wrn` + `--wrn` bar | row, rule, list entry, warning bar, busy dot | orange bar over a warm wash, no frame |
 | Invalid | `--wash-neg` + `--neg` bar | row, rule, list entry, field, failure bar | red bar and a red frame around the whole row |
 | Focused | `--accsoft` border + `--ring` | field, keycap capture, combo, chip, card, pad button | a solid amber edge inside a soft halo, nothing else halos |
-| Hover | `--fill` | row, rule, list entry | a wash with no bar, never the only signal |
+| Hover | `--fill` | row, rule, list entry | a wash with no bar, never the only signal; a choice value on the row wakes with it |
 | Disabled | `opacity .4` | any row | everything fades together, so no colour reads as live |
 | Window unfocused | `.unfoc` token swap | every surface | accent drops to grey, halo goes to zero |
 | Running / failed | `--pos` / `--neg` + halo | status dot, toast edge, session row | semantic hue, never the user's accent |
@@ -153,6 +153,57 @@ If you soften that ring, focus stops being visible and the surface fails.
 
 Nothing else in a surface carries a halo. A control that always looks focused
 teaches the user nothing.
+
+## Grounds
+
+Locked 2026-09-13 on sheet 17. Four laws:
+
+1. **A ground is what a control sits on.** Pane, rail, band, menu, attention and
+   invalid are grounds. A control never picks its own colours and never gets a
+   patched palette; it reads roles from the ground it sits on.
+2. **A ground mixed from the accent never carries the accent.** On the band the
+   chosen colour is ink, so a switch that is on turns into an ink track with a
+   cut-out knob instead of violet on violet.
+3. **Wells are ink, not surfaces.** A chip, a track or a number well is a
+   translucent ink wash, so it shows up on any ground instead of melting into one.
+4. **Hover lifts a ground, it never replaces it.** Hovering the current row
+   deepens the band; it cannot remove it.
+
+Every ground resolves the same eight roles: `ink`, `soft`, `faint`, `well`,
+`edge`, `mark`, `on mark` and `lift`.
+
+| Ground | `bg` | `soft` | `mark` |
+|---|---|---|---|
+| pane | `system.surface_elevated` | `system.text_secondary` | `system.accent` |
+| rail | `system.surface_rail` | `system.text_rail` | `system.accent` |
+| menu | `system.surface_raised` | `system.text_secondary` | `system.accent` |
+| attention | `mix(system.surface_elevated, system.warning, washes.wash_attention.alpha_milli)` | `system.text_secondary` | `system.warning` |
+| invalid | `mix(system.surface_elevated, system.danger, washes.wash_invalid.alpha_milli)` | `system.text_secondary` | `system.danger` |
+| band | `mix(system.accent_fill_base, system.accent, RAIL_FILL_MIX)`, the existing `fill_current` | `floored_mix(bg, ink, 820, 4.5)` | `ink` |
+| band hover | `band.lift` | `floored_mix(bg, ink, 820, 4.5)` | `ink` |
+
+A surface ground (pane, rail, menu, attention, invalid) resolves `ink` as
+`system.text_primary`, `faint` as `system.text_muted`, `well` as
+`washes.fill_resting`, `edge` as `washes.hairline`, `on mark` as its own `bg`,
+and `lift` as `mix(bg, ink, 50)`.
+
+A ground mixed from the accent (band and band hover) resolves `ink` as
+`system.text_primary`, `faint` as `floored_mix(bg, ink, 660, 3.0)`, `well` as
+`css_rgba_milli(ink, 140)`, `edge` as `css_rgba_milli(ink, 240)`, `mark` as
+`ink`, `on mark` as its own `bg`, and `lift` as `mix(bg, ink, 80)`.
+
+`floored_mix(bg, ink, permille, floor)` is `mix(bg, ink, p)` for the smallest `p`
+starting at `permille` and rising in steps of 10 up to 1000 whose WCAG contrast
+against `bg` reaches `floor`, or `ink` when none does. The floor only moves
+`soft` and `faint` where the locked 820 and 660 fall short: dark green and dark
+cyan at rest, and dark amber, green and cyan on hover. Violet, blue, magenta and
+every light preset keep the locked values exactly. Ink and soft clear 4.5:1 and
+faint clears 3:1 on every ground, in all twelve accent presets, at rest and on
+hover.
+
+Components read roles from the ground they sit on, so the same switch paints
+itself correctly on the pane and on the band. The code home is `SettingsGrounds`
+in `libs/theme/src/lib.rs`.
 
 ## Component register
 
@@ -182,6 +233,14 @@ The plugin contract panel and the qol core tools (`__core-shortcuts`,
 component that exists for only one of them is a defect. This is the code truth for
 that register; the table above is the general one.
 
+A core tool reaches the panel chrome through `CustomSettingsBreadcrumbs`.
+`settings_breadcrumbs` adds its words to the trail, and `settings_hints` returns
+`CustomHints { question, left, right }`, where the panel adds `esc back` when
+`right` is empty. While a core tool reports a crumb its own deck is deeper than
+its list, so the panel draws no accent edge on the tool's card and the tool's
+`deck::render` draws every edge and mark. Both hosts build choose cards from the
+same `tile_arts`, `choose_step` and `choose_hints`.
+
 | Component | Symbol | Geometry |
 |---|---|---|
 | Page body | `components::settings_page()` | `flex_1 min_h_0 flex flex_col`, px `SPACE_PAD`, pb `SPACE_PAD`, gap `SPACE_TIGHT` |
@@ -193,9 +252,11 @@ that register; the table above is the general one.
 | Label group | `components::settings_label_group(label, Option<description>, palette)` | `flex_1 min_w_0 flex flex_col`, gap `SPACE_STACK`; `settings_label` + optional `settings_description` |
 | Value group | `settings_value_group()` | gap `SPACE_INSET` |
 | Toggle | `SettingsToggle` | 40 x 24 track (`HEIGHT_INLINE - 4`), knob inset `SPACE_STACK` |
-| Select value chip | `SettingsSelectValue` | px `SPACE_INSET`, py `SPACE_TIGHT`, gap `SPACE_INSET`, rounded `RADIUS_CONTROL`, min `FIELD_MIN_WIDTH` 180, max `VALUE_MAX_WIDTH` 280, label truncated |
-| Text field | `SettingsTextField` | h `HEIGHT_CONTROL`, px `SPACE_CELL`, rounded `RADIUS_CONTROL` |
+| Choice value | `SettingsChoiceValue` with `ChoiceArt` | every select row, single or multi, and the display mode row: word `TEXT_BODY` truncated at `CHOICE_WORD_MAX_WIDTH` 180, art box `CHOICE_PICTURE_WIDTH` x `CHOICE_PICTURE_HEIGHT` 56 x 35 drawn by `pictures::fitted_image`, or by `pictures::stacked_image` for two chosen pictures, arrow 8 x 14 drawn by `pictures::chevron`, gap `SPACE_CELL`; no fill, border or chip |
+| Text field | `SettingsTextField`, and `SettingsTextField::live(field, row, palette)` for the field being typed into | h `HEIGHT_CONTROL`, px `SPACE_CELL`, rounded `RADIUS_CONTROL`, min `TEXT_FIELD_MIN_WIDTH` 220, max `FIELD_MAX_WIDTH` 320; the live field is focused, grows with its text between the two widths and draws its caret, and every key reaches it through `text_edit::apply_edit_key`, which answers `EditKey::Changed`, `Handled` or `Ignored` |
 | Key combination | `SettingsKeyCombination` | h `HEIGHT_INLINE`, px `SPACE_INSET`, rounded `RADIUS_CONTROL` |
+| Modifier chip | `SettingsModifierChip` | the `Kit::keycap` recipe on its row ground: on is a `well` fill with `ink` text, off has no fill and `faint` text; the border is `ink` at the cursor, `soft` when on, else `edge` |
+| Mono label | `components::settings_mono_label(text, row, palette)` | `flex_1 min_w_0`, truncated, mono `TEXT_CAPTION`, `soft` on the pane and `ink` on the band |
 | Feedback bar | `SettingsFeedback` | mark `SPACE_MARK` wide, px `SPACE_GUTTER`, py `SPACE_INSET` |
 | Message | `components::settings_message(text, danger: bool, palette)` | `flex_1 flex items_center justify_center`, `TEXT_BODY`, colour `status_muted` or `status_danger` when danger; returns `Div` |
 | Count chip | `Kit::count_chip(count, label)` | h `HEIGHT_INLINE` (28), px `SPACE_INSET`, gap `SPACE_SNUG`, rounded `RADIUS_CONTROL`, border 1 hairline, bg `washes.fill_resting`, `TEXT_MICRO`, count SEMIBOLD text_primary, label text_secondary |
@@ -204,7 +265,13 @@ that register; the table above is the general one.
 | Hint bar | `Kit::hint_bar()` | h `HEIGHT_HINT_BAR`, px `SPACE_PAD`, gap `SPACE_GUTTER`, border_t hairline, bg `washes.fill_hover`, `TEXT_MICRO` text_secondary |
 | Hint | `Kit::hint(key, label)` | gap `SPACE_SNUG`: keycap + label |
 | Buttons | `Kit::button_primary/ghost/danger` | px `SPACE_CELL`, py `SPACE_SNUG` |
-| Dropdown menu | `dropdown.rs` | menu p `SPACE_SNUG`, item px `SPACE_INSET`, item gap `SPACE_INSET`, min `MENU_MIN_WIDTH` 214, max `MENU_MAX_WIDTH` 280, label truncated |
+| Dropdown menu | `dropdown.rs` | list item action menus only, never a select: menu p `SPACE_SNUG`, item px `SPACE_INSET`, item gap `SPACE_INSET`, min `MENU_MIN_WIDTH` 214, max `MENU_MAX_WIDTH` 280, label truncated |
+| Row ground | `components::RowGround` | pane at rest, band when the row is selected with the body focused, band hover through `group_hover(SETTINGS_ROW_GROUP)` |
+| Settings tile | `components::SettingsTile` with `TileArt`, `tile_layout`, `settings_tile_rows` and `TILE_HEIGHT` | `TILE_HEIGHT` 116, px `SPACE_SNUG`, gap `layout.gap`, rounded `RADIUS_CARD`; art 112 x 70 at three per row, 104 x 65 at four and 88 x 55 at five; grid gap `SPACE_CELL` at three and four per row and `SPACE_INSET` at five; name `TEXT_CAPTION`, `TEXT_MICRO` at five per row; tick 16 x 12 at top `SPACE_CELL`, right `SPACE_INSET`; `settings_tile_rows` pads the first row by `SPACE_INSET`; `tile_arts` gives each option its valid picture, else `letters_for` letters, else `letters:?`; `choose_step` moves the highlight and stops at every edge; `choose_hints` is `↵ choose` with `←→ move`, or `←→↑↓ move` once the tiles wrap |
+| Hint bar (question) | `components::SettingsHintBar` with `SettingsHint` and `HintTone` | resting: `kit().hint_bar()` with the left hints, a spacer and the right hints; question: the bar fills `css_rgba_milli(grounds.pane.ink, 70)`, a `SPACE_MARK` left mark in `grounds.pane.faint`, the question `TEXT_CAPTION` semibold in ink, then the hints; `hint_tone_color` gives `state_on` for `Save` and `state_off` for `Discard`, each keycap edged in its hue at alpha `0x73`; `SettingsHint::busy(label)` draws `settings_action_spinner` at 12 px where the keycap would be, then its label |
+| Tile spinner | `components::settings_tile_spinner` | 44 px (`TILE_SPINNER_SIZE`) in `grounds.pane.faint` |
+| Tick | `pictures::tick` | the locked 16 x 12 markup: a 6 x 11 box with 2 px right and bottom borders turned 45 degrees about its centre; drawn in a tile in `grounds.pane.mark` at rest and `grounds.band.ink` when highlighted |
+| Deck | `deck::render` with `DeckFrame`, `deck::resting`, `deck::edge_alpha` and `deck::rail_opacity` | front card rests at `9d+1`; sliver `i` at left `9i`, 12 wide, inset `7(d-i)`; sliver edge `status_muted` at `max(0.08, 0.5 x 0.62^(d-1-i))`; rail `max(0.12, 0.5 x 0.65^(d-1))`, 0.5 at depth 0 and 1; mark `HEIGHT_INLINE` at `top(y - 14 - inset)`; `DeckFrame.on_sliver` takes a click on sliver `i`, and every card, sliver and drawer calls `.occlude()` |
 
 Rules for settings scope:
 
@@ -246,8 +313,9 @@ Rules for settings scope:
   loading, same frame as `settings_message`). A value cell waiting on a query
   shows the spinner alone, status rows included. A status value that is null
   shows an en dash, not loading. A toast for an operation still running is
-  marked `Toast::busy()` and spins before its title. The core tools save row
-  swaps its keycap for the action spinner while saving.
+  marked `Toast::busy()` and spins before its title. A core tool saving from
+  its question keeps the question up with `SettingsHint::busy("saving")`, the
+  action spinner where the keycap would be.
 
 - **R8** Every heading in a settings surface is the masthead, and its colophon
   says what that group is for. See "The masthead, the colophon and the trail"
@@ -271,6 +339,13 @@ without the user asking for it by name.
    without a description is the bug. Fix the contract, never the renderer.
    The rail masthead is the one exception and carries identity instead of
    purpose, uppercased: the core version, the installed plugin count.
+
+   Every card also carries a colophon from contract copy, lowercase like the
+   others. A select, list, live card or display layout card uses the field's
+   `card_description`. The add card uses "a new {item_label}.", an entry card
+   "a {item_label}." (`an` before a vowel), and a nested string list uses the
+   `lists` `card_description` with `{entry}` replaced by the entry's crumb. At
+   most 36 characters (`CARD_DESCRIPTION_MAX`).
 3. **The cursor is what amber marks.** `SettingsGroupHeader` is quiet by
    default, name and colophon both `status_muted`, and a caller earns the ink
    name and the accent colophon by declaring the cursor with `.current(true)`:
@@ -304,32 +379,38 @@ without the user asking for it by name.
    holding it is `HEIGHT_SETTING_ROW` tall, not `HEIGHT_BAND`, and it carries
    the trail and nothing else: no count chip, no subtitle, no rule under it.
 6. **The card's left edge is the only amber line on a page.** `SPACE_MARK`
-   wide, `RADIUS_CARD` on the left, drawn by `kit::accent_left_edge` at every
-   depth: root card, deck slivers and the front card of a deck all use
-   `deck::CARD_ACCENT`. No internal spine, no second amber rule.
+   wide, `RADIUS_CARD` on the left, drawn by `kit::accent_left_edge`. Only the
+   front card carries the accent edge. Behind it, sliver `i` at depth `d` has a
+   grey edge at alpha `max(0.08, 0.5 x 0.62^(d-1-i))`, the steep fade. Every
+   sliver keeps a 28 px grey mark at `0.9` of its edge alpha, centred on the row
+   that opened the next card. No internal spine, no second amber rule.
 7. **The page card slides over the rail.** Opening a source slides the card
-   left by `RAIL_CARD_OVERLAP` (98) while the rail dims to `RAIL_DIM` (0.5)
-   under `kit::rail_scrim`. Dim plus scrim is the cue; do not add a fake blur.
-   Recheck backdrop-blur support in the workspace-selected GPUI source before
-   replacing this treatment with native blur.
+   left by `RAIL_CARD_OVERLAP` (98) while the rail dims under `kit::rail_scrim`.
+   At depth `d` the rail opacity is `deck::rail_opacity(d)`,
+   `max(0.12, 0.5 x 0.65^(d-1))`: 0.5 is the depth 1 value and every deeper
+   card takes about a third off it.
+   Dim plus scrim is the cue; do not add a fake blur. Recheck backdrop-blur
+   support in the workspace-selected GPUI source before replacing this treatment
+   with native blur.
 8. **One push, one pop, every depth.** `deck::slide` drives the card motion
-   whether the rail is open or closed, at depth 0 and inside a deck. A card
-   that appears without that slide is a wiring bug. A transition animates only
-   while it is in flight (`transition_in_flight` against its tracker): once it
-   has run, every render draws the settled state, so a card that comes back
-   when a page above it closes never replays its slide or its amber edge.
-   Closing is a drawer: the page being closed stays mounted and slides off to
-   the right through `deck::drawer` while the page underneath is rendered at
-   the same time (`render_level` picks which level the body builds from), and
-   the stack pops when the slide ends or on the next key. Known gap: the core
-   tool editors (`native_tools`) still close instantly. Their drawer rendered
-   an empty card, and that is unsolved.
+   whether the rail is open or closed, at depth 0 and at any depth inside a
+   deck. Lists, entries, Add, nested string lists and selects each open a card
+   with that slide, and the trail gains one word per card. Cards stack at any
+   depth, and clicking a sliver goes back to that level. A card that appears
+   without that slide is a wiring bug. A transition animates only while it is
+   in flight (`transition_in_flight` against its tracker): once it has run,
+   every render draws the settled state, so a card that comes back when a page
+   above it closes never replays its slide or its amber edge. Closing is a
+   drawer: the page being closed stays mounted and slides off to the right
+   through `deck::drawer` while the page underneath is rendered at the same
+   time (`render_level` picks which level the body builds from), and the stack
+   pops when the slide ends or on the next key.
 
 Settings scope is `libs/gpui/src/settings_panel/**`,
 `libs/gpui/src/gamepad/**`, `libs/gpui/src/kit.rs`, `dropdown.rs`,
 `hint_bar.rs`, `deck.rs`, and `apps/qol-tray/src/settings_surface/**`.
 
-The guard tests live in `libs/qol-theme/tests/theme.rs`:
+The guard tests live in `libs/theme/tests/theme.rs`:
 `gpui_surfaces_do_not_use_rem_spacing_helpers`,
 `gpui_spacing_literals_stay_on_the_space_ladder`,
 `settings_surfaces_declare_no_local_spacing_constants`,
@@ -352,6 +433,11 @@ components.rs.
 - **A click outside a menu** closes it, and the click still lands where it was aimed. In a
   settings panel a click on the body also takes the cursor from the rail, so the next
   Escape closes the innermost thing there, never the window.
+- **A card blocks the mouse.** A gpui hitbox under a painted element still takes
+  clicks, so every card, sliver and drawer calls `.occlude()`. Without it a
+  sliver click also switched plugins through the rail item beneath.
+- **A rail click from a card** asks first when the top form changed, and
+  otherwise lands on the chosen source's page with no cards open.
 - **Arrow keys** move the amber bar. The bar is the cursor and it never lives in two
   lists at once.
 - **Clickable** means a border or a fill. Flat text is never a button.
@@ -362,9 +448,10 @@ components.rs.
   In code that is `kit::float_shadow`, two casts at alpha `0x0d` 1px down over
   a 2px blur and alpha `0x14` 8px down over a 20px blur. It was heavier and the
   user called the glow excessive on 2026-09-12; keep it a hint of lift.
-- **A control never sizes itself to its content.** A select, its menu and a
+- **A control never sizes itself to its content.** A menu chip, its menu and a
   text field sit between a default width and a maximum and truncate what does
-  not fit, so a long value can never squeeze the label that names it.
+  not fit. A choice value truncates its word at 180 and keeps its art and arrow
+  at fixed sizes. A long value can never squeeze the label that names it.
 - **The panel re-reads the theme every frame.** `Render` takes both the palette
   and the `Kit` fresh, so changing the accent repaints the open surface at
   once. A cached `Kit` is how half a panel kept the old accent.
@@ -381,14 +468,135 @@ components.rs.
 - **Busy** is the spinner, alone in a value cell and beside a caption everywhere
   else. Text never animates.
 
+## Leaving a changed card
+
+Locked 2026-09-13. There is no Save row, no autosave and no inline draft: a card
+holds its changes while it is open, and leaving it is what decides them.
+
+Esc on a changed form card turns the hint bar into the question. The bar is a
+plain ink lift, ink at 7 percent over the hint bar, with a 3 px faint mark on
+the left and the question in 13.5 px semibold ink. `↵` save is in `success`
+(`state_on`) and `esc` discard in `danger` (`state_off`), each keycap edged in
+its own hue at 45 percent.
+
+Any other key closes the question and does its normal job. A required empty
+field blocks with a sentence in the bar, and `↵` goes to that field. Esc twice
+discards.
+
+The Shortcuts and Hotkeys editors are form cards that ask the same way. Their
+crumb is fixed when the card opens, `secondary+↵` asks at once and saves when
+nothing blocks, and while the save runs the question stays up beside the busy
+`saving` hint. A failed save keeps the card and its question.
+
+## Picture choices
+
+Locked 2026-09-13 on the pictures page. All 28 selects open a card of picture
+tiles, and the markup is identical to the locked `pics.mjs` output. The core
+tools' five selects (Action, App reference, Browser reference, Plugin and the
+hotkey's Action) open the same card at depth 2 of the tools deck.
+
+- The tile is 116 px tall with radius 9: an inset `hairline_strong` ring at
+  rest, the band fill when highlighted with no ring.
+- The art box is 112 x 70, or 104 x 65 at four per row and 88 x 55 at five.
+- The name is 13.5 px (12.5 at five per row) in `soft`, or `ink` when
+  highlighted, clamped to two lines. The detail after " · " is 11.5 px in
+  `faint`, or the band's `soft` when highlighted, truncated.
+- The tick sits top right at 12 px, in the accent at rest and `ink` on the
+  band.
+- The waiting tile has a hairline ring, a 44 px spinner in the art box and the
+  name in `faint`.
+- Up to 6 options show 3 tiles per row, up to 8 show 4, and more show 5. Two
+  rows are visible, then the card scrolls, and arrows move.
+- The layout snaps to the ladder: the grid gap is `SPACE_CELL` at three and
+  four per row and `SPACE_INSET` at five, the gap between art and words is
+  `SPACE_INSET`, `SPACE_SNUG` at five per row, and the name and detail lines
+  have no gap.
+
+The band marks the highlight, and the tick marks the saved value. The tick is
+left out while adding, for a field the saved entry did not have, and for a
+hotkey action once its plugin changed. An option without a picture gets a
+letter tile. Pictures are
+drawn in ink by `qol_gpui::pictures` from the spec grammar in
+`docs/plugin-contract.md`. A picture never shows a key the user binds, and a
+system default is the device drawn on a screen. The Bone desktop picture draws
+with the shipped light palette, whose edge and soft differ from the canvas
+literal.
+
+The pixel reference is the design lock snapshot at
+`~/.claude/projects/-media-kmrh47-WD-SN850X-Git-qol-monorepo/design-locks/settings-choice-pictures-v14/`
+(`nownext/pics.mjs` sha256
+`3825c20e98c7b8639b242ac84a957efd3914a481e8edf55229718ae73d0a04e1`,
+`nownext/choices.mjs` sha256
+`341b3b614b116ff0b8c95ec4469546a4be67fa64fa4c97b84822a9ad6e1bd345`), and the
+goldens in `libs/gpui/tests/fixtures/pictures` hold it in the repo.
+
+### Choice values
+
+Locked 2026-09-14 as design G1, snapshotted in
+`~/.claude/projects/-media-kmrh47-WD-SN850X-Git-qol-monorepo/design-locks/settings-select-row-g1/`
+with `png/RowsG1.png` as the reference. A select row whose value opens a
+picture card never draws a chip, because a boxed value with an arrow reads as
+a dropdown.
+
+- `SettingsChoiceValue` shows the value word, the chosen option's art in a
+  56 x 35 box and an 8 x 14 arrow, `SPACE_CELL` apart. The word is
+  `TEXT_BODY` and truncates at 180; the box and the arrow never change size.
+- The art is the option's tile art from its card: its valid picture, else its
+  letters.
+- `pictures::fitted_image` draws a picture whole. Its stroke bounds are
+  scaled to fit the box and centred, nothing is cropped or clipped, and lines
+  at the default width render 1 px. A colour choice fills the box at radius 6.
+  Letters sit on a 56 x 35 tile of the line colour at 20 percent inside a
+  1 px ring at 80 percent, in 16 px SemiBold.
+- At rest the word is `faint` and the arrow is `faint` at 40 percent. The art
+  rests: explicit stroke colours take the line colour (`soft`), explicit fills
+  become the line colour at 12 percent, and the art sits at 70 percent,
+  desaturated. Mask contents keep their colours. A colour choice is exempt: a
+  `swatch` keeps its own colour at full strength at rest, neither faded nor
+  desaturated, because the colour is the value.
+- The pointer wakes a pane row: the word turns `soft`, the art shows its own
+  colours at full strength and the arrow is full. On the band the art stays
+  awake with `ink` as its line colour, and the arrow is band `faint`.
+- A multi-select row is a choice value too. Its word lists the chosen names,
+  the part of each label before ` · `, joined by `, `, or reads `none`. With
+  nothing chosen the art is the `empty` tile: a 56 x 35 ring at radius 6 in the
+  line colour at 80 percent, dashed 3 on 3, with no wash. One chosen option
+  shows its own art. Two or more stack the first two: the second one's art is
+  fitted into 44 x 27.5 at (12, 0) at 50 percent, the box is cut away under a
+  44 x 27.5 rounded rect (radius 4.5) at (0, 7.5) so the row ground shows
+  through, and the first one's art is fitted into that rect in front. Letters
+  in the stack sit on a 44 x 27.5 tile at radius 4.5 in 12 px SemiBold. Locked
+  2026-09-14 as H2 and H6, snapshotted in
+  `~/.claude/projects/-media-kmrh47-WD-SN850X-Git-qol-monorepo/design-locks/settings-last-dropdowns/`.
+- ↵ on a multi-select opens the same picture card as a select. A tick marks
+  every chosen tile, ↵ or a click ticks or unticks the highlighted tile and
+  saves at once, and the card stays open until esc. The ↵ hint reads `tick` or
+  `untick` for the highlighted tile, and the highlight opens on the first
+  chosen tile.
+- The Resolution and refresh row of the display Arrangement card is a choice
+  value. Its word is the staged or current mode, such as `2560x1440 · 165 Hz`
+  (`2560x1440` without a refresh rate), and its art is
+  `display-mode:<width>x<height>`: a screen in the mode's own shape, scaled to
+  fit 76 x 44 in the 96 x 60 art space, radius 4, centred, with a 6 high stand
+  and a 16 wide foot. ↵ opens a picture card of the selected display's modes
+  under the sub header `Size and refresh for this display.`, ticked on the
+  staged mode, else the current one; choosing a tile stages that mode and
+  returns to the Arrangement card. Locked 2026-09-14 as J1.
+- No select opens a floating dropdown, and `SettingsSelectValue` is gone.
+  `dropdown.rs` serves list item action menus only.
+
 ## Relationship to qol-theme and kit.rs
 
 The theme is real code, not a mood board, and it has drifted from this spec. Both
 sides are named here so the delta is visible instead of argued about.
 
-`libs/qol-theme/src/lib.rs` owns the palette as `SystemPalette`, built from
+`libs/theme/src/lib.rs` owns the palette as `SystemPalette`, built from
 `LIGHT_REFERENCE` / `DARK_REFERENCE`. That is the SSOT for colour; never introduce
-a colour literal in `libs/gpui`.
+a colour literal in `libs/gpui`. The same file owns the surfaces' ground table as
+`SettingsGrounds`: the six grounds plus band hover, each with its eight roles.
+`desktop_theme_preview(mode, accent_key)`, `web_theme_preview(theme_key)` and
+`accent_swatch(mode, accent_key)` describe a theme for the theme and accent
+pictures without building a live surface.
 
 Known deltas from V2, each one a decision waiting to be made rather than a bug to
 fix silently:
@@ -447,7 +655,7 @@ proposed, not slipped into an unrelated change.
 
 ## Changing the theme
 
-The theme is versioned. This is V2.1. V2 was agreed 2026-08-21, after an audit that found
+The theme is versioned. This is V2.5. V2 was agreed 2026-08-21, after an audit that found
 the focus ring defined six times and invisible in all six, a height class that set
 a different height than its name, a state that existed only in the light theme, and
 twenty distinct type sizes across two rival scales.
@@ -459,6 +667,16 @@ V2.1 also names the single focus owner for settings surfaces (R6), after a core
 tool reopened from the launcher lost its selection to a second focus path.
 V2.1 also adds R7, one progress cue, after the PointZerver pairing code row
 spelled loading in text forever while every other row spun.
+
+V2.2, agreed 2026-09-13: grounds, cards at any depth, the save question and
+picture choices, locked on the canvas at
+https://claude.ai/code/artifact/215304ee-6161-4de9-a6d1-c38f377d3b81.
+
+V2.3, agreed 2026-09-14: a select row that opens a picture card shows its word, the chosen picture fitted whole and an arrow, quiet at rest and awake on the highlight and under the pointer, locked on the canvas at https://claude.ai/code/artifact/215304ee-6161-4de9-a6d1-c38f377d3b81 as design G1.
+
+V2.4, agreed 2026-09-14: every select row is a choice value, multi-selects and display modes included: a dashed empty tile when nothing is chosen, two stacked pictures when several are, a card with a tick on every chosen tile, and display modes drawn as screens in their own shape, locked on the canvas at https://claude.ai/code/artifact/215304ee-6161-4de9-a6d1-c38f377d3b81 as H2, H6, J1 and the multi-select card.
+
+V2.5, agreed 2026-09-14: a colour choice keeps its own colour at rest instead of greying out with the other pictures, asked for by the user after V2.4 shipped.
 
 A change to any token, ladder or state definition is a new version: update this
 file first, then the deck, then the code, in that order. A change that lands in one
