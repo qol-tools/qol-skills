@@ -148,7 +148,76 @@ function claimQueries(queries) {
   } catch {}
 }
 
-function unansweredQueue() {
+function mutesFile() {
+  const dir = storeDir();
+  return dir ? join(dir, "qolmem-mutes.json") : null;
+}
+
+function readMutes() {
+  const file = mutesFile();
+  if (!file) return [];
+  let parsed;
+  try {
+    parsed = JSON.parse(readFileSync(file, "utf8"));
+  } catch {
+    return [];
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return [];
+  const records = [];
+  for (const [key, record] of Object.entries(parsed)) {
+    if (!record || typeof record !== "object" || Array.isArray(record)) continue;
+    if (typeof record.query !== "string" || !record.query.length) continue;
+    if (!Number.isFinite(record.ts)) continue;
+    if (!Array.isArray(record.norms)) continue;
+    const norms = record.norms.filter((norm) => typeof norm === "string" && norm.length);
+    records.push({ key, query: record.query, ts: record.ts, norms });
+  }
+  return records;
+}
+
+function mutedQueue() {
+  return readMutes().sort((a, b) => b.ts - a.ts);
+}
+
+function mutesMap() {
+  const map = {};
+  for (const record of readMutes()) {
+    map[record.key] = { query: record.query, ts: record.ts, norms: record.norms };
+  }
+  return map;
+}
+
+function muteEntries(groups) {
+  const file = mutesFile();
+  if (!file) return 0;
+  const map = mutesMap();
+  let written = 0;
+  for (const group of groups) {
+    const key = normalizeQuery(group.query);
+    const variants = Array.isArray(group.variants) ? group.variants : [];
+    const norms = [...new Set([key, ...variants.map((variant) => normalizeQuery(variant))])];
+    map[key] = { query: group.query, ts: Date.now(), norms };
+    written += 1;
+  }
+  try {
+    writeFileSync(file, JSON.stringify(map) + "\n");
+  } catch {}
+  return written;
+}
+
+function unmuteKey(key) {
+  const file = mutesFile();
+  if (!file) return false;
+  const map = mutesMap();
+  if (!Object.prototype.hasOwnProperty.call(map, key)) return false;
+  delete map[key];
+  try {
+    writeFileSync(file, JSON.stringify(map) + "\n");
+  } catch {}
+  return true;
+}
+
+function unansweredQueue({ all = false } = {}) {
   const dir = storeDir();
   if (!dir) return [];
   let text;
@@ -185,8 +254,8 @@ function unansweredQueue() {
   const claimed = (e) => claims.some(([norm, ts]) =>
     ts >= e.ts && (norm === e.norm || norm.startsWith(e.norm) || e.norm.startsWith(norm))
   );
-  const all = [...latest.values()];
-  const superseded = (e) => all.some((other) => {
+  const candidates = [...latest.values()];
+  const superseded = (e) => candidates.some((other) => {
     if (other.norm === e.norm) return false;
     if (other.norm.length > e.norm.length && other.norm.startsWith(e.norm)) return true;
     if (!e.times.some((mine) => other.times.some((theirs) => theirs > mine && theirs - mine <= TYPING_GAP_MS))) {
@@ -194,7 +263,10 @@ function unansweredQueue() {
     }
     return sharedPrefix(e.norm, other.norm) >= Math.max(TYPING_MIN_PREFIX, Math.min(e.norm.length, other.norm.length) / 2);
   });
-  const survived = all.filter((e) => UNANSWERED.has(e.verdict) && !claimed(e) && !superseded(e));
+  const mutedNorms = new Set(readMutes().flatMap((record) => record.norms));
+  const survived = candidates.filter((e) =>
+    UNANSWERED.has(e.verdict) && !claimed(e) && !superseded(e) && !mutedNorms.has(e.norm)
+  );
   survived.sort((a, b) => b.ts - a.ts);
   const groups = [];
   for (const entry of survived) {
@@ -210,7 +282,8 @@ function unansweredQueue() {
       groups.push({ words, query: entry.query, ts: entry.ts, variants: [entry.query] });
     }
   }
-  return groups.slice(0, CAP).map((g) => ({ query: g.query, ts: g.ts, variants: g.variants }));
+  const limited = all ? groups : groups.slice(0, CAP);
+  return limited.map((g) => ({ query: g.query, ts: g.ts, variants: g.variants }));
 }
 
 async function dropAnswered(queue, timeoutMs = 1500) {
@@ -248,4 +321,4 @@ async function dropAnswered(queue, timeoutMs = 1500) {
   return kept;
 }
 
-module.exports = { storeDir, unansweredQueue, claimQueries, dropAnswered, lanesDir, collectReceipts };
+module.exports = { storeDir, unansweredQueue, claimQueries, dropAnswered, lanesDir, collectReceipts, readMutes, mutedQueue, muteEntries, unmuteKey };

@@ -45,10 +45,10 @@ async function run() {
   const queue = await dropAnswered(unansweredQueue());
   const count = queue.length;
   const countLine = count > 0
-    ? `qol-memory: ${count} unanswered launcher questions - type: qolmem gen`
+    ? `qol-memory: ${count} unanswered launcher questions - qolmem list shows them, qolmem gen answers them`
     : '';
   const systemMessage = [
-    count > 0 ? `qol-memory: ${count} unanswered launcher questions - answer them with \`qolmem gen\`` : '',
+    count > 0 ? `qol-memory: ${count} unanswered launcher questions - qolmem list shows them, qolmem gen answers them` : '',
     receiptText,
   ].filter(Boolean).join('\n');
   let result;

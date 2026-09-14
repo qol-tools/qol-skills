@@ -15,6 +15,10 @@ Call `qol-memory__ask` before re-deriving a fact about paths, decisions, commits
 
 Call `qol-memory__capture` when a session settles something a later session needs. The tool expects one self-contained sentence that carries the identifiers a later reader needs (paths, commit subjects, decision names), plus the absolute project directory as `cwd`.
 
+## Refill commands
+
+The continue block's unanswered launcher questions can be inspected and dismissed without launching an answering lane. `qolmem list` prints the waiting questions and the muted ones with their ages, and `qolmem mute <n>` and `qolmem unmute <n>` move the numbered entries between those lists, so a muted question stays out of the queue even when it is asked again. `qolmem gen` launches one background answering lane for the waiting questions.
+
 ## Store health and the continue block
 
 `qol-memory__status` reports store health. The session-start continue block lists the memory units that landed since the last session in this directory, so a fresh session starts with the newest settled facts without asking.

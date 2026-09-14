@@ -5,9 +5,9 @@ const { spawnSync } = require("node:child_process");
 const { readFileSync, readdirSync, existsSync } = require("node:fs");
 const { homedir } = require("node:os");
 const { join, dirname } = require("node:path");
-const { collectReceipts, unansweredQueue, claimQueries, dropAnswered } = require("./qolmem-lib.cjs");
+const { collectReceipts, unansweredQueue, claimQueries, dropAnswered, mutedQueue, muteEntries, unmuteKey } = require("./qolmem-lib.cjs");
 
-const GEN_RE = /^\s*qolmem(\s+gen)?\s*$/i;
+const COMMAND_RE = /^\s*qolmem(?:\s+(?:(gen)|(list)|(mute|unmute)(?:\s+(\d+))?))?\s*$/i;
 
 // A launcher question names any project on the machine, so the answerer needs
 // every checkout it could be about: the parent of the current repo plus the
@@ -79,20 +79,71 @@ if (!payload || typeof payload !== "object") process.exit(0);
 const prompt = typeof payload.prompt === "string" ? payload.prompt : "";
 const receipts = collectReceipts();
 const receiptText = receipts.map((r) => r.summary).join("\n");
-if (receipts.length && !GEN_RE.test(prompt)) {
-  process.stdout.write(JSON.stringify({
-    systemMessage: receiptText,
-    hookSpecificOutput: {
-      hookEventName: "UserPromptSubmit",
-      additionalContext: receiptText,
-    },
-  }) + "\n");
+const commandMatch = COMMAND_RE.exec(prompt);
+if (!commandMatch) {
+  if (receipts.length) {
+    process.stdout.write(JSON.stringify({
+      systemMessage: receiptText,
+      hookSpecificOutput: {
+        hookEventName: "UserPromptSubmit",
+        additionalContext: receiptText,
+      },
+    }) + "\n");
+  }
   process.exit(0);
 }
-if (!GEN_RE.test(prompt)) process.exit(0);
+const keyword = commandMatch[1] || commandMatch[2] || commandMatch[3];
+const command = keyword ? keyword.toLowerCase() : "gen";
+const index = commandMatch[4] === undefined ? null : Number(commandMatch[4]);
+
+function age(ts) {
+  const minutes = Math.floor((Date.now() - ts) / 60000);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  return `${Math.floor(hours / 24)}d`;
+}
 
 async function main() {
   const receiptPrefix = receipts.length ? receiptText + "\n" : "";
+
+  if (command === "list") {
+    const waiting = await dropAnswered(unansweredQueue({ all: true }));
+    const muted = mutedQueue();
+    if (!waiting.length && !muted.length) block(receiptPrefix + "qolmem: no unanswered questions.");
+    const lines = [`qolmem: ${waiting.length} waiting, ${muted.length} muted`];
+    waiting.forEach((entry, i) => lines.push(`${i + 1}. ${entry.query} (${age(entry.ts)})`));
+    if (muted.length) {
+      lines.push("muted:");
+      muted.forEach((record, i) => lines.push(`${i + 1}. ${record.query} (muted ${age(record.ts)})`));
+    }
+    block(receiptPrefix + lines.join("\n"));
+  }
+
+  if (command === "mute") {
+    if (index === null) block(receiptPrefix + "qolmem: usage: qolmem mute <n> (see qolmem list)");
+    const waiting = await dropAnswered(unansweredQueue({ all: true }));
+    const muted = mutedQueue();
+    if (index < 1 || index > waiting.length) {
+      block(receiptPrefix + `qolmem: no waiting question ${index}; qolmem list shows ${waiting.length}.`);
+    }
+    const entry = waiting[index - 1];
+    muteEntries([entry]);
+    block(receiptPrefix + `qolmem: muted "${entry.query}"; ${waiting.length - 1} waiting, ${muted.length + 1} muted.`);
+  }
+
+  if (command === "unmute") {
+    if (index === null) block(receiptPrefix + "qolmem: usage: qolmem unmute <n> (see qolmem list)");
+    const muted = mutedQueue();
+    if (index < 1 || index > muted.length) {
+      block(receiptPrefix + `qolmem: no muted question ${index}; qolmem list shows ${muted.length}.`);
+    }
+    const record = muted[index - 1];
+    unmuteKey(record.key);
+    const waiting = unansweredQueue({ all: true }).length;
+    block(receiptPrefix + `qolmem: unmuted "${record.query}"; ${waiting} waiting, ${muted.length - 1} muted.`);
+  }
+
   const queue = await dropAnswered(unansweredQueue());
   if (!queue.length) block(receiptPrefix + "qolmem: no unanswered questions.");
 

@@ -188,9 +188,9 @@ test('injected block gains the queue count line', async () => {
     assert.deepStrictEqual(JSON.parse(r.stdout), {
       hookSpecificOutput: {
         hookEventName: 'SessionStart',
-        additionalContext: '[qol-memory continue] 2 unit(s) landed\nqol-memory: 1 unanswered launcher questions - type: qolmem gen',
+        additionalContext: '[qol-memory continue] 2 unit(s) landed\nqol-memory: 1 unanswered launcher questions - qolmem list shows them, qolmem gen answers them',
       },
-      systemMessage: 'qol-memory: 1 unanswered launcher questions - answer them with `qolmem gen`',
+      systemMessage: 'qol-memory: 1 unanswered launcher questions - qolmem list shows them, qolmem gen answers them',
     });
   } finally {
     await stop(server);
@@ -213,9 +213,9 @@ test('daemon abstain with a non-empty queue emits the count line alone', async (
     assert.deepStrictEqual(JSON.parse(r.stdout), {
       hookSpecificOutput: {
         hookEventName: 'SessionStart',
-        additionalContext: 'qol-memory: 2 unanswered launcher questions - type: qolmem gen',
+        additionalContext: 'qol-memory: 2 unanswered launcher questions - qolmem list shows them, qolmem gen answers them',
       },
-      systemMessage: 'qol-memory: 2 unanswered launcher questions - answer them with `qolmem gen`',
+      systemMessage: 'qol-memory: 2 unanswered launcher questions - qolmem list shows them, qolmem gen answers them',
     });
   } finally {
     await stop(server);
