@@ -17,7 +17,7 @@ Call `qol-memory__capture` when a session settles something a later session need
 
 ## Refill commands
 
-The continue block's unanswered launcher questions can be inspected and dismissed without launching an answering lane. `qolmem list` prints the waiting questions and the muted ones with their ages, and `qolmem mute <n>` and `qolmem unmute <n>` move the numbered entries between those lists, so a muted question stays out of the queue even when it is asked again. `qolmem gen` launches one background answering lane for the waiting questions.
+The continue block's unanswered launcher questions can be inspected and dismissed without launching an answering lane. `qolmem list` prints the waiting questions and the muted ones with their ages, and `qolmem mute <n>` and `qolmem unmute <n>` move the numbered entries between those lists, so a muted question stays out of the queue even when it is asked again. `qolmem gen` launches one background answering lane for the waiting questions. Bare `qolmem` or `qolmem help` prints the command list.
 
 ## Store health and the continue block
 

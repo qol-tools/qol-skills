@@ -76,3 +76,19 @@ test('list reports the waiting questions, mute moves one aside, unmute restores 
   assert.match(restored.reason, /^qolmem: 2 waiting, 0 muted$/m);
   assert.match(restored.reason, /^1\. where does the tray log live \(\d+m\)$/m);
 });
+
+test('bare qolmem and qolmem help print the command list without naming themselves', () => {
+  const store = makeStore([]);
+  const lanes = mkdtempSync(path.join(os.tmpdir(), 'qolmem-commands-lanes-'));
+
+  for (const prompt of ['qolmem', 'qolmem help']) {
+    const help = runCommand(prompt, store, lanes);
+    assert.strictEqual(help.decision, 'block');
+    assert.ok(help.reason.startsWith('qolmem: launcher refill commands'));
+    assert.match(help.reason, /^  qolmem gen\s+answer the waiting questions in a background lane$/m);
+    assert.match(help.reason, /^  qolmem list\s+show the waiting and muted questions$/m);
+    assert.match(help.reason, /^  qolmem mute <n>\s+drop waiting question n until it is unmuted$/m);
+    assert.match(help.reason, /^  qolmem unmute <n>\s+restore muted question n$/m);
+    assert.ok(!help.reason.includes('qolmem help'));
+  }
+});

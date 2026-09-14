@@ -7,7 +7,7 @@ const { homedir } = require("node:os");
 const { join, dirname } = require("node:path");
 const { collectReceipts, unansweredQueue, claimQueries, dropAnswered, mutedQueue, muteEntries, unmuteKey } = require("./qolmem-lib.cjs");
 
-const COMMAND_RE = /^\s*qolmem(?:\s+(?:(gen)|(list)|(mute|unmute)(?:\s+(\d+))?))?\s*$/i;
+const COMMAND_RE = /^\s*qolmem(?:\s+(?:(help)|(gen)|(list)|(mute|unmute)(?:\s+(\d+))?))?\s*$/i;
 
 // A launcher question names any project on the machine, so the answerer needs
 // every checkout it could be about: the parent of the current repo plus the
@@ -92,9 +92,9 @@ if (!commandMatch) {
   }
   process.exit(0);
 }
-const keyword = commandMatch[1] || commandMatch[2] || commandMatch[3];
-const command = keyword ? keyword.toLowerCase() : "gen";
-const index = commandMatch[4] === undefined ? null : Number(commandMatch[4]);
+const keyword = commandMatch[1] || commandMatch[2] || commandMatch[3] || commandMatch[4];
+const command = keyword ? keyword.toLowerCase() : "help";
+const index = commandMatch[5] === undefined ? null : Number(commandMatch[5]);
 
 function age(ts) {
   const minutes = Math.floor((Date.now() - ts) / 60000);
@@ -106,6 +106,16 @@ function age(ts) {
 
 async function main() {
   const receiptPrefix = receipts.length ? receiptText + "\n" : "";
+
+  if (command === "help") {
+    block(receiptPrefix + [
+      "qolmem: launcher refill commands",
+      "  qolmem gen          answer the waiting questions in a background lane",
+      "  qolmem list         show the waiting and muted questions",
+      "  qolmem mute <n>     drop waiting question n until it is unmuted",
+      "  qolmem unmute <n>   restore muted question n",
+    ].join("\n"));
+  }
 
   if (command === "list") {
     const waiting = await dropAnswered(unansweredQueue({ all: true }));
