@@ -910,6 +910,7 @@ function piManifest(base) {
 }
 
 const PI_RUNTIME_MARKER = "// vendor-sync:hooks-runtime";
+const PI_GENERATED_SIGNATURE = "const PRE_TOOL_USE_HOOKS = [";
 
 function syncPiPlugin(root, pluginName, base, options, changes, failures) {
   const files = manifestPaths(root, pluginName);
@@ -925,7 +926,7 @@ function syncPiPlugin(root, pluginName, base, options, changes, failures) {
   const hooksTs = path.join(extensionsDir, "hooks.ts");
   const current = fs.existsSync(hooksTs) ? fs.readFileSync(hooksTs, "utf8") : null;
 
-  if (current !== null && normalizeNewlines(current).split("\n")[0] === PI_RUNTIME_MARKER) {
+  if (current !== null && !current.includes(PI_GENERATED_SIGNATURE)) {
     return;
   }
 

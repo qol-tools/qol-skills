@@ -544,7 +544,7 @@ test("keeps a marked pi extension when hooks.json is absent", () => {
   execFileSync("node", [script, "--root", root, "--check"], { stdio: "pipe" });
 });
 
-test("regenerates an unmarked pi extension", () => {
+test("regenerates stale generated pi extension output", () => {
   const root = makeRepo();
 
   writeAlphaHooks(root, {
@@ -562,14 +562,37 @@ test("regenerates an unmarked pi extension", () => {
 
   const hooksTs = path.join(root, "plugins", "alpha", ".pi", "extensions", "hooks.ts");
   fs.mkdirSync(path.dirname(hooksTs), { recursive: true });
-  fs.writeFileSync(hooksTs, "// stale hand-written extension\n");
+  fs.writeFileSync(hooksTs, "const PRE_TOOL_USE_HOOKS = [\n];\n// stale generated extension\n");
 
   execFileSync("node", [script, "--root", root], { stdio: "pipe" });
 
   const generated = fs.readFileSync(hooksTs, "utf8");
 
   assert.match(generated, /const PRE_TOOL_USE_HOOKS = \[/);
-  assert.doesNotMatch(generated, /stale hand-written extension/);
+  assert.doesNotMatch(generated, /stale generated extension/);
+
+  execFileSync("node", [script, "--root", root, "--check"], { stdio: "pipe" });
+});
+
+test("never overwrites or deletes a hand-written pi extension", () => {
+  const root = makeRepo();
+  const handWritten = "export default function (pi) {}\n";
+  const hooksTs = path.join(root, "plugins", "alpha", ".pi", "extensions", "hooks.ts");
+  fs.mkdirSync(path.dirname(hooksTs), { recursive: true });
+  fs.writeFileSync(hooksTs, handWritten);
+
+  execFileSync("node", [script, "--root", root], { stdio: "pipe" });
+  assert.equal(fs.readFileSync(hooksTs, "utf8"), handWritten);
+
+  writeAlphaHooks(root, {
+    hooks: {
+      PreToolUse: [
+        { matcher: "Bash", hooks: [{ type: "command", command: "node -e 'const fs=require(\"node:fs\");' alpha bin/one.cjs" }] },
+      ],
+    },
+  });
+  execFileSync("node", [script, "--root", root], { stdio: "pipe" });
+  assert.equal(fs.readFileSync(hooksTs, "utf8"), handWritten);
 
   execFileSync("node", [script, "--root", root, "--check"], { stdio: "pipe" });
 });
