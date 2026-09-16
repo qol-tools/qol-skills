@@ -909,6 +909,8 @@ function piManifest(base) {
   };
 }
 
+const PI_RUNTIME_MARKER = "// vendor-sync:hooks-runtime";
+
 function syncPiPlugin(root, pluginName, base, options, changes, failures) {
   const files = manifestPaths(root, pluginName);
   const existing = maybeReadJson(files.pi);
@@ -921,16 +923,19 @@ function syncPiPlugin(root, pluginName, base, options, changes, failures) {
   const extensionContent = piExtensionContent(root, pluginName, failures);
   const extensionsDir = path.join(root, "plugins", pluginName, ".pi", "extensions");
   const hooksTs = path.join(extensionsDir, "hooks.ts");
+  const current = fs.existsSync(hooksTs) ? fs.readFileSync(hooksTs, "utf8") : null;
+
+  if (current !== null && normalizeNewlines(current).split("\n")[0] === PI_RUNTIME_MARKER) {
+    return;
+  }
 
   if (extensionContent) {
-    const current = fs.existsSync(hooksTs) ? fs.readFileSync(hooksTs, "utf8") : null;
-
     if (current === null || normalizeNewlines(current) !== normalizeNewlines(extensionContent)) {
       fs.mkdirSync(extensionsDir, { recursive: true });
       fs.writeFileSync(hooksTs, extensionContent);
       changes.push(relative(root, hooksTs));
     }
-  } else if (fs.existsSync(hooksTs)) {
+  } else if (current !== null) {
     fs.unlinkSync(hooksTs);
     changes.push(relative(root, hooksTs));
 

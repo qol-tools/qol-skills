@@ -497,6 +497,83 @@ test("accepts CRLF-normalized pi extension files from Windows checkouts", () => 
   execFileSync("node", [script, "--root", root, "--check"], { stdio: "pipe" });
 });
 
+test("leaves a marked pi extension untouched when hooks.json exists", () => {
+  const root = makeRepo();
+
+  writeAlphaHooks(root, {
+    hooks: {
+      PreToolUse: [
+        {
+          matcher: "Bash",
+          hooks: [
+            { type: "command", command: "node -e 'const fs=require(\"node:fs\");' alpha bin/one.cjs" },
+          ],
+        },
+      ],
+    },
+  });
+
+  const hooksTs = path.join(root, "plugins", "alpha", ".pi", "extensions", "hooks.ts");
+  fs.mkdirSync(path.dirname(hooksTs), { recursive: true });
+  fs.writeFileSync(hooksTs, "// vendor-sync:hooks-runtime\nruntime content\n");
+
+  execFileSync("node", [script, "--root", root], { stdio: "pipe" });
+
+  assert.equal(
+    fs.readFileSync(hooksTs, "utf8"),
+    "// vendor-sync:hooks-runtime\nruntime content\n",
+  );
+
+  execFileSync("node", [script, "--root", root, "--check"], { stdio: "pipe" });
+});
+
+test("keeps a marked pi extension when hooks.json is absent", () => {
+  const root = makeRepo();
+
+  const hooksTs = path.join(root, "plugins", "alpha", ".pi", "extensions", "hooks.ts");
+  fs.mkdirSync(path.dirname(hooksTs), { recursive: true });
+  fs.writeFileSync(hooksTs, "// vendor-sync:hooks-runtime\nruntime content\n");
+
+  execFileSync("node", [script, "--root", root], { stdio: "pipe" });
+
+  assert.equal(
+    fs.readFileSync(hooksTs, "utf8"),
+    "// vendor-sync:hooks-runtime\nruntime content\n",
+  );
+
+  execFileSync("node", [script, "--root", root, "--check"], { stdio: "pipe" });
+});
+
+test("regenerates an unmarked pi extension", () => {
+  const root = makeRepo();
+
+  writeAlphaHooks(root, {
+    hooks: {
+      PreToolUse: [
+        {
+          matcher: "Bash",
+          hooks: [
+            { type: "command", command: "node -e 'const fs=require(\"node:fs\");' alpha bin/one.cjs" },
+          ],
+        },
+      ],
+    },
+  });
+
+  const hooksTs = path.join(root, "plugins", "alpha", ".pi", "extensions", "hooks.ts");
+  fs.mkdirSync(path.dirname(hooksTs), { recursive: true });
+  fs.writeFileSync(hooksTs, "// stale hand-written extension\n");
+
+  execFileSync("node", [script, "--root", root], { stdio: "pipe" });
+
+  const generated = fs.readFileSync(hooksTs, "utf8");
+
+  assert.match(generated, /const PRE_TOOL_USE_HOOKS = \[/);
+  assert.doesNotMatch(generated, /stale hand-written extension/);
+
+  execFileSync("node", [script, "--root", root, "--check"], { stdio: "pipe" });
+});
+
 test("generates kimi manifests from resolved base metadata", () => {
   const root = makeRepo();
 
