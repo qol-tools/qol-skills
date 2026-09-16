@@ -201,12 +201,14 @@ Focus: the panel owns it. `SettingsPanelView::focus_target()` names the handle
 `reconcile_focus` applies it. Custom bodies never focus themselves; they publish
 a handle and paint from `is_focused`.
 
-Menus: `Dropdown::render_clickable` and `render_items_clickable` take a dismiss closure
-next to the click closure, and the shared menu calls it from `on_mouse_down_out`, so
-every consumer (select and multi-select rows, list-card action menus, the core tool
-editors) closes on an outside click the same way. The settings card's left mouse-down
-leaves the rail (`set_source_menu(false)` then `reconcile_focus`) before the row click
-runs, so a mouse-opened dropdown never sits under rail focus.
+Choice cards: `SettingsPanelView::open_choose_card` pushes a card for select and
+multi-select rows, and `SettingsPanelView::on_choose_card_key` handles tile
+navigation and selection. A single-select click or Enter chooses and returns;
+multi-select click, Space, or Enter toggles and keeps the card open until Escape.
+List actions use `SettingsPanelView::open_item_card` to push an action card; its
+rows dispatch through the shared runtime and return to the list after dispatch.
+The card stack owns focus and depth, so choices and actions never float over the
+settings rail or underlying rows.
 
 Motion: no surface runs a gpui repeat animation. `ActivityAnimation` is the
 shared timer clock; build it with `.interval(..)` (100 ms for the braille
