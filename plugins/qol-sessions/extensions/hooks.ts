@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { buildSessionContext, estimateTokens, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as fsp from "node:fs/promises";
@@ -7,6 +7,9 @@ import * as path from "node:path";
 import { Type } from "typebox";
 
 const BRIDGE_TIMEOUT_MS = 86_410_000;
+const SUBMIT_TIMEOUT_MS = 900_000;
+const COMPACT_TIMEOUT_MS = 900_000;
+const CONTEXT_ENTRY = "qol-context";
 const LOOP_ENTRY = "qol-sessions-feature-loop";
 const LOOP_PHASES = new Set(["idle", "waiting", "review", "closing", "paused"]);
 const REVIEW_FOLLOW_UP = `The qol-sessions feature loop is still active. Personally inspect the implementation against the user's complete acceptance criteria. If anything remains, call session_bridge for the next bounded correction round and acknowledge the reviewed completion_marker. If the entire feature is accepted, call session_loop_close with the session, completion_marker, outcome accepted, landed, before, now, verification, and remaining. If the user redirected the work or a genuine blocker requires user input, call session_loop_close with the session, completion_marker, outcome paused, and unfinished scope under remaining. Do not stop at a round boundary.`;
@@ -102,8 +105,47 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
     if (loopPhase === "closing") setLoopPhase("idle");
   }
 
+  function usageFields(ctx) {
+    const usage = ctx.getContextUsage?.();
+    if (!usage || usage.tokens == null) return null;
+    const contextWindow = usage.contextWindow ?? null;
+    return {
+      tokens: usage.tokens,
+      contextWindow,
+      percent: usage.percent ?? (contextWindow ? (usage.tokens / contextWindow) * 100 : null),
+    };
+  }
+
+  function publishContext(ctx, reason, fields = null) {
+    try {
+      const snapshot = fields ?? usageFields(ctx);
+      if (!snapshot) return;
+      pi.appendEntry(CONTEXT_ENTRY, { reason, at: Date.now(), ...snapshot });
+    } catch {}
+  }
+
+  pi.on("session_compact", async (event, ctx) => {
+    let tokensAfter = null;
+    try {
+      const context = buildSessionContext(ctx.sessionManager.getBranch());
+      tokensAfter = context.messages.reduce((total, message) => total + estimateTokens(message), 0);
+    } catch {}
+    const contextWindow = ctx.getContextUsage?.()?.contextWindow ?? null;
+    publishContext(ctx, "compacted", {
+      tokensBefore: event?.compactionEntry?.tokensBefore ?? null,
+      tokensAfter,
+      contextWindow,
+      percent: tokensAfter != null && contextWindow ? (tokensAfter / contextWindow) * 100 : null,
+    });
+  });
+
+  pi.on("session_compact_failed", async (event, ctx) => {
+    publishContext(ctx, "compact_failed", { error: event?.errorMessage ?? null });
+  });
+
   pi.on("session_start", async (_event, ctx) => {
     restoreLoopPhase(ctx);
+    publishContext(ctx, "session_start");
     await startWatcher(ctx);
   });
 
@@ -118,7 +160,8 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
     }
   });
 
-  pi.on("agent_settled", async (_event, _ctx) => {
+  pi.on("agent_settled", async (_event, ctx) => {
+    publishContext(ctx, "turn_end");
     if (loopPhase === "review") {
       if (!reviewFollowUpSent) {
         reviewFollowUpSent = true;
@@ -304,6 +347,7 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
       group: Type.Optional(Type.String({ description: "Optional group name; registers the lane as a member of a grouped-research set so completed rounds aggregate into one combined wake under the sessions data dir when every member completes" })),
       resume: Type.Optional(Type.Boolean({ description: "Force a resume of the harness's persisted session for this key when a new terminal is launched. Resume is automatic when the spawn ledger holds a session id for the key (same tool and cwd); resume: false opts out. The spawn outcome reports resume and resume_detail" })),
       silent_wake: Type.Optional(Type.Boolean({ description: "skip the parent wake message; the lane report and a receipt json are still written and the lane terminal still closes" })),
+      auto_compact: Type.Optional(Type.Boolean({ description: "set false to opt this lane out of automatic compaction; the sessions.toml auto_compact setting is the default, and the opt-out is recorded in the spawn ledger so it survives a respawn" })),
       agent_profile: Type.Optional(Type.String({ description: "Named agent_profiles entry from sessions.toml. The profile declares the tool, model, permitted roles, and image/trust declarations; the resolved assignment is reported as agent_assignment." })),
       task_role: Type.Optional(Type.String({ description: "Role this assignment performs: scout, implement, architect, review, or debug. Required for every constrained assignment even when requires is empty, and the profile must permit it." })),
       requires: Type.Optional(Type.Array(Type.String(), { description: "Capabilities this assignment needs: image_input, visual_review, or both. image_input needs a native declaration; visual_review needs native image input plus an allow declaration." })),
@@ -314,6 +358,7 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
       if (params.model != null) args.push("--model", params.model);
       if (params.group != null) args.push("--group", params.group);
       if (params.resume === true) args.push("--resume");
+      if (params.auto_compact === false) args.push("--no-auto-compact");
       if (params.agent_profile != null) args.push("--agent-profile", params.agent_profile);
       if (params.task_role != null) args.push("--task-role", params.task_role);
       if (Array.isArray(params.requires)) args.push("--requires", params.requires.join(","));
@@ -397,11 +442,30 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
       if (params.agent_profile != null) args.push("--agent-profile", params.agent_profile);
       if (params.task_role != null) args.push("--task-role", params.task_role);
       if (Array.isArray(params.requires)) args.push("--requires", params.requires.join(","));
-      const stdout = await run(args, 60_000, undefined, signal);
+      const stdout = await run(args, SUBMIT_TIMEOUT_MS, undefined, signal);
       const outcome = JSON.parse(stdout);
       reviewFollowUpSent = false;
       const text = `task submitted to session ${outcome.session}; round open, wait with session_bridge (omit task)`;
       return { content: [{ type: "text", text: `${text}\n${outcome.screen}` }], details: { outcome } };
+    },
+  });
+
+  pi.registerTool({
+    name: "session_compact",
+    label: "Compact a lane's context",
+    description:
+      "Submit the target tool's own compaction command to one live session and return the context used before and after. This is an architect-owned control action on a lane, never a way to deliver work: it submits only the tool's fixed compaction command (pi: /compact) and never caller text. It refuses with a typed reason when a bridge round is open (round_open), the lane is not at its prompt (not_at_prompt), its state cannot be proven (state_unknown) or the tool has no verified compaction command (unsupported_tool); a harness with nothing left to compact reports nothing_to_compact, and runtime failures report delivery_failed, compaction_failed, session_gone or timeout. The result carries tokens before and after plus the saving, and reports unknown rather than a fabricated number when the tool cannot report usage.",
+    parameters: Type.Object({
+      session: Type.String({ description: "Stable session token from sessions_list" }),
+    }),
+    async execute(_toolCallId, params, signal, _onUpdate) {
+      const stdout = await run(["compact", params.session], COMPACT_TIMEOUT_MS, undefined, signal);
+      const outcome = JSON.parse(stdout);
+      const before = outcome.tokens_before == null ? "unknown" : String(outcome.tokens_before);
+      const after = outcome.tokens_after == null ? "unknown" : String(outcome.tokens_after);
+      const saved = outcome.saved_tokens == null ? "" : ` (saved ${outcome.saved_tokens})`;
+      const text = `compacted ${outcome.session} with ${outcome.command}: ${before} -> ${after} tokens${saved}`;
+      return { content: [{ type: "text", text }], details: { outcome } };
     },
   });
 
