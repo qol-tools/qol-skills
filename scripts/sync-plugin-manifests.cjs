@@ -931,13 +931,21 @@ function syncPiPlugin(root, pluginName, base, options, changes, failures) {
 
   if (extensionContent) {
     if (current === null || normalizeNewlines(current) !== normalizeNewlines(extensionContent)) {
-      fs.mkdirSync(extensionsDir, { recursive: true });
-      fs.writeFileSync(hooksTs, extensionContent);
       changes.push(relative(root, hooksTs));
+
+      if (!options.check) {
+        fs.mkdirSync(extensionsDir, { recursive: true });
+        fs.writeFileSync(hooksTs, extensionContent);
+      }
     }
   } else if (current !== null) {
-    fs.unlinkSync(hooksTs);
     changes.push(relative(root, hooksTs));
+
+    if (options.check) {
+      return;
+    }
+
+    fs.unlinkSync(hooksTs);
 
     try {
       const remaining = fs.readdirSync(extensionsDir);
