@@ -75,7 +75,7 @@ Every crate's `src/` root is a composition layer. Keep public facades and requir
 Rules for every Rust crate:
 
 - A module with children uses `name/mod.rs`. Do not combine `name.rs` with a sibling `name/` directory.
-- Within one `platform/` directory, use either flat OS modules or directory-backed OS modules uniformly. Never mix the two forms.
+- Within one `platform/` directory, use either flat OS modules or directory-backed OS modules uniformly. Never mix the two forms. When one OS adapter grows a second file, every sibling in that directory converts to the directory form in the same commit, even the ones that stay a single small file.
 - Do not create catch-all `common/`, `helper(s)/`, or `util(s)/` source directories. Name the capability or architecture boundary that owns the code.
 - Make ownership refactors path-only first. Repair module wiring and stable facade re-exports, verify behavior, and review semantic changes separately.
 - Before moving code, derive the inventory from the source tree and module declarations. Do not copy a file list or count into a skill as maintained truth.
@@ -116,7 +116,7 @@ Rules:
 - `help <command-path>` and `<command-path> help` are equivalent.
 - `help` in the middle of a command path is invalid. Reject it with guidance instead of guessing.
 - Contextual help documents command intent, important flags, output behavior, and exit behavior.
-- `doctor` is read-only by default. Repairs require an explicit flag such as `doctor --fix`.
+- `doctor` is read-only, always. `qol-headless` treats the one token after `doctor` as a check id, so `doctor --fix` fails with ``Unknown doctor check `--fix` `` (`libs/headless/src/lib.rs`, `execute_doctor` and `selected_doctor_checks`). A repair is its own command (`apply_host_fix <fix-id>` is the shipped precedent), and the failing check carries that command in `.with_fix(...)` so the fix travels with the diagnosis.
 - `--json` is a global output-mode flag, not a doctor-specific converter. It may appear before or after the command path.
 - `--json` is valid only for commands that explicitly register a structured JSON interface.
 - Reject `--json` before running a command that does not support structured output.
@@ -156,7 +156,8 @@ Recommended universal commands:
 
 ```text
 <binary> version
-<binary> doctor --fix
+<binary> doctor
+<binary> apply_host_fix <fix-id>
 ```
 
 Command names should be explicit domain verbs. Host action ids map to CLI commands; they are not the domain model.
@@ -452,6 +453,17 @@ impl WindowOps for Platform {
 }
 ```
 
+A question the platform could not answer is its own case, never a
+success-shaped default. A listing may legitimately return empty, but "no
+client installed", "the service did not answer", and "this OS cannot be
+inspected" are not "everything is fine": model them as an explicit unknown
+variant carrying the reason, and let the caller decide. `DoctorStatus` is
+`Ok`, `Warn`, `Fail` only (`libs/headless/src/doctor/contract.rs`), so an
+unknown maps to `Warn` naming what could not be read, never to `Ok`. A stub
+that answers a health, capability, or readiness question with the healthy
+value makes every unsupported host report success forever, which is the
+silent failure the mission forbids.
+
 When a fallback guard type (a `ProcessTreeGuard`, lock guard, or similar)
 stands in for a real one, mirror the real guard's surface including a no-op
 `impl Drop`. Shared code that calls `drop(guard)` to bound a lifetime window is
@@ -459,6 +471,38 @@ then a genuine `Drop` invocation on every target, and clippy's
 `drop_non_drop` stays quiet under `-D warnings` on the exotic-target build —
 otherwise the same `drop()` call that runs real cleanup on Linux is a lint
 error on FreeBSD.
+
+## Cross-platform capability libraries
+
+`qol-shared-libs` decides whether a shared library should exist and where it
+goes. This section is about its shape once it does, because a capability whose
+real implementation exists on one OS will leak that OS into every consumer
+unless the boundary is drawn deliberately.
+
+- **Name the library and its modules for the question, not for one platform's
+  vocabulary.** A module called `graph/` holding links and channels is PipeWire
+  vocabulary in a crate macOS and Windows also compile, and every file above it
+  starts reading as Linux code. `health/` asks "is this working"; `platform/`
+  knows what a link is.
+- **Answer and execute from the same boundary.** When the real operations exist
+  only on one OS, expose "which operations does this system offer, in order"
+  plus "run this one", and keep the operation opaque to the caller. A consumer
+  that matches on operation variants to call them has taken the platform
+  knowledge back, and the cfg it avoided returns as a match arm it cannot
+  satisfy on another OS.
+- **Keep the numbers with the caller.** Bookkeeping generalizes: counters,
+  claims, ordering, retry state. Policy does not: cooldowns, caps, budgets,
+  and timeouts are the consumer's product decision. A default value for one of
+  those inside the library is policy wearing a library's clothes.
+- **Put host facts behind probes on the library** (is this OS supported, is the
+  client installed, does the service answer, with a typed reason each). That is
+  what lets a plugin ship diagnostics with no `platform/` directory and no cfg
+  of its own.
+- **Put the discriminator in the shared type, filled in by `platform/`.** When
+  consumers need to know what kind of thing something is, the kind is a field
+  on the shared value, not a prefix a consumer parses out of a host identifier.
+  String-matching a host id to learn what something is reconstructs the
+  platform branch the facade exists to own.
 
 ## Platform-specific dependencies
 
@@ -492,6 +536,9 @@ The `<os>.rs` source files use these unconditionally — the cfg gate at the man
 - ❌ **Never force distinct capability substrates into `linux.rs`** when they have different contracts. Create a capability-local backend split and have the OS adapter select or use it.
 - ❌ **Never have a trait method that exists only on one OS via cfg.** Add it to the trait, stub it on others.
 - ❌ **Never return `unimplemented!()` from a stub** — it panics. Return a typed `Err` so the caller can handle it.
+- ❌ **Never keep load-bearing state only in a daemon's memory.** A plugin daemon is stopped and restarted at any moment: the host reloads it after a config save, an update replaces it, it crashes. Attempt counters, ownership of a host resource, and pending give-back records belong in a file under the runtime dir, so a restart does not silently reset them.
+- ❌ **Never let two plugins mutate one host resource on intent alone.** There is no plugin-to-plugin channel (`qol-arch-channels`), so "only one of us touches this" is not enforceable by a sentence in a design. Put the neutral contract in `libs/` and give the resource a claim record with an owner and an expiry that the daemon and the standalone CLI both take, so a crashed owner frees it and a terminal command cannot race the daemon.
+- ❌ **Never answer a question the platform could not answer with a success value.** See "Stubs for unsupported OSes".
 - ✅ **Name the backend by capability/substrate** (`x11_snapshot`, `systemd_user`, `dbus_session`, `mqtt_bridge`) when that is the real boundary.
 - ✅ **Always cover every OS and every unlisted target in the facade,** with a dedicated adapter or an explicitly selected fallback. Code must compile on Linux, macOS, and Windows — and on exotic targets via the complement-cfg `fallback`/`unsupported` module (see "Stubs for unsupported OSes").
 - ✅ **Keep facade parity,** so each selected adapter exposes the same callable surface. Adapter-private helpers do not belong in the facade; follow `qol-arch-cross-platform` for consumer locality.
