@@ -64,6 +64,7 @@ Every host mutation must declare its lifetime as `PortableSession` or `ResidentP
 - `ResidentPolicy` requires explicit host-local consent, durable ownership state, idempotent reconciliation, and exact restoration on disable or uninstall.
 - Neither lifetime may adopt, overwrite, or later clear pre-existing host state it did not create.
 - If the platform cannot satisfy the selected lifetime, surface the limitation and leave the host unchanged.
+- A host setting the user changes through qol is the user's change, not a qol mutation. Choosing the default audio output, setting the volume, pairing a device or picking a display mode uses the host's own mechanism at the user's direction: qol records no lifetime for it, snapshots nothing, and never reverts it on exit, crash, residency disable or uninstall. Only state qol introduces to make itself work (hotkey grabs, autostart, package guards) or a policy qol keeps enforcing on its own carries a lifetime.
 
 ## Non-negotiables
 
@@ -81,7 +82,7 @@ For anything qol-tray claims (hotkeys, tray icon, system menu entries, autostart
 
 ### 3. The host machine is restored at the ownership boundary
 
-Portable restores the host's pre-existing state when the session ends, whether by clean exit, crash, or removal. Resident intentionally outlives a process, but restores the host's pre-existing state when residency is disabled or qol is uninstalled. In both modes, qol must distinguish its mutations from pre-existing state and must never restore by erasing changes it did not own.
+Portable restores the host's pre-existing state when the session ends, whether by clean exit, crash, or removal. Resident intentionally outlives a process, but restores the host's pre-existing state when residency is disabled or qol is uninstalled. In both modes, qol must distinguish its mutations from pre-existing state and must never restore by erasing changes it did not own. A host setting the user directed through qol is outside this boundary and stays as the user left it.
 
 ### 4. Plug-in to working in seconds, not minutes
 
@@ -107,6 +108,7 @@ When evaluating a proposal:
 
 - Does it require the user to touch host-OS settings? → **Reject or redesign.**
 - What is each host mutation's declared lifetime? → **Require `PortableSession` or `ResidentPolicy`; reject implicit persistence.**
+- Is it a host setting the user directed, such as audio output, volume or pairing? → **Apply it through the host's own mechanism; no lifetime, no snapshot, no restore.**
 - Can Portable restore after clean and abnormal termination? → **Add deterministic recovery, or leave the host unchanged.**
 - Does Resident snapshot, own, expose, reconcile, and reverse only its own state? → **Add the missing lifecycle, or reject the mutation.**
 - Are residency entries per-device-keyed and only ever written by an explicit toggle on that device? → **Fix the boundary before implementation.**
