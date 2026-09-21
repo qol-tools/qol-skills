@@ -35,7 +35,7 @@ function readToken() {
   return null;
 }
 
-function postJson(urlPath, body, timeoutMs) {
+function postJson(urlPath, body, timeoutMs, extraHeaders) {
   return new Promise((resolve, reject) => {
     const token = readToken();
     if (!token) {
@@ -43,12 +43,18 @@ function postJson(urlPath, body, timeoutMs) {
       return;
     }
     const payload = Buffer.from(JSON.stringify(body));
+    const headers = {
+      'content-type': 'application/json',
+      'x-qol-token': token,
+    };
+    if (extraHeaders && typeof extraHeaders === 'object') {
+      for (const [name, value] of Object.entries(extraHeaders)) {
+        if (typeof value === 'string' && value.length) headers[name] = value;
+      }
+    }
     const req = http.request(baseUrl() + urlPath, {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-qol-token': token,
-      },
+      headers,
       timeout: timeoutMs,
     }, (res) => {
       let raw = '';

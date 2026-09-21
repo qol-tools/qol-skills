@@ -5,7 +5,7 @@ description: Use when a session needs a settled fact from earlier work in this w
 
 # qol-memory
 
-Long-context memory for agent sessions, served by the qol-tray daemon over its local HTTP API. Claude Code receives the tools through the plugin manifest; other harnesses reach the same tools with `qol mcp configure <harness>`, which carries the per-host token. The plugin ships no static token.
+Long-context memory for agent sessions, served by the qol-tray daemon over its local HTTP API. Claude Code receives the tools through the stdio bridge in `bin/qol-memory-mcp.cjs` that the plugin manifest declares: the bridge owns the MCP handshake, serves a built-in tool list while qol-tray is not answering, and retries tool calls until the daemon picks up, so a session that starts before qol-tray is up still has the memory tools. Other harnesses reach the same tools with `qol mcp configure <harness>`, which carries the per-host token. The plugin ships no static token.
 
 ## Ask before re-deriving
 
