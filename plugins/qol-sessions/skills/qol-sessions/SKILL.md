@@ -82,7 +82,17 @@ Never start two parallel lanes with indistinguishable titles.
 
 The current session is the architect and final reviewer and runs on the flash tier. Every spawned lane also runs on the flash tier, and the tier choice is deterministic, never the harness default: the harness may not encode tier in the tool name, and the same tool can come up on different models depending on its default configuration.
 
-- Pass the concrete binding to every `session_spawn`: `tool: "pi"` and a `model` from the `sessions.toml` allow list (`spawn_model` is the default, `allowed_models` names every model this host may launch, and the spawn refuses anything unlisted). `tool: "claude"` is never spawned on this host, whatever harness the architect itself runs in. A missing model is a refusal point, never a silent default. When the config file is absent, the fallback source of truth is the host's own spawn record: read the newest `*.json` in `~/Library/Application Support/qol-tray/sessions/spawn-records/`, each one holds `{"key", "tool", "model", ...}` for one past spawn, and use the pairing it records.
+- Pass the concrete binding to every `session_spawn`: `tool: "pi"` and a model that the `tool_models` table in `sessions.toml` declares for pi (`spawn_model` supplies the default model, `allowed_models` stays the spending allowlist, and a tool/model pair that `tool_models` does not declare is refused before any terminal is created). `tool: "claude"` is never spawned on this host, whatever harness the architect itself runs in. A `session_fork` without `--tool` resolves the harness from the chosen model through `tool_models` and never defaults to claude. A missing model is a refusal point, never a silent default. When the config file is absent, the fallback source of truth is the host's own spawn record: read the newest `*.json` in `~/Library/Application Support/qol-tray/sessions/spawn-records/`, each one holds `{"key", "tool", "model", ...}` for one past spawn, and use the pairing it records.
+
+`tool_models` is an explicit harness-to-models mapping, because a model name does not carry its harness:
+
+```toml
+[tool_models]
+pi = ["deepseek-v4-flash", "deepseek-flash", "glm-5.3-flash"]
+```
+
+A launch whose tool/model pair the mapping does not declare is refused, an omitted harness resolves only when the model is declared for one tool, and `allowed_models` stays the independent spending allowlist.
+
 - Never source a tool or model name from your own harness prompt, environment, or model list: a name sitting in your context describes your context, not this host, and filling the tier choice from it is a silent default, which the refusal rule forbids. The binding above, the config, and the spawn records are the only valid sources.
 - Verify the lane's tier right after spawn from the target's model indicator. A lane that came up on the wrong tier is closed and respawned with the explicit model before any work is bridged; a lane never runs on a tier above the architect's own.
 - The architect never delegates its own work: scoping, acceptance review, verdict synthesis, and the final report stay in the architect session. Lanes implement, research, and produce preliminary reviews; they never accept a feature.

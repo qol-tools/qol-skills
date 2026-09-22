@@ -38,7 +38,7 @@ test('bridge topics are role-based and bind lanes to pi with the configured mode
     assert.ok(BRIDGE_TOPIC_PATTERN.test('bridge two terminals'));
     assert.ok(BRIDGE_TOPIC_PATTERN.test('the architect should review the handoff'));
     assert.match(BRIDGE_CONTEXT, /tool "pi"/);
-    assert.match(BRIDGE_CONTEXT, /sessions\.toml allow list/);
+    assert.match(BRIDGE_CONTEXT, /tool_models/);
     assert.doesNotMatch(BRIDGE_CONTEXT, /deepseek|glm/i);
     assert.match(BRIDGE_CONTEXT, /tool "claude" is never spawned/);
 });
@@ -169,7 +169,7 @@ test('matching prompts receive the event-driven feature loop', () => {
         assert.match(context, /session_bridge/);
         assert.match(context, /session_loop_close/);
         assert.match(context, /on the flash tier/);
-        assert.match(context, /Spawned lanes always run tool "pi" with a model from the sessions\.toml allow list/);
+        assert.match(context, /Spawned lanes always run tool "pi" with a model that the sessions\.toml tool_models mapping declares for pi/);
         assert.match(context, /verdict synthesis, and the final report happen in-session/);
         assert.match(context, /qol-workflow:git-trees/);
         assert.match(context, /qol-workflow:commit/);
