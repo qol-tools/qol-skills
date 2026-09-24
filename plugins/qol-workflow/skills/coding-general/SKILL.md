@@ -1,8 +1,6 @@
 ---
 name: coding-general
 description: Use when writing or reviewing any code in this workspace, regardless of language. Universal coding guidelines and the default response-brevity contract for every agent in qol-skills.
-metadata:
-  pinned: session
 ---
 
 # General Coding Guidelines

@@ -17,20 +17,6 @@ const USER_PROMPT_SUBMIT_HOOKS = [
     { script: "bin/qol-cicd-context.cjs" },
 ];
 
-const SESSION_START_CONTEXT_HOOKS = [
-    { script: "hooks/pinned-skills/0.mjs" },
-    { script: "hooks/pinned-skills/1.mjs" },
-    { script: "hooks/pinned-skills/2.mjs" },
-    { script: "hooks/pinned-skills/3.mjs" },
-    { script: "hooks/pinned-skills/4.mjs" },
-    { script: "hooks/pinned-skills/5.mjs" },
-    { script: "hooks/pinned-skills/6.mjs" },
-];
-
-let stashedContext = "";
-let stashedSessionFile = "";
-const startupWidgetKeys: string[] = [];
-
 let pendingPromptContext = "";
 
 function runHook(script, input) {
@@ -161,52 +147,6 @@ export default function (pi: ExtensionAPI) {
       const extraContext = pendingPromptContext;
       pendingPromptContext = "";
       return { systemPrompt: (event.systemPrompt ?? "") + extraContext };
-    });
-  }
-
-  if (SESSION_START_CONTEXT_HOOKS.length > 0) {
-    pi.on("session_start", async (event, ctx) => {
-      const sessionFile = ctx.sessionManager.getSessionFile() ?? "";
-      const sessionId = ctx.sessionManager.getSessionId();
-      let context = "";
-
-      for (const hook of SESSION_START_CONTEXT_HOOKS) {
-        const result = runHook(hook.script, JSON.stringify({
-          session_id: sessionId,
-          cwd: ctx.sessionManager.getCwd(),
-          session_file: sessionFile,
-          reason: event.reason ?? "",
-        }));
-
-        if (result.systemMessage) {
-          const key = "qol-hook:" + hook.script;
-          startupWidgetKeys.push(key);
-          ctx.ui?.setWidget?.(key, result.systemMessage.split("\n"));
-        }
-
-        if (result.context) {
-          context += "\n\n" + result.context;
-        }
-      }
-
-      if (context) {
-        stashedContext = context;
-        stashedSessionFile = sessionFile;
-      } else if (sessionFile !== stashedSessionFile) {
-        stashedContext = "";
-        stashedSessionFile = sessionFile;
-      }
-    });
-
-    pi.on("before_agent_start", async (event, ctx) => {
-      const sessionFile = ctx.sessionManager.getSessionFile() ?? "";
-
-      if (stashedContext && sessionFile === stashedSessionFile) {
-        for (const key of startupWidgetKeys.splice(0)) {
-          ctx.ui?.setWidget?.(key, undefined);
-        }
-        return { systemPrompt: (event.systemPrompt ?? "") + "\n\n" + stashedContext };
-      }
     });
   }
 }

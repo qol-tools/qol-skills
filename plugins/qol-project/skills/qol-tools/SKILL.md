@@ -1,8 +1,6 @@
 ---
 name: qol-tools
 description: Use when working anywhere in the qol-tools world - the qol-monorepo (apps/, libs/, plugins/, tools/, docs/) or the qol-skills repo. Covers org-level conventions, monorepo layout, dependency model, branch and commit policy, and pointers to more specific skills.
-metadata:
-  pinned: session
 ---
 
 # qol-tools — org-level knowledge

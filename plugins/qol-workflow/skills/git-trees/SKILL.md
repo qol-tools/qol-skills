@@ -1,8 +1,6 @@
 ---
 name: git-trees
 description: Use whenever modifying files, creating commits, or creating, switching, or branching in the qol-monorepo or qol-skills repo. Defines completion-as-commit, the mandatory Cargo.lock merge driver, the branch-based worktree workflow where new feature work is done, the direct-vs-PR route, and final squash delivery.
-metadata:
-  pinned: session
 ---
 
 # git-trees

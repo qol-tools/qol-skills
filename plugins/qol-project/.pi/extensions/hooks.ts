@@ -16,15 +16,6 @@ const USER_PROMPT_SUBMIT_HOOKS = [
 
 const SESSION_START_CONTEXT_HOOKS = [
     { script: "bin/inject-qol-cli-context.cjs" },
-    { script: "hooks/pinned-skills/0.mjs" },
-    { script: "hooks/pinned-skills/1.mjs" },
-    { script: "hooks/pinned-skills/2.mjs" },
-    { script: "hooks/pinned-skills/3.mjs" },
-    { script: "hooks/pinned-skills/4.mjs" },
-    { script: "hooks/pinned-skills/5.mjs" },
-    { script: "hooks/pinned-skills/6.mjs" },
-    { script: "hooks/pinned-skills/7.mjs" },
-    { script: "hooks/pinned-skills/8.mjs" },
 ];
 
 let stashedContext = "";

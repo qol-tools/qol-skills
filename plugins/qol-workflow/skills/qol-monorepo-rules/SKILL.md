@@ -1,14 +1,12 @@
 ---
 name: qol-monorepo-rules
-description: Always-on delivery rules for work inside qol-tools repositories - PR opt-in, standards evolution, guest-VM verification, and the build/test gate before reporting done. Pinned: injected in full at session start and after every compaction; these rules must fire without a topic trigger.
-metadata:
-  pinned: session
+description: Always-on delivery rules for work inside qol-tools repositories - PR opt-in, standards evolution, guest-VM verification, and the build/test gate before reporting done. Autoinjected in full at session start and after every compaction in repos that list it with `vs autoinject`; these rules must fire without a topic trigger.
 ---
 
 # qol-tools delivery rules
 
 These are unconditional. They previously lived in the monorepo's root `CLAUDE.md`,
-which only Claude Code loaded. They are pinned (injected at session start and after every compaction) so every agent gets them.
+which only Claude Code loaded. They are autoinjected at session start and after every compaction, in repos that list them with `vs autoinject`, so every agent gets them.
 
 ## PRs are opt-in. Default is commit-direct-to-main.
 

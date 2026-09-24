@@ -1,6 +1,6 @@
 {
   "name": "qol-project",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "description": "Project-level conventions for the qol-tools ecosystem: mission invariants, org layout, shared CI/release contracts, cross-platform architecture guardrails, shared library placement, plugin templates, and clean OS development environments for portability validation. Ships PreToolUse hooks that block architecture-contract violations plus a UserPromptSubmit hook that reminds Claude to consult qol-mission when prompts mention design/scope/issue terms in a qol-tools repo.",
   "author": {
     "name": "KMRH47"
@@ -28,51 +28,6 @@
       "event": "SessionStart",
       "matcher": "startup|resume|clear",
       "command": "node bin/inject-qol-cli-context.cjs"
-    },
-    {
-      "event": "SessionStart",
-      "matcher": "startup|resume|clear|compact",
-      "command": "node hooks/pinned-skills/0.mjs"
-    },
-    {
-      "event": "SessionStart",
-      "matcher": "startup|resume|clear|compact",
-      "command": "node hooks/pinned-skills/1.mjs"
-    },
-    {
-      "event": "SessionStart",
-      "matcher": "startup|resume|clear|compact",
-      "command": "node hooks/pinned-skills/2.mjs"
-    },
-    {
-      "event": "SessionStart",
-      "matcher": "startup|resume|clear|compact",
-      "command": "node hooks/pinned-skills/3.mjs"
-    },
-    {
-      "event": "SessionStart",
-      "matcher": "startup|resume|clear|compact",
-      "command": "node hooks/pinned-skills/4.mjs"
-    },
-    {
-      "event": "SessionStart",
-      "matcher": "startup|resume|clear|compact",
-      "command": "node hooks/pinned-skills/5.mjs"
-    },
-    {
-      "event": "SessionStart",
-      "matcher": "startup|resume|clear|compact",
-      "command": "node hooks/pinned-skills/6.mjs"
-    },
-    {
-      "event": "SessionStart",
-      "matcher": "startup|resume|clear|compact",
-      "command": "node hooks/pinned-skills/7.mjs"
-    },
-    {
-      "event": "SessionStart",
-      "matcher": "startup|resume|clear|compact",
-      "command": "node hooks/pinned-skills/8.mjs"
     },
     {
       "event": "UserPromptSubmit",
