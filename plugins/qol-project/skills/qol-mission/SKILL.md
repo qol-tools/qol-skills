@@ -1,6 +1,8 @@
 ---
 name: qol-mission
 description: Use when weighing trade-offs that touch the mission of qol-tools — what the product is, who it's for, the Portable and Resident host-ownership contracts, and the non-negotiable user-facing promises that any feature, bug fix, or architecture decision must respect. Covers the user experience, portability, persistent host policy, host-OS interaction, hotkeys, settings, sync, and "what qol-tools should do for the user".
+metadata:
+  pinned: session
 ---
 
 # qol-tools Mission

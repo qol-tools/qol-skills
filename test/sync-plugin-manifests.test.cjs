@@ -1089,10 +1089,9 @@ function evalSessionStartBlock(source) {
   const code =
     `let stashedContext = "";\n`
     + `let stashedSessionFile = "";\n`
-    + `let injectedSessionFile = "";\n`
     + `const startupWidgetKeys = [];\n`
     + block
-    + `\nreturn { stashedContext: () => stashedContext, stashedSessionFile: () => stashedSessionFile, injectedSessionFile: () => injectedSessionFile };`;
+    + `\nreturn { stashedContext: () => stashedContext, stashedSessionFile: () => stashedSessionFile };`;
 
   const handlers = {};
   const pi = { on: (event, fn) => { handlers[event] = fn; } };
@@ -1132,26 +1131,26 @@ test("session-start stash survives a gate-miss refire and clears on a new sessio
   assert.equal(api.stashedContext(), "", "new session file clears the stash");
 });
 
-test("session-start stash delivers once to before_agent_start for the same session file", async () => {
-  const { handlers, api, setHookResult, ctx } = evalSessionStartBlock(generatedSessionStartExtension());
+test("session-start stash persists across turns for the same session file", async () => {
+  const { handlers, setHookResult, ctx } = evalSessionStartBlock(generatedSessionStartExtension());
 
   setHookResult({ context: "BLOCK" });
   await handlers.session_start({ reason: "startup" }, ctx("s1.jsonl"));
 
   const first = await handlers.before_agent_start({ systemPrompt: "BASE" }, ctx("s1.jsonl"));
   assert.equal(first.systemPrompt, "BASE\n\n\n\nBLOCK");
-  assert.equal(api.injectedSessionFile(), "s1.jsonl");
 
   const second = await handlers.before_agent_start({ systemPrompt: "BASE" }, ctx("s1.jsonl"));
-  assert.equal(second, undefined, "injection happens once per session");
+  assert.equal(second.systemPrompt, "BASE\n\n\n\nBLOCK", "context persists every turn");
+
+  const leaked = await handlers.before_agent_start({ systemPrompt: "BASE" }, ctx("s2.jsonl"));
+  assert.equal(leaked, undefined, "stash never leaks into another session file");
 
   setHookResult({});
-  await handlers.session_start({ reason: "reload" }, ctx("s1.jsonl"));
-  const third = await handlers.before_agent_start({ systemPrompt: "BASE" }, ctx("s1.jsonl"));
-  assert.equal(third, undefined);
+  await handlers.session_start({ reason: "startup" }, ctx("s2.jsonl"));
 
-  const other = await handlers.before_agent_start({ systemPrompt: "BASE" }, ctx("other.jsonl"));
-  assert.equal(other, undefined, "stash never leaks into another session file");
+  const other = await handlers.before_agent_start({ systemPrompt: "BASE" }, ctx("s2.jsonl"));
+  assert.equal(other, undefined, "a new session file with no new context injects nothing");
 });
 
 function makeToolExtensionRepo() {

@@ -16,11 +16,19 @@ const USER_PROMPT_SUBMIT_HOOKS = [
 
 const SESSION_START_CONTEXT_HOOKS = [
     { script: "bin/inject-qol-cli-context.cjs" },
+    { script: "hooks/pinned-skills/0.mjs" },
+    { script: "hooks/pinned-skills/1.mjs" },
+    { script: "hooks/pinned-skills/2.mjs" },
+    { script: "hooks/pinned-skills/3.mjs" },
+    { script: "hooks/pinned-skills/4.mjs" },
+    { script: "hooks/pinned-skills/5.mjs" },
+    { script: "hooks/pinned-skills/6.mjs" },
+    { script: "hooks/pinned-skills/7.mjs" },
+    { script: "hooks/pinned-skills/8.mjs" },
 ];
 
 let stashedContext = "";
 let stashedSessionFile = "";
-let injectedSessionFile = "";
 const startupWidgetKeys: string[] = [];
 
 let pendingPromptContext = "";
@@ -193,12 +201,7 @@ export default function (pi: ExtensionAPI) {
     pi.on("before_agent_start", async (event, ctx) => {
       const sessionFile = ctx.sessionManager.getSessionFile() ?? "";
 
-      if (
-        stashedContext
-        && sessionFile === stashedSessionFile
-        && sessionFile !== injectedSessionFile
-      ) {
-        injectedSessionFile = sessionFile;
+      if (stashedContext && sessionFile === stashedSessionFile) {
         for (const key of startupWidgetKeys.splice(0)) {
           ctx.ui?.setWidget?.(key, undefined);
         }

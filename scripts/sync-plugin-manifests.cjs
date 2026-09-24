@@ -635,7 +635,6 @@ function piExtensionContent(root, pluginName, failures) {
     lines.push("");
     lines.push('let stashedContext = "";');
     lines.push('let stashedSessionFile = "";');
-    lines.push('let injectedSessionFile = "";');
     lines.push("const startupWidgetKeys: string[] = [];");
   }
 
@@ -833,12 +832,7 @@ function piExtensionContent(root, pluginName, failures) {
     lines.push('    pi.on("before_agent_start", async (event, ctx) => {');
     lines.push('      const sessionFile = ctx.sessionManager.getSessionFile() ?? "";');
     lines.push("");
-    lines.push("      if (");
-    lines.push("        stashedContext");
-    lines.push("        && sessionFile === stashedSessionFile");
-    lines.push("        && sessionFile !== injectedSessionFile");
-    lines.push("      ) {");
-    lines.push("        injectedSessionFile = sessionFile;");
+    lines.push("      if (stashedContext && sessionFile === stashedSessionFile) {");
     lines.push("        for (const key of startupWidgetKeys.splice(0)) {");
     lines.push("          ctx.ui?.setWidget?.(key, undefined);");
     lines.push("        }");

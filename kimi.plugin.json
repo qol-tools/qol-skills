@@ -83,6 +83,51 @@
       "command": "node plugins/qol-project/bin/inject-qol-cli-context.cjs"
     },
     {
+      "event": "SessionStart",
+      "matcher": "startup|resume|clear|compact",
+      "command": "node plugins/qol-project/hooks/pinned-skills/0.mjs"
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "startup|resume|clear|compact",
+      "command": "node plugins/qol-project/hooks/pinned-skills/1.mjs"
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "startup|resume|clear|compact",
+      "command": "node plugins/qol-project/hooks/pinned-skills/2.mjs"
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "startup|resume|clear|compact",
+      "command": "node plugins/qol-project/hooks/pinned-skills/3.mjs"
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "startup|resume|clear|compact",
+      "command": "node plugins/qol-project/hooks/pinned-skills/4.mjs"
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "startup|resume|clear|compact",
+      "command": "node plugins/qol-project/hooks/pinned-skills/5.mjs"
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "startup|resume|clear|compact",
+      "command": "node plugins/qol-project/hooks/pinned-skills/6.mjs"
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "startup|resume|clear|compact",
+      "command": "node plugins/qol-project/hooks/pinned-skills/7.mjs"
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "startup|resume|clear|compact",
+      "command": "node plugins/qol-project/hooks/pinned-skills/8.mjs"
+    },
+    {
       "event": "UserPromptSubmit",
       "command": "node plugins/qol-project/bin/qol-mission-reminder.cjs"
     },
@@ -143,8 +188,39 @@
       "command": "node plugins/qol-workflow/bin/qol-cicd-context.cjs"
     },
     {
-      "event": "UserPromptSubmit",
-      "command": "node plugins/qol-workflow/bin/qol-monorepo-rules-context.cjs"
+      "event": "SessionStart",
+      "matcher": "startup|resume|clear|compact",
+      "command": "node plugins/qol-workflow/hooks/pinned-skills/0.mjs"
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "startup|resume|clear|compact",
+      "command": "node plugins/qol-workflow/hooks/pinned-skills/1.mjs"
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "startup|resume|clear|compact",
+      "command": "node plugins/qol-workflow/hooks/pinned-skills/2.mjs"
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "startup|resume|clear|compact",
+      "command": "node plugins/qol-workflow/hooks/pinned-skills/3.mjs"
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "startup|resume|clear|compact",
+      "command": "node plugins/qol-workflow/hooks/pinned-skills/4.mjs"
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "startup|resume|clear|compact",
+      "command": "node plugins/qol-workflow/hooks/pinned-skills/5.mjs"
+    },
+    {
+      "event": "SessionStart",
+      "matcher": "startup|resume|clear|compact",
+      "command": "node plugins/qol-workflow/hooks/pinned-skills/6.mjs"
     },
     {
       "event": "UserPromptSubmit",

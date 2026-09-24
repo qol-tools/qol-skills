@@ -17,7 +17,6 @@ const SESSION_START_CONTEXT_HOOKS = [
 
 let stashedContext = "";
 let stashedSessionFile = "";
-let injectedSessionFile = "";
 const startupWidgetKeys: string[] = [];
 
 let pendingPromptContext = "";
@@ -164,12 +163,7 @@ export default function (pi: ExtensionAPI) {
     pi.on("before_agent_start", async (event, ctx) => {
       const sessionFile = ctx.sessionManager.getSessionFile() ?? "";
 
-      if (
-        stashedContext
-        && sessionFile === stashedSessionFile
-        && sessionFile !== injectedSessionFile
-      ) {
-        injectedSessionFile = sessionFile;
+      if (stashedContext && sessionFile === stashedSessionFile) {
         for (const key of startupWidgetKeys.splice(0)) {
           ctx.ui?.setWidget?.(key, undefined);
         }
