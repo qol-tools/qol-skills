@@ -10,7 +10,8 @@ disable-model-invocation: true
 ## Role
 
 The session turns one problem into one detached fork and keeps its own thread.
-The fork starts from a cold read: it has none of this conversation, only the brief file the launch points it at.
+The fork reads the brief file the launch points it at, plus a copy of this chat, which `session_fork` writes beside the brief by default.
+The brief is authoritative; pass `copy_chat: false` when the chat would mislead or is irrelevant.
 This skill writes that brief, chooses the launch facts, makes exactly one `session_fork` call, reports one line, and returns this session to its own work.
 A fork is not a lane: it never reports back, nothing collects it with `session_bridge`, and it owns its problem end to end.
 
@@ -18,7 +19,7 @@ A fork is not a lane: it never reports back, nothing collects it with `session_b
 
 1. Write the brief from `$ARGUMENTS` plus the relevant conversation context.
    Include the repo and exact paths, what is wrong or wanted, findings already made, constraints and repo rules that apply, the acceptance check, and what done looks like.
-   Spell out every identifier the fork needs (paths, commands, config keys, names), because the reader has none of this conversation.
+   Spell out every identifier the fork needs (paths, commands, config keys, names), because the chat copy drops tool output and the fork should not have to dig for them.
 2. Choose the launch facts.
    - `cwd`: the repo the problem lives in.
    - `key`: a short, stable, unused key naming the tree, for example `chase-lockfile`.
