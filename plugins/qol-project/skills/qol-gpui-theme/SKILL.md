@@ -322,7 +322,7 @@ same `tile_arts`, `choose_step` and `choose_hints`.
 | Hint | `Kit::hint(key, label)` | gap `SPACE_SNUG`: key chip + label |
 | Cards, band bar, filter field | `components::settings_card`, `floating_card`, `settings_band_bar`, `settings_filter_field`, `settings_filter_overlay`, `rail_scrim_layer`, `rail_item_label`, `settings_slider_track`, `settings_swatch`, `settings_accent_dot`, `settings_error_line`, `settings_arrow` | recipes, so the views compose and never style |
 | Buttons | `Kit::button_primary/ghost/danger` | px `SPACE_CELL`, py `SPACE_SNUG` |
-| Dropdown menu | `dropdown.rs` | list item action menus only, never a select: menu p `SPACE_SNUG`, item px `SPACE_INSET`, item gap `SPACE_INSET`, min `MENU_MIN_WIDTH` 214, max `MENU_MAX_WIDTH` 280, label truncated |
+| List action card | `settings_panel/view/list_card.rs` | selected list items push a card of action rows; actions retain contract order, Enter dispatches the selected row, and Escape returns to the list |
 | Row ground | `components::RowGround` | pane at rest, band when the row is selected with the body focused, band hover through `group_hover(SETTINGS_ROW_GROUP)` |
 | Settings tile | `components::SettingsTile` with `TileArt`, `tile_layout`, `settings_tile_rows` and `TILE_HEIGHT` | `TILE_HEIGHT` 116, px `SPACE_SNUG`, gap `layout.gap`, rounded `RADIUS_CARD`; art 112 x 70 at three per row, 104 x 65 at four and 88 x 55 at five; grid gap `SPACE_CELL` at three and four per row and `SPACE_INSET` at five; name `TEXT_CAPTION`, `TEXT_MICRO` at five per row; tick 16 x 12 at top `SPACE_CELL`, right `SPACE_INSET`; `settings_tile_rows` pads the first row by `SPACE_INSET`; `tile_arts` gives each option its valid picture, else `letters_for` letters, else `letters:?`; `choose_step` moves the highlight and stops at every edge; `choose_hints` is `↵ choose` with `←→ move`, or `←→↑↓ move` once the tiles wrap |
 | Hint bar (question) | `components::SettingsHintBar` with `SettingsHint` and `HintTone` | resting: `kit().hint_bar()` with the left hints, a spacer and the right hints; question: the bar fills `translucent(grounds.pane.ink, Alpha::Wash)`, the question in the ListName style in ink, then the hints, with no mark on its edge; `hint_tone_color` gives `success` for `Save` and `danger` for `Discard`, each key chip edged in its hue at `Alpha::Veil`; `SettingsHint::busy(label)` draws `settings_action_spinner` at 12 px where the keycap would be, then its label |
@@ -465,8 +465,8 @@ without the user asking for it by name.
    pops when the slide ends or on the next key.
 
 Settings scope is `libs/gpui/src/settings_panel/**`,
-`libs/gpui/src/gamepad/**`, `libs/gpui/src/kit.rs`, `dropdown.rs`,
-`hint_bar.rs`, `deck.rs`, and `apps/qol-tray/src/settings_surface/**`.
+`libs/gpui/src/gamepad/**`, `libs/gpui/src/kit.rs`, `hint_bar.rs`,
+`deck.rs`, and `apps/qol-tray/src/settings_surface/**`.
 
 The guard tests live in `libs/theme/tests/theme.rs`, and every debt list is
 empty: a window that picks its own size, weight, key name, symbol, corner,
@@ -606,7 +606,7 @@ Locked 2026-09-14 as design G1, snapshotted in
 `~/.claude/projects/-media-kmrh47-WD-SN850X-Git-qol-monorepo/design-locks/settings-select-row-g1/`
 with `png/RowsG1.png` as the reference. A select row whose value opens a
 picture card never draws a chip, because a boxed value with an arrow reads as
-a dropdown.
+a compact menu.
 
 - `SettingsChoiceValue` shows the value word, the chosen option's art in a
   56 x 35 box and an 8 x 14 arrow, `SPACE_CELL` apart. The word is
@@ -652,8 +652,9 @@ a dropdown.
   under the sub header `Size and refresh for this display.`, ticked on the
   staged mode, else the current one; choosing a tile stages that mode and
   returns to the Arrangement card. Locked 2026-09-14 as J1.
-- No select opens a floating dropdown, and `SettingsSelectValue` is gone.
-  `dropdown.rs` serves list item action menus only.
+- No `select` uses a floating menu, and `SettingsSelectValue` is gone.
+  `SettingsChoiceValue` and the choice card serve select and multi-select rows;
+  list-item actions use an item action card.
 
 ## Relationship to qol-theme and kit.rs
 
@@ -735,7 +736,7 @@ twenty distinct type sizes across two rival scales.
 
 V2.1, agreed 2026-09-05: the spacing ladder was added and the settings register was
 unified - page body, label group, message, count chip, keycap, hint bar and
-dropdown insets each have one recipe shared by plugin panels and the core tools.
+menu insets each have one recipe shared by plugin panels and the core tools.
 V2.1 also names the single focus owner for settings surfaces (R6), after a core
 tool reopened from the launcher lost its selection to a second focus path.
 V2.1 also adds R7, one progress cue, after the PointZerver pairing code row
