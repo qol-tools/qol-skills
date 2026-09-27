@@ -135,7 +135,7 @@ IPC mechanisms have distinct roles. Discover the maintained set from the host
 routers/listeners and do not conflate their contracts:
 
 1. **axum HTTP** (`127.0.0.1:42700`) — the dashboard, the `qol-tray exec` CLI, and the plugin-store API. The CLI does *not* speak a plugin's socket directly; it POSTs to axum, which dispatches onward.
-2. **desktop-state Unix socket** (Unix only) — a one-way feed of monitor/cursor/focus state that plugin daemons and external tools *read*. Never used for action dispatch.
+2. **local runtime socket** — bidirectional host requests/replies and subscriptions, distinct from per-plugin action dispatch. Use [qol-arch-channels](../../../qol-project/skills/qol-arch-channels/SKILL.md) for the canonical `RuntimeRequest`/host-dispatcher boundary and its local trust scope.
 3. **per-plugin Unix socket** (path from each `plugin.toml` `daemon.socket`) — the actual plugin RPC; tray + axum dispatch actions here.
 
 The native settings host's singleton socket is internal qtray process control,

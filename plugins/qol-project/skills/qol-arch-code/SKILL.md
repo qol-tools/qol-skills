@@ -24,7 +24,7 @@ This makes the codebase:
 
 ## Headless-first feature shape
 
-Prefer applications and plugins that work as standalone headless tools first. The qol-tray integration should be an adapter over that tool, not where the feature's core behavior lives.
+Prefer applications and plugins that work as standalone headless tools first. The qol-tray integration should be an adapter over that tool, not where the feature's core behavior lives. Standalone access to shared state may be a client of the same headless service; follow [stateful service ownership](../qol-shared-libs/SKILL.md#stateful-service-ownership).
 
 Layer Rust plugins like this:
 
@@ -70,7 +70,7 @@ This keeps the tool useful from a terminal, script, test, or future host while s
 
 ## Rust module and directory hygiene
 
-Every crate's `src/` root is a composition layer. Keep public facades and required entrypoints there; place implementation beneath the capability, adapter, or presentation boundary that owns it. The host has the strictest application root: `apps/qol-tray/src/` contains only `main.rs` and `lib.rs`. Plugins allow only `main.rs`, `lib.rs`, and optional `cli.rs` at their source root. Ordinary libraries may keep stable public facade modules at the root, but implementation growth moves behind owned directories.
+Every crate's `src/` root is a composition layer. Keep public facades and required entrypoints there; place implementation beneath the capability, adapter, or presentation boundary that owns it. The host has the strictest application root: `apps/tray/src/` contains only `main.rs` and `lib.rs`. Plugins allow only `main.rs`, `lib.rs`, and optional `cli.rs` at their source root. Ordinary libraries may keep stable public facade modules at the root, but implementation growth moves behind owned directories.
 
 Rules for every Rust crate:
 
@@ -96,7 +96,7 @@ Before changing a grown plugin, inventory direct `src/*.rs` files, native and we
 
 ## Headless CLI contract
 
-Every application/plugin binary is a standalone CLI first. `qol-tray` invokes that CLI; it does not own the feature.
+Every application/plugin binary exposes a standalone CLI. That CLI may consume the service boundary described under Headless-first feature shape; standalone access does not imply an independent state owner.
 
 Every binary must support:
 

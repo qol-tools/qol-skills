@@ -32,9 +32,15 @@ Keep cfg selection in `platform/mod.rs`. Domain code in `src/bluetooth/` must st
 
 ## Backend boundary
 
-The Linux backend owns every BlueZ interaction. Prefer the typed D-Bus bindings already in use over shelling out to a CLI: shelling out loses typed errors and turns adapter state into screen-scraping. When an operation needs a helper binary, inspect its metadata for doctor rather than executing it during a read-only check.
+Within this plugin, the Linux backend owns BlueZ interactions. Controllers also has its own Bluetooth mutation path; this is not exclusive workspace ownership. Prefer the typed D-Bus bindings already in use over shelling out to a CLI: shelling out loses typed errors and turns adapter state into screen-scraping. When an operation needs a helper binary, inspect its metadata for doctor rather than executing it during a read-only check.
 
 Device readiness is a domain question, not a backend one. Audio classification and connection-readiness predicates live in `src/bluetooth/` so both the reconnect path and the settings payload agree on what "ready" means.
+
+## Proposed shared mutation boundary
+
+Reliable linked-computer handoff requires one neutral owner for peripheral identity, connection operations, and mutation claims shared by Bluetooth and Controllers. `libs/bluetooth-control` is proposed, not available for consumption. Apply the [stateful service-owner rule](../../../qol-project/skills/qol-shared-libs/SKILL.md#stateful-service-ownership) to the coordinated write boundary; local daemon and standalone clients must honor the same claims.
+
+Bluetooth retains reconnect/handoff policy; Controllers retains HID/input and driver-fix policy. Computer grants, Bluetooth bonds, and Zigbee pairing remain distinct domains. Detailed authority: [linked-computers design](../../../../../qol-monorepo/docs/specs/2026-09-27-linked-computers-design.md), “Bluetooth handoff”. No shared claim service or working handoff is established by the existing plugin's readiness logic.
 
 ## Common changes
 

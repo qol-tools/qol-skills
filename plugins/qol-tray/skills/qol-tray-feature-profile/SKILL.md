@@ -11,7 +11,8 @@ Use this when the task is specifically about the Profile feature in `qol-tray`, 
 
 - `src/features/profile/core/mod.rs` handles profile export/import bundles, plugin config projection, and `plugins.lock.json`.
 - `src/features/profile/sync/service.rs` builds and applies the synced profile document, manages remote state, and writes backups.
-- `src/features/profile/startup.rs` migrates old config layout into `profile/` on startup.
+- `src/features/profile/startup.rs` ensures the active profile directories exist.
+- `src/features/profile/scope_store.rs` owns UID-keyed scoped plugin values; `src/plugins/config/mod.rs` owns `PluginConfigManager` and runtime config materialization.
 - `src/features/profile/http/import_export.rs` exposes profile export/import HTTP endpoints.
 - `src/features/profile/http/sync.rs` exposes connect, pull, push, disconnect, and backup actions.
 - `src/features/profile/http/mod.rs` owns the profile HTTP state and route slice mounted into plugin-store settings.
@@ -24,13 +25,14 @@ Use this when the task is specifically about the Profile feature in `qol-tray`, 
 ## Working Rules
 
 - Keep profile behavior aligned across export, import, pull, push, and backup flows.
-- Treat `profile/plugin-configs/` as the profile cache and `plugins/*/config.json` as live installed state. Export must reconcile both.
-- A profile override should win for the same plugin, but unrelated installed plugin configs must still be exported.
+- `ProfileScopeStore` holds the authoritative UID-keyed scoped values. `PluginConfigManager` merges them and materializes the installed `config.json` consumed at runtime; route config mutations through its guarded write path.
+- Export in `src/features/profile/core/storage.rs` retains an installed-config compatibility fallback when scoped values are absent. Preserve it without treating the runtime file as an independent writer or letting it overwrite scoped preferences.
 - If an imported bundle explicitly provides `plugin_configs`, remove stale live plugin configs that are missing from that imported set.
-- Startup cleanup should backfill live `plugins/*/config.json` into `profile/plugin-configs/` when the cached profile copy is missing.
 - Preserve unsupported plugins in `plugins.lock.json` during import and sync so one machine does not delete another machine's platform-specific plugins.
 - Preserve existing repo URLs for surviving installed plugins when the imported profile does not mention them.
 - Reject wrong-typed plugin config values at validation time. Do not silently accept them just because defaults can be resolved.
+
+For future linked-computer storage, follow the [proposed remote contract](../qol-tray-core/SKILL.md#proposed-linked-computers-contract).
 
 ## Plugin config storage trichotomy and the resolver
 
@@ -115,7 +117,7 @@ A reviewer who flags "these backups can be committed and pushed" as a P1 is misr
 ## Review Checklist
 
 - Does export round-trip the same effective local profile?
-- Does import change both the cached profile state and the live installed state?
+- Does import update scoped values and the derived runtime configuration through the owning persistence path?
 - Does sync output describe the shared profile without pruning unsupported remote entries?
 - Does backup content match what push would upload?
 - Does a reload after import or pull leave `plugins.lock.json` and sync output consistent?
@@ -133,7 +135,6 @@ Targeted commands:
 ```bash
 cargo test profile -- --nocapture
 cargo test --test profile_feature -- --nocapture
-cargo test migrate_live_plugin_configs_into_profile_dir -- --nocapture
 cargo test validate_plugin_config_rejects_wrong_typed_values -- --nocapture
 ```
 

@@ -22,7 +22,9 @@ Inspect those paths before stating a capability, setting default, throttle inter
 
 ## Desktop protocol boundary
 
-Discovery ports and messages must match the desktop plugin's `src/config/mod.rs` and `src/discovery/model.rs`. Command JSON must match `src/command/model.rs`.
+Use [PointZ's security and client/server contract](../qol-plugin-pointz/SKILL.md#security-and-clientserver-contract) for the desktop wire, discovery, command, and pairing owners. Verify compatibility against the active Flutter checkout before claiming client support.
+
+Future migration follows [PointZ's proposed core cutover](../qol-plugin-pointz/SKILL.md#proposed-core-migration).
 
 Change client and server protocol definitions together. Preserve tolerant decoding when adding optional fields; require an intentional compatibility decision for renamed commands, changed enum spelling, or port changes.
 

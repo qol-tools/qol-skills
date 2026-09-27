@@ -37,13 +37,19 @@ Keep code plugin-local when it expresses one plugin's domain policy, transport p
 
 If no owner exists, name the capability and its expected consumers before creating a crate. Follow `standards-evolution` when the placement rule changes workspace policy.
 
+## Stateful service ownership
+
+A shared stateful authority requires one explicit lifecycle owner and one write API, with exclusive writer enforcement for its namespace. Clients may share contracts and call the service; they must not instantiate independently writable copies of its store. This applies to standalone CLIs as well as host/plugin adapters. Stateless code reuse does not imply a service.
+
+For the proposed linked-computers service, `libs/peers` and host `linked_computers` are design targets, not existing consumable owners. The [core proposed remote contract](../../../qol-tray/skills/qol-tray-core/SKILL.md#proposed-linked-computers-contract) owns exposure, projections, and storage exclusions.
+
 ## Dependency rules
 
 - Add a crate to the narrowest owning manifest.
 - Scope platform-only dependencies under target-specific Cargo tables.
 - Reuse workspace dependency declarations when the root manifest owns a shared version.
 - Do not add a dependency merely because another plugin happens to use it; confirm the same purpose and boundary.
-- Keep plugins independent: a plugin must not depend on or query another plugin for reusable domain facts or operations. Put the neutral capability contract in `libs/`, make each plugin consume it directly, and keep each plugin's selection, lifecycle, presentation, and product policy local.
+- Keep plugins independent: a plugin must not depend on or query another plugin for reusable domain facts or operations. Put the neutral capability contract in `libs/`, let each plugin consume its facade or service client according to Stateful service ownership above, and keep each plugin's selection, presentation, and product policy local.
 - Remove unused dependencies rather than preserving future intent in prose.
 
 Shared libraries and consumers land atomically in the monorepo. Do not invent a publish/push sequence for workspace path dependencies.

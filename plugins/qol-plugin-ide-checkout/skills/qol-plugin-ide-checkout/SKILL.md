@@ -1,48 +1,44 @@
 ---
 name: qol-plugin-ide-checkout
-description: Use when working on the qol-tray ide-checkout Task Runner plugin. Covers Rust supervision, the Python daemon boundary, config, status reporting, packaging, and synchronization with the browser-extension API contract.
+description: Use when working on the qol-tray IDE Checkout plugin. Covers its Rust daemon, checkout workflow, config, status reporting, platform lifecycle, packaging, and browser-extension contract boundary.
 ---
 
 # qol-plugin-ide-checkout
 
-Task Runner has a Rust process boundary and a Python API daemon. The plugin skill owns supervision, packaging, config, and operational behavior; `qol-tray-task-runner-ide-checkout` owns endpoint schemas, security policy, and consumer compatibility.
+IDE Checkout runs a Rust local HTTP daemon. Locate the plugin through the manifest declaring `id = "qol-ide-checkout"`; paths below are relative to that plugin. This skill owns implementation boundaries; [the API skill](../qol-tray-task-runner-ide-checkout/SKILL.md) owns consumer guidance.
 
 ## Contract sources
 
-- `plugin.toml` owns plugin identity, runtime command/actions, daemon metadata, platforms, and artifacts.
-- `qol-config.toml` owns editable app/script/temp-path shapes and defaults.
-- `server.py` owns built-in action dispatch, default config used without an on-disk override, HTTP behavior, and interpreter syntax requirements.
-- `src/main.rs` owns process supervision, health/status invocation, notification fallback, and packaged-script resolution.
-- The API-contract skill owns externally consumed request/response/error semantics.
-
-Change duplicated values such as daemon endpoints or config defaults at every owning boundary in one patch and add an executable consistency check where possible. Do not copy those values into this skill.
+- `plugin.toml` owns identity, runtime actions, daemon addressing/listener inheritance, platforms, and artifacts.
+- `qol-config.toml` and `src/daemon/config.rs` own app paths, temporary-root configuration, typed loading, and contract-derived defaults.
+- `src/main.rs` and the CLI boundary own headless dispatch and status/settings entrypoints.
+- `src/daemon/mod.rs` owns daemon startup, config loading, and lifecycle wiring.
+- `src/daemon/server.rs` owns HTTP parsing, routing, request/response models, and mutation-origin checks.
+- `src/daemon/checkout.rs` owns repository/branch validation, clone refresh, process invocation, and configured-app launch.
+- `src/daemon/platform/` owns inherited listeners, executable checks, and host-death behavior; `src/daemon/takeover.rs` owns standalone bind/takeover.
 
 ## Runtime boundary
 
-The Rust binary locates the packaged daemon relative to its executable and hands process control to Python where the target supports that model. Debug daemon behavior in Python stdout/stderr; debug launch, packaging, or notification behavior in Rust.
-
-Do not add environment/path overrides without considering symlinked executables, release layout, and untrusted input. The shipped artifact must include every runtime file the supervisor resolves.
+The daemon adopts the host's inherited listener when supplied, otherwise uses its bind/takeover path. Preserve shared lifecycle behavior and derive support from manifest-selected adapters. There is no Python daemon or packaged script to resolve.
 
 ## Common changes
 
-**Add a built-in action:** implement and register it in `server.py`, update the external API contract when consumer-visible, validate parameters before filesystem/process access, and add request-level tests.
+**Change checkout behavior:** use the checkout module, keep validation before filesystem/process work, and update router-level compatibility cases when responses change.
 
-**Change a config shape/default:** update `qol-config.toml`, Python defaults/loading/validation, and API responses together.
+**Change config:** update the config contract and Rust model together; derive defaults through the existing contract loader.
 
-**Change daemon addressing:** update the Python bind, Rust health probe, manifest daemon metadata, and every contract consumer. Prefer one generated/shared source over another copied constant.
+**Change addressing or lifecycle:** update the manifest, daemon bind/takeover path, and health/status consumer together.
 
-**Change CORS/security:** the API-contract skill defines policy and `server.py` enforces it. Update tests for accepted and rejected origins, traversal, command interpolation, and localhost binding.
+**Change HTTP/security:** follow the API skill and owning router/model; preserve accepted/rejected caller cases and process/path validation in their source tests.
 
 ## Invariants
 
-- Configured app/script identifiers never become unchecked shell fragments.
-- Clone destinations stay beneath the validated task root.
-- CORS and localhost binding are defense-in-depth, not substitutes for path/command validation.
-- Runtime interpreter support is derived from `server.py`, packaging, and the test matrix, not a prose minimum version.
+- Configured app identifiers resolve through the typed app configuration and never become shell fragments.
+- Preserve checkout path and branch validation before clone/refresh; keep generated destinations under the configured temporary root.
+- HTTP caller checks do not replace checkout validation; their precise policy belongs to the router referenced by the API skill.
 - Required tools are bundled or their absence becomes an explicit actionable error, consistent with `qol-mission`.
-- Notifications may degrade through platform adapters, but health failures remain visible.
-- Rust/Python release packaging is tested as one artifact.
+- Health, checkout, and app-launch failures remain visible, including a checkout that succeeded before app launch failed.
 
 ## Verification
 
-Run Rust format/build/Clippy/tests, Python syntax and API tests, packaging checks, and `cargo run -q -p qol -- check`. Exercise the external contract against the real daemon for any endpoint/security change.
+Run the scoped Rust and shared contract suites plus packaging checks through the repository gate. Endpoint/security changes require router and real-daemon contract evidence; platform lifecycle claims require the manifest-declared targets. Verification is performed by the owning architect in a Sessions implementation round.

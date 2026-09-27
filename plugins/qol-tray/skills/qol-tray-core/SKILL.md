@@ -49,55 +49,20 @@ when a newer version is available, then `Quit`. There are no per-plugin tray ite
 
 ## Plugin manifest (`plugin.toml`)
 
-```toml
-[plugin]
-id = "plugin-name"               # mutable display label
-uid = "<uuid-v4>"                # frozen identity, authored once, never changed
-name = "Plugin Name"
-description = "Description"
-version = "1.0.0"
-platforms = ["linux"]            # optional - omit for all platforms
+Use the live scaffold located by the manifest declaring `id = "qol-template"` and the shared `PluginManifest` resolver in `libs/plugin-api/src/manifest/schema.rs` (monorepo-relative). Declare activation actions in the `[action.<id>]` catalog; the resolver prefers that catalog and retains legacy `runtime.actions`/menu handling as compatibility fallback. Keep durable references keyed by the immutable plugin UID.
 
-[runtime]
-command = "plugin-binary"
-actions = { run = ["run"], settings = ["settings"] }   # optional map
-
-[menu]
-label = "Menu Label"
-items = [
-    { type = "action", id = "run", label = "Run", action = "run" },
-    { type = "checkbox", id = "toggle", label = "Enable", checked = true,
-      action = "toggle-config", config_key = "enabled" },
-    { type = "separator" },
-    { type = "submenu", id = "sub", label = "More", items = [...] },
-]
-
-[daemon]                          # optional
-enabled = true
-command = "plugin-binary"
-socket = "/tmp/qol-plugin.sock"
-
-[[dependencies.binaries]]
-name = "plugin-binary"
-repo = "owner/plugin-repo"
-pattern = "plugin-binary-{os}-{arch}"
-```
-
-Action types: `run` (daemon socket or runtime binary), `toggle-config` (flip a
-boolean in `config.json` at `config_key`), `settings` (hosted contract panel
-when eligible, otherwise the mapped daemon/runtime action).
+Derive action kinds, invocation arguments, and validation from that shared resolver and the live template rather than copying a manifest or maintaining a separate executable-action inventory.
 
 ## Plugin contracts (two-file pattern)
 
 Plugins declare their user-facing surface through two TOML files at the plugin
 root, both parsed by the `qol-config` crate.
 
-**`qol-config.toml`** - persistent config the user edits, saved to `config.json`.
+**`qol-config.toml`** - persistent settings contract. Storage authority and runtime materialization follow [Profile config persistence](../qol-tray-feature-profile/SKILL.md#working-rules).
 Field kinds include `boolean`, `string`, `number`, `select`, `string_array`,
 `object_array`, `object_map`, `color`, `action`, `list`, `status`, `qr_code`.
 
-**`qol-runtime.toml`** - named actions and queries the plugin exposes (non-persistent).
-Required only when `qol-config.toml` references action/query names.
+**`qol-runtime.toml`** - typed actions, queries, and streams consumed by settings or other callers, including MCP. It is not limited to config references. `RuntimeSpec` in monorepo `libs/config/src/contract/runtime.rs` owns the supported declarations and validation; follow the live template for shared `qol-plugin-api` contract tests.
 
 ```toml
 # qol-config.toml
@@ -164,21 +129,26 @@ missing. The host lifecycle, one-window rule, and fallback contract live in
 ## Contract and delivery rules
 
 - Commands are strict binary basenames (`[A-Za-z0-9_-]+`) - never `.sh`, absolute paths, or traversal.
-- When `runtime.actions` is present, every executable menu action requires a mapping (strict coverage).
+- Resolve activation actions through the shared manifest resolver above; its compatibility validation also governs legacy `runtime.actions` and menu mappings.
 - Command resolution is symlink-safe: canonicalized targets must stay under the plugin root.
 - Dev-mode binary resolution order is **plugin root first, then `target/debug/`, then `target/release/`**. Do not leave stale binaries in the plugin root - they win over a fresh `target/debug/` build.
 - In dev mode qol-tray runs `cargo build` directly; a plugin needs a `Cargo.toml`, not a Makefile.
 - Plugin reload (`/api/dev/reload`) is single-flight via an `AtomicBool` guard; concurrent requests get `409`. The build runs in `spawn_blocking` so it never blocks axum workers.
-- Every plugin must include a contract-validation test that parses `plugin.toml` and calls `manifest.validate()`, with `qol-tray` + `toml` in `[dev-dependencies]`.
+- Every plugin includes shared `qol-plugin-api` contract validation; copy the live template's test and manifest dependencies, not a dependency on the tray application.
+
+## Proposed linked-computers contract
+
+The core peer service and normalized remote-operation catalog are proposed in [linked-computers design](../../../../../qol-monorepo/docs/specs/2026-09-27-linked-computers-design.md), not available APIs. Core must own computer identity, trust, and transport; apply the [stateful service-owner rule](../../../qol-project/skills/qol-shared-libs/SKILL.md#stateful-service-ownership).
+
+Derive remote operations and exposure from canonical manifest/runtime declarations and shared validation by stable plugin UID and operation identity. Reuse local dispatch; do not create a parallel remote inventory or handler set. Existing MCP `agent_tool` metadata grants no peer access.
+
+Each receiving host owns its grants and local state. Remote projections must carry origin, session generation, revision, and freshness; stale projections cannot authorize mutations or revive online state. Keep peer credentials, identity, and grants out of profile sync/export. Peer requests cannot confer host residency. The design owns the detailed protocol and implementation gates; no new metadata field, endpoint, or shared peer crate is implied here.
 
 ## Hotkeys
 
-qol-tray grabs global hotkeys at the X11 level (`src/hotkeys/`), intercepting them
-before the window manager. Bindings live in `~/.config/qol-tray/hotkeys.json`
-(`id`, `key`, `plugin_uid`, `action`, `enabled`; legacy `plugin_id` still read via
-serde alias); key/modifier names are defined in
-`src/hotkeys/types.rs`. To replace an OS shortcut: disable it in System Settings,
-add the binding, restart so qol-tray grabs the key exclusively.
+Hotkey capture and takeover live under `src/hotkeys/`; binding types and compatibility parsing come from that source. Diagnose conflicts through `src/doctor/diagnosis/` and use the QoL-owned repair/takeover path in `src/hotkeys/takeover/`. Do not direct users to disable host shortcuts manually. Surface unsupported takeover cases; source support for one desktop does not establish support for every platform.
+
+Host mutation and restoration obligations belong to [qol-mission](../../../qol-project/skills/qol-mission/SKILL.md#one-profile-two-host-ownership-contracts).
 
 ## Cross-platform tray
 

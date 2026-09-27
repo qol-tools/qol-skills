@@ -17,12 +17,14 @@ Keep the Controllers plugin's native hardware knowledge separate from qol-tray's
 | Area | Owner |
 | --- | --- |
 | Native detection, driver fixes, evdev supplementation, and Linux Bluetooth metadata | the `plugin-controllers` plugin source |
-| Generic `type = "gamepad"` rendering, browser monitoring, profiles, haptics, and presentation | `apps/qol-tray/ui/views/plugin-config/fields/` |
-| Controller illustration geometry | `apps/qol-tray/ui/assets/gamepad-*` |
-| Gamepad styling | `apps/qol-tray/ui/styles/plugin-config.css` |
+| Generic `type = "gamepad"` rendering, browser monitoring, profiles, haptics, and presentation | `apps/tray/ui/views/plugin-config/fields/` |
+| Controller illustration geometry | `apps/tray/ui/assets/gamepad-*` |
+| Gamepad styling | `apps/tray/ui/styles/plugin-config.css` |
 | Host/plugin query contract | `qol-config.toml`, `qol-runtime.toml`, and the plugin daemon payload |
 
 Do not move a hardware-specific daemon workaround into the generic field. Do not build a plugin-local copy of UI behavior that every gamepad field should share.
+
+For proposed cross-plugin Bluetooth mutation coordination, follow [Bluetooth's shared mutation boundary](../../../qol-plugin-bluetooth/skills/qol-plugin-bluetooth/SKILL.md#proposed-shared-mutation-boundary).
 
 ## Data flow
 

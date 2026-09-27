@@ -5,7 +5,7 @@ description: Use when working on the qol-tray CLI Sessions plugin. Covers live t
 
 # qol-plugin-cli-sessions
 
-CLI Sessions owns an always-on-top overview of live CLI sessions and the attention policy that decides which one needs the user. Terminal identity, discovery, screen reading, and focus are consumed from the shared terminal-sessions library; this plugin owns interpretation and presentation.
+CLI Sessions owns an always-on-top overview of live CLI sessions and the attention policy that decides which one needs the user. Terminal identity, discovery, screen reading, focus, and interpretation come from `qol-terminal-sessions`; this plugin owns attention-state mapping and presentation. See [shared terminal ownership](../../../qol-project/skills/qol-shared-libs/SKILL.md#dependency-rules).
 
 ## Contract sources
 
@@ -20,8 +20,9 @@ CLI Sessions owns an always-on-top overview of live CLI sessions and the attenti
 |---|---|
 | `src/cli.rs` | Headless command surface and doctor registration. |
 | `src/host/` | Terminal-host boundary; the implemented host drives Kitty remote control. |
-| `src/session/` | Session identity, registry, tool classification, status, and git context. |
-| `src/strategy/` | Per-tool interpretation: the trait, its generic default, and tool-specific enrichers. |
+| `src/session/` | Local registry, attention status, git context, and adapters over shared terminal identities/tool descriptors. |
+| Shared `qol-terminal-sessions::cli` facade | Interpretation, tool descriptors, and registered harness strategies; source in monorepo `libs/terminal-sessions/src/cli/`. |
+| `src/attention/`, `src/daemon/screen_analysis.rs` | Plugin attention policy and mapping from shared interpretation. |
 | `src/signal/` | Screen and title evidence used to detect prompts and input requests. |
 | `src/daemon/` | Reconcile loop and action dispatch. |
 | `src/storage/` | Session-state persistence, paths, and snapshots. |
@@ -31,7 +32,9 @@ CLI Sessions owns an always-on-top overview of live CLI sessions and the attenti
 
 ## Interpretation strategy
 
-Interpretation is a registry, not a chain of conditionals. The strategy trait carries a working default so an unrecognized tool still produces a usable reading; tool-specific implementations supply evidence hooks (`working`, `awaiting`, `turn_taken`) and never re-derive the phase order. The trait's default `read` composes the hooks through the pure `phase_for` skeleton (Busy > Blocked > Done > Idle) and applies the moving-screen invariant in exactly one place, keyed on the previous status. Movement reads `Busy` whenever the session was `Working` or has not been observed before, so a streaming session stays working (debounce) and a first sighting never arms "your turn" from historical evidence. Once a session has settled into a waiting status, a redraw stops overriding the evidence hooks, so a rename or banner refresh in an acknowledged session keeps its waiting phase instead of re-arming. A redraw with no waiting evidence still reads `Busy`, because movement is all a hidden spinner leaves behind. Dropping the debounce turns every busy session into a false "your turn"; keying the invariant on a bare previous-working flag instead of the full status turns every first sighting of a moving session into one. The generic shell strategy overrides `read` because it is busy-by-default (absence of a foreground process is the idle signal), which does not fit the evidence skeleton. Adding support for a new CLI tool means adding a strategy, registering it for that tool, and covering its evidence with cases - never branching on the tool inside shared code and never writing a phase if-else ladder inside a strategy.
+`qol-terminal-sessions` owns the interpretation registry, generic fallback, and tool-specific enrichers. Read its public facade and `libs/terminal-sessions/src/cli/mod.rs` and `cli/interpreter.rs` in the monorepo for exact strategy methods and phase semantics. Extend that owner for new harness evidence; do not create another interpreter in the plugin.
+
+Keep the plugin's pure attention transition separate from the shared reading. Preserve moving-session handling and sticky acknowledgement at their owning boundaries so a redraw does not re-alert an acknowledged session.
 
 The session's own transcript outranks the screen and the tab title. Each harness writes a JSONL transcript, and the type of its last complete entry is the deterministic runtime signal: a terminal type reads Ready, anything else reads Working, and a session whose transcript never resolves stays Unknown so the screen verdict still holds. A harness backend therefore carries exactly two things, how to locate the transcript for a live pid and its terminal-type set, and everything else is shared. Never reintroduce file freshness or transcript growth as a busy signal: a turn in flight writes nothing for minutes at a time, with measured zero-write stretches of 260s inside a single live turn against a 120s freshness window, including one 4m36s pure-think gap. Writes are bursty by nature, so no sampling interval rescues a growth predicate, and a thinking session reads as idle. Screen movement stays a fallback for the generic strategy and for any harness with no transcript, never the primary reading for one that has it.
 
@@ -49,17 +52,17 @@ Every harness-specific behavior - naming, title grammars, metadata extraction, s
 
 ## Common changes
 
-**Support a new CLI tool:** add a strategy, register it for the tool, and add classification so sessions resolve to it. Enrich display and phase reading; do not add tool branches to the registry, daemon, or UI.
+**Support a new CLI tool:** extend and register its interpretation in `qol-terminal-sessions`, then consume its shared reading here. Keep plugin attention and presentation mapping local; do not add tool branches to the daemon or UI.
 
 **Add a terminal host:** implement the host boundary and its session binding. Discovery, screen reading, and focus belong to the shared terminal-sessions library - extend the library when the capability is host-neutral, and keep only host-specific wiring local.
 
-**Change attention policy:** edit the phase reading and the status transition together, and cover the transition with cases rather than a live terminal.
+**Change attention policy:** edit the plugin's status transition over shared readings and cover it with cases rather than a live terminal. Change evidence interpretation only in its shared owner.
 
 **Change the panel:** keep the overview keyboard-first. It is an interactive gpui surface, so it must use `SurfaceKind::OverlayPanel` (normal, focusable, with the shared overlay state applied inside the reveal gate); non-focusable window kinds silently leak keystrokes to whatever is underneath, and a plain `SurfaceKind::Panel` drops the always-on-top behavior.
 
 ## Invariants
 
-- Terminal identity, discovery, screen reading, and focus come from the shared library; this plugin does not re-implement them or poll independently when the library exposes a subscription.
+- Terminal identity, discovery, screen reading, focus, and interpretation come from the shared library; this plugin does not re-implement them or poll independently when the library exposes a subscription.
 - An unrecognized tool degrades to the generic strategy instead of disappearing from the overview.
 - The status transition is pure and total over previous status and phase.
 - Acknowledgement is sticky until the session genuinely changes phase.

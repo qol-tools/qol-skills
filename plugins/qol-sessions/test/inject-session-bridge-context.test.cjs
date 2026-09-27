@@ -219,7 +219,6 @@ test('the skill requires an event-driven review loop through feature acceptance'
     assert.match(skill, /`completion_marker` as `acknowledge_marker`/);
     assert.match(skill, /checkpoint remains available for acknowledgement by `session_loop_close`/);
     assert.match(skill, /`session_spawn` is keyed, not heuristic/);
-    assert.match(skill, /immediately usable by `session_bridge`/);
     assert.match(skill, /Treat every token returned by `sessions_list` or `session_spawn` as an opaque, instance-bound capability/);
     assert.match(skill, /Never inspect terminal sockets, override backend environment variables/);
     assert.match(skill, /Then return to step 3/);

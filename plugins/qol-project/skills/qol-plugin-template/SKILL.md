@@ -5,7 +5,7 @@ description: Use when bootstrapping a new qol-tray plugin from the template plug
 
 # qol-plugin-template
 
-The `plugins/*` directory whose manifest declares `id = "plugin-template"` is the canonical scaffold. Its checked-out files are the source of truth for baseline layout, dependencies, CI workflows, contract syntax, and validation; this skill must not duplicate that inventory.
+The `plugins/*` directory whose manifest declares `id = "qol-template"` is the canonical scaffold. Its checked-out files are the source of truth for baseline layout, dependencies, CI workflows, contract syntax, and validation; this skill must not duplicate that inventory.
 
 ## Bootstrap procedure
 

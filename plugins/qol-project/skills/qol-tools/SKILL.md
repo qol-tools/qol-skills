@@ -115,7 +115,7 @@ Any prose written into the qol-tools world (SKILL.md, README, commit body, PR de
 | `plugin-alt-tab, plugin-launcher, plugin-lights, ...` | "each release unit under `plugins/*`" |
 | `qol-config + qol-plugin-api + qol-runtime` | "workspace members under `libs/`" |
 | `the 3 file migrations: v3.15->v3.16, v3.16->v3.17, v3.17->v3.18` | "every migration registered in `PreFlightRegistry::current()`" |
-| a plugin's source directory, named as a literal path | "the `plugins/*` directory whose manifest declares `id = \"plugin-lights\"`" - manifests own plugin identity, directory names do not |
+| a plugin's source directory, named as a literal path | "the `plugins/*` directory whose manifest declares `id = \"qol-lights\"`" - manifests own plugin identity, directory names do not |
 | `` `OLDEST_SUPPORTED = 3.15.0` `` | "below `OLDEST_SUPPORTED` (slides per release)" |
 | ``active branch is `world-canvas-overhaul` `` | omit, or point at `docs/plans/` for live state |
 | `as of qol-config 1.3.0` | omit, or "the API selected by the workspace" |
