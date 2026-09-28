@@ -695,6 +695,56 @@ echo 5 > .claude/bypass-qol-arch-code
 
 The marker is auto-consumed per edit; no cleanup needed.
 
+### Enforcement: design guard
+
+The same hook blocks code that does not follow the Bone and Amber design every qol
+surface shares (`qol-project:qol-gpui-theme` is the contract). It mirrors the guard
+tests in `libs/theme/tests/theme.rs` at edit time instead of minutes later in CI,
+and every block names what to use instead. The rules live in
+`bin/qol-design-guard.cjs`.
+
+Native gpui surfaces (`libs/gpui/src`, `apps/tray/src`, `plugins/*/src`):
+
+- Motion is `qol_gpui::motion::animation(Motion::*)`; no `Animation::new`, `.with_easing`, hand easing.
+- Hover is `kit.pointable`; no `.hover(` or `group_hover(` outside `kit.rs` and `settings_panel/components/`.
+- Text is `.text(TextStyle::…)`; no `.text_size`, `.font_weight`, `.font_family`, `.line_height`. Headings are `kit.heading`, `kit.heading_title` or `SettingsGroupHeader`.
+- Keys in hints are a `qol_gpui::Key`, never a string.
+- Every non-ASCII character a window draws is in the shipped fonts (the hook reads their cmap tables); anything else is `qol_gpui::icon::icon`.
+- Colour comes from the theme (`kit.grounds.*`, `kit.washes.*`, a kit recipe, a semantic hue); no `rgb(0x…)`, `rgba(…)` or `hsla(…)` literal outside `kit.rs`. `rgba(0)` is transparent and allowed.
+- Heights of 28 px or more, radii and (in settings scope) spacing sit on the ladders read from `libs/theme/src/lib.rs`; settings scope also bans rem helpers such as `.gap_2()` and local spacing constants.
+- Depth comes from the theme: no hand alpha, `BoxShadow`, line width or literal opacity. Chips are `kit.chip`, windows are `kit.window()` and square, every scrolling list ends in `kit.scroll_cue`, a running phrase never ends in an ellipsis, and no surface draws a coloured side line.
+- Settings scope composes recipes: no leaf `.bg`, `.text_color`, `.border`, `.rounded` outside the recipe owners, no raw `kit.palette.<field>` beyond the semantic hues, one focus owner, spinners only through the components.
+
+The settings page shape, derived from the core tool pages (Hotkeys, Shortcuts and
+Updates all have it; the pre-redesign Linked computers page had none of it). A file
+under `apps/tray/src/settings_surface/` that implements `CustomSettingsBreadcrumbs`
+must:
+
+- lay its rows out in `settings_list()`, windowed by `visible_range` and closed by `kit.scroll_cue(ScrollSource::Window { .. })`;
+- group rows under `SettingsGroupHeader::new(title, Some(colophon), kit)`;
+- put values and actions on the right in `settings_value_group()` (`settings_value_text`, `settings_action_affordance`);
+- name its keys in `settings_hints` with `SettingsHint::new(Key::…, label)`;
+- route keys through `intent(..)` and `escape_step(..)` rather than raw key names.
+
+Web settings page (`apps/tray/ui`, `plugins/*/ui`):
+
+- CSS takes colour from semantic tokens or `rgba(var(--*-rgb), a)`, sizes from `var(--qol-text-*)` or `var(--fs-*)`, fonts from `var(--font-sans|mono|ui|data)`, times from `var(--qol-motion-*)` or `var(--dur-*)`, shadows from `var(--qol-shadow-*)`, and never draws a coloured left border.
+- Views under `ui/views/` (the dev gallery excepted) use no static `style="…"`, no bare `<p>`, and no `<h3>` to `<h6>`: a group is a `<section>` whose `.section-header` holds an `<h2>`, and prose is a classed part.
+
+Only violations the edit introduces are reported, counted per rule, so an unrelated
+edit to a file with existing debt passes and a second copy of that debt does not.
+Tests, examples, `*_tests.rs`, `*.test.js`, `generated-*` files and `vendor/` are
+skipped.
+
+To audit a tree, run the guard directly. It exits 1 if any file is flagged:
+
+```bash
+node plugins/qol-project/bin/qol-design-guard.cjs <qol-monorepo> apps/tray/src/settings_surface apps/tray/ui/views
+```
+
+Bypass one edit with `touch .claude/bypass-qol-design`, or N edits with
+`echo N > .claude/bypass-qol-design`.
+
 Implementation: Node.js (`bin/check-qol-arch-code.cjs`) — Claude Code requires Node, so the dependency is free across Linux, macOS, and Windows. Wired through the shared hook launcher in `hooks/hooks.json`, which uses `CLAUDE_PLUGIN_ROOT` when Claude provides it and resolves the installed Codex plugin cache when Codex does not.
 
 ## Sibling skills

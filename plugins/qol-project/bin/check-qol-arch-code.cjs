@@ -40,6 +40,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const design = require('./qol-design-guard.cjs');
 
 const INSPECTED_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 const OS_BASENAMES = new Set(['linux.rs', 'macos.rs', 'windows.rs']);
@@ -1053,12 +1054,12 @@ Bypass for this edit only:
 `);
 }
 
-function markerPaths(cwd, filePath) {
+function markerPaths(cwd, filePath, name = 'bypass-qol-arch-code') {
     const markers = [];
     const seen = new Set();
     const push = dir => {
         if (!dir) return;
-        const marker = path.join(dir, '.claude', 'bypass-qol-arch-code');
+        const marker = path.join(dir, '.claude', name);
         if (seen.has(marker)) return;
         seen.add(marker);
         markers.push(marker);
@@ -1093,11 +1094,41 @@ function consumeBypassMarker(marker, basename) {
     return true;
 }
 
-function consumeBypass(cwd, filePath, basename) {
-    for (const marker of markerPaths(cwd, filePath)) {
+function consumeBypass(cwd, filePath, basename, name) {
+    for (const marker of markerPaths(cwd, filePath, name)) {
         if (consumeBypassMarker(marker, basename)) return true;
     }
     return false;
+}
+
+function blockDesign(filePath, relative, violations) {
+    process.stderr.write(`qol-arch-code design violation in ${filePath}.
+
+This edit adds code that does not follow the Bone and Amber design the rest of
+qol is built from. Each line says what to use instead:
+
+${design.formatViolations(relative, violations)}
+
+The register, the ladders and the settings page shape are in the
+qol-project:qol-gpui-theme skill; libs/theme/tests/theme.rs fails the build on
+the same patterns. The rules and where each comes from are in the
+qol-project:qol-arch-code skill, "Enforcement: design guard".
+
+Bypass for this edit only:
+  touch .claude/bypass-qol-design
+  # or for N edits in a row:
+  echo 5 > .claude/bypass-qol-design
+`);
+}
+
+function findNewDesignViolations(tool, input, filePath) {
+    const root = design.workspaceRoot(filePath);
+    if (!root) return null;
+    const relative = design.relativeTo(root, filePath);
+    const after = extractNewContent(tool, { ...input, file_path: filePath });
+    if (!after) return null;
+    const violations = design.newViolations(relative, readExistingFile(filePath), after, root);
+    return violations.length > 0 ? { relative, violations } : null;
 }
 
 function main() {
@@ -1130,6 +1161,12 @@ function main() {
     if (layoutViolation) {
         if (consumeBypass(cwd, filePath, basename)) return 0;
         blockSourceLayout(filePath, layoutViolation);
+        return 2;
+    }
+
+    const designViolation = findNewDesignViolations(tool, input, filePath);
+    if (designViolation && !consumeBypass(cwd, filePath, basename, 'bypass-qol-design')) {
+        blockDesign(filePath, designViolation.relative, designViolation.violations);
         return 2;
     }
 
