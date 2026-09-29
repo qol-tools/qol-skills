@@ -1,6 +1,6 @@
 ---
 name: qol-arch-code
-description: Use when designing or refactoring Rust plugins/libs that need clean source ownership, cross-platform support, capability-specific backend splits, native GPUI or web UI placement, or headless-first CLI/plugin contracts. Defines plugin source-root hygiene, the ui/ versus src/ui/ boundary, Rust module directory form, strategy-pattern compartmentalization (platform/ subfolders, trait + per-OS impls), capability-local backend boundaries, headless binary layering, mandatory help/doctor commands, what a plugin doctor command must report, and plugin doctor output contracts. Triggers on plugin directory structure, loose files under src/, module file-plus-folder hybrids, native or web UI placement, platform-specific code, multi-OS support, OS-named files, Linux X11/Wayland/compositor splits, headless CLI design, plugin runtime action design, doctor commands, logging and tracing (`log::`, `qol_runtime::probe!`, raw `eprintln!`/`dbg!`), or any time you see #[cfg(target_os)] sprawl. For symbol/import hygiene that prevents dead_code warnings under `-D warnings`, see `qol-arch-cross-platform`. For CI/release workflow contracts that enforce cross-platform builds, see `qol-arch-cicd`.
+description: Use when designing or refactoring Rust plugins/libs that need clean source ownership, cross-platform support, capability-specific backend splits, native GPUI or web UI placement, or headless-first CLI/plugin contracts. Defines plugin source-root hygiene, the ui/ versus src/ui/ boundary, Rust module directory form, strategy-pattern compartmentalization (platform/ subfolders, trait + per-OS impls), capability-local backend boundaries, headless binary layering, mandatory help/doctor commands, what a plugin doctor command must report, and plugin doctor output contracts. Triggers on plugin directory structure, loose files under src/, module file-plus-folder hybrids, native or web UI placement, platform-specific code, multi-OS support, OS-named files, Linux X11/Wayland/compositor splits, headless CLI design, plugin runtime action design, doctor commands, output categories (log via `log::`, trace via `qol_runtime::probe!`, command output in `cli` modules; `println!`/`eprintln!`/`dbg!` outside them), or any time you see #[cfg(target_os)] sprawl. For symbol/import hygiene that prevents dead_code warnings under `-D warnings`, see `qol-arch-cross-platform`. For CI/release workflow contracts that enforce cross-platform builds, see `qol-arch-cicd`.
 ---
 
 # qol-arch-code: Plugin and Cross-Platform Code Layout
@@ -522,20 +522,50 @@ windows = { version = "0.58", features = ["Win32_UI_WindowsAndMessaging"] }
 
 The `<os>.rs` source files use these unconditionally — the cfg gate at the manifest level guarantees they're only compiled when relevant.
 
-## Logging and tracing
+## Output: log, trace, command output
 
-qol Rust code has two diagnostic channels. Raw stderr prints are neither.
+Every line a qol process writes belongs to exactly one of three categories. Each category has one way to write it and one place it lands.
 
-| Need | Use | Where it lands |
-|---|---|---|
-| A diagnostic someone may read later: an error, a fallback taken, a state change | `log::error!`, `log::warn!`, `log::info!`, `log::debug!` | qol-tray: its tracing subscriber and log file. Plugins: stderr through `qol_plugin_daemon::logger`, relayed by the tray into the daemon log. |
-| A timing or event stream for `qol trace <target>` | `qol_runtime::probe!` | The trace log, debug builds only. See `qol-tools:qol-trace`. |
+| Category | Write it with | Lands in | In `qol dev` |
+|---|---|---|---|
+| **Log** | `log::error!`, `log::warn!`, `log::info!`, `log::debug!` | qol-tray: its tracing subscriber, which writes stderr and the log file in `qol_log::log_dir()`. Every other process: stderr through `qol_log::init_stderr()`, which the tray relays into its daemon log for plugins. | Logs view, filterable by level and target (the module path). |
+| **Trace** | `qol_runtime::probe!` | The trace file (`qol_conventions::TRACE_LOG_PATH`), debug builds only. See `qol-tools:qol-trace`. | Trace view, and `qol trace <target>`. |
+| **Command output** | `println!`, `eprintln!`, or `qol_headless` `PlainTextOutput` | The terminal of the person who ran the command. | Nowhere. Commands do not run under `qol dev`. |
 
-- Every plugin `main` calls `qol_plugin_daemon::logger::init()` first, so `log::` records are not dropped. A plugin without that call has no logger.
-- Never add `eprintln!`, `eprint!` or `dbg!` to production code. They cannot be filtered by level, they skip the tray's log file, and `dbg!` is a leftover by definition.
-- `println!` stays allowed: stdout is a command's product output (help text, `--json`, `cargo:` build directives), not a log.
-- stderr is legitimate output in exactly three places: the log and trace implementations themselves, CLI surfaces (`cli.rs`, `cli/`, the monorepo `tools/` tree) where the reader is a person at a terminal, and tests, examples and build scripts.
-- Existing `eprintln!` calls are debt. Move them to `log::` when you touch the code for another reason; a file you edit is not blocked for the prints it already has.
+The `qol dev` Logs view is a raw capture of the tray's stdout and stderr, with every plugin's stdout and stderr relayed into it. Anything a daemon or plugin prints lands there whether it is a log or not. That is why a daemon never prints: a print carries no level and no target, so it cannot be filtered.
+
+### Log levels
+
+- `error`: an operation someone asked for failed, or state was lost.
+- `warn`: something failed and the process recovered, retried or fell back.
+- `info`: lifecycle only. Started, ready, listening, stopping.
+- `debug`: everything else a developer wants while debugging. Release plugin builds and the tray's default filter hide it.
+
+Do not prefix a message with `[module]`. The target already names the module.
+
+### Where each category may appear
+
+- Log and trace: anywhere.
+- Command output, only in these places:
+  - a `cli` module: `cli.rs`, `<name>_cli.rs`, or anything under `cli/`, whose first line is `#![allow(clippy::print_stdout, clippy::print_stderr)]` (only the lints it needs);
+  - a `tools/` crate, with that allow at the crate root, because the whole crate is a terminal program;
+  - a `build` module (`build.rs` or `build/`) that emits `cargo:` directives for build scripts;
+  - the tray's `logging/` module and `libs/log/`, which are the log sink itself;
+  - `libs/headless/`, which writes plugin CLI output;
+  - `examples/` and tests. `clippy.toml` allows prints in tests.
+- `dbg!`: nowhere outside tests.
+
+### Rules
+
+- Every process except qol-tray calls `qol_log::init_stderr()` first thing in `main`. Without it every `log::` call in that process is dropped, because `log` discards records until a logger is installed.
+- A library never prints. When library code produces something a person should read, it returns it (a `String`, a report, a `Result`) and the calling `cli` module prints it. `host_exec::run_exec` returns `Err(message)`: `qol-tray exec` prints it, and the launcher turns it into a launch error.
+- Moving a print into a `cli` module means moving the code that decides what to print, not wrapping the print in a helper called from daemon code.
+- `writeln!(std::io::stderr(), ...)` is still a print. The same location rules apply to raw `io::stdout()` and `io::stderr()` handles.
+
+### Enforcement
+
+- **Compiler.** `[workspace.lints.clippy]` in the root `Cargo.toml` sets `print_stdout`, `print_stderr` and `dbg_macro` to `deny`, and every crate opts in with `[lints] workspace = true`. A crate with its own `[lints.clippy]` table (qol-tray, voice, watch, migrations, terminal-sessions) cannot inherit, so it repeats the three lints. CI runs clippy with `-D warnings` on Linux and macOS for every affected crate, so a stray print fails the PR. Windows-only files are not linted in CI; the hook covers them.
+- **Edit time, the fastest check.** The `qol-logging` PreToolUse hook rejects an edit before it lands when it adds a print, a raw stdout or stderr handle, or a print allow outside the places above, or a `dbg!` anywhere outside tests. It answers in milliseconds, so an agent never waits for clippy to hear it. There is no bypass: the allowed places are the escape hatch.
 
 ## Hard rules
 
@@ -550,7 +580,7 @@ qol Rust code has two diagnostic channels. Raw stderr prints are neither.
 - ❌ **Never branch on platform identity in business logic.** Runtime OS checks, OS-specific imports, OS command choices, and OS-keyed storage/path routing belong in a facade/resolver/scope store.
 - ❌ **Never force distinct capability substrates into `linux.rs`** when they have different contracts. Create a capability-local backend split and have the OS adapter select or use it.
 - ❌ **Never have a trait method that exists only on one OS via cfg.** Add it to the trait, stub it on others.
-- ❌ **Never add `eprintln!`, `eprint!` or `dbg!` to production code.** Use `log::` or `qol_runtime::probe!`; see "Logging and tracing".
+- ❌ **Never print outside a `cli`, `build` or `tools/` module.** Daemons, plugins and libraries write `log::` or `qol_runtime::probe!`; see "Output: log, trace, command output".
 - ❌ **Never return `unimplemented!()` from a stub** — it panics. Return a typed `Err` so the caller can handle it.
 - ❌ **Never keep load-bearing state only in a daemon's memory.** A plugin daemon is stopped and restarted at any moment: the host reloads it after a config save, an update replaces it, it crashes. Attempt counters and ownership of a host resource belong in a file under the runtime dir, so a restart does not silently reset them.
 - ❌ **Never let two plugins mutate one host resource on intent alone.** There is no plugin-to-plugin channel (`qol-arch-channels`), so "only one of us touches this" is not enforceable by a sentence in a design. Put the neutral contract in `libs/` and give the resource a claim record with an owner and an expiry that the daemon and the standalone CLI both take, so a crashed owner frees it and a terminal command cannot race the daemon.
@@ -763,11 +793,9 @@ Bypass one edit with `touch .claude/bypass-qol-design`, or N edits with
 
 Implementation: Node.js (`bin/check-qol-arch-code.cjs`) — Claude Code requires Node, so the dependency is free across Linux, macOS, and Windows. Wired through the shared hook launcher in `hooks/hooks.json`, which uses `CLAUDE_PLUGIN_ROOT` when Claude provides it and resolves the installed Codex plugin cache when Codex does not.
 
-### Enforcement: logging guard
+### Enforcement: output guard
 
-`bin/check-qol-logging.cjs` denies an Edit, Write or MultiEdit that raises the number of `eprintln!`, `eprint!` or `dbg!` calls in a `.rs` file under a `qol-*` repo. It counts the production view of the file (comments and the `#[cfg(test)]` module stripped) before and after the edit, so rewording an existing print passes and adding one does not. The exemptions are the ones listed in "Logging and tracing": tests, examples, benches, `build.rs`, CLI surfaces, and the log and trace implementations (`apps/tray/src/logging/`, `libs/log/`, `libs/runtime/src/probe.rs` and `event_tap_trace.rs`, `libs/plugin-daemon/src/logger.rs`).
-
-Bypass one edit with `touch .claude/bypass-qol-logging`, or N edits with `echo N > .claude/bypass-qol-logging`.
+`bin/check-qol-logging.cjs` enforces "Output: log, trace, command output" at edit time. It counts each signal (`eprintln!`, `eprint!`, `println!`, `print!`, `io::stdout()`, `io::stderr()`, a `clippy::print_*` allow, `dbg!`, a `clippy::dbg_macro` allow) in the production view of the file, with comments and the `#[cfg(test)]` module stripped, and denies the edit when a count goes up outside the places that section allows. Clippy is the backstop for anything written without an Edit or Write tool.
 
 ## Sibling skills
 

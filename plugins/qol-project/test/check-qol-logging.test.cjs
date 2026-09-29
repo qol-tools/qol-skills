@@ -40,18 +40,30 @@ function fixture(relative, content) {
 
 const PLUGIN_FILE = '/x/qol-monorepo/plugins/launcher/src/ui/controller.rs';
 
-for (const macro of ['eprintln!("x")', 'eprint!("x")', 'dbg!(value)']) {
+for (const macro of ['eprintln!("x")', 'eprint!("x")', 'println!("x")', 'print!("x")', 'dbg!(value)']) {
     test(`blocks a new ${macro} in plugin code`, () => {
         assertDeny(write(PLUGIN_FILE, `fn f() { ${macro}; }\n`), new RegExp(macro.split('(')[0]));
     });
 }
 
-test('allows log:: and probe! calls', () => {
-    assertAllow(write(PLUGIN_FILE, 'fn f() { log::info!("x"); qol_runtime::probe!("T", "m"); }\n'));
+test('blocks a raw stderr handle in plugin code', () => {
+    assertDeny(write(PLUGIN_FILE, 'fn f() { let _ = writeln!(std::io::stderr(), "x"); }\n'), /io::stderr\(\)/);
 });
 
-test('allows println! since stdout is product output', () => {
-    assertAllow(write(PLUGIN_FILE, 'fn f() { println!("{}", json); }\n'));
+test('blocks a print allow outside a cli module', () => {
+    assertDeny(write(PLUGIN_FILE, '#![allow(clippy::print_stderr)]\nfn f() {}\n'), /allow\(clippy::print_\*\)/);
+});
+
+test('allows a print allow and prints inside a cli module', () => {
+    assertAllow(write('/x/qol-monorepo/plugins/launcher/src/cli.rs', '#![allow(clippy::print_stdout, clippy::print_stderr)]\nfn f() { println!("x"); }\n'));
+});
+
+test('blocks dbg! even inside a cli module', () => {
+    assertDeny(write('/x/qol-monorepo/plugins/launcher/src/cli.rs', 'fn f() { dbg!(1); }\n'), /dbg!/);
+});
+
+test('allows log:: and probe! calls', () => {
+    assertAllow(write(PLUGIN_FILE, 'fn f() { log::info!("x"); qol_runtime::probe!("T", "m"); }\n'));
 });
 
 test('allows an edit that keeps the existing eprintln! count', () => {
@@ -78,47 +90,48 @@ test('blocks eprintln! added through MultiEdit', () => {
     }), /eprintln!/);
 });
 
-test('ignores eprintln! inside the cfg(test) module and comments', () => {
+test('ignores prints inside the cfg(test) module and comments', () => {
     assertAllow(write(PLUGIN_FILE, [
         'fn f() {}',
         '// eprintln!("commented")',
         '#[cfg(test)]',
         'mod tests {',
-        '    fn t() { eprintln!("test"); }',
+        '    #[allow(clippy::print_stdout)]',
+        '    fn t() { println!("test"); dbg!(1); }',
         '}',
         '',
     ].join('\n')));
 });
 
-for (const exempt of [
+for (const allowed of [
     '/x/qol-monorepo/plugins/launcher/tests/launch.rs',
     '/x/qol-monorepo/plugins/launcher/examples/demo.rs',
     '/x/qol-monorepo/plugins/launcher/build.rs',
     '/x/qol-monorepo/plugins/launcher/src/cli.rs',
     '/x/qol-monorepo/plugins/launcher/src/cli/doctor.rs',
-    '/x/qol-monorepo/tools/cli/src/main.rs',
+    '/x/qol-monorepo/apps/tray/src/app/host_cli.rs',
+    '/x/qol-monorepo/libs/conventions/src/build/plugin_manifest.rs',
+    '/x/qol-monorepo/tools/cli/src/commands/dev.rs',
     '/x/qol-monorepo/apps/tray/src/logging/relay.rs',
-    '/x/qol-monorepo/libs/log/src/lib.rs',
-    '/x/qol-monorepo/libs/runtime/src/probe.rs',
-    '/x/qol-monorepo/libs/plugin-daemon/src/logger.rs',
+    '/x/qol-monorepo/libs/log/src/stderr.rs',
+    '/x/qol-monorepo/libs/headless/src/lib.rs',
 ]) {
-    test(`exempts ${exempt.replace('/x/qol-monorepo/', '')}`, () => {
-        assertAllow(write(exempt, 'fn f() { eprintln!("x"); }\n'));
+    test(`allows command output in ${allowed.replace('/x/qol-monorepo/', '')}`, () => {
+        assertAllow(write(allowed, 'fn f() { eprintln!("x"); println!("y"); }\n'));
+    });
+}
+
+for (const blocked of [
+    '/x/qol-monorepo/libs/runtime/src/probe.rs',
+    '/x/qol-monorepo/apps/tray/src/installer/mod.rs',
+    '/x/qol-monorepo/plugins/launcher/src/client.rs',
+]) {
+    test(`blocks command output in ${blocked.replace('/x/qol-monorepo/', '')}`, () => {
+        assertDeny(write(blocked, 'fn f() { eprintln!("x"); }\n'), /eprintln!/);
     });
 }
 
 test('ignores non-qol repos and non-Rust files', () => {
     assertAllow(write('/x/other-repo/src/main.rs', 'fn f() { eprintln!("x"); }\n'));
     assertAllow(write('/x/qol-monorepo/scripts/run.sh', 'eprintln!("x")\n'));
-});
-
-test('bypass marker lets one edit through and is consumed', () => {
-    const { root } = fixture('plugins/x/src/lib.rs', '');
-    fs.mkdirSync(path.join(root, '.claude'));
-    const marker = path.join(root, '.claude', 'bypass-qol-logging');
-    fs.writeFileSync(marker, '');
-    const payload = { tool_name: 'Write', cwd: root, tool_input: { file_path: PLUGIN_FILE, content: 'fn f() { eprintln!("x"); }\n' } };
-    assertAllow(run(payload));
-    assert.equal(fs.existsSync(marker), false);
-    assertDeny(run(payload), /eprintln!/);
 });

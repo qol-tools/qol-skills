@@ -141,7 +141,7 @@ impl MyView {
         // Listen to changes
         cx.subscribe_in(&input, window, |_, _, event, _, _| {
             if let gpui_component::input::InputEvent::Change = event {
-                println!("Input changed");
+                log::debug!("input changed");
             }
         }).detach();
 
@@ -201,7 +201,7 @@ To confirm selection:
 // In MyDelegate
 fn confirm(&mut self, _secondary: bool, _window: &mut Window, _cx: &mut Context<ListState<Self>>) {
     if let Some(ix) = self.selected_index {
-        println!("Confirmed item at index {:?}", ix);
+        log::debug!("confirmed item at index {:?}", ix);
     }
 }
 ```

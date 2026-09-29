@@ -7,20 +7,34 @@ const path = require('node:path');
 const INSPECTED_TOOLS = new Set(['Edit', 'Write', 'MultiEdit']);
 const QOL_PATH_RE = /[\\/]qol-[^\\/]+[\\/]/;
 
-const EXEMPT_PATH_RES = [
+const TEST_PATH_RES = [
     /[\\/](tests|examples|benches)[\\/]/,
     /_tests?\.rs$/,
-    /[\\/]build\.rs$/,
+];
+
+const COMMAND_OUTPUT_PATH_RES = [
     /[\\/]cli\.rs$/,
+    /_cli\.rs$/,
     /[\\/]cli[\\/]/,
+    /[\\/]build\.rs$/,
+    /[\\/]build[\\/]/,
     /[\\/]qol-monorepo[\\/]tools[\\/]/,
     /[\\/]apps[\\/]tray[\\/]src[\\/]logging[\\/]/,
     /[\\/]libs[\\/]log[\\/]/,
-    /[\\/]libs[\\/]runtime[\\/]src[\\/](probe|event_tap_trace)\.rs$/,
-    /[\\/]libs[\\/]plugin-daemon[\\/]src[\\/]logger\.rs$/,
+    /[\\/]libs[\\/]headless[\\/]/,
 ];
 
-const MACROS = ['eprintln', 'eprint', 'dbg'];
+const SIGNALS = [
+    { name: 'eprintln!', re: /\beprintln!\s*[(\[{]/g, commandOutput: true },
+    { name: 'eprint!', re: /\beprint!\s*[(\[{]/g, commandOutput: true },
+    { name: 'println!', re: /\bprintln!\s*[(\[{]/g, commandOutput: true },
+    { name: 'print!', re: /(?<!\w)print!\s*[(\[{]/g, commandOutput: true },
+    { name: 'io::stdout()', re: /\bio::stdout\s*\(\s*\)/g, commandOutput: true },
+    { name: 'io::stderr()', re: /\bio::stderr\s*\(\s*\)/g, commandOutput: true },
+    { name: 'allow(clippy::print_*)', re: /#!?\[\s*(?:allow|expect)\s*\([^\]]*clippy::(?:print_stdout|print_stderr)/g, commandOutput: true },
+    { name: 'dbg!', re: /\bdbg!\s*[(\[{]/g, commandOutput: false },
+    { name: 'allow(clippy::dbg_macro)', re: /#!?\[\s*(?:allow|expect)\s*\([^\]]*clippy::dbg_macro/g, commandOutput: false },
+];
 
 function readStdin() {
     try {
@@ -64,40 +78,21 @@ function productionView(content) {
         .replace(/\/\/.*$/gm, '');
 }
 
-function countMacros(content) {
+function countSignals(content, signals) {
     const view = productionView(content);
-    return Object.fromEntries(
-        MACROS.map(name => [name, (view.match(new RegExp(`\\b${name}!\\s*[(\\[{]`, 'g')) || []).length]),
-    );
+    return signals.map(signal => (view.match(signal.re) || []).length);
 }
 
-function addedMacros(before, after) {
-    const was = countMacros(before);
-    const now = countMacros(after);
-    return MACROS.filter(name => now[name] > was[name]);
-}
-
-function consumeBypass(cwd) {
-    const marker = path.join(cwd, '.claude', 'bypass-qol-logging');
-    try {
-        if (!fs.statSync(marker).isFile()) return false;
-        const raw = fs.readFileSync(marker, 'utf8').trim();
-        const count = /^\d+$/.test(raw) ? Number(raw) : 1;
-        if (count > 1) fs.writeFileSync(marker, String(count - 1));
-        else fs.unlinkSync(marker);
-        return true;
-    } catch {
-        return false;
-    }
+function addedSignals(before, after, signals) {
+    const was = countSignals(before, signals);
+    const now = countSignals(after, signals);
+    return signals.filter((_, index) => now[index] > was[index]).map(signal => signal.name);
 }
 
 function deny(filePath, added) {
-    const names = added.map(name => `${name}!`).join(', ');
     const reason =
-        `New ${names} in ${path.basename(filePath)}: qol code logs through log::error!/warn!/info!/debug!, ` +
-        `or qol_runtime::probe! for qol trace, never raw stderr prints.\n` +
-        `[qol-logging] swap it for log:: or probe! (qol-project:qol-arch-code, "Logging and tracing"); ` +
-        `one-off bypass: touch .claude/bypass-qol-logging`;
+        `New ${added.join(', ')} in ${path.basename(filePath)}: outside a cli, build or tools module, qol code writes only log:: (log) or qol_runtime::probe! (trace), and dbg! nowhere.\n` +
+        `[qol-logging] use log::error!/warn!/info!/debug! or probe!, or return the text to a cli module that prints it (qol-project:qol-arch-code, "Output: log, trace, command output")`;
     process.stdout.write(JSON.stringify({
         hookSpecificOutput: {
             hookEventName: 'PreToolUse',
@@ -119,13 +114,14 @@ function main() {
     const input = payload.tool_input || {};
     const filePath = input.file_path || '';
     if (!filePath.endsWith('.rs') || !QOL_PATH_RE.test(filePath)) return;
-    if (EXEMPT_PATH_RES.some(re => re.test(filePath))) return;
+    if (TEST_PATH_RES.some(re => re.test(filePath))) return;
+    const commandOutputAllowed = COMMAND_OUTPUT_PATH_RES.some(re => re.test(filePath));
+    const signals = SIGNALS.filter(signal => !(commandOutputAllowed && signal.commandOutput));
 
     const existing = readExistingFile(filePath);
     const after = prospectiveContent(tool, input, existing);
-    const added = addedMacros(existing || '', after);
+    const added = addedSignals(existing || '', after, signals);
     if (added.length === 0) return;
-    if (consumeBypass(payload.cwd || process.cwd())) return;
     deny(filePath, added);
 }
 
