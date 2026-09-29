@@ -295,7 +295,7 @@ function lineRules(relative, line, flat, next, add) {
             let at = line.indexOf(pattern);
             while (at >= 0) {
                 if (!/[A-Za-z0-9_]/.test(line[at - 1] || '')) {
-                    add('motion', `writes ${pattern}`, 'qol_gpui::motion::animation(Motion::QUICK | SETTLE | TRAVEL | FADE | LOOP)');
+                    add('motion', `writes ${pattern}`, 'qol_gpui::motion::animation(Motion::QUICK | SETTLE | TRAVEL | FADE | LOOP), or motion::after_hold(Motion::*, hold) when it holds first');
                     break;
                 }
                 at = line.indexOf(pattern, at + 1);

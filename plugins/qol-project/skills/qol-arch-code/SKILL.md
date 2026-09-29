@@ -705,7 +705,7 @@ and every block names what to use instead. The rules live in
 
 Native gpui surfaces (`libs/gpui/src`, `apps/tray/src`, `plugins/*/src`):
 
-- Motion is `qol_gpui::motion::animation(Motion::*)`; no `Animation::new`, `.with_easing`, hand easing.
+- Motion is `qol_gpui::motion::animation(Motion::*)`, or `qol_gpui::motion::after_hold(Motion::*, hold)` when it holds before it moves; no `Animation::new`, `.with_easing`, hand easing.
 - Hover is `kit.pointable`; no `.hover(` or `group_hover(` outside `kit.rs` and `settings_panel/components/`.
 - Text is `.text(TextStyle::…)`; no `.text_size`, `.font_weight`, `.font_family`, `.line_height`. Headings are `kit.heading`, `kit.heading_title` or `SettingsGroupHeader`.
 - Keys in hints are a `qol_gpui::Key`, never a string.
