@@ -1,6 +1,6 @@
 ---
 name: qol-arch-code
-description: Use when designing or refactoring Rust plugins/libs that need clean source ownership, cross-platform support, capability-specific backend splits, native GPUI or web UI placement, or headless-first CLI/plugin contracts. Defines plugin source-root hygiene, the ui/ versus src/ui/ boundary, Rust module directory form, strategy-pattern compartmentalization (platform/ subfolders, trait + per-OS impls), capability-local backend boundaries, headless binary layering, mandatory help/doctor commands, what a plugin doctor command must report, and plugin doctor output contracts. Triggers on plugin directory structure, loose files under src/, module file-plus-folder hybrids, native or web UI placement, platform-specific code, multi-OS support, OS-named files, Linux X11/Wayland/compositor splits, headless CLI design, plugin runtime action design, doctor commands, or any time you see #[cfg(target_os)] sprawl. For symbol/import hygiene that prevents dead_code warnings under `-D warnings`, see `qol-arch-cross-platform`. For CI/release workflow contracts that enforce cross-platform builds, see `qol-arch-cicd`.
+description: Use when designing or refactoring Rust plugins/libs that need clean source ownership, cross-platform support, capability-specific backend splits, native GPUI or web UI placement, or headless-first CLI/plugin contracts. Defines plugin source-root hygiene, the ui/ versus src/ui/ boundary, Rust module directory form, strategy-pattern compartmentalization (platform/ subfolders, trait + per-OS impls), capability-local backend boundaries, headless binary layering, mandatory help/doctor commands, what a plugin doctor command must report, and plugin doctor output contracts. Triggers on plugin directory structure, loose files under src/, module file-plus-folder hybrids, native or web UI placement, platform-specific code, multi-OS support, OS-named files, Linux X11/Wayland/compositor splits, headless CLI design, plugin runtime action design, doctor commands, logging and tracing (`log::`, `qol_runtime::probe!`, raw `eprintln!`/`dbg!`), or any time you see #[cfg(target_os)] sprawl. For symbol/import hygiene that prevents dead_code warnings under `-D warnings`, see `qol-arch-cross-platform`. For CI/release workflow contracts that enforce cross-platform builds, see `qol-arch-cicd`.
 ---
 
 # qol-arch-code: Plugin and Cross-Platform Code Layout
@@ -522,6 +522,21 @@ windows = { version = "0.58", features = ["Win32_UI_WindowsAndMessaging"] }
 
 The `<os>.rs` source files use these unconditionally — the cfg gate at the manifest level guarantees they're only compiled when relevant.
 
+## Logging and tracing
+
+qol Rust code has two diagnostic channels. Raw stderr prints are neither.
+
+| Need | Use | Where it lands |
+|---|---|---|
+| A diagnostic someone may read later: an error, a fallback taken, a state change | `log::error!`, `log::warn!`, `log::info!`, `log::debug!` | qol-tray: its tracing subscriber and log file. Plugins: stderr through `qol_plugin_daemon::logger`, relayed by the tray into the daemon log. |
+| A timing or event stream for `qol trace <target>` | `qol_runtime::probe!` | The trace log, debug builds only. See `qol-tools:qol-trace`. |
+
+- Every plugin `main` calls `qol_plugin_daemon::logger::init()` first, so `log::` records are not dropped. A plugin without that call has no logger.
+- Never add `eprintln!`, `eprint!` or `dbg!` to production code. They cannot be filtered by level, they skip the tray's log file, and `dbg!` is a leftover by definition.
+- `println!` stays allowed: stdout is a command's product output (help text, `--json`, `cargo:` build directives), not a log.
+- stderr is legitimate output in exactly three places: the log and trace implementations themselves, CLI surfaces (`cli.rs`, `cli/`, the monorepo `tools/` tree) where the reader is a person at a terminal, and tests, examples and build scripts.
+- Existing `eprintln!` calls are debt. Move them to `log::` when you touch the code for another reason; a file you edit is not blocked for the prints it already has.
+
 ## Hard rules
 
 - ❌ **Never add implementation modules directly under a plugin's `src/` root.** New root Rust files are limited to `main.rs`, `lib.rs`, and optional `cli.rs`.
@@ -535,6 +550,7 @@ The `<os>.rs` source files use these unconditionally — the cfg gate at the man
 - ❌ **Never branch on platform identity in business logic.** Runtime OS checks, OS-specific imports, OS command choices, and OS-keyed storage/path routing belong in a facade/resolver/scope store.
 - ❌ **Never force distinct capability substrates into `linux.rs`** when they have different contracts. Create a capability-local backend split and have the OS adapter select or use it.
 - ❌ **Never have a trait method that exists only on one OS via cfg.** Add it to the trait, stub it on others.
+- ❌ **Never add `eprintln!`, `eprint!` or `dbg!` to production code.** Use `log::` or `qol_runtime::probe!`; see "Logging and tracing".
 - ❌ **Never return `unimplemented!()` from a stub** — it panics. Return a typed `Err` so the caller can handle it.
 - ❌ **Never keep load-bearing state only in a daemon's memory.** A plugin daemon is stopped and restarted at any moment: the host reloads it after a config save, an update replaces it, it crashes. Attempt counters and ownership of a host resource belong in a file under the runtime dir, so a restart does not silently reset them.
 - ❌ **Never let two plugins mutate one host resource on intent alone.** There is no plugin-to-plugin channel (`qol-arch-channels`), so "only one of us touches this" is not enforceable by a sentence in a design. Put the neutral contract in `libs/` and give the resource a claim record with an owner and an expiry that the daemon and the standalone CLI both take, so a crashed owner frees it and a terminal command cannot race the daemon.
@@ -746,6 +762,12 @@ Bypass one edit with `touch .claude/bypass-qol-design`, or N edits with
 `echo N > .claude/bypass-qol-design`.
 
 Implementation: Node.js (`bin/check-qol-arch-code.cjs`) — Claude Code requires Node, so the dependency is free across Linux, macOS, and Windows. Wired through the shared hook launcher in `hooks/hooks.json`, which uses `CLAUDE_PLUGIN_ROOT` when Claude provides it and resolves the installed Codex plugin cache when Codex does not.
+
+### Enforcement: logging guard
+
+`bin/check-qol-logging.cjs` denies an Edit, Write or MultiEdit that raises the number of `eprintln!`, `eprint!` or `dbg!` calls in a `.rs` file under a `qol-*` repo. It counts the production view of the file (comments and the `#[cfg(test)]` module stripped) before and after the edit, so rewording an existing print passes and adding one does not. The exemptions are the ones listed in "Logging and tracing": tests, examples, benches, `build.rs`, CLI surfaces, and the log and trace implementations (`apps/tray/src/logging/`, `libs/log/`, `libs/runtime/src/probe.rs` and `event_tap_trace.rs`, `libs/plugin-daemon/src/logger.rs`).
+
+Bypass one edit with `touch .claude/bypass-qol-logging`, or N edits with `echo N > .claude/bypass-qol-logging`.
 
 ## Sibling skills
 
