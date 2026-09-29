@@ -49,7 +49,9 @@ of the same unit run the same invocation, so they share a namespace:
 | plugin-version.yml qol_tray candidates / qol-tray-release.yml builds | `qol-tray-linux`, `qol-tray-macos` |
 
 Every rust-cache use runs with `save-if: ${{ github.ref == 'refs/heads/main' }}`
-so only main-fed jobs save caches. Cache keys embed the shared key, runner,
+so only main-fed jobs save caches, plus `cache-on-failure: true` so a red
+main job (a flaky test) still refreshes its namespace instead of leaving every
+later run cold. Cache keys embed the shared key, runner,
 RUSTFLAGS env hash, and lockfile hash; changing a namespace or RUSTFLAGS
 invalidates keys, so batch such changes into one deliberate cold wave.
 
