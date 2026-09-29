@@ -60,6 +60,17 @@ deterministic cache budget: the newest two entries per namespace survive and
 anything unaccessed for 14 days is deleted. Script changes ship with matching
 tests in `.github/scripts/tests/`.
 
+## Merge queue
+
+main merges pull requests through a merge queue (ruleset "main merge queue").
+PR runs of ci.yml do `cargo check --release`; the `merge_group` run and main
+pushes do the full `cargo build --release`, so a release-only link error sends
+the PR back instead of landing, and main keeps the release cache warm for the
+queue. Org and repo admins bypass the queue for direct pushes. The Versioning
+prepare job pushes its bump commit with the `VERSIONING_DEPLOY_KEY` deploy key,
+because the Actions token cannot bypass a ruleset; tags stay on the Actions
+token so tag pushes never trigger the release workflows beside the dispatch.
+
 ## Local verification
 
 ```bash
