@@ -31,9 +31,9 @@ Release units and tagging rules live in the `qol-tray-release-flow` skill; read 
 
 ## Shared build setup and cache contract
 
-`.github/actions/rust-setup/action.yml` owns the toolchain, rust-cache, and
-Linux apt dependency steps. Every workflow job that compiles the workspace
-calls it with its `cache-key` input; never copy those three steps into a
+`.github/actions/rust-setup/action.yml` owns the toolchain, dependency cache, optional
+compiler cache, and Linux apt dependency steps. Every workflow job that compiles the workspace
+calls it with its `cache-key` input; never copy setup steps into a
 workflow. Setup only: build commands and verify gates stay in the workflows
 and scripts. RUSTFLAGS stays declared per job so warning parity remains
 visible in each workflow file.
@@ -55,10 +55,48 @@ later run cold. Cache keys embed the shared key, runner,
 RUSTFLAGS env hash, and lockfile hash; changing a namespace or RUSTFLAGS
 invalidates keys, so batch such changes into one deliberate cold wave.
 
-`.github/scripts/cache_prune.py` (run from release-prune.yml) enforces the
-deterministic cache budget: the newest two entries per namespace survive and
-anything unaccessed for 14 days is deleted. Script changes ship with matching
-tests in `.github/scripts/tests/`.
+`.github/scripts/cache_prune.py` owns the compiler key family, cache directory,
+archive capacity, and total byte ceiling. The setup action exports this contract
+for restore, environment setup, and workflow saves; consumers do not restate it.
+Pruning groups by ref and namespace, expires unused entries, and removes
+superseded entries before current ones. Under byte pressure, compiler archives
+yield to current dependency caches. Keep headroom below the hosting quota.
+
+Apply the budget before compiler uploads and immediately after them, in addition
+to scheduled pruning. Reserve an archive capacity before introducing a new
+compiler namespace; its first upload must not rely on the next scheduled prune. After a save, verify the replacement exists in the GitHub
+cache listing, then delete only older IDs in its exact namespace and ref.
+Never delete by key or prefix: a concurrent save or a warning-only upload failure
+must not cause removal of the replacement or a newer archive. Cache deletion uses
+[GitHub's ID endpoint](https://docs.github.com/en/rest/actions/cache#delete-a-github-actions-cache-for-a-repository-using-a-cache-id)
+and the writing job needs `actions: write`. Test failed saves, overlapping saves,
+foreign refs, upload bursts, CLI budget wiring, and opt-in guards.
+
+### Compiler reuse across fresh checkouts
+
+CI may supplement the dependency cache with a bounded local sccache archive.
+The setup action owns enabling it; export its wrapper only after rust-cache
+computes its existing key. Restore by runner OS/architecture and save only from
+main. Record machine-readable hit/miss statistics; skip diagnostics and uploads
+on cancellation, and let artifact uploads replace an earlier job attempt.
+Keep incremental compilation off in this CI lane; preserve local development
+profiles and every validation gate.
+
+Clippy runs without the compiler wrapper: the pinned wrapper does not cache
+its driver invocation. PR release checks and main release builds use different
+compiler outputs and keys; do not claim that a main build warms the PR check.
+Target reuse measurements at matching library compilations, not either of these
+uncached stages, linking, test execution, or the complete hosted pipeline.
+
+[sccache's Rust contract](https://github.com/mozilla/sccache/blob/v0.17.0/docs/Rust.md)
+excludes linked executables and incremental compilations. Its
+[content hashes](https://github.com/mozilla/sccache/blob/v0.17.0/docs/Caching.md)
+cover compiler inputs, rather than relying on restored checkout timestamps.
+Before expanding coverage or upgrading the pinned compiler-cache tool, verify
+source, included asset, feature, and environment invalidation with real Cargo
+builds, plus matching binaries on unchanged inputs. Audit filesystem-reading
+procedural macros for inputs absent from compiler dependency information.
+Report local cache measurements separately from hosted workflow duration.
 
 ## Merge queue
 
