@@ -797,6 +797,22 @@ Implementation: Node.js (`bin/check-qol-arch-code.cjs`) — Claude Code requires
 
 `bin/check-qol-logging.cjs` enforces "Output: log, trace, command output" at edit time. It counts each signal (`eprintln!`, `eprint!`, `println!`, `print!`, `io::stdout()`, `io::stderr()`, a `clippy::print_*` allow, `dbg!`, a `clippy::dbg_macro` allow) in the production view of the file, with comments and the `#[cfg(test)]` module stripped, and denies the edit when a count goes up outside the places that section allows. Clippy is the backstop for anything written without an Edit or Write tool.
 
+### Enforcement: settings guard
+
+A plugin declares every setting in its `qol-config.toml` and reads its config only through `qol_config::load_plugin_config_from_env_with_contract` (or `load_plugin_config_with_contract`). It never locates, reads or writes its config file itself.
+
+The host owns that file: stored values beat contract defaults, and saves go through the tray. The contract is the one source for the settings panel, validation and defaults, so a hand-rolled read skips contract defaults and drifts from what the panel shows.
+
+`bin/check-qol-arch-code.cjs` enforces this at edit time for production code under a plugin's `src/` (a directory with a `plugin.toml`). It denies an edit that adds any of:
+
+- a contract-less loader: `load_plugin_config`, `load_plugin_config_or`, `load_plugin_config_from_env`
+- a raw config file path: `plugin_config_paths`, `plugin_config_paths_from_env`
+- the host config tree: `qol_config::config_dir`
+
+Counts are compared before and after the edit, so existing uses (the shot doctor, the monitor legacy path, the memory doctor) only block when they grow. Bypass one edit with `touch .claude/bypass-qol-arch-code`.
+
+Residual: a path built by hand from `HOME` or `XDG_CONFIG_HOME`, or a settings window drawn outside the contract, passes this guard. The per-plugin `validate_contract_defaults_match_type` test catches a config type that drifts from the contract.
+
 ## Sibling skills
 
 This skill covers code *layout*. Two sibling skills ship in the same plugin and cover orthogonal aspects of the same overall infrastructure-health story:

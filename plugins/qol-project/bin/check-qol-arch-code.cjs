@@ -19,6 +19,9 @@
  *      slots from a platform/mod.rs facade in favor of cfg(unix)/windows/
  *      target_family aliases. Identical per-OS files are reserved slots,
  *      not duplicates; authoring a new facade family-first stays allowed.
+ *   6. Hand-rolled plugin settings: contract-less config loaders, raw config
+ *      file paths and the host config tree in plugin src/ production code.
+ *      Settings live in qol-config.toml and load through the contract.
  *
  * Allowed:
  *   - cfg(target_os) on `mod {linux,macos,windows};` or `pub use
@@ -809,6 +812,55 @@ Bypass for this edit only:
 `);
 }
 
+const SETTINGS_SIGNALS = [
+    {
+        label: 'contract-less config loader',
+        pattern: /\bload_plugin_config(?:_or|_from_env)?\b/g,
+    },
+    {
+        label: 'raw config file path',
+        pattern: /\bplugin_config_paths(?:_from_env)?\b/g,
+    },
+    {
+        label: 'host config tree (qol_config::config_dir)',
+        pattern: /\bqol_config::config_dir\b/g,
+    },
+];
+
+function settingsSignalCounts(content) {
+    const code = productionCode(content);
+    return SETTINGS_SIGNALS.map(signal => (code.match(signal.pattern) || []).length);
+}
+
+function findNewSettingsSignals(filePath, newContent) {
+    if (findPluginContext(filePath)?.area !== 'src') return [];
+    const before = settingsSignalCounts(readExistingFile(filePath) || '');
+    const after = settingsSignalCounts(newContent);
+    return SETTINGS_SIGNALS
+        .filter((_, index) => after[index] > before[index])
+        .map(signal => signal.label);
+}
+
+function blockSettings(filePath, labels) {
+    const detail = labels.map(label => `  - ${label}`).join('\n');
+    process.stderr.write(`qol-arch-code violation in ${filePath}.
+
+This edit hand-rolls plugin settings instead of going through the contract:
+
+${detail}
+
+Declare the setting in the plugin's qol-config.toml and read the config with
+qol_config::load_plugin_config_from_env_with_contract(PLUGIN_ID,
+qol_config::plugin_config_contract!()). The host owns the config file; a
+plugin never locates, reads or writes it itself.
+
+Reference: qol-project:qol-arch-code skill, "Enforcement: settings guard".
+
+Bypass for this edit only:
+  touch .claude/bypass-qol-arch-code
+`);
+}
+
 function platformViolationKind(violation) {
     if (violation.startsWith('missing target coverage:')) return 'missing target coverage';
     if (violation.startsWith('callable surface differs:')) return 'callable surface differs';
@@ -1202,6 +1254,12 @@ function main() {
     const familyMerge = findFamilyMergeViolation(filePath, newContent);
     if (familyMerge) {
         blockFamilyMerge(filePath, familyMerge);
+        return 2;
+    }
+
+    const settingsSignals = findNewSettingsSignals(filePath, newContent);
+    if (settingsSignals.length > 0) {
+        blockSettings(filePath, settingsSignals);
         return 2;
     }
 
