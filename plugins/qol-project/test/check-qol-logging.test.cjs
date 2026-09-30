@@ -135,3 +135,85 @@ test('ignores non-qol repos and non-Rust files', () => {
     assertAllow(write('/x/other-repo/src/main.rs', 'fn f() { eprintln!("x"); }\n'));
     assertAllow(write('/x/qol-monorepo/scripts/run.sh', 'eprintln!("x")\n'));
 });
+
+function bash(command, cwd = '/x/qol-monorepo') {
+    return run({ tool_name: 'Bash', hook_event_name: 'PreToolUse', tool_use_id: `t${Date.now()}${Math.random()}`, cwd, tool_input: { command } });
+}
+
+test('blocks a python heredoc that writes eprintln! into a qol Rust file', () => {
+    const command = [
+        "python3 - <<'PY'",
+        'p="libs/peers/src/service/session/active.rs"',
+        's=open(p).read()',
+        's=s.replace("outcome", "eprintln!(\\"PROBE\\"); outcome")',
+        'open(p,"w").write(s)',
+        'PY',
+    ].join('\n');
+    assertDeny(bash(command), /eprintln!/);
+});
+
+test('blocks sed -i with an escaped println into a qol Rust file', () => {
+    assertDeny(bash("sed -i 's/a/println\\!(\"x\")/' plugins/launcher/src/client.rs"), /println!/);
+});
+
+test('blocks a redirect that appends dbg! to a qol Rust file', () => {
+    assertDeny(bash("echo 'fn f() { dbg!(1); }' >> apps/tray/src/app/mod.rs"), /dbg!/);
+});
+
+test('allows reading prints with grep', () => {
+    assertAllow(bash('grep -rn "eprintln!" libs/peers/src/service/session/active.rs'));
+});
+
+test('allows shell writes of command output into cli and test files', () => {
+    assertAllow(bash("sed -i 's/a/println!(\"x\")/' plugins/launcher/src/cli.rs"));
+    assertAllow(bash("sed -i 's/a/eprintln!(\"x\")/' plugins/launcher/tests/launch.rs"));
+});
+
+test('allows shell writes outside qol repos', () => {
+    assertAllow(bash("sed -i 's/a/eprintln!(\"x\")/' src/main.rs", '/x/other-repo'));
+});
+
+function repo() {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'qol-logging-'));
+    const dir = path.join(root, 'qol-monorepo');
+    fs.mkdirSync(path.join(dir, 'libs/peers/src'), { recursive: true });
+    const git = (...args) => spawnSync('git', ['-C', dir, ...args], { encoding: 'utf8' });
+    git('init', '-q');
+    fs.writeFileSync(path.join(dir, 'libs/peers/src/lib.rs'), 'fn f() {}\n');
+    fs.writeFileSync(path.join(dir, 'libs/peers/src/old.rs'), 'fn f() { eprintln!("old"); }\n');
+    git('add', '.');
+    git('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'init');
+    return dir;
+}
+
+function around(dir, change) {
+    const id = `t${Date.now()}${Math.random()}`.replace('.', '');
+    const payload = { tool_name: 'Bash', tool_use_id: id, cwd: dir, tool_input: { command: 'python3 edit.py' } };
+    assertAllow(run({ ...payload, hook_event_name: 'PreToolUse' }));
+    change();
+    return run({ ...payload, hook_event_name: 'PostToolUse' });
+}
+
+test('flags prints a shell command wrote through a script file', () => {
+    const dir = repo();
+    const result = around(dir, () => fs.appendFileSync(path.join(dir, 'libs/peers/src/lib.rs'), 'fn g() { eprintln!("x"); }\n'));
+    const output = JSON.parse(result.stdout);
+    assert.equal(output.decision, 'block');
+    assert.match(output.reason, /\[qol-logging\]/);
+    assert.match(output.reason, /libs\/peers\/src\/lib\.rs \(eprintln!\)/);
+});
+
+test('flags prints in a new untracked file', () => {
+    const dir = repo();
+    const result = around(dir, () => fs.writeFileSync(path.join(dir, 'libs/peers/src/new.rs'), 'fn g() { dbg!(1); }\n'));
+    assert.match(JSON.parse(result.stdout).reason, /new\.rs \(dbg!\)/);
+});
+
+test('does not flag prints that were already there or live in test modules', () => {
+    const dir = repo();
+    fs.appendFileSync(path.join(dir, 'libs/peers/src/lib.rs'), 'fn dirty() { println!("before"); }\n');
+    assertAllow(around(dir, () => {
+        fs.appendFileSync(path.join(dir, 'libs/peers/src/lib.rs'), 'fn h() {}\n');
+        fs.writeFileSync(path.join(dir, 'libs/peers/src/old.rs'), 'fn f() { eprintln!("old"); }\n#[cfg(test)]\nmod tests {\n    fn t() { println!("x"); }\n}\n');
+    }));
+});
