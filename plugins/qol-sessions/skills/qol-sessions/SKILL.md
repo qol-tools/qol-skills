@@ -14,7 +14,7 @@ Every round is fire-and-forget: deliver it (`session_spawn` with `background: tr
 | Action | Purpose |
 |---|---|
 | `sessions_list()` | Discover live terminals and their stable session tokens |
-| `session_spawn(tool, cwd, key, model?, title?, group?, task, background: true)` | Launch a keyed implementation terminal (titled, on the flash tier) or reuse its matching live session, then return its token; `model` names the lane's tier override, `title` names the tab (defaults to the lane key), `group` tags a set of research lanes for grouped delivery (see below), `task` carries the first round, and `background: true` (always) queues the round at spawn time and returns before the lane is live |
+| `session_spawn(tool, cwd, key, model?, effort?, title?, group?, task)` | Launch a keyed implementation terminal (titled) or reuse its matching live session, then return its token; `model` names the lane's model, `effort` its reasoning effort where the harness takes one, `title` names the tab (defaults to the lane key), `group` tags a set of research lanes for grouped delivery (see below), `task` carries the first round; the round is queued at spawn time and the call returns before the lane is live |
 | `session_submit(session, task, acknowledge_marker?)` | Deliver one bounded round to a live lane and return immediately with the round open; used for every round after the first |
 | `session_bridge(session, acknowledge_marker?)` | Collect a round that remains open after its wake, or recover an interrupted round; a completed spawned lane is collected from its wake report instead, and agents never pass `task` here |
 | `session_loop_close(session, completion_marker, outcome, landed, before, now, verification, remaining)` | Acknowledge the final round, end the loop, and render its canonical report |
@@ -80,21 +80,23 @@ Never start two parallel lanes with indistinguishable titles.
 
 ## Tier assignment
 
-The current session is the architect and final reviewer and runs on the flash tier. Every spawned lane also runs on the flash tier, and the tier choice is deterministic, never the harness default: the harness may not encode tier in the tool name, and the same tool can come up on different models depending on its default configuration.
+The current session is the architect and final reviewer. Every spawned lane runs on an explicit harness, model and effort, never the harness default: the harness may not encode tier in the tool name, and the same tool can come up on different models depending on its default configuration.
 
-- Pass the concrete binding to every `session_spawn`: `tool: "pi"` and a model that the `tool_models` table in `sessions.toml` declares for pi (`spawn_model` supplies the default model, `allowed_models` stays the spending allowlist, and a tool/model pair that `tool_models` does not declare is refused before any terminal is created). `tool: "claude"` is never spawned on this host, whatever harness the architect itself runs in. A `session_fork` without `--tool` resolves the harness from the chosen model through `tool_models` and never defaults to claude. A missing model is a refusal point, never a silent default. When the config file is absent, the fallback source of truth is the host's own spawn record: read the newest `*.json` in `~/Library/Application Support/qol-tray/sessions/spawn-records/`, each one holds `{"key", "tool", "model", ...}` for one past spawn, and use the pairing it records.
+- Pass the concrete binding to every `session_spawn`: a `tool`, a `model` that the `tool_models` table in `sessions.toml` declares for that tool, and an `effort` when the harness takes one. Any declared harness/model pair may launch: `spawn_model` supplies the default model, `allowed_models` stays the spending allowlist, and a pair that `tool_models` does not declare is refused before any terminal is created. The harness, model and effort the user names are the binding. A `session_fork` without `--tool` resolves the harness from the chosen model through `tool_models` and never defaults to claude.
+- Launch flags have one source (`launch_flags` in the qol CLI), shared by `session_spawn`, lane sets and `session_fork`: `effort` (low, medium, high, xhigh, max) reaches claude as `--effort` and pi as `--thinking`, other harnesses refuse it, and every claude launch starts with `--dangerously-skip-permissions`. Never hand-roll harness flags, and never use `session_fork` to get an effort level or skipped permissions for work that should be a bridged lane. A missing model is a refusal point, never a silent default. When the config file is absent, the fallback source of truth is the host's own spawn record: read the newest `*.json` in `~/Library/Application Support/qol-tray/sessions/spawn-records/`, each one holds `{"key", "tool", "model", ...}` for one past spawn, and use the pairing it records.
 
 `tool_models` is an explicit harness-to-models mapping, because a model name does not carry its harness:
 
 ```toml
 [tool_models]
-pi = ["deepseek-v4-flash", "deepseek-flash", "glm-5.3-flash"]
+pi = ["deepseek-flash", "zai/glm-5.3-flash"]
+claude = ["claude-sonnet-5-5"]
 ```
 
 A launch whose tool/model pair the mapping does not declare is refused, an omitted harness resolves only when the model is declared for one tool, and `allowed_models` stays the independent spending allowlist.
 
 - Never source a tool or model name from your own harness prompt, environment, or model list: a name sitting in your context describes your context, not this host, and filling the tier choice from it is a silent default, which the refusal rule forbids. The binding above, the config, and the spawn records are the only valid sources.
-- Verify the lane's tier right after spawn from the target's model indicator. A lane that came up on the wrong tier is closed and respawned with the explicit model before any work is bridged; a lane never runs on a tier above the architect's own.
+- Verify the lane's tier right after spawn from the target's model indicator. A lane that came up on the wrong tier is closed and respawned with the explicit model before any work is bridged.
 - The architect never delegates its own work: scoping, acceptance review, verdict synthesis, and the final report stay in the architect session. Lanes implement, research, and produce preliminary reviews; they never accept a feature.
 - Tiers are roles, not product names. The concrete binding (tool + model) is a source-owned host fact: the spawn records are its authoritative copy, and when they record a different pairing, that pairing wins. The named value is what the newest record holds; re-read that record whenever the pairing matters.
 - The reminder carrying this rule fires only when a lane can actually spawn at the tier, which `qol sessions capability --tier flash` answers as `lane_spawn`: a registered tool is installed and a model at that tier is resolvable. A probe that errors or times out counts as available, so a slow check never drops the rule.

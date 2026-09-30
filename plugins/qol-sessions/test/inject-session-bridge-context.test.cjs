@@ -33,14 +33,14 @@ function run(payload) {
     });
 }
 
-test('bridge topics are role-based and bind lanes to pi with the configured model', () => {
+test('bridge topics are role-based and bind lanes to a declared harness and model', () => {
     assert.ok(BRIDGE_TOPIC_PATTERN.test('delegate this to an implementation agent'));
     assert.ok(BRIDGE_TOPIC_PATTERN.test('bridge two terminals'));
     assert.ok(BRIDGE_TOPIC_PATTERN.test('the architect should review the handoff'));
-    assert.match(BRIDGE_CONTEXT, /tool "pi"/);
+    assert.match(BRIDGE_CONTEXT, /tool, model, and effort the architect passes explicitly/);
     assert.match(BRIDGE_CONTEXT, /tool_models/);
     assert.doesNotMatch(BRIDGE_CONTEXT, /deepseek|glm/i);
-    assert.match(BRIDGE_CONTEXT, /tool "claude" is never spawned/);
+    assert.doesNotMatch(BRIDGE_CONTEXT, /never spawned/);
 });
 
 test('unrelated prompts stay silent outside a qol workspace', () => {
@@ -61,10 +61,11 @@ test('the tier rule fires on any prompt inside a qol workspace', () => {
     assert.ok(shouldInjectTierRule({ hook_event_name: 'UserPromptSubmit', prompt: 'fix padding', cwd: qolCwd }));
     assert.ok(!shouldInjectTierRule({ hook_event_name: 'PreToolUse', prompt: 'fix padding', cwd: qolCwd }));
     assert.ok(!shouldInjectTierRule({ prompt: '[qol session bridge]\nact as the implementer', cwd: qolCwd }));
-    assert.match(TIER_RULE, /flash tier/);
     assert.doesNotMatch(TIER_RULE, /gpt|codex|kimi|fable|deepseek|glm/i);
     assert.match(TIER_RULE, /allowed_models/);
-    assert.match(TIER_RULE, /tool: "pi"/);
+    assert.match(TIER_RULE, /any harness\/model pair the sessions\.toml tool_models mapping declares/);
+    assert.match(TIER_RULE, /one launch-flag source/);
+    assert.doesNotMatch(TIER_RULE, /forbidden|only permitted lane tool/);
     assert.match(TIER_RULE, /never through a raw harness spawn/);
     assert.match(TIER_RULE, /session_spawn/);
     const result = run({
@@ -168,8 +169,7 @@ test('matching prompts receive the event-driven feature loop', () => {
         assert.match(context, /returns only a live bridgeable session/);
         assert.match(context, /session_bridge/);
         assert.match(context, /session_loop_close/);
-        assert.match(context, /on the flash tier/);
-        assert.match(context, /Spawned lanes always run tool "pi" with a model that the sessions\.toml tool_models mapping declares for pi/);
+        assert.match(context, /Spawned lanes run the tool, model, and effort the architect passes explicitly/);
         assert.match(context, /verdict synthesis, and the final report happen in-session/);
         assert.match(context, /qol-workflow:git-trees/);
         assert.match(context, /qol-workflow:commit/);
