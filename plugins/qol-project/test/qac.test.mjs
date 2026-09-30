@@ -7,7 +7,8 @@ import { execFileSync } from "node:child_process";
 import { parsePrompt } from "../hooks/qac-intercept.mjs";
 import { lint, splitRule, summarize } from "../src/qac.mjs";
 import { progressReporter } from "../src/progress.mjs";
-import { renderReport } from "../src/report.mjs";
+import { browserCommand, renderReport } from "../src/report.mjs";
+import { locate } from "../src/locate.mjs";
 import { EXIT, run } from "../scripts/qac.mjs";
 
 function repo(files) {
@@ -141,4 +142,41 @@ test("renderReport embeds findings without breaking out of the script tag", () =
   }, ["qol-logging"]);
   assert.equal(html.split("</script>").length, 3);
   assert.match(html, /\\u003c\/script>\\u003cb>x/);
+});
+
+test("locate prefers explicit line references", () => {
+  const message = "Detected:\n\n  line 8: #[cfg(x)]\n  line 9: use a;\n";
+  assert.deepEqual(locate(message, "a\nb\n", "src/a.rs"), [8, 9]);
+  assert.deepEqual(locate("  - src/a.css:35 font-size: 1rem", "", "src/a.css"), [35]);
+});
+
+test("locate finds signal lines from the hook's own locators", () => {
+  const content = "fn a() {}\nlet p = qol_config::plugin_config_paths(&[ID]);\n// note\nprintln!(\"x\");\n";
+  const locators = [
+    { label: "raw config file path", re: /\bplugin_config_paths\b/g },
+    { label: "println!", re: /\bprintln!\s*[(\[{]/g },
+  ];
+  assert.deepEqual(locate("  - raw config file path", content, "a.rs", locators), [2]);
+  assert.deepEqual(locate("New println! in a.rs", content, "a.rs", locators), [4]);
+  assert.deepEqual(locate("  - helper: consumed only by linux", "pub fn helper() {}\n", "a.rs"), [1]);
+  assert.deepEqual(locate("OS-named files must live inside platform/", content, "a.rs", locators), []);
+});
+
+test("lint keeps the source of every flagged file and skips vendor/", () => {
+  const root = repo({
+    ...PLUGIN,
+    "plugins/fixture/src/config/mod.rs": "pub fn f() {\n    let _ = qol_config::config_dir();\n}\n",
+    "vendor/lib/src/debug.rs": "fn f() { dbg!(1); }\n",
+  });
+  const result = lint(root);
+  assert.equal(result.findings.length, 1);
+  assert.deepEqual(result.findings[0].lines, [2]);
+  assert.deepEqual(Object.keys(result.sources), ["plugins/fixture/src/config/mod.rs"]);
+});
+
+test("browserCommand opens the default web browser, never the text/html handler", () => {
+  const exec = () => "firefox.desktop\n";
+  assert.deepEqual(browserCommand("/r/qac/x.html", { platform: "linux", exec }), ["gtk-launch", ["firefox.desktop", "file:///r/qac/x.html"]]);
+  assert.deepEqual(browserCommand("/r/x.html", { platform: "linux", exec: () => { throw new Error("no"); } }), ["xdg-open", ["file:///r/x.html"]]);
+  assert.deepEqual(browserCommand("/r/x.html", { platform: "darwin" }), ["open", ["file:///r/x.html"]]);
 });

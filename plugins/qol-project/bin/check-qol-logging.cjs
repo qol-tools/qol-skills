@@ -144,7 +144,9 @@ function lintFile(filePath, content) {
     }));
 }
 
-module.exports = { lintFile };
+const LOCATORS = SIGNALS.map(signal => ({ label: signal.name, re: signal.re }));
+
+module.exports = { lintFile, LOCATORS };
 
 if (require.main === module) {
     try {

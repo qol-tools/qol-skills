@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
+import { locate } from "./locate.mjs";
 
 const require = createRequire(import.meta.url);
 
@@ -16,13 +17,16 @@ export function repoRoot(cwd, exec = execFileSync) {
   return exec("git", ["rev-parse", "--show-toplevel"], { cwd, encoding: "utf8" }).trim();
 }
 
+const IGNORED = /^(?:vendor|third_party)\//;
+const MAX_SOURCE_BYTES = 400 * 1024;
+
 export function listFiles(root, paths = [], exec = execFileSync) {
   const output = exec(
     "git",
     ["ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", ...paths],
     { cwd: root, encoding: "utf8", maxBuffer: 256 * 1024 * 1024 },
   );
-  return [...new Set(output.split("\0").filter(Boolean))].sort();
+  return [...new Set(output.split("\0").filter(file => file && !IGNORED.test(file)))].sort();
 }
 
 export function summarize(message) {
@@ -52,7 +56,7 @@ export function splitRule(summary, file = "") {
   };
 }
 
-export function lintFiles(root, files, { hooks = HOOKS, read = readFileSync, onProgress = () => {} } = {}) {
+export function lintFiles(root, files, { hooks = HOOKS, read = readFileSync, onProgress = () => {}, sources = {} } = {}) {
   const findings = [];
   for (const [index, file] of files.entries()) {
     onProgress(index, files.length);
@@ -66,7 +70,9 @@ export function lintFiles(root, files, { hooks = HOOKS, read = readFileSync, onP
     for (const [hook, module] of hooks) {
       for (const message of module.lintFile(absolute, content)) {
         const summary = summarize(message);
-        findings.push({ file, hook, summary, ...splitRule(summary, file), message });
+        const lines = locate(message, content, file, module.LOCATORS);
+        findings.push({ file, hook, summary, ...splitRule(summary, file), lines, message });
+        if (!(file in sources)) sources[file] = content.length > MAX_SOURCE_BYTES ? null : content;
       }
     }
   }
@@ -77,11 +83,12 @@ export function lint(cwd, paths = [], deps = {}) {
   const exec = deps.exec ?? execFileSync;
   const root = repoRoot(cwd, exec);
   const files = listFiles(root, paths, exec);
-  const findings = lintFiles(root, files, deps);
+  const sources = {};
+  const findings = lintFiles(root, files, { ...deps, sources });
   deps.onProgress?.(files.length, files.length);
   const byHook = {};
   for (const finding of findings) byHook[finding.hook] = (byHook[finding.hook] ?? 0) + 1;
-  return { root, files: files.length, findings, byHook, at: new Date().toISOString() };
+  return { root, files: files.length, findings, byHook, sources, at: new Date().toISOString() };
 }
 
 export function renderHelp(prefix = "qac") {

@@ -906,16 +906,17 @@ function isArchitectureBoundary(filePath, content) {
     return false;
 }
 
+const STRONG_PLATFORM_SIGNALS = [
+    { label: 'cfg!(target_os)', re: CFG_MACRO },
+    { label: '#[cfg(target_family)]', re: CFG_TARGET_FAMILY },
+    { label: '#[cfg(unix/windows)]', re: CFG_UNIX_WINDOWS },
+    { label: 'std::env::consts::OS', re: RUNTIME_OS_CONST },
+    { label: 'OS-specific import', re: OS_API_IMPORT },
+    { label: 'OS command dispatch', re: OS_COMMAND },
+];
+
 function findStrongPlatformSignals(content) {
-    const candidates = [
-        { label: 'cfg!(target_os)', re: CFG_MACRO },
-        { label: '#[cfg(target_family)]', re: CFG_TARGET_FAMILY },
-        { label: '#[cfg(unix/windows)]', re: CFG_UNIX_WINDOWS },
-        { label: 'std::env::consts::OS', re: RUNTIME_OS_CONST },
-        { label: 'OS-specific import', re: OS_API_IMPORT },
-        { label: 'OS command dispatch', re: OS_COMMAND },
-    ];
-    return candidates
+    return STRONG_PLATFORM_SIGNALS
         .filter(candidate => candidate.re.test(content))
         .map(candidate => candidate.label);
 }
@@ -1305,6 +1306,14 @@ function lintFile(filePath, content) {
     }));
 }
 
-module.exports = { lintFile };
+const LOCATORS = [
+    ...SETTINGS_SIGNALS.map(signal => ({ label: signal.label, re: signal.pattern })),
+    ...STRONG_PLATFORM_SIGNALS,
+    { label: 'platform token + storage/path routing', re: PLATFORM_TOKEN },
+    { label: 'platform token + branching', re: PLATFORM_TOKEN },
+    { label: 'compile_error!', re: COMPILE_ERROR },
+];
+
+module.exports = { lintFile, LOCATORS };
 
 if (require.main === module) process.exit(main());

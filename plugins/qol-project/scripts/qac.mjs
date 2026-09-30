@@ -60,8 +60,9 @@ export function run(argv, {
   if (args.pretty) {
     out(`${summaryLine(result, args.prefix)}\n${args.open ? "report opened: " : "report: "}${report}`);
   } else {
+    const { sources, ...summary } = result;
     const findings = result.findings.map(({ message, ...finding }) => finding);
-    out(JSON.stringify({ ...result, findings, report }));
+    out(JSON.stringify({ ...summary, findings, report }));
   }
   return result.findings.length === 0 ? EXIT.clean : EXIT.findings;
 }
