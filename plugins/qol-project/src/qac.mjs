@@ -37,9 +37,25 @@ export function summarize(message) {
   return summary.length > 240 ? `${summary.slice(0, 237)}...` : summary;
 }
 
-export function lintFiles(root, files, { hooks = HOOKS, read = readFileSync } = {}) {
+function ruleTitle(text, file) {
+  const sentence = text.split(/(?<=\.)\s/)[0].replace(/\.$/, "");
+  const general = sentence.replace(` in ${path.basename(file)}`, "").replace(/^This edit /, "");
+  return general.charAt(0).toUpperCase() + general.slice(1);
+}
+
+export function splitRule(summary, file = "") {
+  const at = summary.indexOf(":");
+  if (at < 0) return { rule: ruleTitle(summary, file), detail: "" };
+  return {
+    rule: ruleTitle(summary.slice(0, at).trim(), file),
+    detail: summary.slice(at + 1).replace(/^\s*-\s*/, "").trim(),
+  };
+}
+
+export function lintFiles(root, files, { hooks = HOOKS, read = readFileSync, onProgress = () => {} } = {}) {
   const findings = [];
-  for (const file of files) {
+  for (const [index, file] of files.entries()) {
+    onProgress(index, files.length);
     const absolute = path.join(root, file);
     let content;
     try {
@@ -49,7 +65,8 @@ export function lintFiles(root, files, { hooks = HOOKS, read = readFileSync } = 
     }
     for (const [hook, module] of hooks) {
       for (const message of module.lintFile(absolute, content)) {
-        findings.push({ file, hook, summary: summarize(message), message });
+        const summary = summarize(message);
+        findings.push({ file, hook, summary, ...splitRule(summary, file), message });
       }
     }
   }
@@ -61,20 +78,10 @@ export function lint(cwd, paths = [], deps = {}) {
   const root = repoRoot(cwd, exec);
   const files = listFiles(root, paths, exec);
   const findings = lintFiles(root, files, deps);
+  deps.onProgress?.(files.length, files.length);
   const byHook = {};
   for (const finding of findings) byHook[finding.hook] = (byHook[finding.hook] ?? 0) + 1;
-  return { root, files: files.length, findings, byHook };
-}
-
-export function renderLint(result, prefix = "qac") {
-  const lines = [`${prefix} lint: ${result.files} files, ${result.findings.length} findings`];
-  for (const [hook] of HOOKS) {
-    const findings = result.findings.filter(finding => finding.hook === hook);
-    if (findings.length === 0) continue;
-    lines.push("", `${hook} (${findings.length})`);
-    for (const finding of findings) lines.push(`  ${finding.file}  ${finding.summary}`);
-  }
-  return lines.join("\n");
+  return { root, files: files.length, findings, byHook, at: new Date().toISOString() };
 }
 
 export function renderHelp(prefix = "qac") {

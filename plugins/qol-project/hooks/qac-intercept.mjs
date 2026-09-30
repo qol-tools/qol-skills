@@ -16,6 +16,7 @@ export function parsePrompt(prompt, cwd) {
     ? ["help"]
     : VERBS.includes(verb) ? [verb, ...tokens.slice(1)] : ["lint", ...tokens];
   const flags = ["--prefix=qac", "--pretty"];
+  if (args[0] === "lint") flags.push("--open");
   if (cwd) flags.push(`--cwd=${cwd}`);
   return [...args, ...flags];
 }
