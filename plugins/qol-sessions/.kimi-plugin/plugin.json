@@ -1,6 +1,6 @@
 {
   "name": "qol-sessions",
-  "version": "0.5.59",
+  "version": "0.5.60",
   "description": "Architect-to-implementer feature loop for independent terminals with event-signalled rounds, explicit closure, and a canonical final report.",
   "author": {
     "name": "KMRH47"
@@ -16,6 +16,11 @@
     {
       "event": "Stop",
       "command": "node bin/guard-session-feature-loop.cjs"
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash|mcp__.*session_bridge",
+      "command": "node bin/deny-watched-round-wait.cjs"
     }
   ]
 }

@@ -5,6 +5,7 @@ import path from "node:path";
 const PLUGIN_DIR = path.resolve(__dirname, "../..");
 
 const PRE_TOOL_USE_HOOKS = [
+    { matcher: "Bash|mcp__.*session_bridge", script: "bin/deny-watched-round-wait.cjs" },
 ];
 
 const USER_PROMPT_SUBMIT_HOOKS = [
@@ -88,6 +89,32 @@ function stopGuardInput(ctx: ExtensionContext) {
 }
 
 export default function (pi: ExtensionAPI) {
+  if (PRE_TOOL_USE_HOOKS.length > 0) {
+    pi.on("tool_call", async (event, _ctx) => {
+      if (!event.toolName) {
+        return;
+      }
+
+      for (const hook of PRE_TOOL_USE_HOOKS) {
+        const matched = hook.matcher
+          && matchedToolName(hook.matcher, event.toolName);
+
+        if (!matched) {
+          continue;
+        }
+
+        const input = JSON.stringify({
+          tool_name: matched,
+          tool_input: event.input ?? {},
+        });
+        const result = runHook(hook.script, input);
+
+        if (result.blocked) {
+          return { block: true, reason: result.reason };
+        }
+      }
+    });
+  }
 
   if (USER_PROMPT_SUBMIT_HOOKS.length > 0) {
     pi.on("input", async (event, ctx) => {

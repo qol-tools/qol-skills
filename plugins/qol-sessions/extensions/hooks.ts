@@ -291,6 +291,7 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
       key: Type.Optional(Type.String({ description: "Stable spawn key for a single lane; makes retries idempotent. Use `lanes` instead when the work needs more than one" })),
       surface: Type.Optional(Type.String({ description: "tab or os-window; defaults to the spawn_surface config, then tab" })),
       model: Type.Optional(Type.String({ description: "Model override for the spawned session. Omit it: a selected agent profile's declared model is the default, then the spawn_model config. The tool/model pair must be declared in the sessions.toml tool_models mapping, and allowed_models remains the spending allowlist, because tiers are billed per token and only the person paying picks one" })),
+      effort: Type.Optional(Type.String({ description: "Reasoning effort, passed to tools that take one: claude as --effort, pi as --thinking. Every lane of a set launches at it. A claude launch also starts with --dangerously-skip-permissions" })),
       title: Type.Optional(Type.String({ description: "Tab title for the spawned session; defaults to the lane key" })),
       task: Type.Optional(Type.String({ description: "Bounded first-round task embedded in the launch; the round is open when the call returns and session_bridge (no task) waits for it. Required for a single lane; use `lanes` instead when the work splits across several" })),
       lanes: Type.Optional(Type.Array(Type.Object({
@@ -353,7 +354,7 @@ export default function sessionsToolsExtension(pi: ExtensionAPI) {
       cwd: Type.String({ description: "Working directory for the detached architect" }),
       key: Type.String({ description: "Stable, unused key naming the new tree; a key already held by a live session is refused because a fork always starts fresh" }),
       model: Type.Optional(Type.String({ description: "Model for the fork; a selected agent profile's declared model is the default when this is omitted, then spawn_model in sessions.toml. An explicit model that conflicts with the selected profile is refused, the tool/model pair must be declared in the sessions.toml tool_models mapping, and allowed_models still governs spending." })),
-      effort: Type.Optional(Type.String({ description: "Reasoning effort for tools that take one (claude): low, medium, high, xhigh, max" })),
+      effort: Type.Optional(Type.String({ description: "Reasoning effort, passed to tools that take one: claude as --effort, pi as --thinking. Every lane of a set launches at it. A claude launch also starts with --dangerously-skip-permissions" })),
       brief: Type.String({ description: "Required problem statement. Write it for someone with none of your context: what is wrong, what you already know, what done looks like" }),
       title: Type.Optional(Type.String({ description: "Tab title for the fork; defaults to the key" })),
       surface: Type.Optional(Type.String({ description: "tab or os-window; defaults to the spawn_surface config, then tab" })),

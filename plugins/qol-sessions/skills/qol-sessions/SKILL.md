@@ -7,6 +7,8 @@ description: "Use when an architect must create or drive an implementation agent
 
 Use one event-driven transaction per implementation round and repeat rounds until the architect accepts the feature. Do not assemble a relay from separate send, read, wait, status, or polling calls.
 
+**Never wait on a lane.** The whole point of the watcher is that lanes report back asynchronously while the architect does other work or ends its turn. Blocking on `session_bridge`, `qol sessions resume`, `bridge` or `wait` for a round the watcher owns is a defect: `qol sessions next` reports such a round as `phase=watched` with no command, and the `deny-watched-round-wait` PreToolUse hook refuses the call.
+
 Every round is fire-and-forget: deliver it (`session_spawn` with `background: true` and `task`, or `session_submit`), end the architect turn, and let the watcher's wake message resume the architect. A foreground round that suspends the architect inside a tool call is not part of this workflow: never pass `task` to `session_bridge`, and never call `session_bridge` before a wake arrives. A spawned lane's completed wake is its collection receipt: the watcher closes the lane and checkpoint, writes the durable report, and names that report in the wake. Review that report directly. `session_bridge` collects only a round that remains open after its wake, or recovers an interrupted round.
 
 ## Public actions
@@ -129,7 +131,7 @@ The reasoning loop must be idle while implementation runs. Delivery ends the arc
 - Deliver each round through `session_spawn(background: true, task)` or `session_submit`, then end the turn. Never hold a tool call open to wait, and never call `session_bridge` speculatively.
 - A completed spawned-lane wake arrives after the watcher has closed the lane and its pending checkpoint. The wake names the durable report; review that report directly and do not call `session_bridge`, for which no pending round remains. A wake for a round that remains open is collected with one `session_bridge` call.
 - One session carries one attached process. A bridge or resume against a session that another process is already attached to is refused, and `qol sessions next` reports that round as `phase=attached` with no command. Never work around that refusal: let the attached process return.
-- Flow control is command-owned, never narrated. If the reasoning loop resumes without a wake, run `qol sessions next` and invoke exactly the command it prints as one foreground call, writing no other text; a turn that only reports the absence of an event is always wrong.
+- Flow control is command-owned, never narrated. If the reasoning loop resumes without a wake, run `qol sessions next`: `phase=watched` means the watcher owns the round, so end the turn; any other phase prints exactly one command to run as one foreground call.
 - Never poll a process, continuation handle, screen, session, status, or clock from repeated reasoning turns. Progress rendering outside the reasoning loop is fine.
 - If the client surface cannot deliver wake messages, report the bridge surface as unavailable. Do not emulate it with polling, and do not fall back to a blocking bridge.
 
