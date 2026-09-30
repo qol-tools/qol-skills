@@ -289,6 +289,17 @@ test('passes _test.rs suffix files', () => {
     assert.equal(r.exitCode, 0);
 });
 
+test('passes tests.rs module files', () => {
+    const r = run({
+        tool_name: 'Write',
+        tool_input: {
+            file_path: '/x/Git/qol-monorepo/src/handle/tests.rs',
+            content: '#[cfg(target_os = "linux")]\nuse std::time::Duration;\n',
+        },
+    });
+    assert.equal(r.exitCode, 0);
+});
+
 test('blocks cross-platform violations when subagent is the caller', () => {
     const r = run({
         tool_name: 'Write',

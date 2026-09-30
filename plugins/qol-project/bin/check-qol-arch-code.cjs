@@ -28,7 +28,7 @@
  *     {linux,macos,windows}::...;` lines (the canonical mod.rs pattern).
  *   - Anything inside files literally named `linux.rs`, `macos.rs`,
  *     `windows.rs` — those are the OS impls themselves.
- *   - Files under tests/ and examples/ — relaxed, cross-platform tests
+ *   - Files under tests/ and examples/, tests.rs modules — relaxed, cross-platform tests
  *     legitimately use cfg(target_os).
  *
  * Bypass for one-off legitimate exceptions:
@@ -1236,7 +1236,8 @@ function evaluate(payload) {
         TESTS_PATH_RE.test(filePath) ||
         EXAMPLES_PATH_RE.test(filePath) ||
         basename.endsWith('_test.rs') ||
-        basename.endsWith('_tests.rs')
+        basename.endsWith('_tests.rs') ||
+        basename === 'tests.rs'
     ) {
         return 0;
     }

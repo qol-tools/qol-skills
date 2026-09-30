@@ -9,7 +9,7 @@
  * cross-platform CI matrix actually exercises the other OS.
  *
  * Rules (active on .rs files under any /qol-tools/ path, outside platform/,
- * tests/, examples/, and *_test.rs / *_tests.rs):
+ * tests/, examples/, tests.rs, and *_test.rs / *_tests.rs):
  *
  *   1. Block #[allow(dead_code)]  outside platform/. Hiding a dead-on-some-OS
  *      symbol behind allow doesn't fix it — it lets it rot. Move the symbol
@@ -279,6 +279,7 @@ function isExempt(filePath) {
     if (EXAMPLES_PATH_RE.test(filePath)) return true;
     if (basename.endsWith('_test.rs')) return true;
     if (basename.endsWith('_tests.rs')) return true;
+    if (basename === 'tests.rs') return true;
     return false;
 }
 

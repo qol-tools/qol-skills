@@ -709,6 +709,17 @@ test('passes test files', () => {
     assert.equal(r.exitCode, 0);
 });
 
+test('passes tests.rs module files', () => {
+    const r = run({
+        tool_name: 'Write',
+        tool_input: {
+            file_path: '/x/Git/qol-monorepo/src/handle/tests.rs',
+            content: '#[cfg(target_os = "linux")] fn t() {}\n',
+        },
+    });
+    assert.equal(r.exitCode, 0);
+});
+
 test('blocks cfg macro platform branch outside facade', () => {
     const r = run({
         tool_name: 'Write',
