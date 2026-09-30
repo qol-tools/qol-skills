@@ -813,6 +813,12 @@ Counts are compared before and after the edit, so existing uses (the shot doctor
 
 Residual: a path built by hand from `HOME` or `XDG_CONFIG_HOME`, or a settings window drawn outside the contract, passes this guard. The per-plugin `validate_contract_defaults_match_type` test catches a config type that drifts from the contract.
 
+### Lint: `qac`
+
+The edit-time hooks only see new violations, so existing debt stays invisible until someone touches the file. `qac lint [path ...]` runs the qol-arch-code, cross-platform, cicd and logging hooks over whole tracked and untracked files (the whole repo when no path is given), counting every violation already there. It never consumes a bypass marker.
+
+Type `qac lint` as a bare prompt (the `hooks/qac-intercept.mjs` typed-verb hook answers with no model turn), run `/qac [path ...]`, or call `node scripts/qac.mjs lint --pretty`. Without `--pretty` it prints JSON; exit 0 is clean, 1 has findings, 2 is a bad verb, 3 is outside a git repository. Each hook exposes `lintFile(path, content)` through `bin/hook-lint-mode.cjs`, so a new filter in any of them is linted too.
+
 ## Sibling skills
 
 This skill covers code *layout*. Two sibling skills ship in the same plugin and cover orthogonal aspects of the same overall infrastructure-health story:

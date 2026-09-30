@@ -30,7 +30,7 @@ jobs:
         shell: bash
         run: |
           shopt -s nullglob
-          tests=(test/*.test.cjs plugins/*/test/*.test.cjs)
+          tests=(test/*.test.cjs plugins/*/test/*.test.cjs plugins/*/test/*.test.mjs)
           if [ ${#tests[@]} -eq 0 ]; then
             echo "No hook tests found — nothing to run."
             exit 0

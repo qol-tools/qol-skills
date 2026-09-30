@@ -93,6 +93,10 @@
     },
     {
       "event": "UserPromptSubmit",
+      "command": "node plugins/qol-project/hooks/qac-intercept.mjs"
+    },
+    {
+      "event": "UserPromptSubmit",
       "command": "node plugins/qol-sessions/bin/inject-session-bridge-context.cjs"
     },
     {

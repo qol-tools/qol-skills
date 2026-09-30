@@ -54,6 +54,8 @@ const CFG_TARGET_OS = /#\[cfg\((?:not\(|all\(|any\()?target_os\s*=/;
 const USE_STATEMENT = /^\s*(?:pub(?:\([^)]*\))?\s+)?use\s+/;
 const ATTRIBUTE_LINE = /^\s*#\[/;
 
+const lintMode = require('./hook-lint-mode.cjs');
+
 function readStdin() {
     try {
         return fs.readFileSync(0, 'utf8');
@@ -63,10 +65,12 @@ function readStdin() {
 }
 
 function log(msg) {
+    if (lintMode.active()) return;
     process.stderr.write(`[qol-arch-cross-platform] ${msg}\n`);
 }
 
 function consumeBypass(marker, basename) {
+    if (lintMode.active()) return false;
     if (!fs.existsSync(marker) || !fs.statSync(marker).isFile()) return false;
     try {
         const raw = fs.readFileSync(marker, 'utf8').trim();
@@ -119,6 +123,7 @@ function extractNewContent(tool, input) {
 }
 
 function readExistingFile(filePath) {
+    if (lintMode.isTarget(filePath)) return null;
     try {
         return fs.readFileSync(filePath, 'utf8');
     } catch {
@@ -250,7 +255,7 @@ function findNewAdapterExclusiveHelpers(filePath, newContent) {
 }
 
 function blockAdapterExclusiveHelpers(filePath, violations) {
-    process.stderr.write(`qol-arch-cross-platform violation in ${filePath}.
+    lintMode.report(process.stderr, `qol-arch-cross-platform violation in ${filePath}.
 
 Found an adapter-exclusive shared helper:
 
@@ -332,7 +337,7 @@ function blockAllowViolations(filePath, violations) {
         .map(v => `  line ${v.lineno}: ${v.text.trim()}`)
         .join('\n');
     const kinds = [...new Set(violations.map(v => v.kind))].join(', ');
-    process.stderr.write(`qol-arch-cross-platform violation in ${filePath}.
+    lintMode.report(process.stderr, `qol-arch-cross-platform violation in ${filePath}.
 
 Found #[allow(${kinds})] outside a platform/ directory:
 
@@ -366,7 +371,7 @@ function blockCfgOnUse(filePath, violations) {
     const detail = violations
         .map(v => `  line ${v.useLineno}: ${v.useText.trim()}`)
         .join('\n');
-    process.stderr.write(`qol-arch-cross-platform violation in ${filePath}.
+    lintMode.report(process.stderr, `qol-arch-cross-platform violation in ${filePath}.
 
 Found #[cfg(target_os = ...)] attached to a use statement outside a
 platform/ directory:
@@ -401,7 +406,10 @@ function main() {
     } catch {
         return 0;
     }
+    return evaluate(payload);
+}
 
+function evaluate(payload) {
     const tool = payload.tool_name || payload.tool || '';
     if (!INSPECTED_TOOLS.has(tool)) return 0;
 
@@ -440,4 +448,14 @@ function main() {
     return 0;
 }
 
-process.exit(main());
+function lintFile(filePath, content) {
+    return lintMode.run(filePath, () => evaluate({
+        tool_name: 'Write',
+        tool_input: { file_path: filePath, content },
+        cwd: path.dirname(filePath),
+    }));
+}
+
+module.exports = { lintFile };
+
+if (require.main === module) process.exit(main());

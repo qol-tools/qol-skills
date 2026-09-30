@@ -54,6 +54,8 @@ const PLATFORM_CRATES = new Set([
     'windows', 'windows-sys', 'windows-targets',
 ]);
 
+const lintMode = require('./hook-lint-mode.cjs');
+
 function readStdin() {
     try {
         return fs.readFileSync(0, 'utf8');
@@ -63,6 +65,7 @@ function readStdin() {
 }
 
 function log(msg) {
+    if (lintMode.active()) return;
     process.stderr.write(`[qol-arch-cicd] ${msg}\n`);
 }
 
@@ -210,7 +213,7 @@ function blockRustflags(filePath, violations) {
     const detail = violations
         .map(v => `  line ${v.lineno}: ${v.text.trim()}`)
         .join('\n');
-    process.stderr.write(`qol-arch-cicd violation in ${filePath}.
+    lintMode.report(process.stderr, `qol-arch-cicd violation in ${filePath}.
 
 Found cargo invocation(s) without RUSTFLAGS=-D warnings in env:
 
@@ -240,7 +243,7 @@ function blockHardcodedUbuntu(filePath, violations) {
     const detail = violations
         .map(v => `  line ${v.lineno}: ${v.text.trim()}`)
         .join('\n');
-    process.stderr.write(`qol-arch-cicd violation in ${filePath}.
+    lintMode.report(process.stderr, `qol-arch-cicd violation in ${filePath}.
 
 Found hardcoded "runs-on: ubuntu-latest" in a workflow that consumes
 plugin.toml:
@@ -287,7 +290,7 @@ Bypass for this edit only:
 }
 
 function blockMissingQolConfig(filePath) {
-    process.stderr.write(`qol-arch-cicd violation in ${filePath}.
+    lintMode.report(process.stderr, `qol-arch-cicd violation in ${filePath}.
 
 This workflow runs cargo, and the repo's Cargo.toml has
 qol-config = { path = "../qol-config" }, but the workflow does not check
@@ -329,7 +332,7 @@ function blockPlatformCrates(filePath, violations) {
     const detail = violations
         .map(v => `  line ${v.lineno}: ${v.crate} — ${v.text.trim()}`)
         .join('\n');
-    process.stderr.write(`qol-arch-cicd violation in ${filePath}.
+    lintMode.report(process.stderr, `qol-arch-cicd violation in ${filePath}.
 
 Found platform-specific crate(s) in unconditional [dependencies]:
 
@@ -372,7 +375,10 @@ function main() {
     } catch {
         return 0;
     }
+    return evaluate(payload);
+}
 
+function evaluate(payload) {
     const tool = payload.tool_name || payload.tool || '';
     if (!INSPECTED_TOOLS.has(tool)) return 0;
 
@@ -387,7 +393,7 @@ function main() {
 
     const cwd = payload.cwd || process.cwd();
     const marker = path.join(cwd, '.claude', 'bypass-qol-arch-cicd');
-    if (fs.existsSync(marker) && fs.statSync(marker).isFile()) {
+    if (!lintMode.active() && fs.existsSync(marker) && fs.statSync(marker).isFile()) {
         try {
             const raw = fs.readFileSync(marker, 'utf8').trim();
             const count = /^\d+$/.test(raw) ? Number(raw) : 1;
@@ -436,4 +442,14 @@ function main() {
     return 0;
 }
 
-process.exit(main());
+function lintFile(filePath, content) {
+    return lintMode.run(filePath, () => evaluate({
+        tool_name: 'Write',
+        tool_input: { file_path: filePath, content },
+        cwd: path.dirname(filePath),
+    }));
+}
+
+module.exports = { lintFile };
+
+if (require.main === module) process.exit(main());

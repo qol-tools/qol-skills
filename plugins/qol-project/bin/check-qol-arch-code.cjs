@@ -44,6 +44,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const design = require('./qol-design-guard.cjs');
+const lintMode = require('./hook-lint-mode.cjs');
 
 const INSPECTED_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 const OS_BASENAMES = new Set(['linux.rs', 'macos.rs', 'windows.rs']);
@@ -285,6 +286,7 @@ function readStdin() {
 }
 
 function log(msg) {
+    if (lintMode.active()) return;
     process.stderr.write(`[qol-arch-code] ${msg}\n`);
 }
 
@@ -300,6 +302,7 @@ function extractNewContent(tool, input) {
 }
 
 function readExistingFile(filePath) {
+    if (lintMode.isTarget(filePath)) return null;
     try {
         return fs.readFileSync(filePath, 'utf8');
     } catch {
@@ -788,7 +791,7 @@ function findFamilyMergeViolation(filePath, newContent) {
 }
 
 function blockFamilyMerge(filePath, removed) {
-    process.stderr.write(`qol-arch-code violation in ${filePath}.
+    lintMode.report(process.stderr, `qol-arch-code violation in ${filePath}.
 
 This edit removes per-OS platform module slots (${removed.join(', ')}) and
 replaces them with a cfg(unix)/cfg(windows)/target_family alias.
@@ -843,7 +846,7 @@ function findNewSettingsSignals(filePath, newContent) {
 
 function blockSettings(filePath, labels) {
     const detail = labels.map(label => `  - ${label}`).join('\n');
-    process.stderr.write(`qol-arch-code violation in ${filePath}.
+    lintMode.report(process.stderr, `qol-arch-code violation in ${filePath}.
 
 This edit hand-rolls plugin settings instead of going through the contract:
 
@@ -877,7 +880,7 @@ function findNewPlatformFacadeViolations(filePath, newContent) {
 }
 
 function blockPlatformFacade(filePath, violations) {
-    process.stderr.write(`qol-arch-code violation in ${filePath}.
+    lintMode.report(process.stderr, `qol-arch-code violation in ${filePath}.
 
 The platform facade is incomplete:
 
@@ -949,7 +952,7 @@ function findNewPlatformDecisionSignals(filePath, newContent) {
 }
 
 function blockCompileError(filePath) {
-    process.stderr.write(`qol-arch-code violation in ${filePath}: \`compile_error!\` macro found.
+    lintMode.report(process.stderr, `qol-arch-code violation in ${filePath}: \`compile_error!\` macro found.
 
 The skill prohibits compile_error! gates for unsupported platforms. They
 break cross-compilation, block dev on other hosts, and break CI matrix
@@ -968,7 +971,7 @@ Bypass for this single edit:
 
 function blockPlatformDecision(filePath, labels) {
     const detail = labels.map(label => `  - ${label}`).join('\n');
-    process.stderr.write(`qol-arch-code violation in ${filePath}.
+    lintMode.report(process.stderr, `qol-arch-code violation in ${filePath}.
 
 Detected platform-specific decision logic outside an architecture boundary:
 
@@ -989,7 +992,7 @@ Bypass for this edit only:
 }
 
 function blockOsFileOutsidePlatform(filePath) {
-    process.stderr.write(`qol-arch-code violation in ${filePath}.
+    lintMode.report(process.stderr, `qol-arch-code violation in ${filePath}.
 
 OS-named files (linux.rs, macos.rs, windows.rs) must live inside a
 \`platform/\` directory. Found this one as a direct child of its feature
@@ -1046,7 +1049,7 @@ function blockSourceLayout(filePath, violation) {
             fix = 'Move the file beneath the capability or adapter that owns it.';
     }
 
-    process.stderr.write(`qol-arch-code violation in ${filePath}.
+    lintMode.report(process.stderr, `qol-arch-code violation in ${filePath}.
 
 ${problem}
 
@@ -1070,7 +1073,7 @@ function blockCfgViolations(filePath, violations) {
         ])
         .join('\n');
 
-    process.stderr.write(`qol-arch-code violation in ${filePath}.
+    lintMode.report(process.stderr, `qol-arch-code violation in ${filePath}.
 
 Detected #[cfg(target_os = ...)] attributes outside the canonical mod.rs
 re-export pattern:
@@ -1147,6 +1150,7 @@ function consumeBypassMarker(marker, basename) {
 }
 
 function consumeBypass(cwd, filePath, basename, name) {
+    if (lintMode.active()) return false;
     for (const marker of markerPaths(cwd, filePath, name)) {
         if (consumeBypassMarker(marker, basename)) return true;
     }
@@ -1154,7 +1158,7 @@ function consumeBypass(cwd, filePath, basename, name) {
 }
 
 function blockDesign(filePath, relative, violations) {
-    process.stderr.write(`qol-arch-code design violation in ${filePath}.
+    lintMode.report(process.stderr, `qol-arch-code design violation in ${filePath}.
 
 This edit adds code that does not follow the Bone and Amber design the rest of
 qol is built from. Each line says what to use instead:
@@ -1193,7 +1197,10 @@ function main() {
     } catch {
         return 0; // silent fail; never wedge Claude
     }
+    return evaluate(payload);
+}
 
+function evaluate(payload) {
     const tool = payload.tool_name || payload.tool || '';
     if (!INSPECTED_TOOLS.has(tool)) return 0;
 
@@ -1290,4 +1297,14 @@ function main() {
     return 0;
 }
 
-process.exit(main());
+function lintFile(filePath, content) {
+    return lintMode.run(filePath, () => evaluate({
+        tool_name: 'Write',
+        tool_input: { file_path: filePath, content },
+        cwd: path.dirname(filePath),
+    }));
+}
+
+module.exports = { lintFile };
+
+if (require.main === module) process.exit(main());

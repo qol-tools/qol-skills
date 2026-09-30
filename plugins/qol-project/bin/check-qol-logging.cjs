@@ -36,6 +36,8 @@ const SIGNALS = [
     { name: 'allow(clippy::dbg_macro)', re: /#!?\[\s*(?:allow|expect)\s*\([^\]]*clippy::dbg_macro/g, commandOutput: false },
 ];
 
+const lintMode = require('./hook-lint-mode.cjs');
+
 function readStdin() {
     try {
         return fs.readFileSync(0, 'utf8');
@@ -45,6 +47,7 @@ function readStdin() {
 }
 
 function readExistingFile(filePath) {
+    if (lintMode.isTarget(filePath)) return null;
     try {
         return fs.readFileSync(filePath, 'utf8');
     } catch {
@@ -93,6 +96,10 @@ function deny(filePath, added) {
     const reason =
         `New ${added.join(', ')} in ${path.basename(filePath)}: outside a cli, build or tools module, qol code writes only log:: (log) or qol_runtime::probe! (trace), and dbg! nowhere.\n` +
         `[qol-logging] use log::error!/warn!/info!/debug! or probe!, or return the text to a cli module that prints it (qol-project:qol-arch-code, "Output: log, trace, command output")`;
+    if (lintMode.active()) {
+        lintMode.report(process.stderr, reason);
+        return;
+    }
     process.stdout.write(JSON.stringify({
         hookSpecificOutput: {
             hookEventName: 'PreToolUse',
@@ -109,6 +116,10 @@ function main() {
     } catch {
         return;
     }
+    evaluate(payload);
+}
+
+function evaluate(payload) {
     const tool = payload.tool_name || '';
     if (!INSPECTED_TOOLS.has(tool)) return;
     const input = payload.tool_input || {};
@@ -121,11 +132,23 @@ function main() {
     const existing = readExistingFile(filePath);
     const after = prospectiveContent(tool, input, existing);
     const added = addedSignals(existing || '', after, signals);
-    if (added.length === 0) return;
+    if (added.length === 0) return 0;
     deny(filePath, added);
+    return 2;
 }
 
-try {
-    main();
-} catch {}
-process.exit(0);
+function lintFile(filePath, content) {
+    return lintMode.run(filePath, () => evaluate({
+        tool_name: 'Write',
+        tool_input: { file_path: filePath, content },
+    }));
+}
+
+module.exports = { lintFile };
+
+if (require.main === module) {
+    try {
+        main();
+    } catch {}
+    process.exit(0);
+}
