@@ -62,15 +62,23 @@ Pruning groups by ref and namespace, expires unused entries, and removes
 superseded entries before current ones. Under byte pressure, compiler archives
 yield to current dependency caches. Keep headroom below the hosting quota.
 
-Apply the budget before compiler uploads and immediately after them, in addition
-to scheduled pruning. Reserve an archive capacity before introducing a new
-compiler namespace; its first upload must not rely on the next scheduled prune. After a save, verify the replacement exists in the GitHub
-cache listing, then delete only older IDs in its exact namespace and ref.
+A job that compiles the workspace never holds an `actions: write` token: every
+build script, procedural macro and test it runs can read the checkout's stored
+credentials, and that scope can delete caches and dispatch workflows. The build
+job saves its archive with `actions/cache/save`, which needs no token. Retirement
+runs in a separate main-only job after it, with only `contents: read` and
+`actions: write`, `persist-credentials: false`, a sparse checkout of
+`.github/scripts`, and no Rust toolchain. For each archive saved for the pushed
+commit, it verifies the archive exists in the GitHub cache listing, then deletes
+only older IDs in its exact namespace and ref, and prunes nothing else. Cache
+maintenance must never fail CI: mark the retirement step `continue-on-error`.
+Scheduled pruning enforces the byte ceiling, so a new compiler namespace may
+exceed it until the next scheduled run.
 Never delete by key or prefix: a concurrent save or a warning-only upload failure
 must not cause removal of the replacement or a newer archive. Cache deletion uses
-[GitHub's ID endpoint](https://docs.github.com/en/rest/actions/cache#delete-a-github-actions-cache-for-a-repository-using-a-cache-id)
-and the writing job needs `actions: write`. Test failed saves, overlapping saves,
-foreign refs, upload bursts, CLI budget wiring, and opt-in guards.
+[GitHub's ID endpoint](https://docs.github.com/en/rest/actions/cache#delete-a-github-actions-cache-for-a-repository-using-a-cache-id).
+Test failed saves, overlapping saves, foreign refs, upload bursts, CLI budget
+wiring, opt-in guards, and that no build job holds a deletion token.
 
 ### Compiler reuse across fresh checkouts
 
