@@ -4,6 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
 import { hookResponse, parsePrompt } from "../hooks/qac-intercept.mjs";
 import { FIX_FILE_LIMIT, fixBrief, fixGuidance, lint, renderHelp, splitRule, summarize } from "../src/qac.mjs";
 import { progressReporter } from "../src/progress.mjs";
@@ -176,9 +177,10 @@ test("lint keeps the source of every flagged file and skips vendor/", () => {
 
 test("browserCommand opens the default web browser, never the text/html handler", () => {
   const exec = () => "firefox.desktop\n";
-  assert.deepEqual(browserCommand("/r/qac/x.html", { platform: "linux", exec }), ["gtk-launch", ["firefox.desktop", "file:///r/qac/x.html"]]);
-  assert.deepEqual(browserCommand("/r/x.html", { platform: "linux", exec: () => { throw new Error("no"); } }), ["xdg-open", ["file:///r/x.html"]]);
-  assert.deepEqual(browserCommand("/r/x.html", { platform: "darwin" }), ["open", ["file:///r/x.html"]]);
+  const url = pathToFileURL("/r/x.html").href;
+  assert.deepEqual(browserCommand("/r/x.html", { platform: "linux", exec }), ["gtk-launch", ["firefox.desktop", url]]);
+  assert.deepEqual(browserCommand("/r/x.html", { platform: "linux", exec: () => { throw new Error("no"); } }), ["xdg-open", [url]]);
+  assert.deepEqual(browserCommand("/r/x.html", { platform: "darwin" }), ["open", [url]]);
 });
 
 test("parsePrompt routes qac fix without opening the report", () => {
