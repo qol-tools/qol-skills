@@ -4,8 +4,8 @@ import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
-import { parsePrompt } from "../hooks/qac-intercept.mjs";
-import { lint, splitRule, summarize } from "../src/qac.mjs";
+import { hookResponse, parsePrompt } from "../hooks/qac-intercept.mjs";
+import { FIX_FILE_LIMIT, fixBrief, fixGuidance, lint, renderHelp, splitRule, summarize } from "../src/qac.mjs";
 import { progressReporter } from "../src/progress.mjs";
 import { browserCommand, renderReport } from "../src/report.mjs";
 import { locate } from "../src/locate.mjs";
@@ -179,4 +179,54 @@ test("browserCommand opens the default web browser, never the text/html handler"
   assert.deepEqual(browserCommand("/r/qac/x.html", { platform: "linux", exec }), ["gtk-launch", ["firefox.desktop", "file:///r/qac/x.html"]]);
   assert.deepEqual(browserCommand("/r/x.html", { platform: "linux", exec: () => { throw new Error("no"); } }), ["xdg-open", ["file:///r/x.html"]]);
   assert.deepEqual(browserCommand("/r/x.html", { platform: "darwin" }), ["open", ["file:///r/x.html"]]);
+});
+
+test("parsePrompt routes qac fix without opening the report", () => {
+  assert.deepEqual(parsePrompt("qac fix plugins/shot", "/w"), ["fix", "plugins/shot", "--prefix=qac", "--pretty", "--cwd=/w"]);
+});
+
+test("hookResponse hands a fix brief to the model and blocks everything else", () => {
+  assert.deepEqual(hookResponse("fix", 1, "brief\n"), {
+    hookSpecificOutput: { hookEventName: "UserPromptSubmit", additionalContext: "brief" },
+  });
+  assert.deepEqual(hookResponse("fix", 0, "qac fix: nothing to fix"), { decision: "block", reason: "qac fix: nothing to fix" });
+  assert.deepEqual(hookResponse("lint", 1, "x"), { decision: "block", reason: "x" });
+});
+
+test("help lists the verbs without a line about help itself", () => {
+  const help = renderHelp();
+  assert.match(help, /qac lint/);
+  assert.match(help, /qac fix/);
+  assert.doesNotMatch(help, /qac help/);
+});
+
+test("fixGuidance drops bypass hints", () => {
+  const message = "qol-arch-code violation in x.\n\nDo this.\n\nBypass for this edit only:\n  touch .claude/bypass-qol-arch-code";
+  assert.equal(fixGuidance(message), "qol-arch-code violation in x.\n\nDo this.");
+});
+
+test("fixBrief ranks files by findings and caps the default batch", () => {
+  const findings = [];
+  for (let file = 0; file < FIX_FILE_LIMIT + 2; file++) {
+    for (let n = 0; n <= file; n++) findings.push({ file: `f${file}.rs`, hook: "qol-logging", rule: "New dbg!", lines: [n + 1], message: "New dbg!" });
+  }
+  const brief = fixBrief({ findings });
+  assert.equal(brief.files.length, FIX_FILE_LIMIT);
+  assert.equal(brief.files[0], `f${FIX_FILE_LIMIT + 1}.rs`);
+  assert.match(brief.text, /more elsewhere/);
+  assert.match(brief.text, /Never create a bypass marker/);
+  assert.equal(fixBrief({ findings }, { explicit: true }).files.length, FIX_FILE_LIMIT + 2);
+});
+
+test("run fix returns the brief, or reports nothing to fix", () => {
+  const root = repo({ ...PLUGIN, "plugins/fixture/src/config/mod.rs": "pub fn f() {\n    let _ = qol_config::config_dir();\n}\n" });
+  const lines = [];
+  assert.equal(run(["fix", "--pretty", `--cwd=${root}`], { out: line => lines.push(line), ...quiet() }), EXIT.findings);
+  assert.match(lines[0], /^qac fix: 1 findings in 1 files\./);
+  assert.match(lines[0], /## plugins\/fixture\/src\/config\/mod.rs/);
+  assert.match(lines[0], /\(line 2\)/);
+  const clean = repo({ "README.md": "x\n" });
+  const out = [];
+  assert.equal(run(["fix", "--pretty", `--cwd=${clean}`], { out: line => out.push(line), ...quiet() }), EXIT.clean);
+  assert.equal(out[0], "qac fix: 1 files, nothing to fix");
 });

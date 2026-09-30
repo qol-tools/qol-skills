@@ -4,7 +4,8 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const CLI = fileURLToPath(new URL("../scripts/qac.mjs", import.meta.url));
-const VERBS = ["lint", "help"];
+const VERBS = ["lint", "fix", "help"];
+const FINDINGS = 1;
 
 export function parsePrompt(prompt, cwd) {
   const match = /^qac(?:\s+(.*))?$/i.exec((prompt ?? "").trim());
@@ -19,6 +20,14 @@ export function parsePrompt(prompt, cwd) {
   if (args[0] === "lint") flags.push("--open");
   if (cwd) flags.push(`--cwd=${cwd}`);
   return [...args, ...flags];
+}
+
+export function hookResponse(verb, status, output) {
+  const text = output.trim() || `qac ${verb}: nothing to do`;
+  if (verb === "fix" && status === FINDINGS) {
+    return { hookSpecificOutput: { hookEventName: "UserPromptSubmit", additionalContext: text } };
+  }
+  return { decision: "block", reason: text };
 }
 
 function main() {
@@ -36,14 +45,16 @@ function main() {
   if (args === null) process.exit(0);
 
   let output;
+  let status = 0;
   try {
     output = execFileSync(process.execPath, [CLI, ...args], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
   } catch (error) {
+    status = error.status ?? -1;
     output = `${error.stdout ?? ""}${error.stderr ?? ""}`.trim()
       || (error instanceof Error ? error.message : String(error));
   }
 
-  process.stdout.write(`${JSON.stringify({ decision: "block", reason: output.trim() || "qac: nothing to do" })}\n`);
+  process.stdout.write(`${JSON.stringify(hookResponse(args[0], status, output))}\n`);
   process.exit(0);
 }
 

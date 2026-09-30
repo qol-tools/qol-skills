@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { fileURLToPath } from "node:url";
-import { HOOKS, lint, renderHelp } from "../src/qac.mjs";
+import { HOOKS, fixBrief, lint, renderHelp } from "../src/qac.mjs";
 import { progressReporter } from "../src/progress.mjs";
 import { openReport, writeReport } from "../src/report.mjs";
 
@@ -37,14 +37,14 @@ export function run(argv, {
 } = {}) {
   const args = parseArgs(argv);
   if (args.verb === "help") {
-    out(args.pretty ? renderHelp(args.prefix) : JSON.stringify({ verbs: ["lint", "help"] }));
+    out(args.pretty ? renderHelp(args.prefix) : JSON.stringify({ verbs: ["lint", "fix"] }));
     return EXIT.clean;
   }
-  if (args.verb !== "lint") {
+  if (args.verb !== "lint" && args.verb !== "fix") {
     out(`${args.prefix}: unknown verb "${args.verb}"\n${renderHelp(args.prefix)}`);
     return EXIT.usage;
   }
-  const bar = progress("qac", `${args.prefix} lint`);
+  const bar = progress("qac", `${args.prefix} ${args.verb}`);
   let result;
   try {
     result = lint(args.cwd, args.paths, { ...deps, onProgress: bar.step });
@@ -55,6 +55,15 @@ export function run(argv, {
   }
   const count = result.findings.length;
   bar.finish(count === 0 ? "clean" : `${count} findings`, count === 0 ? "ok" : "warn");
+  if (args.verb === "fix") {
+    if (count === 0) {
+      out(`${args.prefix} fix: ${result.files} files, nothing to fix`);
+      return EXIT.clean;
+    }
+    const brief = fixBrief(result, { explicit: args.paths.length > 0, cli: fileURLToPath(import.meta.url) });
+    out(args.pretty ? brief.text : JSON.stringify({ files: brief.files, count: brief.count, brief: brief.text }));
+    return EXIT.findings;
+  }
   const report = write(result, HOOKS.map(([hook]) => hook));
   if (args.open) open(report);
   if (args.pretty) {

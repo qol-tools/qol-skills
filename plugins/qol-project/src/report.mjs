@@ -87,6 +87,8 @@ kbd { font: 500 10px var(--mono); color: var(--dim); border: 1px solid var(--lin
 .btn { all: unset; cursor: pointer; font: 500 12px var(--sans); color: var(--dim); padding: 5px 10px; border: 1px solid var(--line); border-radius: 7px; white-space: nowrap; }
 .btn:hover { color: var(--text); background: var(--hover); }
 .btn.on { color: var(--text); border-color: var(--amber); }
+.btn.fix { color: var(--amber); border-color: var(--amber-soft); background: var(--amber-soft); }
+.btn.fix:hover { color: var(--text); border-color: var(--amber); }
 .body { padding: 16px 20px 64px; }
 .note { border: 1px solid var(--line); border-left: 3px solid var(--amber); background: var(--panel); border-radius: 8px; padding: 10px 14px; margin: 0 0 12px; font-family: var(--sans); }
 .note .head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -224,7 +226,9 @@ function renderViewer() {
   copy.onclick = () => { navigator.clipboard?.writeText(file); toast("Path copied"); };
   const full = el("button", "btn" + (state.full ? " on" : ""), state.full ? "Focus" : "Full file");
   full.onclick = () => { state.full = !state.full; renderViewer(); };
-  head.append(p, copy, full);
+  const fix = el("button", "btn fix", "Copy fix command");
+  fix.onclick = () => { navigator.clipboard?.writeText("qac fix " + file); toast("Copied qac fix " + file.split("/").pop() + " - paste it into Claude"); };
+  head.append(p, fix, copy, full);
   viewer.append(head);
   const body = el("div", "body");
   viewer.append(body);

@@ -94,6 +94,43 @@ export function lint(cwd, paths = [], deps = {}) {
 export function renderHelp(prefix = "qac") {
   return [
     `${prefix} lint [path ...]  run the qol-arch-code, cross-platform, cicd and logging hooks over whole files (default: the whole repo)`,
-    `${prefix} help             list these verbs`,
+    `${prefix} fix [path ...]   hand the findings to this session to fix, then re-lint (default: the ${FIX_FILE_LIMIT} files with most findings)`,
   ].join("\n");
+}
+
+export const FIX_FILE_LIMIT = 8;
+
+export function fixGuidance(message) {
+  return message
+    .split(/\n\s*\n/)
+    .filter(paragraph => !/^\s*(Bypass|\[qol-)/.test(paragraph))
+    .join("\n\n")
+    .trim();
+}
+
+export function fixBrief(result, { explicit = false, cli = "qac.mjs" } = {}) {
+  const byFile = new Map();
+  for (const finding of result.findings) {
+    if (!byFile.has(finding.file)) byFile.set(finding.file, []);
+    byFile.get(finding.file).push(finding);
+  }
+  const ranked = [...byFile.entries()].sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]));
+  const chosen = explicit ? ranked : ranked.slice(0, FIX_FILE_LIMIT);
+  const files = chosen.map(([file]) => file);
+  const count = chosen.reduce((sum, [, findings]) => sum + findings.length, 0);
+  const rest = result.findings.length - count;
+  const lines = [
+    `qac fix: ${count} findings in ${files.length} files${rest > 0 ? ` (${rest} more elsewhere; run qac fix again after these)` : ""}.`,
+    "Fix every finding below in place, following the qol-project:qol-arch-code and qol-arch-cross-platform skills.",
+    "Never create a bypass marker, add an allow attribute, or delete code just to silence a hook. If a finding needs a design decision, stop and ask.",
+    `When done, verify with: node "${cli}" lint ${files.map(file => JSON.stringify(file)).join(" ")} --pretty (expect 0 findings), then run the repo's own checks.`,
+  ];
+  for (const [file, findings] of chosen) {
+    lines.push("", `## ${file}`);
+    for (const finding of findings) {
+      const at = finding.lines?.length ? ` (line ${finding.lines.join(", ")})` : "";
+      lines.push("", `### [${finding.hook}] ${finding.rule}${at}`, fixGuidance(finding.message));
+    }
+  }
+  return { text: lines.join("\n"), files, count };
 }
