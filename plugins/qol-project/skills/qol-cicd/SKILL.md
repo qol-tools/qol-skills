@@ -71,6 +71,13 @@ prepare job pushes its bump commit with the `VERSIONING_DEPLOY_KEY` deploy key,
 because the Actions token cannot bypass a ruleset; tags stay on the Actions
 token so tag pushes never trigger the release workflows beside the dispatch.
 
+The squash commit's subject is the pull request title, and `plugin_version.py`
+picks the bump from it and from the `* type(scope): ...` lines of the squash
+body (`feat` is minor, never patch). The plan job's "Squash subject is
+conventional" step runs `.githooks/commit-msg` on that subject: it fails the
+`merge_group` run and only warns on pull request runs, because a title edit does
+not rerun them. See the qol-workflow:commit skill, "Pull request titles".
+
 ## Local verification
 
 ```bash

@@ -159,6 +159,11 @@
     },
     {
       "event": "PreToolUse",
+      "matcher": "Bash",
+      "command": "node plugins/qol-workflow/bin/pr-deny-unconventional-title.cjs"
+    },
+    {
+      "event": "PreToolUse",
       "matcher": "Edit|Write|MultiEdit",
       "command": "node plugins/qol-workflow/bin/deny-tool-matches.cjs"
     },

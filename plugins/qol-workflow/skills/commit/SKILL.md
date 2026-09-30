@@ -42,6 +42,27 @@ optional body explaining WHY when non-obvious
   conventional commit per repo before it lands on `main` unless the user
   explicitly asks for multiple delivered commits
 
+## Pull request titles
+
+A pull request title is a commit subject. The merge queue squashes the pull
+request into one commit titled by the pull request, and versioning reads that
+subject: `feat` bumps minor, `fix` and `perf` bump patch, `!` or
+`BREAKING CHANGE` bumps major, and any other title releases nothing. Title every
+pull request `<type>(scope): summary` under the same rules as a commit, and use
+the highest-impact type of the commits it carries (one `feat` makes it `feat`).
+
+Incident: PR #40 was titled "Launcher and settings marks from one drawn set",
+so its two `feat` commits never counted. qol-tray and the launcher went out as
+patches, and eight plugins whose only change was their icon field were never
+released.
+
+Enforced by `bin/pr-deny-unconventional-title.cjs`, which runs the repository's
+own `.githooks/commit-msg` on the `gh pr create` / `gh pr edit` title and
+refuses `gh pr create` without `--title`. Residual: a title built by shell
+expansion or set in the web UI is not seen; the merge queue's "Squash subject is
+conventional" step refuses it there, and versioning also reads the `* type:`
+lines GitHub lists in a squash body.
+
 ## Atomic commits
 
 - One logical change per commit.
