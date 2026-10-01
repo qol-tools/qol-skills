@@ -22,7 +22,8 @@ and toasts remain plugin-owned.
 | `SettingsWindowHost` | `settings_panel/` | Retains exactly one settings window and implements open, focus-same-plugin, replace-with-another-plugin, and park/reveal across Escape |
 | `SettingsRuntime::tray` | `settings_panel/` | Routes hosted runtime queries and actions through qol-tray's existing HTTP API |
 | `settings_panel::open` / `run_standalone` | `settings_panel/` | Plugin-owned fallback entrypoints for code already running GPUI or starting a standalone GPUI app |
-| `Dropdown` + `DropdownStyle` | `dropdown.rs` | Keyboard option picker built on `ScrollList`; caller decorates labels (e.g. `[x]` marks for multi-select) and paints it via `deferred(anchored(...))` so it overlays later rows |
+| Choice card | `settings_panel/view/choose_card.rs` | Select and multi-select rows push a card of option tiles; picture or letter art, keyboard navigation, click selection, and tick state are shared |
+| List item card | `settings_panel/view/list_card.rs` | A selected list item with actions pushes a card whose rows dispatch those actions through the shared runtime |
 | `ScrollList` | `scroll_list.rs` | Selection + scroll-window state shared with launcher/removeapp |
 
 `Surface::show_focused` is for interactive panels (`Render + Focusable`),
@@ -107,8 +108,9 @@ extend `settings_panel/` instead. What the kit module guarantees:
    when the tray is unreachable; `resolve_config` merges them over the
    contract.
 2. `ResolvedField` kinds map to row controls: boolean → toggle (space),
-   select → dropdown (enter), string_array with `options` or `query` →
-   multi-select dropdown, number → typed edit with min/max clamp,
+   select → choice value plus picture choice card (enter or click),
+   string_array with `options` or `query` → multi-select choice value plus
+   picture choice card, number → typed edit with min/max clamp,
    string/string_array → text edit, color → hex text edit with a live
    swatch, status → query-backed shared `StatusIndicator`, action →
    dispatchable row, and list → query-backed live rows. Query-less actions
@@ -150,12 +152,11 @@ extend `settings_panel/` instead. What the kit module guarantees:
    authoritative result.
 5. List row actions use `row_action` / `row_actions` in contract order. The
    first action whose `when` field is truthy is the primary action; Enter on an
-   active list row dispatches it, interpolates its `input` from the row, and
-   shows the shared spinner until the query refreshes. When multiple actions
-   are visible, Space, Right, or the row action affordance opens the shared
-   `Dropdown`; Up/Down select, Enter dispatches, and Escape/Left returns to the
-   list. This mirrors the web `SearchableActionList` primary-action plus
-   `ActionMenu` contract. Wire payload-bearing adapters with
+   active list row opens its item card when a primary action is available. Each
+   visible action is a row in that card; Enter dispatches the selected action,
+   and Escape/Left returns to the list. This mirrors the web
+   `SearchableActionList` primary-action plus `ActionMenu` contract. Wire
+   payload-bearing adapters with
    `SettingsRuntime::with_input_action`; never decode row data or build action
    menus in plugin-specific GPUI code.
 6. Every change saves immediately by PUTting **row values merged over
@@ -206,8 +207,8 @@ selects) are documented in `qol-project:qol-shared-libs`.
    failure. It may open the web settings URL or use the shared standalone
    panel; never silently do nothing.
 6. **Keyboard-first**: up/down navigate, space toggles, enter activates
-   (opens dropdowns / begins edits / commits), typing a digit starts a
-   number edit directly, ESC closes innermost-first (edit → dropdown →
+   (opens choice or action cards / begins edits / commits), typing a digit
+   starts a number edit directly, ESC closes innermost-first (edit → card →
    panel). Mouse is secondary.
 
 ## Invariants (violations are bugs)
