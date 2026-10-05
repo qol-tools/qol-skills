@@ -31,8 +31,8 @@ Release units and tagging rules live in the `qol-tray-release-flow` skill; read 
 
 ## Shared build setup and cache contract
 
-`.github/actions/rust-setup/action.yml` owns the toolchain, dependency cache, optional
-compiler cache, and Linux apt dependency steps. Every workflow job that compiles the workspace
+`.github/actions/rust-setup/action.yml` owns the toolchain, dependency cache,
+and Linux apt dependency steps. Every workflow job that compiles the workspace
 calls it with its `cache-key` input; never copy setup steps into a
 workflow. Setup only: build commands and verify gates stay in the workflows
 and scripts. RUSTFLAGS stays declared per job so warning parity remains
@@ -55,56 +55,49 @@ later run cold. Cache keys embed the shared key, runner,
 RUSTFLAGS env hash, and lockfile hash; changing a namespace or RUSTFLAGS
 invalidates keys, so batch such changes into one deliberate cold wave.
 
-`.github/scripts/cache_prune.py` owns the compiler key family, cache directory,
-archive capacity, and total byte ceiling. The setup action exports this contract
-for restore, environment setup, and workflow saves; consumers do not restate it.
-Pruning groups by ref and namespace, expires unused entries, and removes
-superseded entries before current ones. Under byte pressure, compiler archives
-yield to current dependency caches. Keep headroom below the hosting quota.
+`.github/scripts/cache_prune.py` owns the total byte ceiling. Pruning groups by
+ref and namespace, expires unused entries, and removes superseded entries
+before current ones. Keep headroom below the hosting quota.
 
 A job that compiles the workspace never holds an `actions: write` token: every
 build script, procedural macro and test it runs can read the checkout's stored
-credentials, and that scope can delete caches and dispatch workflows. The build
-job saves its archive with `actions/cache/save`, which needs no token. Retirement
-runs in a separate main-only job after it, with only `contents: read` and
-`actions: write`, `persist-credentials: false`, a sparse checkout of
-`.github/scripts`, and no Rust toolchain. For each archive saved for the pushed
-commit, it verifies the archive exists in the GitHub cache listing, then deletes
-only older IDs in its exact namespace and ref, and prunes nothing else. Cache
-maintenance must never fail CI: mark the retirement step `continue-on-error`.
-Scheduled pruning enforces the byte ceiling, so a new compiler namespace may
-exceed it until the next scheduled run.
-Never delete by key or prefix: a concurrent save or a warning-only upload failure
-must not cause removal of the replacement or a newer archive. Cache deletion uses
+credentials, and that scope can delete caches and dispatch workflows. Cache
+deletion runs only in the scheduled prune job, which compiles nothing.
+Never delete by key or prefix: a concurrent save must not cause removal of the
+replacement or a newer entry. Cache deletion uses
 [GitHub's ID endpoint](https://docs.github.com/en/rest/actions/cache#delete-a-github-actions-cache-for-a-repository-using-a-cache-id).
-Test failed saves, overlapping saves, foreign refs, upload bursts, CLI budget
-wiring, opt-in guards, and that no build job holds a deletion token.
+Test overlapping saves, foreign refs, CLI budget wiring, and that no build job
+holds a deletion token.
 
-### Compiler reuse across fresh checkouts
+### What a build cache entry holds
 
-CI may supplement the dependency cache with a bounded local sccache archive.
-The setup action owns enabling it; export its wrapper only after rust-cache
-computes its existing key. Restore by runner OS/architecture and save only from
-main. Record machine-readable hit/miss statistics; skip diagnostics and uploads
-on cancellation, and let artifact uploads replace an earlier job attempt.
-Keep incremental compilation off in this CI lane; preserve local development
-profiles and every validation gate.
+A cache key is immutable, and the key only changes when a third-party
+dependency changes: rust-cache hashes the lockfile's registry and git packages
+and ignores workspace versions, so version bumps reuse the same entry. An entry
+therefore holds exactly what the main run that saved it compiled, until the
+next dependency change.
 
-Clippy runs without the compiler wrapper: the pinned wrapper does not cache
-its driver invocation. PR release checks and main release builds use different
-compiler outputs and keys; do not claim that a main build warms the PR check.
-Target reuse measurements at matching library compilations, not either of these
-uncached stages, linking, test execution, or the complete hosted pipeline.
+A release check and a release build compile different units, so a build never
+warms a check. The setup action exports `build-cache-hit`; the main run that
+misses the exact key, and so saves a new entry, also runs the release check.
+Pull requests then restore third-party check artifacts instead of recompiling
+every third-party crate on each run. To put a new kind of artifact into an
+existing entry, delete that entry by id and let the next full main run save it
+again: one deliberate cold run for that namespace.
 
-[sccache's Rust contract](https://github.com/mozilla/sccache/blob/v0.17.0/docs/Rust.md)
-excludes linked executables and incremental compilations. Its
-[content hashes](https://github.com/mozilla/sccache/blob/v0.17.0/docs/Caching.md)
-cover compiler inputs, rather than relying on restored checkout timestamps.
-Before expanding coverage or upgrading the pinned compiler-cache tool, verify
-source, included asset, feature, and environment invalidation with real Cargo
-builds, plus matching binaries on unchanged inputs. Audit filesystem-reading
-procedural macros for inputs absent from compiler dependency information.
-Report local cache measurements separately from hosted workflow duration.
+rust-cache never keeps workspace members or path dependencies, so the vendored
+crates under `vendor/` (gpui, ravif, global-hotkey) and every registry crate
+that depends on them compile again in every job.
+
+### No compiler cache
+
+CI ran a 512 MB sccache archive beside the dependency cache until October 2026.
+Across ten sampled jobs it hit 0 to 3 percent of Rust compilations: a full main
+run writes several times the capacity, eviction keeps the last crates compiled,
+and those are the top of the workspace graph that changes with every commit.
+It was removed and its space went to the release check artifacts. Before adding
+a compiler cache again, measure hits on hosted runs first, and scope it to
+crates whose inputs are stable between commits.
 
 ## Merge queue
 
@@ -112,7 +105,8 @@ main merges pull requests through a merge queue (ruleset "main merge queue").
 PR runs of ci.yml do `cargo check --release`; the `merge_group` run and main
 pushes do the full `cargo build --release`, so a release-only link error sends
 the PR back instead of landing, and main keeps the release cache warm for the
-queue. Org and repo admins bypass the queue for direct pushes. The Versioning
+queue. A push that lands a commit the queue already passed skips lint, test and
+build, so it saves no cache; only a direct push runs the full workflow on main. Org and repo admins bypass the queue for direct pushes. The Versioning
 prepare job pushes its bump commit with the `VERSIONING_DEPLOY_KEY` deploy key,
 because the Actions token cannot bypass a ruleset; tags stay on the Actions
 token so tag pushes never trigger the release workflows beside the dispatch.
