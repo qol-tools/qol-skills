@@ -479,6 +479,26 @@ function settingsPageRules(relative, body, add) {
     if (!body.includes('intent(')) {
         page('matches raw key names', 'qol_gpui::settings_panel::intent(key, ..) and escape_step(..) so every core tool moves and activates the same way');
     }
+    if (namesCrumbs(body) && !body.includes('deck::render(')) {
+        page('opens a deeper level in place of its own rows', 'deck::render(kit, card, DeckFrame { depth, slide: deck::slide(..), closing, marks, .. }) for every level settings_breadcrumbs names, as Shortcuts and Hotkeys open their editors');
+    }
+}
+
+function namesCrumbs(body) {
+    const start = body.search(/fn settings_breadcrumbs\s*\(/);
+    if (start < 0) return false;
+    const open = body.indexOf('{', start);
+    if (open < 0) return false;
+    let depth = 0;
+    for (let at = open; at < body.length; at += 1) {
+        if (body[at] === '{') depth += 1;
+        if (body[at] === '}') depth -= 1;
+        if (depth === 0) {
+            const returned = body.slice(open + 1, at).replace(/\s+/g, '');
+            return returned !== 'Vec::new()' && returned !== 'vec![]';
+        }
+    }
+    return false;
 }
 
 function rustViolations(relative, content, root) {

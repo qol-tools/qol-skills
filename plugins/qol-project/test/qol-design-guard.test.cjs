@@ -194,6 +194,38 @@ test('passes a core settings page with list, group headers, values, hints and in
     assert.strictEqual(r.exitCode, 0, r.stderr);
 });
 
+const CRUMB_PAGE = COMPLIANT_PAGE.replace(
+    'impl CustomSettingsBreadcrumbs for PeersView {\n',
+    'impl CustomSettingsBreadcrumbs for PeersView {\n    fn settings_breadcrumbs(&self) -> Vec<SettingsDestination> {\n        match self.level {\n            Level::Main => Vec::new(),\n            Level::Peer => SettingsDestination::new("peer").ok().into_iter().collect(),\n        }\n    }\n',
+);
+
+test('blocks a core settings page that opens a deeper level in place of its rows', () => {
+    const root = workspace();
+    const r = write(root, SETTINGS, CRUMB_PAGE);
+    assert.strictEqual(r.exitCode, 2, r.stderr);
+    assert.match(r.stderr, /opens a deeper level in place of its own rows/);
+    assert.match(r.stderr, /deck::render\(kit, card, DeckFrame/);
+});
+
+test('passes a core settings page that draws its deeper level as a deck card', () => {
+    const root = workspace();
+    const decked = CRUMB_PAGE.replace(
+        '            .into_any_element()\n',
+        '            .into_any_element();\n        deck::render(kit(), self.card(), self.frame()).into_any_element()\n',
+    );
+    const r = write(root, SETTINGS, decked);
+    assert.strictEqual(r.exitCode, 0, r.stderr);
+});
+
+test('passes a core settings page whose breadcrumbs stay empty without a deck', () => {
+    const root = workspace();
+    const r = write(root, SETTINGS, COMPLIANT_PAGE.replace(
+        'impl CustomSettingsBreadcrumbs for PeersView {\n',
+        'impl CustomSettingsBreadcrumbs for PeersView {\n    fn settings_breadcrumbs(&self) -> Vec<SettingsDestination> {\n        Vec::new()\n    }\n',
+    ));
+    assert.strictEqual(r.exitCode, 0, r.stderr);
+});
+
 test('does not block an unrelated edit to a file with existing design debt', () => {
     const root = workspace();
     const r = edit(root, SETTINGS, FLAT_PAGE, 'Vec::new()', 'vec![]');

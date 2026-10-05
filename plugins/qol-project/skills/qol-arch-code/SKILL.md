@@ -771,7 +771,8 @@ must:
 - group rows under `SettingsGroupHeader::new(title, Some(colophon), kit)`;
 - put values and actions on the right in `settings_value_group()` (`settings_value_text`, `settings_action_affordance`);
 - name its keys in `settings_hints` with `SettingsHint::new(Key::…, label)`;
-- route keys through `intent(..)` and `escape_step(..)` rather than raw key names.
+- route keys through `intent(..)` and `escape_step(..)` rather than raw key names;
+- open every deeper level as a page card: once `settings_breadcrumbs` can name a crumb, the same file draws that level with `deck::render(kit, card, DeckFrame { .. })` over its page, as Shortcuts and Hotkeys do, and never swaps the page's own rows for the level's rows.
 
 Web settings page (`apps/tray/ui`, `plugins/*/ui`):
 
