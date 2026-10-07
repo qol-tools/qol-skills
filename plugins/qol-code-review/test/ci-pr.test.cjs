@@ -94,7 +94,8 @@ test('the sessions cannot read /proc and the fix cannot write where later steps 
     Object.assign(process.env, { RUNNER_TEMP: '/runner/_temp', CLAUDE_CODE_PLUGIN_SEED_DIR: '/home/runner/.claude-seed' });
     try {
         const denied = deniedWrites();
-        for (const rule of ['Edit(//runner/_temp/**)', 'Write(//runner/_temp/**)', 'Edit(//home/runner/.claude-seed/**)', 'Write(//home/runner/.claude-seed/**)']) {
+        const rules = ['/runner/_temp', '/home/runner/.claude-seed'].flatMap((dir) => [`Edit(/${path.resolve(dir)}/**)`, `Write(/${path.resolve(dir)}/**)`]);
+        for (const rule of rules) {
             assert.ok(denied.includes(rule), rule);
         }
         const gitDir = path.resolve(require('node:child_process').execFileSync('git', ['rev-parse', '--git-dir'], { encoding: 'utf8' }).trim());
