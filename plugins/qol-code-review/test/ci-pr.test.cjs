@@ -75,6 +75,7 @@ test('renderComment reports a failed fix, a pass and a failed review', () => {
     const refused = renderComment({ ...BASE, markdown: REVIEW, fixRefused: 'the fix touches files outside the pull request diff', fixReply: FIX_REPLY });
     assert.ok(refused.includes('> The fix needed files outside this pull request, so nothing was pushed.'));
     assert.ok(!refused.includes('<code>fixed</code>'));
+    assert.ok(refused.includes(`</details>\n\nhttps://github.com/o/r/blob/${HEAD}/.github/workflows/a.yml#L9-L15\n\n`));
     const pass = REVIEW.replace('"verdict": "block"', '"verdict": "pass"');
     assert.ok(renderComment({ ...BASE, markdown: pass }).includes('> [!TIP]\n> **Pass** · 1 high · 1 low\n> Nothing to fix.'));
     assert.ok(renderComment({ ...BASE, markdown: '' }).includes('> [!CAUTION]\n> **Review failed.** The review of `177805c` failed before it produced a result.'));

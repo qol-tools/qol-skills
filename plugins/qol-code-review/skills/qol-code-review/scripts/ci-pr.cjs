@@ -224,6 +224,7 @@ const VERDICTS = { pass: ['TIP', 'Pass'], conditional: ['WARNING', 'Conditional'
 const LANES = [['blocker', 'Blocker'], ['high', 'High'], ['medium', 'Medium'], ['low', 'Low'], ['note', 'Note']];
 const alert = (kind, lines) => [`> [!${kind}]`, ...lines.map((line) => `> ${line}`)].join('\n');
 const DIFF_LINES = 40;
+const SNIPPET_LINES = 3;
 const COMMENT_LIMIT = 60000;
 
 function fixStatuses(fixReply) {
@@ -302,11 +303,16 @@ function renderComment({ markdown, headSha, runUrl, repoUrl, fixSha, fixOutcome,
             ? `Fixing failed, nothing was pushed. See [the run](${runUrl}).`
             : CONFIG.fixVerdicts.includes(data.verdict) ? `Nothing was fixed, ${left.length} left for you.` : 'Nothing to fix.';
     const where = (f) => (f.file ? `[\`${String(f.file).split('/').pop()}${f.line ? `:${f.line}` : ''}\`](${repoUrl}/blob/${headSha}/${f.file}${f.line ? `#L${f.line}` : ''}) · ` : '');
+    const snippet = (f) => {
+        const line = Number(f.line);
+        if (!/^[\w./-]+$/.test(String(f.file || '')) || !Number.isInteger(line) || line < 1) return '';
+        return `${repoUrl}/blob/${headSha}/${f.file}#L${Math.max(1, line - SNIPPET_LINES)}-L${line + SNIPPET_LINES}`;
+    };
     const item = (f) => {
         const { status, note } = statusOf(f);
         const body = [`${where(f)}\`${f.id}\``, `**Action:** ${f.required_action || ''}`, note ? `**${status === 'fixed' ? 'Fix' : 'Left'}:** ${note}` : ''].filter(Boolean).join('\n\n');
         const title = String(f.title || f.required_action || f.id).replace(/\s+/g, ' ').replace(/</g, '&lt;');
-        return [`<details><summary>${title}${['fixed', 'skipped'].includes(status) ? ` <code>${status}</code>` : ''}</summary>\n\n${body}\n\n</details>`, diffBlock(byId.get(f.id) || [])];
+        return [`<details><summary>${title}${['fixed', 'skipped'].includes(status) ? ` <code>${status}</code>` : ''}</summary>\n\n${body}\n\n</details>`, diffBlock(byId.get(f.id) || []) || snippet(f)];
     };
     const [kind, verdict] = VERDICTS[data.verdict] || ['NOTE', data.verdict];
     const parts = [CONFIG.commentMarker, alert(kind, [`**${verdict}** · ${counts}`, outcome])];
