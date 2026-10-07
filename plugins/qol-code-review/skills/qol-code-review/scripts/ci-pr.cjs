@@ -127,6 +127,22 @@ function changedFiles(args) {
     return git(['diff', '--no-renames', '--name-only', ...args]).split('\n').filter(Boolean);
 }
 
+function patchFiles(patch) {
+    return [...patch.matchAll(/^diff --git a\/(.+?) b\/(.+)$/gm)].flatMap(([, from, to]) => [from, to]);
+}
+
+function refuseOutside(files, options) {
+    const allowed = new Set(changedFiles([options.base, options.head]));
+    const refused = [...new Set(files)].filter((file) => file.startsWith('.github/') || !allowed.has(file));
+    if (refused.length) throw new Error(`the fix touches files outside the pull request diff or under .github/: ${refused.join(', ')}`);
+}
+
+function checkPatch(options) {
+    need(options, 'patch', 'base', 'head');
+    refuseOutside(patchFiles(fs.readFileSync(options.patch, 'utf8')), options);
+    console.log('patch stays inside the pull request diff');
+}
+
 function fix(options) {
     need(options, 'base', 'head', 'out');
     const dir = path.join(options.out, 'fix');
@@ -150,10 +166,7 @@ function fix(options) {
     fs.writeFileSync(path.join(dir, 'reply.md'), reply);
     console.log(reply);
     git(['add', '-A']);
-    const touched = changedFiles(['--cached']);
-    const allowed = new Set(changedFiles([options.base, options.head]));
-    const refused = touched.filter((file) => file.startsWith('.github/') || !allowed.has(file));
-    if (refused.length) throw new Error(`the fix touches files outside the pull request diff or under .github/: ${refused.join(', ')}`);
+    refuseOutside(changedFiles(['--cached']), options);
     const patch = git(['diff', '--cached', '--binary']);
     if (!patch) return;
     fs.writeFileSync(path.join(dir, 'fix.patch'), patch);
@@ -240,6 +253,7 @@ function run(argv) {
         marker: () => console.log(CONFIG.commentMarker),
         review,
         fix,
+        'check-patch': checkPatch,
         comment,
     };
     if (!commands[options.command]) throw new Error(`usage: ci-pr.cjs ${Object.keys(commands).join('|')} [--flag value ...]`);
@@ -255,4 +269,4 @@ if (require.main === module) {
     }
 }
 
-module.exports = { deniedReads, deniedWrites, parseArgs, lastVerdict, reviewJson, withoutJson, renderComment, CONFIG };
+module.exports = { patchFiles, deniedReads, deniedWrites, parseArgs, lastVerdict, reviewJson, withoutJson, renderComment, CONFIG };

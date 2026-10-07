@@ -4,7 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const path = require('node:path');
 
-const { deniedReads, deniedWrites, parseArgs, lastVerdict, reviewJson, withoutJson, renderComment, CONFIG } = require(path.join(__dirname, '..', 'skills', 'qol-code-review', 'scripts', 'ci-pr.cjs'));
+const { patchFiles, deniedReads, deniedWrites, parseArgs, lastVerdict, reviewJson, withoutJson, renderComment, CONFIG } = require(path.join(__dirname, '..', 'skills', 'qol-code-review', 'scripts', 'ci-pr.cjs'));
 
 const HEAD = '177805ca3d66cc5c451f77336320b891bb3ee303';
 const FIX = '00a59666596d3fd41327ce1d3c0ed14b4c13a1ad';
@@ -79,4 +79,9 @@ test('the sessions cannot read /proc and the fix cannot write where later steps 
     } finally {
         process.env = saved;
     }
+});
+
+test('patchFiles lists both sides of every file in a patch', () => {
+    const patch = 'diff --git a/src/x.rs b/src/x.rs\n--- a/src/x.rs\n+++ b/src/x.rs\ndiff --git a/old.txt b/.github/new.yml\n';
+    assert.deepStrictEqual(patchFiles(patch), ['src/x.rs', 'src/x.rs', 'old.txt', '.github/new.yml']);
 });
