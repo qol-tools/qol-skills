@@ -281,7 +281,7 @@ function renderComment({ markdown, headSha, runUrl, repoUrl, fixSha, fixOutcome,
     }
     const seen = new Set();
     const findings = [...(data.must_fix || []), ...(data.deferred_followups || [])].filter((f) => f && f.id && !seen.has(f.id) && seen.add(f.id));
-    const statuses = fixStatuses(fixReply);
+    const statuses = fixSha ? fixStatuses(fixReply) : new Map();
     const statusOf = (f) => statuses.get(f.id) || {};
     const fixed = findings.filter((f) => statusOf(f).status === 'fixed');
     const left = findings.filter((f) => statusOf(f).status !== 'fixed' && ['blocker', 'high', 'medium'].includes(f.severity));

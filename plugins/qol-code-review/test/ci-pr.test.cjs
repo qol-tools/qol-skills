@@ -68,7 +68,9 @@ test('renderComment draws severity lanes, a fold per finding and the fix diff in
 });
 
 test('renderComment reports a failed fix, a pass and a failed review', () => {
-    assert.ok(renderComment({ ...BASE, markdown: REVIEW, fixOutcome: 'failure' }).includes('Fixing failed, nothing was pushed.'));
+    const failed = renderComment({ ...BASE, markdown: REVIEW, fixOutcome: 'failure', fixReply: FIX_REPLY });
+    assert.ok(failed.includes('1 high · 1 low · Fixing failed, nothing was pushed.'));
+    assert.ok(!failed.includes('✅') && !failed.includes('**Fix:**'));
     const pass = REVIEW.replace('"verdict": "block"', '"verdict": "pass"');
     assert.ok(renderComment({ ...BASE, markdown: pass }).includes('## ✅ Pass\n\n1 high · 1 low · Nothing to fix.'));
     assert.ok(renderComment({ ...BASE, markdown: '' }).includes('## ❌ Review failed\n\nThe review of `177805c` failed before it produced a result.'));
