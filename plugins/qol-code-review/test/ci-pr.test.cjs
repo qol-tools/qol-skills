@@ -4,7 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const path = require('node:path');
 
-const { patchFiles, deniedReads, deniedWrites, parseArgs, lastVerdict, reviewJson, withoutJson, renderComment, CONFIG } = require(path.join(__dirname, '..', 'skills', 'qol-code-review', 'scripts', 'ci-pr.cjs'));
+const { appliedFiles, refuseOutside, deniedReads, deniedWrites, parseArgs, lastVerdict, reviewJson, withoutJson, renderComment, CONFIG } = require(path.join(__dirname, '..', 'skills', 'qol-code-review', 'scripts', 'ci-pr.cjs'));
 
 const HEAD = '177805ca3d66cc5c451f77336320b891bb3ee303';
 const FIX = '00a59666596d3fd41327ce1d3c0ed14b4c13a1ad';
@@ -81,14 +81,38 @@ test('the sessions cannot read /proc and the fix cannot write where later steps 
     }
 });
 
-test('patchFiles reads paths the way git apply does and refuses renames', () => {
-    const dir = require('node:fs').mkdtempSync(path.join(require('node:os').tmpdir(), 'ci-pr-patch-'));
-    const file = path.join(dir, 'fix.patch');
-    require('node:fs').writeFileSync(file, [
-        'diff --git a/src/x.rs b/src/x.rs', '--- a/src/x.rs', '+++ b/src/x.rs', '@@ -0,0 +1 @@', '+a',
-        'diff --git a/old.txt b/old.txt', 'deleted file mode 100644', '--- a/old.txt', '+++ /dev/null', '@@ -1 +0,0 @@', '-a', '',
-    ].join('\n'));
-    assert.deepStrictEqual(patchFiles(file), ['src/x.rs', 'old.txt']);
-    require('node:fs').writeFileSync(file, ['diff --git a/old.txt b/.github/new.yml', 'similarity index 100%', 'rename from old.txt', 'rename to .github/new.yml', ''].join('\n'));
-    assert.throws(() => patchFiles(file), /renames or copies/);
+test('the patch check uses the paths git actually applies on the pull request head', () => {
+    const fs = require('node:fs');
+    const { execFileSync } = require('node:child_process');
+    const dir = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'ci-pr-patch-'));
+    const run = (...args) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd: dir, encoding: 'utf8' });
+    run('init', '-q', '-b', 'main');
+    fs.writeFileSync(path.join(dir, 'kept.txt'), 'a\n');
+    run('add', '.');
+    run('commit', '-qm', 'base');
+    run('branch', 'pr');
+    run('symbolic-ref', 'HEAD', 'refs/heads/pr');
+    run('reset', '-q', '--hard');
+    fs.writeFileSync(path.join(dir, 'pr.txt'), 'a\n');
+    run('add', '.');
+    run('commit', '-qm', 'pr');
+    run('symbolic-ref', 'HEAD', 'refs/heads/main');
+    run('reset', '-q', '--hard');
+    run('merge', '-q', '--no-ff', 'pr', '-m', 'merge');
+    const patch = (name) => {
+        const file = path.join(dir, `${name.replace(/\W/g, '-')}.patch`);
+        fs.writeFileSync(file, [`diff --git a/${name} b/${name}`, 'new file mode 100644', '--- /dev/null', `+++ b/${name}`, '@@ -0,0 +1 @@', '+x', ''].join('\n'));
+        return file;
+    };
+    const cwd = process.cwd();
+    process.chdir(dir);
+    try {
+        fs.writeFileSync(path.join(dir, 'p.patch'), ['diff --git a/pr.txt b/pr.txt', '--- a/pr.txt', '+++ b/pr.txt', '@@ -1 +1 @@', '-a', '+b', ''].join('\n'));
+        assert.deepStrictEqual(appliedFiles(path.join(dir, 'p.patch'), 'HEAD^2'), ['pr.txt']);
+        assert.doesNotThrow(() => refuseOutside(['pr.txt'], { base: 'HEAD^1', head: 'HEAD' }));
+        assert.throws(() => refuseOutside(appliedFiles(patch('.github/x.yml'), 'HEAD^2'), { base: 'HEAD^1', head: 'HEAD' }), /outside the pull request diff/);
+        assert.throws(() => refuseOutside(appliedFiles(patch('other.txt'), 'HEAD^2'), { base: 'HEAD^1', head: 'HEAD' }), /other.txt/);
+    } finally {
+        process.chdir(cwd);
+    }
 });

@@ -127,32 +127,27 @@ function changedFiles(args) {
     return git(['diff', '--no-renames', '--name-only', ...args]).split('\n').filter(Boolean);
 }
 
-function patchFiles(patchFile) {
-    if (/^ (rename|copy) /m.test(git(['apply', '--summary', patchFile]))) throw new Error('the fix patch renames or copies a file, which the fix never produces');
-    const tokens = git(['apply', '--numstat', '-z', patchFile]).split('\0');
-    const files = [];
-    for (let index = 0; index < tokens.length; index += 1) {
-        const [, , name] = tokens[index].split('\t');
-        if (name === undefined) continue;
-        if (name) {
-            files.push(name);
-        } else {
-            files.push(tokens[index + 1], tokens[index + 2]);
-            index += 2;
-        }
-    }
-    return files;
-}
-
 function refuseOutside(files, options) {
     const allowed = new Set(changedFiles([options.base, options.head]));
     const refused = [...new Set(files)].filter((file) => file.startsWith('.github/') || !allowed.has(file));
     if (refused.length) throw new Error(`the fix touches files outside the pull request diff or under .github/: ${refused.join(', ')}`);
 }
 
+function appliedFiles(patchFile, target) {
+    const index = path.join(require('node:os').tmpdir(), `ci-pr-index-${process.pid}`);
+    const env = { ...process.env, GIT_INDEX_FILE: index };
+    try {
+        git(['read-tree', target], { env });
+        git(['apply', '--cached', patchFile], { env });
+        return git(['diff', '--cached', '--no-renames', '--name-only', '-z', target], { env }).split('\0').filter(Boolean);
+    } finally {
+        fs.rmSync(index, { force: true });
+    }
+}
+
 function checkPatch(options) {
     need(options, 'patch', 'base', 'head');
-    refuseOutside(patchFiles(options.patch), options);
+    refuseOutside(appliedFiles(options.patch, `${options.head}^2`), options);
     console.log('patch stays inside the pull request diff');
 }
 
@@ -282,4 +277,4 @@ if (require.main === module) {
     }
 }
 
-module.exports = { patchFiles, deniedReads, deniedWrites, parseArgs, lastVerdict, reviewJson, withoutJson, renderComment, CONFIG };
+module.exports = { appliedFiles, refuseOutside, deniedReads, deniedWrites, parseArgs, lastVerdict, reviewJson, withoutJson, renderComment, CONFIG };
