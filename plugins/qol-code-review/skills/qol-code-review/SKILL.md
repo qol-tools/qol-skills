@@ -379,3 +379,20 @@ output: review.md (primary), report.json, optional summary.json; the canonical p
 ```
 
 The writer fails early if the review content is empty. Node is always available in both runtimes, so this step has no extra dependency.
+
+## Pull request CI
+
+`scripts/ci-pr.cjs` is the whole review a CI job runs on a pull request; the workflow only installs Claude Code, seeds the plugins, calls it, pushes the patch it leaves and posts the comment it renders.
+Everything the run decides lives in `ci/`: `config.json` (model, effort, plugins to enable, denied tools, the verdicts that trigger a fix, the fix commit subject, the comment marker), `review-prompt.md` (solo review plus one adversarial agent), `agents.json` (that agent, given the config's model and effort at run time) and `fix-prompt.md`.
+
+Run it from the checkout of the pull request merged into its base:
+
+| Command | Reads | Writes |
+|---|---|---|
+| `plugins` | config | the plugin ids to seed, one per line |
+| `marker` | config | the marker that identifies the review comment |
+| `review --pr <n> --base <rev> --head <rev> --out <dir> [--title <t>] [--body <b>]` | the diff, the detector, the references | `<out>/review/review.md` and `report.json` through the writer, `<out>/reply.md`, `<out>/result.json` |
+| `fix --base <rev> --head <rev> --out <dir>` | the saved review | `<out>/fix/reply.md`, and when files changed `<out>/fix/fix.patch` plus `message.txt` |
+| `comment --out <dir> --head-sha <sha> --run-url <url> --repo-url <url> [--fix-sha <sha>] [--fix-outcome <outcome>]` | the saved review, the fix reply | `<out>/comment.md` |
+
+`review` and `fix` run Claude Code with permissions skipped and Bash denied. `fix` skips a pull request whose head (the merge commit's second parent) is already the fix commit and any verdict outside `fixVerdicts`, and refuses a patch that touches `.github/` or a file the pull request does not change. `comment` renders the review's json block as the verdict line and tables, folds the prose, and exits 1 when there was no review.
