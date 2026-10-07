@@ -56,12 +56,13 @@ const FIX_REPLY = 'Done.\n\n```json\n{"fixes": [{"id": "security-1", "status": "
 
 test('renderComment draws severity lanes, a fold per finding and the fix diff in the open', () => {
     const body = renderComment({ ...BASE, markdown: REVIEW, fixSha: FIX, fixReply: FIX_REPLY, patch: PATCH });
-    assert.ok(body.startsWith(`${CONFIG.commentMarker}\n\n## ⛔ Block\n\n1 high · 1 low · 1 fixed in [\`00a5966\`](https://github.com/o/r/commit/${FIX}), 0 left for you.`));
-    assert.ok(body.includes('#### 🔴 High\n\n<details><summary>✅ Allow only | Read</summary>'));
+    assert.ok(body.startsWith(`${CONFIG.commentMarker}\n\n> [!CAUTION]\n> **Block** · 1 high · 1 low\n> 1 fixed in [\`00a5966\`](https://github.com/o/r/commit/${FIX}), 0 left for you.`));
+    assert.ok(body.includes('#### High · 1\n\n<details><summary>Allow only | Read <code>fixed</code></summary>'));
     assert.ok(body.includes(`[\`a.yml:12\`](https://github.com/o/r/blob/${HEAD}/.github/workflows/a.yml#L12) · \`security-1\``));
     assert.ok(body.includes('**Fix:** Allowlisted tools'));
     assert.ok(body.includes('</details>\n\n```diff\n@@ a.yml:12 @@\n-  old\n+  new\n```'));
-    assert.ok(body.includes('#### 🟡 Low\n\n<details><summary>⏭️ Scan more</summary>'));
+    assert.ok(body.includes('#### Low · 1\n\n<details><summary>Scan more <code>skipped</code></summary>'));
+    assert.ok(body.includes('**Left:** Low'));
     assert.ok(body.includes('<details><summary>Full review</summary>'));
     assert.ok(body.includes(`<sub>qol-code-review · ${CONFIG.model} · head \`177805c\``));
     assert.ok(!body.includes('```json'));
@@ -69,11 +70,11 @@ test('renderComment draws severity lanes, a fold per finding and the fix diff in
 
 test('renderComment reports a failed fix, a pass and a failed review', () => {
     const failed = renderComment({ ...BASE, markdown: REVIEW, fixOutcome: 'failure', fixReply: FIX_REPLY });
-    assert.ok(failed.includes('1 high · 1 low · Fixing failed, nothing was pushed.'));
-    assert.ok(!failed.includes('✅') && !failed.includes('**Fix:**'));
+    assert.ok(failed.includes('> **Block** · 1 high · 1 low\n> Fixing failed, nothing was pushed.'));
+    assert.ok(!failed.includes('<code>fixed</code>') && !failed.includes('**Fix:**'));
     const pass = REVIEW.replace('"verdict": "block"', '"verdict": "pass"');
-    assert.ok(renderComment({ ...BASE, markdown: pass }).includes('## ✅ Pass\n\n1 high · 1 low · Nothing to fix.'));
-    assert.ok(renderComment({ ...BASE, markdown: '' }).includes('## ❌ Review failed\n\nThe review of `177805c` failed before it produced a result.'));
+    assert.ok(renderComment({ ...BASE, markdown: pass }).includes('> [!TIP]\n> **Pass** · 1 high · 1 low\n> Nothing to fix.'));
+    assert.ok(renderComment({ ...BASE, markdown: '' }).includes('> [!CAUTION]\n> **Review failed.** The review of `177805c` failed before it produced a result.'));
 });
 
 test('fixStatuses reads the fixes json, or id lines when there is none', () => {

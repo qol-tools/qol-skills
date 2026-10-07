@@ -214,9 +214,9 @@ function withoutJson(markdown) {
     return markdown.replace(/^```json[ \t]*\n[\s\S]*?^```[ \t]*$\n?/gm, '').trimEnd();
 }
 
-const VERDICTS = { pass: '✅ Pass', conditional: '⚠️ Conditional', block: '⛔ Block' };
-const LANES = [['blocker', '⛔', 'Blocker'], ['high', '🔴', 'High'], ['medium', '🟠', 'Medium'], ['low', '🟡', 'Low'], ['note', '⚪', 'Note']];
-const STATUS = { fixed: '✅', skipped: '⏭️' };
+const VERDICTS = { pass: ['TIP', 'Pass'], conditional: ['WARNING', 'Conditional'], block: ['CAUTION', 'Block'] };
+const LANES = [['blocker', 'Blocker'], ['high', 'High'], ['medium', 'Medium'], ['low', 'Low'], ['note', 'Note']];
+const alert = (kind, lines) => [`> [!${kind}]`, ...lines.map((line) => `> ${line}`)].join('\n');
 const DIFF_LINES = 40;
 const COMMENT_LIMIT = 60000;
 
@@ -276,7 +276,7 @@ function renderComment({ markdown, headSha, runUrl, repoUrl, fixSha, fixOutcome,
     if (!data || !data.verdict) {
         const text = markdown && markdown.trim()
             ? `Reviewed head: ${headSha}\n\n${markdown.trim()}`
-            : `## ❌ Review failed\n\nThe review of \`${short(headSha)}\` failed before it produced a result. See [the run](${runUrl}).`;
+            : alert('CAUTION', [`**Review failed.** The review of \`${short(headSha)}\` failed before it produced a result. See [the run](${runUrl}).`]);
         return `${CONFIG.commentMarker}\n${text}\n`;
     }
     const seen = new Set();
@@ -296,14 +296,15 @@ function renderComment({ markdown, headSha, runUrl, repoUrl, fixSha, fixOutcome,
     const where = (f) => (f.file ? `[\`${String(f.file).split('/').pop()}${f.line ? `:${f.line}` : ''}\`](${repoUrl}/blob/${headSha}/${f.file}${f.line ? `#L${f.line}` : ''}) · ` : '');
     const item = (f) => {
         const { status, note } = statusOf(f);
-        const body = [`${where(f)}\`${f.id}\``, `**Action:** ${f.required_action || ''}`, note ? `**Fix:** ${note}` : ''].filter(Boolean).join('\n\n');
-        const summary = `${STATUS[status] ? `${STATUS[status]} ` : ''}${String(f.title || f.required_action || f.id).replace(/\s+/g, ' ')}`;
-        return [`<details><summary>${summary.replace(/</g, '&lt;')}</summary>\n\n${body}\n\n</details>`, diffBlock(byId.get(f.id) || [])];
+        const body = [`${where(f)}\`${f.id}\``, `**Action:** ${f.required_action || ''}`, note ? `**${status === 'fixed' ? 'Fix' : 'Left'}:** ${note}` : ''].filter(Boolean).join('\n\n');
+        const title = String(f.title || f.required_action || f.id).replace(/\s+/g, ' ').replace(/</g, '&lt;');
+        return [`<details><summary>${title}${['fixed', 'skipped'].includes(status) ? ` <code>${status}</code>` : ''}</summary>\n\n${body}\n\n</details>`, diffBlock(byId.get(f.id) || [])];
     };
-    const parts = [CONFIG.commentMarker, `## ${VERDICTS[data.verdict] || `❔ ${data.verdict}`}`, `${counts} · ${outcome}`];
-    for (const [key, dot, label] of LANES) {
+    const [kind, verdict] = VERDICTS[data.verdict] || ['NOTE', data.verdict];
+    const parts = [CONFIG.commentMarker, alert(kind, [`**${verdict}** · ${counts}`, outcome])];
+    for (const [key, label] of LANES) {
         const lane = findings.filter((f) => f.severity === key);
-        if (lane.length) parts.push(`#### ${dot} ${label}`, ...lane.flatMap(item));
+        if (lane.length) parts.push(`#### ${label} · ${lane.length}`, ...lane.flatMap(item));
     }
     if (other.length) parts.push('#### Other changes in the fix', diffBlock(other));
     parts.push(`<details><summary>Full review</summary>\n\n${withoutJson(markdown)}\n\n</details>`);
