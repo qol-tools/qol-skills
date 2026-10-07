@@ -192,7 +192,13 @@ function fix(options) {
     fs.writeFileSync(path.join(dir, 'reply.md'), reply);
     console.log(reply);
     git(['add', '-A']);
-    refuseOutside(changedFiles(['--cached']), options);
+    try {
+        refuseOutside(changedFiles(['--cached']), options);
+    } catch (error) {
+        fs.writeFileSync(path.join(dir, 'refused.txt'), `${error.message}\n`);
+        console.log(error.message);
+        return;
+    }
     const patch = git(['diff', '--cached', '--binary', '--no-renames']);
     if (!patch) return;
     fs.writeFileSync(path.join(dir, 'fix.patch'), patch);
@@ -270,7 +276,7 @@ function diffBlock(hunks) {
     return ['```diff', ...shown, '```'].join('\n');
 }
 
-function renderComment({ markdown, headSha, runUrl, repoUrl, fixSha, fixOutcome, fixReply, patch, withDiffs = true }) {
+function renderComment({ markdown, headSha, runUrl, repoUrl, fixSha, fixOutcome, fixRefused, fixReply, patch, withDiffs = true }) {
     const short = (sha) => String(sha).slice(0, 7);
     const data = markdown ? reviewJson(markdown) : null;
     if (!data || !data.verdict) {
@@ -290,7 +296,9 @@ function renderComment({ markdown, headSha, runUrl, repoUrl, fixSha, fixOutcome,
     const counts = LANES.filter(([key]) => data.counts?.[key] > 0).map(([key]) => `${data.counts[key]} ${key}`).join(' · ') || 'no findings';
     const outcome = fixSha
         ? `${fixed.length} fixed in ${commit}, ${left.length} left for you.`
-        : fixOutcome === 'failure'
+        : fixRefused
+            ? `The fix needed files outside this pull request, so nothing was pushed. See [the run](${runUrl}).`
+            : fixOutcome === 'failure'
             ? `Fixing failed, nothing was pushed. See [the run](${runUrl}).`
             : CONFIG.fixVerdicts.includes(data.verdict) ? `Nothing was fixed, ${left.length} left for you.` : 'Nothing to fix.';
     const where = (f) => (f.file ? `[\`${String(f.file).split('/').pop()}${f.line ? `:${f.line}` : ''}\`](${repoUrl}/blob/${headSha}/${f.file}${f.line ? `#L${f.line}` : ''}) · ` : '');
@@ -310,7 +318,7 @@ function renderComment({ markdown, headSha, runUrl, repoUrl, fixSha, fixOutcome,
     parts.push(`<details><summary>Full review</summary>\n\n${withoutJson(markdown)}\n\n</details>`);
     parts.push(`<sub>qol-code-review · ${CONFIG.model} · head \`${short(headSha)}\` · [run](${runUrl})</sub>`);
     const body = `${parts.filter(Boolean).join('\n\n')}\n`;
-    return body.length > COMMENT_LIMIT && withDiffs ? renderComment({ markdown, headSha, runUrl, repoUrl, fixSha, fixOutcome, fixReply, patch, withDiffs: false }) : body;
+    return body.length > COMMENT_LIMIT && withDiffs ? renderComment({ markdown, headSha, runUrl, repoUrl, fixSha, fixOutcome, fixRefused, fixReply, patch, withDiffs: false }) : body;
 }
 
 function comment(options) {
@@ -324,6 +332,7 @@ function comment(options) {
         repoUrl: options.repoUrl,
         fixSha: options.fixSha,
         fixOutcome: options.fixOutcome,
+        fixRefused: read(path.join(options.out, 'fix', 'refused.txt')).trim(),
         fixReply: read(path.join(options.out, 'fix', 'reply.md')),
         patch: read(path.join(options.out, 'fix', 'fix.patch')),
     });
