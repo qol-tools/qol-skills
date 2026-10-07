@@ -221,7 +221,7 @@ function withoutJson(markdown) {
 }
 
 const VERDICTS = { pass: ['TIP', 'Pass'], conditional: ['WARNING', 'Conditional'], block: ['CAUTION', 'Block'] };
-const LANES = [['blocker', 'Blocker'], ['high', 'High'], ['medium', 'Medium'], ['low', 'Low'], ['note', 'Note']];
+const LANES = [['blocker', 'Blocker'], ['high', 'High'], ['medium', 'Medium'], ['low', 'Low']];
 const alert = (kind, lines) => [`> [!${kind}]`, ...lines.map((line) => `> ${line}`)].join('\n');
 const DIFF_LINES = 40;
 const SNIPPET_LINES = 3;
