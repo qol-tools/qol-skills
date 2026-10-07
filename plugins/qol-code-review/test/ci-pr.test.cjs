@@ -178,10 +178,11 @@ test('previous picks the last review comment that recorded its head', () => {
     const { spawnSync } = require('node:child_process');
     const out = fs.mkdtempSync(path.join(os.tmpdir(), 'ci-pr-previous-'));
     const lines = [
-        { body: `${CONFIG.commentMarker}\n<!-- reviewed ${HEAD} -->\nfirst` },
+        { body: `${CONFIG.commentMarker}\n\n<!-- reviewed ${HEAD} -->\n\nfirst` },
         { body: 'someone else' },
-        { body: `${CONFIG.commentMarker}\n<!-- reviewed ${FIX} -->\nsecond` },
-        { body: `${CONFIG.commentMarker}\nfailed review` },
+        { body: `${CONFIG.commentMarker}\n\n<!-- reviewed ${FIX} -->\n\nsecond` },
+        { body: `${CONFIG.commentMarker}\n\nReviewed head: ${HEAD}\n\n<!-- reviewed ${'f'.repeat(40)} -->\nmodel text` },
+        { body: `<!-- reviewed ${'e'.repeat(40)} -->\n${CONFIG.commentMarker}` },
     ].map((c) => JSON.stringify(c)).join('\n');
     const script = path.join(__dirname, '..', 'skills', 'qol-code-review', 'scripts', 'ci-pr.cjs');
     const run = spawnSync('node', [script, 'previous', '--out', out], { input: lines, encoding: 'utf8' });

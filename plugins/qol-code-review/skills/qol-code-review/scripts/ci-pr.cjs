@@ -235,17 +235,22 @@ function fix(options) {
     console.log(`patch: ${path.join(dir, 'fix.patch')}`);
 }
 
-const REVIEWED = /^<!-- reviewed ([0-9a-f]{40}) -->$/m;
+const REVIEWED = /^<!-- reviewed ([0-9a-f]{40}) -->\n/;
+
+function reviewedHead(body) {
+    const text = String(body || '');
+    if (!text.startsWith(`${CONFIG.commentMarker}\n\n`)) return null;
+    return text.slice(CONFIG.commentMarker.length + 2).match(REVIEWED)?.[1] || null;
+}
 
 function previous(options) {
     need(options, 'out');
-    const bodies = fs.readFileSync(0, 'utf8').split('\n').filter((line) => line.trim()).map((line) => JSON.parse(line))
-        .filter((comment) => String(comment.body || '').startsWith(CONFIG.commentMarker));
-    const last = bodies.filter((comment) => REVIEWED.test(comment.body)).pop();
+    const comments = fs.readFileSync(0, 'utf8').split('\n').filter((line) => line.trim()).map((line) => JSON.parse(line));
+    const last = comments.filter((comment) => reviewedHead(comment.body)).pop();
     if (!last) return;
     fs.mkdirSync(options.out, { recursive: true });
     fs.writeFileSync(path.join(options.out, 'previous.md'), last.body);
-    console.log(last.body.match(REVIEWED)[1]);
+    console.log(reviewedHead(last.body));
 }
 
 function reviewJson(markdown) {
