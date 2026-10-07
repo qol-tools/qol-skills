@@ -392,7 +392,7 @@ Run it from the checkout of the pull request merged into its base:
 |---|---|---|
 | `plugins` | config | the plugin ids to seed, one per line |
 | `marker` | config | the marker that identifies the review comment |
-| `review --pr <n> --base <rev> --head <rev> --out <dir> [--title <t>] [--body <b>]` | the diff, the detector, the references | `<out>/review/review.md` and `report.json` through the writer, `<out>/reply.md`, `<out>/result.json` |
+| `review --pr <n> --base <rev> --head <rev> --out <dir> [--title <t>] [--body <b>]` | the diff, the detector, the references | `<out>/review/review.md` and `report.json` through the writer, `<out>/reply.md` (the last assistant message that carries the json verdict block, so a stop hook's recap never replaces the review), `<out>/stream.jsonl` |
 | `fix --base <rev> --head <rev> --out <dir>` | the saved review | `<out>/fix/reply.md`, and when files changed `<out>/fix/fix.patch` plus `message.txt` |
 | `check-patch --patch <file> --base <rev> --head <rev>` | the paths git itself stages when it applies the patch to the pull request head in a scratch index, the pull request diff | nothing; exits 1 when the patch touches `.github/` or a file the pull request does not change. Run it from a pristine copy of the skill before pushing a patch the fix session made |
 | `comment --out <dir> --head-sha <sha> --run-url <url> --repo-url <url> [--fix-sha <sha>] [--fix-outcome <outcome>]` | the saved review, the fix reply | `<out>/comment.md` |

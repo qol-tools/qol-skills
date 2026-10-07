@@ -4,7 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const path = require('node:path');
 
-const { appliedFiles, refuseOutside, deniedReads, deniedWrites, parseArgs, lastVerdict, reviewJson, withoutJson, fixStatuses, patchHunks, renderComment, CONFIG } = require(path.join(__dirname, '..', 'skills', 'qol-code-review', 'scripts', 'ci-pr.cjs'));
+const { reviewReply, appliedFiles, refuseOutside, deniedReads, deniedWrites, parseArgs, lastVerdict, reviewJson, withoutJson, fixStatuses, patchHunks, renderComment, CONFIG } = require(path.join(__dirname, '..', 'skills', 'qol-code-review', 'scripts', 'ci-pr.cjs'));
 
 const HEAD = '177805ca3d66cc5c451f77336320b891bb3ee303';
 const FIX = '00a59666596d3fd41327ce1d3c0ed14b4c13a1ad';
@@ -138,4 +138,20 @@ test('the patch check uses the paths git actually applies on the pull request he
     } finally {
         process.chdir(cwd);
     }
+});
+
+test('reviewReply keeps the review message, not a later recap or a subagent message', () => {
+    const line = (event) => JSON.stringify(event);
+    const text = (t, parent = null) => line({ type: 'assistant', parent_tool_use_id: parent, message: { content: [{ type: 'text', text: t }] } });
+    const stream = [
+        text('starting'),
+        text('agent says ```json\n{"verdict": "pass"}\n```', 'toolu_1'),
+        text(REVIEW),
+        text('Recap: the verdict is block.'),
+        line({ type: 'result', subtype: 'success', is_error: false, result: 'Recap: the verdict is block.', permission_denials: [] }),
+    ].join('\n');
+    const { reply } = reviewReply(stream);
+    assert.strictEqual(reply, REVIEW);
+    assert.strictEqual(reviewReply(line({ type: 'result', subtype: 'error_max_turns', result: 'x' })).reply, '');
+    assert.strictEqual(reviewReply(line({ type: 'result', subtype: 'success', result: 'plain' })).reply, 'plain');
 });

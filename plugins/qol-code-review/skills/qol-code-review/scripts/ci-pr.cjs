@@ -96,6 +96,24 @@ function reviewPrompt(options) {
     ].join('\n');
 }
 
+function reviewReply(stream, key = 'verdict') {
+    const events = String(stream || '').split('\n').filter((line) => line.trim()).flatMap((line) => {
+        try {
+            return [JSON.parse(line)];
+        } catch {
+            return [];
+        }
+    });
+    const result = events.filter((event) => event.type === 'result').pop() || {};
+    if (result.subtype !== 'success' || result.is_error === true) return { result, reply: '' };
+    const texts = events
+        .filter((event) => event.type === 'assistant' && !event.parent_tool_use_id)
+        .map((event) => (event.message?.content || []).filter((block) => block.type === 'text').map((block) => block.text).join('\n'))
+        .filter((text) => text.trim());
+    const review = texts.filter((text) => reviewJson(text)?.[key]).pop();
+    return { result, reply: review || String(result.result || '') };
+}
+
 function lastVerdict(markdown) {
     const found = [...markdown.matchAll(/"verdict":\s*"([a-z]+)"/g)];
     return found.length ? found[found.length - 1][1] : 'unknown';
@@ -110,12 +128,11 @@ function review(options) {
         '--agents', writeAgents(options.out),
         '--dangerously-skip-permissions',
         '--disallowedTools', ...CONFIG.reviewDeniedTools, ...deniedReads(),
-        '--output-format', 'json',
+        '--output-format', 'stream-json', '--verbose',
     ], { CLAUDE_CODE_SUBAGENT_MODEL: CONFIG.model, CLAUDE_CODE_SUBAGENT_MODEL_FORCE: '1' });
-    fs.writeFileSync(path.join(options.out, 'result.json'), raw);
-    const result = JSON.parse(raw || '{}');
+    fs.writeFileSync(path.join(options.out, 'stream.jsonl'), raw);
+    const { result, reply } = reviewReply(raw);
     console.log(`permission denials: ${JSON.stringify(result.permission_denials || [])}`);
-    const reply = result.subtype === 'success' && result.is_error !== true ? String(result.result || '') : '';
     if (!reply.trim()) throw new Error(`the review produced no result (${result.subtype || 'no output'})`);
     const replyFile = path.join(options.out, 'reply.md');
     fs.writeFileSync(replyFile, reply);
@@ -166,11 +183,12 @@ function fix(options) {
         return;
     }
     const prompt = `${fs.readFileSync(path.join(reviewDir, 'review.md'), 'utf8')}\n${fs.readFileSync(path.join(CI, 'fix-prompt.md'), 'utf8')}`;
-    const reply = claude(prompt, [
+    const { reply } = reviewReply(claude(prompt, [
         '--settings', writeSettings(options.out),
         '--dangerously-skip-permissions',
         '--disallowedTools', ...CONFIG.fixDeniedTools, ...deniedReads(), ...deniedWrites(),
-    ]);
+        '--output-format', 'stream-json', '--verbose',
+    ]), 'fixes');
     fs.writeFileSync(path.join(dir, 'reply.md'), reply);
     console.log(reply);
     git(['add', '-A']);
@@ -337,4 +355,4 @@ if (require.main === module) {
     }
 }
 
-module.exports = { appliedFiles, refuseOutside, deniedReads, deniedWrites, parseArgs, lastVerdict, reviewJson, withoutJson, fixStatuses, patchHunks, renderComment, CONFIG };
+module.exports = { reviewReply, appliedFiles, refuseOutside, deniedReads, deniedWrites, parseArgs, lastVerdict, reviewJson, withoutJson, fixStatuses, patchHunks, renderComment, CONFIG };
