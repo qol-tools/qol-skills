@@ -4,7 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const path = require('node:path');
 
-const { parseArgs, lastVerdict, reviewJson, withoutJson, renderComment, CONFIG } = require(path.join(__dirname, '..', 'skills', 'qol-code-review', 'scripts', 'ci-pr.cjs'));
+const { deniedReads, deniedWrites, parseArgs, lastVerdict, reviewJson, withoutJson, renderComment, CONFIG } = require(path.join(__dirname, '..', 'skills', 'qol-code-review', 'scripts', 'ci-pr.cjs'));
 
 const HEAD = '177805ca3d66cc5c451f77336320b891bb3ee303';
 const FIX = '00a59666596d3fd41327ce1d3c0ed14b4c13a1ad';
@@ -63,4 +63,19 @@ test('renderComment reports a failed fix and a failed review', () => {
 test('renderComment posts a review without a json block as it is', () => {
     const body = renderComment({ ...BASE, markdown: 'plain review' });
     assert.ok(body.includes(`Reviewed head: ${HEAD}\n\nplain review`));
+});
+
+test('the sessions cannot read /proc and the fix cannot write where later steps read', () => {
+    assert.deepStrictEqual(deniedReads(), ['Read(//proc/**)']);
+    const saved = { ...process.env };
+    Object.assign(process.env, { RUNNER_TEMP: '/runner/_temp', CLAUDE_CODE_PLUGIN_SEED_DIR: '/home/runner/.claude-seed' });
+    try {
+        const denied = deniedWrites();
+        for (const rule of ['Edit(//runner/_temp/**)', 'Write(//runner/_temp/**)', 'Edit(//home/runner/.claude-seed/**)', 'Write(//home/runner/.claude-seed/**)']) {
+            assert.ok(denied.includes(rule), rule);
+        }
+        assert.ok(denied.some((rule) => /^Edit\(\/\/.*\.git\/\*\*\)$/.test(rule)));
+    } finally {
+        process.env = saved;
+    }
 });

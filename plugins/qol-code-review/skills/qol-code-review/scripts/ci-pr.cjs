@@ -47,6 +47,15 @@ function claude(prompt, args, env = {}) {
     return result.stdout;
 }
 
+function deniedReads() {
+    return ['Read(//proc/**)'];
+}
+
+function deniedWrites() {
+    const paths = [path.resolve(git(['rev-parse', '--git-dir']).trim()), process.env.RUNNER_TEMP, process.env.CLAUDE_CODE_PLUGIN_SEED_DIR, process.env.CLAUDE_CONFIG_DIR].filter(Boolean);
+    return paths.flatMap((dir) => [`Edit(/${path.resolve(dir)}/**)`, `Write(/${path.resolve(dir)}/**)`]);
+}
+
 function writeSettings(out) {
     const file = path.join(out, 'settings.json');
     fs.writeFileSync(file, JSON.stringify({ enabledPlugins: Object.fromEntries(CONFIG.plugins.map((id) => [id, true])) }));
@@ -100,7 +109,7 @@ function review(options) {
         '--settings', writeSettings(options.out),
         '--agents', writeAgents(options.out),
         '--dangerously-skip-permissions',
-        '--disallowedTools', ...CONFIG.reviewDeniedTools,
+        '--disallowedTools', ...CONFIG.reviewDeniedTools, ...deniedReads(),
         '--output-format', 'json',
     ], { CLAUDE_CODE_SUBAGENT_MODEL: CONFIG.model, CLAUDE_CODE_SUBAGENT_MODEL_FORCE: '1' });
     fs.writeFileSync(path.join(options.out, 'result.json'), raw);
@@ -133,11 +142,10 @@ function fix(options) {
         return;
     }
     const prompt = `${fs.readFileSync(path.join(reviewDir, 'review.md'), 'utf8')}\n${fs.readFileSync(path.join(CI, 'fix-prompt.md'), 'utf8')}`;
-    const gitDir = path.resolve(git(['rev-parse', '--git-dir']).trim());
     const reply = claude(prompt, [
         '--settings', writeSettings(options.out),
         '--dangerously-skip-permissions',
-        '--disallowedTools', ...CONFIG.fixDeniedTools, `Edit(/${gitDir}/**)`, `Write(/${gitDir}/**)`,
+        '--disallowedTools', ...CONFIG.fixDeniedTools, ...deniedReads(), ...deniedWrites(),
     ]);
     fs.writeFileSync(path.join(dir, 'reply.md'), reply);
     console.log(reply);
@@ -247,4 +255,4 @@ if (require.main === module) {
     }
 }
 
-module.exports = { parseArgs, lastVerdict, reviewJson, withoutJson, renderComment, CONFIG };
+module.exports = { deniedReads, deniedWrites, parseArgs, lastVerdict, reviewJson, withoutJson, renderComment, CONFIG };
