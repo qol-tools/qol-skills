@@ -74,7 +74,8 @@ test('the sessions cannot read /proc and the fix cannot write where later steps 
         for (const rule of ['Edit(//runner/_temp/**)', 'Write(//runner/_temp/**)', 'Edit(//home/runner/.claude-seed/**)', 'Write(//home/runner/.claude-seed/**)']) {
             assert.ok(denied.includes(rule), rule);
         }
-        assert.ok(denied.some((rule) => /^Edit\(\/\/.*\.git\/\*\*\)$/.test(rule)));
+        const gitDir = path.resolve(require('node:child_process').execFileSync('git', ['rev-parse', '--git-dir'], { encoding: 'utf8' }).trim());
+        assert.ok(denied.includes(`Edit(/${gitDir}/**)`), gitDir);
     } finally {
         process.env = saved;
     }
