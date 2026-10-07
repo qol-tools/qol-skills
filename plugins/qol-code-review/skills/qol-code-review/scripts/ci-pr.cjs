@@ -196,43 +196,102 @@ function withoutJson(markdown) {
     return markdown.replace(/^```json[ \t]*\n[\s\S]*?^```[ \t]*$\n?/gm, '').trimEnd();
 }
 
-const ICONS = { pass: '✅', conditional: '⚠️', block: '⛔' };
-const SEVERITIES = ['blocker', 'high', 'medium', 'low', 'note'];
+const VERDICTS = { pass: '✅ Pass', conditional: '⚠️ Conditional', block: '⛔ Block' };
+const LANES = [['blocker', '⛔', 'Blocker'], ['high', '🔴', 'High'], ['medium', '🟠', 'Medium'], ['low', '🟡', 'Low'], ['note', '⚪', 'Note']];
+const STATUS = { fixed: '✅', skipped: '⏭️' };
+const DIFF_LINES = 40;
+const COMMENT_LIMIT = 60000;
 
-function renderComment({ markdown, headSha, runUrl, repoUrl, fixSha, fixOutcome, fixReply }) {
-    const short = (sha) => sha.slice(0, 7);
-    const lines = [CONFIG.commentMarker];
+function fixStatuses(fixReply) {
+    const listed = reviewJson(fixReply || '')?.fixes;
+    if (Array.isArray(listed)) return new Map(listed.filter((f) => f && f.id).map((f) => [f.id, { status: f.status, note: f.note }]));
+    const found = [...String(fixReply || '').matchAll(/([a-z][a-z-]*-\d+)\W+(fixed|skipped)\b[.,:;\s-]*(.*)$/gm)];
+    return new Map(found.map(([, id, status, note]) => [id, { status, note: note.trim() }]));
+}
+
+function patchHunks(patch) {
+    const hunks = [];
+    let file = null;
+    for (const line of String(patch || '').split('\n')) {
+        const header = line.match(/^diff --git a\/.+? b\/(.+)$/);
+        if (header) {
+            file = header[1];
+            continue;
+        }
+        const start = line.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
+        if (start && file) {
+            hunks.push({ file, line: Number(start[1]), lines: [] });
+            continue;
+        }
+        const hunk = hunks[hunks.length - 1];
+        if (hunk && hunk.file === file && /^[-+ ]/.test(line) && !/^(---|\+\+\+) /.test(line)) hunk.lines.push(line);
+    }
+    return hunks;
+}
+
+function assignHunks(hunks, fixedFindings) {
+    const byId = new Map(fixedFindings.map((f) => [f.id, []]));
+    const other = [];
+    for (const hunk of hunks) {
+        const owners = fixedFindings.filter((f) => f.file === hunk.file);
+        if (!owners.length) {
+            other.push(hunk);
+            continue;
+        }
+        const owner = owners.reduce((best, f) => (Math.abs((f.line || 0) - hunk.line) < Math.abs((best.line || 0) - hunk.line) ? f : best));
+        byId.get(owner.id).push(hunk);
+    }
+    return { byId, other };
+}
+
+function diffBlock(hunks) {
+    if (!hunks.length) return '';
+    const lines = hunks.flatMap((h) => [`@@ ${h.file.split('/').pop()}:${h.line} @@`, ...h.lines]);
+    const shown = lines.slice(0, DIFF_LINES);
+    if (lines.length > shown.length) shown.push(`@@ ${lines.length - shown.length} more lines in the fix commit @@`);
+    return ['```diff', ...shown, '```'].join('\n');
+}
+
+function renderComment({ markdown, headSha, runUrl, repoUrl, fixSha, fixOutcome, fixReply, patch, withDiffs = true }) {
+    const short = (sha) => String(sha).slice(0, 7);
     const data = markdown ? reviewJson(markdown) : null;
     if (!data || !data.verdict) {
-        lines.push(markdown && markdown.trim() ? `Reviewed head: ${headSha}\n\n${markdown.trim()}` : `The review of \`${short(headSha)}\` failed before it produced a result. See [the run](${runUrl}).`);
-        return `${lines.join('\n')}\n`;
+        const text = markdown && markdown.trim()
+            ? `Reviewed head: ${headSha}\n\n${markdown.trim()}`
+            : `## ❌ Review failed\n\nThe review of \`${short(headSha)}\` failed before it produced a result. See [the run](${runUrl}).`;
+        return `${CONFIG.commentMarker}\n${text}\n`;
     }
-    const counts = SEVERITIES.filter((key) => data.counts?.[key] > 0).map((key) => `${data.counts[key]} ${key}`).join(' · ') || 'no findings';
-    lines.push(`## ${ICONS[data.verdict] || '❔'} Code review: ${data.verdict}`, '', `Head \`${short(headSha)}\` · ${counts} · [run](${runUrl})`);
-    const where = (f) => {
-        const at = f.line ? `:${f.line}` : '';
-        return `[\`${String(f.file).split('/').pop()}${at}\`](${repoUrl}/blob/${headSha}/${f.file}${f.line ? `#L${f.line}` : ''})`;
-    };
-    const cell = (text) => String(text || '').replace(/\n/g, ' ').replace(/\|/g, '\\|');
-    for (const [title, key] of [['Must fix', 'must_fix'], ['Deferred', 'deferred_followups']]) {
-        const rows = data[key] || [];
-        if (!rows.length) continue;
-        lines.push('', `### ${title}`, '', '| Severity | Finding | Where | Action |', '|---|---|---|---|');
-        for (const f of rows) lines.push(`| ${cell(f.severity)} | ${cell(f.id)} | ${where(f)} | ${cell(f.required_action)} |`);
-    }
-    const fixes = fixSha
-        ? `Pushed [\`${short(fixSha)}\`](${repoUrl}/commit/${fixSha}).`
+    const seen = new Set();
+    const findings = [...(data.must_fix || []), ...(data.deferred_followups || [])].filter((f) => f && f.id && !seen.has(f.id) && seen.add(f.id));
+    const statuses = fixStatuses(fixReply);
+    const statusOf = (f) => statuses.get(f.id) || {};
+    const fixed = findings.filter((f) => statusOf(f).status === 'fixed');
+    const left = findings.filter((f) => statusOf(f).status !== 'fixed' && ['blocker', 'high', 'medium'].includes(f.severity));
+    const { byId, other } = assignHunks(withDiffs ? patchHunks(patch) : [], fixSha ? fixed : []);
+    const commit = fixSha ? `[\`${short(fixSha)}\`](${repoUrl}/commit/${fixSha})` : '';
+    const counts = LANES.filter(([key]) => data.counts?.[key] > 0).map(([key]) => `${data.counts[key]} ${key}`).join(' · ') || 'no findings';
+    const outcome = fixSha
+        ? `${fixed.length} fixed in ${commit}, ${left.length} left for you.`
         : fixOutcome === 'failure'
             ? `Fixing failed, nothing was pushed. See [the run](${runUrl}).`
-            : fixReply
-                ? 'No changes were needed.'
-                : '';
-    if (fixes) {
-        lines.push('', '### Fixes', '', fixes);
-        if (fixReply) lines.push('', '<details><summary>Fix notes</summary>', '', fixReply.trim(), '', '</details>');
+            : CONFIG.fixVerdicts.includes(data.verdict) ? `Nothing was fixed, ${left.length} left for you.` : 'Nothing to fix.';
+    const where = (f) => (f.file ? `[\`${String(f.file).split('/').pop()}${f.line ? `:${f.line}` : ''}\`](${repoUrl}/blob/${headSha}/${f.file}${f.line ? `#L${f.line}` : ''}) · ` : '');
+    const item = (f) => {
+        const { status, note } = statusOf(f);
+        const body = [`${where(f)}\`${f.id}\``, `**Action:** ${f.required_action || ''}`, note ? `**Fix:** ${note}` : ''].filter(Boolean).join('\n\n');
+        const summary = `${STATUS[status] ? `${STATUS[status]} ` : ''}${String(f.title || f.required_action || f.id).replace(/\s+/g, ' ')}`;
+        return [`<details><summary>${summary.replace(/</g, '&lt;')}</summary>\n\n${body}\n\n</details>`, diffBlock(byId.get(f.id) || [])];
+    };
+    const parts = [CONFIG.commentMarker, `## ${VERDICTS[data.verdict] || `❔ ${data.verdict}`}`, `${counts} · ${outcome}`];
+    for (const [key, dot, label] of LANES) {
+        const lane = findings.filter((f) => f.severity === key);
+        if (lane.length) parts.push(`#### ${dot} ${label}`, ...lane.flatMap(item));
     }
-    lines.push('', '<details><summary>Full review</summary>', '', withoutJson(markdown), '', '</details>');
-    return `${lines.join('\n')}\n`;
+    if (other.length) parts.push('#### Other changes in the fix', diffBlock(other));
+    parts.push(`<details><summary>Full review</summary>\n\n${withoutJson(markdown)}\n\n</details>`);
+    parts.push(`<sub>qol-code-review · ${CONFIG.model} · head \`${short(headSha)}\` · [run](${runUrl})</sub>`);
+    const body = `${parts.filter(Boolean).join('\n\n')}\n`;
+    return body.length > COMMENT_LIMIT && withDiffs ? renderComment({ markdown, headSha, runUrl, repoUrl, fixSha, fixOutcome, fixReply, patch, withDiffs: false }) : body;
 }
 
 function comment(options) {
@@ -247,6 +306,7 @@ function comment(options) {
         fixSha: options.fixSha,
         fixOutcome: options.fixOutcome,
         fixReply: read(path.join(options.out, 'fix', 'reply.md')),
+        patch: read(path.join(options.out, 'fix', 'fix.patch')),
     });
     const file = path.join(options.out, 'comment.md');
     fs.writeFileSync(file, body);
@@ -277,4 +337,4 @@ if (require.main === module) {
     }
 }
 
-module.exports = { appliedFiles, refuseOutside, deniedReads, deniedWrites, parseArgs, lastVerdict, reviewJson, withoutJson, renderComment, CONFIG };
+module.exports = { appliedFiles, refuseOutside, deniedReads, deniedWrites, parseArgs, lastVerdict, reviewJson, withoutJson, fixStatuses, patchHunks, renderComment, CONFIG };

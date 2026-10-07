@@ -4,7 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const path = require('node:path');
 
-const { appliedFiles, refuseOutside, deniedReads, deniedWrites, parseArgs, lastVerdict, reviewJson, withoutJson, renderComment, CONFIG } = require(path.join(__dirname, '..', 'skills', 'qol-code-review', 'scripts', 'ci-pr.cjs'));
+const { appliedFiles, refuseOutside, deniedReads, deniedWrites, parseArgs, lastVerdict, reviewJson, withoutJson, fixStatuses, patchHunks, renderComment, CONFIG } = require(path.join(__dirname, '..', 'skills', 'qol-code-review', 'scripts', 'ci-pr.cjs'));
 
 const HEAD = '177805ca3d66cc5c451f77336320b891bb3ee303';
 const FIX = '00a59666596d3fd41327ce1d3c0ed14b4c13a1ad';
@@ -43,21 +43,44 @@ test('reviewJson reads the last json fence and withoutJson drops it', () => {
     assert.ok(withoutJson(REVIEW).includes('## Review board result'));
 });
 
-test('renderComment leads with the verdict, tables and the pushed fix, and folds the prose', () => {
-    const body = renderComment({ ...BASE, markdown: REVIEW, fixSha: FIX, fixReply: '- security-1: fixed' });
-    assert.ok(body.startsWith(`${CONFIG.commentMarker}\n## ⛔ Code review: block`));
-    assert.ok(body.includes('Head `177805c` · 1 high · 1 low'));
-    assert.ok(body.includes(`| high | security-1 | [\`a.yml:12\`](https://github.com/o/r/blob/${HEAD}/.github/workflows/a.yml#L12) | Allow only \\| Read |`));
-    assert.ok(body.includes('| low | release-ci-1 | [`b.txt`](https://github.com/o/r/blob/' + HEAD + '/b.txt) | Scan more |'));
-    assert.ok(body.includes(`Pushed [\`00a5966\`](https://github.com/o/r/commit/${FIX}).`));
-    assert.ok(body.includes('<details><summary>Fix notes</summary>'));
+const PATCH = [
+    'diff --git a/.github/workflows/a.yml b/.github/workflows/a.yml',
+    '--- a/.github/workflows/a.yml',
+    '+++ b/.github/workflows/a.yml',
+    '@@ -12,1 +12,1 @@',
+    '-  old',
+    '+  new',
+    '',
+].join('\n');
+const FIX_REPLY = 'Done.\n\n```json\n{"fixes": [{"id": "security-1", "status": "fixed", "note": "Allowlisted tools"}, {"id": "release-ci-1", "status": "skipped", "note": "Low"}]}\n```\n';
+
+test('renderComment draws severity lanes, a fold per finding and the fix diff in the open', () => {
+    const body = renderComment({ ...BASE, markdown: REVIEW, fixSha: FIX, fixReply: FIX_REPLY, patch: PATCH });
+    assert.ok(body.startsWith(`${CONFIG.commentMarker}\n\n## ⛔ Block\n\n1 high · 1 low · 1 fixed in [\`00a5966\`](https://github.com/o/r/commit/${FIX}), 0 left for you.`));
+    assert.ok(body.includes('#### 🔴 High\n\n<details><summary>✅ Allow only | Read</summary>'));
+    assert.ok(body.includes(`[\`a.yml:12\`](https://github.com/o/r/blob/${HEAD}/.github/workflows/a.yml#L12) · \`security-1\``));
+    assert.ok(body.includes('**Fix:** Allowlisted tools'));
+    assert.ok(body.includes('</details>\n\n```diff\n@@ a.yml:12 @@\n-  old\n+  new\n```'));
+    assert.ok(body.includes('#### 🟡 Low\n\n<details><summary>⏭️ Scan more</summary>'));
+    assert.ok(body.includes('<details><summary>Full review</summary>'));
+    assert.ok(body.includes(`<sub>qol-code-review · ${CONFIG.model} · head \`177805c\``));
     assert.ok(!body.includes('```json'));
 });
 
-test('renderComment reports a failed fix and a failed review', () => {
+test('renderComment reports a failed fix, a pass and a failed review', () => {
     assert.ok(renderComment({ ...BASE, markdown: REVIEW, fixOutcome: 'failure' }).includes('Fixing failed, nothing was pushed.'));
-    const failed = renderComment({ ...BASE, markdown: '' });
-    assert.ok(failed.includes('The review of `177805c` failed before it produced a result.'));
+    const pass = REVIEW.replace('"verdict": "block"', '"verdict": "pass"');
+    assert.ok(renderComment({ ...BASE, markdown: pass }).includes('## ✅ Pass\n\n1 high · 1 low · Nothing to fix.'));
+    assert.ok(renderComment({ ...BASE, markdown: '' }).includes('## ❌ Review failed\n\nThe review of `177805c` failed before it produced a result.'));
+});
+
+test('fixStatuses reads the fixes json, or id lines when there is none', () => {
+    assert.deepStrictEqual(fixStatuses(FIX_REPLY).get('security-1'), { status: 'fixed', note: 'Allowlisted tools' });
+    assert.deepStrictEqual(fixStatuses('- **adversarial-2:** skipped, low.').get('adversarial-2'), { status: 'skipped', note: 'low.' });
+});
+
+test('patchHunks keeps each hunk with its file and new line', () => {
+    assert.deepStrictEqual(patchHunks(PATCH), [{ file: '.github/workflows/a.yml', line: 12, lines: ['-  old', '+  new'] }]);
 });
 
 test('renderComment posts a review without a json block as it is', () => {

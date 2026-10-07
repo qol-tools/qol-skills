@@ -320,6 +320,7 @@ Also include a machine-parseable block for downstream CI or follow-up agents:
   "must_fix": [
     {
       "id": "security-1",
+      "title": "One-line claim of what is wrong",
       "severity": "high",
       "confidence": "high",
       "file": "path/to/file",
@@ -327,7 +328,7 @@ Also include a machine-parseable block for downstream CI or follow-up agents:
       "required_action": "Concrete action"
     }
   ],
-  "deferred_followups": [],
+  "deferred_followups": ["same shape as must_fix"],
   "contextual_quick_wins": [],
   "shallow_wrappers": [
     {
@@ -396,4 +397,4 @@ Run it from the checkout of the pull request merged into its base:
 | `check-patch --patch <file> --base <rev> --head <rev>` | the paths git itself stages when it applies the patch to the pull request head in a scratch index, the pull request diff | nothing; exits 1 when the patch touches `.github/` or a file the pull request does not change. Run it from a pristine copy of the skill before pushing a patch the fix session made |
 | `comment --out <dir> --head-sha <sha> --run-url <url> --repo-url <url> [--fix-sha <sha>] [--fix-outcome <outcome>]` | the saved review, the fix reply | `<out>/comment.md` |
 
-`review` and `fix` run Claude Code with permissions skipped and Bash denied; both are denied reads of `/proc`, so the environment and its token stay out of reach, and `fix` is denied writes to the git dir, `RUNNER_TEMP` (where the runner keeps its step command files), the plugin seed and the config dir, so later steps run nothing it wrote. `fix` skips a pull request whose head (the merge commit's second parent) is already the fix commit and any verdict outside `fixVerdicts`, and refuses a patch that touches `.github/` or a file the pull request does not change. `comment` renders the review's json block as the verdict line and tables, folds the prose, and exits 1 when there was no review.
+`review` and `fix` run Claude Code with permissions skipped and Bash denied; both are denied reads of `/proc`, so the environment and its token stay out of reach, and `fix` is denied writes to the git dir, `RUNNER_TEMP` (where the runner keeps its step command files), the plugin seed and the config dir, so later steps run nothing it wrote. `fix` skips a pull request whose head (the merge commit's second parent) is already the fix commit and any verdict outside `fixVerdicts`, and refuses a patch that touches `.github/` or a file the pull request does not change. `comment` renders the review's json block as a verdict line, one lane per severity and a closed fold per finding (where, action, what the fix did), with the fix commit's diff open under each fixed finding; the prose review folds at the end, and it exits 1 when there was no review. The fix session ends with a `fixes` json block, which gives each finding its fixed or skipped mark.
