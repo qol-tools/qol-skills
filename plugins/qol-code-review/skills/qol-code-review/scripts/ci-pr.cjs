@@ -78,6 +78,33 @@ function prepareContext(options) {
     const detector = spawnSync('node', [path.join(__dirname, 'shallow-wrappers.cjs'), '--root', '.', '--diff', path.join(CONTEXT, 'pr.diff'), '--json', path.join(CONTEXT, 'shallow-wrappers.json')], { encoding: 'utf8' });
     if (detector.status !== 0) throw new Error(`shallow-wrappers failed: ${detector.stderr}`);
     fs.writeFileSync(path.join(CONTEXT, 'shallow-wrappers.txt'), detector.stdout);
+    options.followUp = writeFollowUp(options);
+}
+
+function writeFollowUp(options) {
+    if (!isSha(options.since) || !options.previous || !fs.existsSync(options.previous)) return false;
+    try {
+        const files = changedFiles([options.base, options.head]);
+        fs.writeFileSync(path.join(CONTEXT, 'since-last-review.diff'), git(['diff', options.since, `${options.head}^2`, '--', ...files]));
+    } catch (error) {
+        console.log(`full review: ${error.message}`);
+        return false;
+    }
+    fs.copyFileSync(options.previous, path.join(CONTEXT, 'last-review.md'));
+    return true;
+}
+
+function isSha(value) {
+    return /^[0-9a-f]{40}$/.test(String(value || ''));
+}
+
+function sinceLines(options) {
+    if (!options.followUp) return [];
+    return [
+        `- Changes since the last review of \`${options.since.slice(0, 7)}\`: ${CONTEXT}/since-last-review.diff`,
+        `- The last review comment: ${CONTEXT}/last-review.md`,
+        '- This is a follow-up review. Report a finding only on code those changes add or alter, or on code they break. Never repeat a finding of the last review, whether it was fixed, skipped or left open. When the changes hold no defect, the verdict is pass.',
+    ];
 }
 
 function reviewPrompt(options) {
@@ -88,6 +115,7 @@ function reviewPrompt(options) {
         `- PR diff: ${CONTEXT}/pr.diff`,
         `- Shallow-wrapper detector output, already run on that diff: ${CONTEXT}/shallow-wrappers.txt and ${CONTEXT}/shallow-wrappers.json`,
         `- Review checklists: ${CONTEXT}/references/review-checklists.md`,
+        ...sinceLines(options),
         `- Title: ${options.title || ''}`,
         '- Description:',
         String(options.body || '').slice(0, 20000).split('\n').map((line) => `  > ${line}`).join('\n'),
@@ -138,6 +166,7 @@ function review(options) {
     fs.writeFileSync(replyFile, reply);
     const saved = save({ in: replyFile, verdict: lastVerdict(reply), slug: 'pr', outDir: options.out, runId: 'review' }, new Date(), '0000');
     console.log(`verdict: ${saved.verdict}`);
+    if (options.followUp) fs.writeFileSync(path.join(options.out, 'review', 'since.txt'), `${options.since}\n`);
 }
 
 function changedFiles(args) {
@@ -204,6 +233,19 @@ function fix(options) {
     fs.writeFileSync(path.join(dir, 'fix.patch'), patch);
     fs.writeFileSync(path.join(dir, 'message.txt'), `${CONFIG.fixSubject}\n`);
     console.log(`patch: ${path.join(dir, 'fix.patch')}`);
+}
+
+const REVIEWED = /^<!-- reviewed ([0-9a-f]{40}) -->$/m;
+
+function previous(options) {
+    need(options, 'out');
+    const bodies = fs.readFileSync(0, 'utf8').split('\n').filter((line) => line.trim()).map((line) => JSON.parse(line))
+        .filter((comment) => String(comment.body || '').startsWith(CONFIG.commentMarker));
+    const last = bodies.filter((comment) => REVIEWED.test(comment.body)).pop();
+    if (!last) return;
+    fs.mkdirSync(options.out, { recursive: true });
+    fs.writeFileSync(path.join(options.out, 'previous.md'), last.body);
+    console.log(last.body.match(REVIEWED)[1]);
 }
 
 function reviewJson(markdown) {
@@ -277,7 +319,7 @@ function diffBlock(hunks) {
     return ['```diff', ...shown, '```'].join('\n');
 }
 
-function renderComment({ markdown, headSha, runUrl, repoUrl, fixSha, fixOutcome, fixRefused, fixReply, patch, withDiffs = true }) {
+function renderComment({ markdown, headSha, runUrl, repoUrl, since, fixSha, fixOutcome, fixRefused, fixReply, patch, withDiffs = true }) {
     const short = (sha) => String(sha).slice(0, 7);
     const data = markdown ? reviewJson(markdown) : null;
     if (!data || !data.verdict) {
@@ -315,7 +357,8 @@ function renderComment({ markdown, headSha, runUrl, repoUrl, fixSha, fixOutcome,
         return [`<details><summary>${title}${['fixed', 'skipped'].includes(status) ? ` <code>${status}</code>` : ''}</summary>\n\n${body}\n\n</details>`, diffBlock(byId.get(f.id) || []) || snippet(f)];
     };
     const [kind, verdict] = VERDICTS[data.verdict] || ['NOTE', data.verdict];
-    const parts = [CONFIG.commentMarker, alert(kind, [`**${verdict}** · ${counts}`, outcome])];
+    const scope = isSha(since) ? ` · changes since \`${short(since)}\`` : '';
+    const parts = [CONFIG.commentMarker, `<!-- reviewed ${headSha} -->`, alert(kind, [`**${verdict}** · ${counts}${scope}`, outcome])];
     for (const [key, label] of LANES) {
         const lane = findings.filter((f) => f.severity === key);
         if (lane.length) parts.push(`#### ${label} · ${lane.length}`, ...lane.flatMap(item));
@@ -324,7 +367,7 @@ function renderComment({ markdown, headSha, runUrl, repoUrl, fixSha, fixOutcome,
     parts.push(`<details><summary>Full review</summary>\n\n${withoutJson(markdown)}\n\n</details>`);
     parts.push(`<sub>qol-code-review · ${CONFIG.model} · head \`${short(headSha)}\` · [run](${runUrl})</sub>`);
     const body = `${parts.filter(Boolean).join('\n\n')}\n`;
-    return body.length > COMMENT_LIMIT && withDiffs ? renderComment({ markdown, headSha, runUrl, repoUrl, fixSha, fixOutcome, fixRefused, fixReply, patch, withDiffs: false }) : body;
+    return body.length > COMMENT_LIMIT && withDiffs ? renderComment({ markdown, headSha, runUrl, repoUrl, since, fixSha, fixOutcome, fixRefused, fixReply, patch, withDiffs: false }) : body;
 }
 
 function comment(options) {
@@ -334,6 +377,7 @@ function comment(options) {
     const body = renderComment({
         markdown,
         headSha: options.headSha,
+        since: read(path.join(options.out, 'review', 'since.txt')).trim(),
         runUrl: options.runUrl,
         repoUrl: options.repoUrl,
         fixSha: options.fixSha,
@@ -356,6 +400,7 @@ function run(argv) {
         review,
         fix,
         'check-patch': checkPatch,
+        previous,
         comment,
     };
     if (!commands[options.command]) throw new Error(`usage: ci-pr.cjs ${Object.keys(commands).join('|')} [--flag value ...]`);

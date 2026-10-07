@@ -56,7 +56,7 @@ const FIX_REPLY = 'Done.\n\n```json\n{"fixes": [{"id": "security-1", "status": "
 
 test('renderComment draws severity lanes, a fold per finding and the fix diff in the open', () => {
     const body = renderComment({ ...BASE, markdown: REVIEW, fixSha: FIX, fixReply: FIX_REPLY, patch: PATCH });
-    assert.ok(body.startsWith(`${CONFIG.commentMarker}\n\n> [!CAUTION]\n> **Block** · 1 high · 1 low\n> 1 fixed in [\`00a5966\`](https://github.com/o/r/commit/${FIX}), 0 left for you.`));
+    assert.ok(body.startsWith(`${CONFIG.commentMarker}\n\n<!-- reviewed ${HEAD} -->\n\n> [!CAUTION]\n> **Block** · 1 high · 1 low\n> 1 fixed in [\`00a5966\`](https://github.com/o/r/commit/${FIX}), 0 left for you.`));
     assert.ok(body.includes('#### High · 1\n\n<details><summary>Allow only | Read <code>fixed</code></summary>'));
     assert.ok(body.includes(`[\`a.yml:12\`](https://github.com/o/r/blob/${HEAD}/.github/workflows/a.yml#L12) · \`security-1\``));
     assert.ok(body.includes('**Fix:** Allowlisted tools'));
@@ -164,4 +164,30 @@ test('reviewReply keeps the review message, not a later recap or a subagent mess
     assert.strictEqual(reply, REVIEW);
     assert.strictEqual(reviewReply(line({ type: 'result', subtype: 'error_max_turns', result: 'x' })).reply, '');
     assert.strictEqual(reviewReply(line({ type: 'result', subtype: 'success', result: 'plain' })).reply, 'plain');
+});
+
+test('a follow-up comment names the commit it reviewed from', () => {
+    const body = renderComment({ ...BASE, markdown: REVIEW, since: FIX });
+    assert.ok(body.includes('> **Block** · 1 high · 1 low · changes since `00a5966`'));
+    assert.ok(!renderComment({ ...BASE, markdown: REVIEW, since: 'nope' }).includes('changes since'));
+});
+
+test('previous picks the last review comment that recorded its head', () => {
+    const fs = require('node:fs');
+    const os = require('node:os');
+    const { spawnSync } = require('node:child_process');
+    const out = fs.mkdtempSync(path.join(os.tmpdir(), 'ci-pr-previous-'));
+    const lines = [
+        { body: `${CONFIG.commentMarker}\n<!-- reviewed ${HEAD} -->\nfirst` },
+        { body: 'someone else' },
+        { body: `${CONFIG.commentMarker}\n<!-- reviewed ${FIX} -->\nsecond` },
+        { body: `${CONFIG.commentMarker}\nfailed review` },
+    ].map((c) => JSON.stringify(c)).join('\n');
+    const script = path.join(__dirname, '..', 'skills', 'qol-code-review', 'scripts', 'ci-pr.cjs');
+    const run = spawnSync('node', [script, 'previous', '--out', out], { input: lines, encoding: 'utf8' });
+    assert.strictEqual(run.stdout.trim(), FIX);
+    assert.ok(fs.readFileSync(path.join(out, 'previous.md'), 'utf8').endsWith('second'));
+    const none = spawnSync('node', [script, 'previous', '--out', out], { input: '', encoding: 'utf8' });
+    assert.strictEqual(none.stdout.trim(), '');
+    fs.rmSync(out, { recursive: true, force: true });
 });
