@@ -127,8 +127,21 @@ function changedFiles(args) {
     return git(['diff', '--no-renames', '--name-only', ...args]).split('\n').filter(Boolean);
 }
 
-function patchFiles(patch) {
-    return [...patch.matchAll(/^diff --git a\/(.+?) b\/(.+)$/gm)].flatMap(([, from, to]) => [from, to]);
+function patchFiles(patchFile) {
+    if (/^ (rename|copy) /m.test(git(['apply', '--summary', patchFile]))) throw new Error('the fix patch renames or copies a file, which the fix never produces');
+    const tokens = git(['apply', '--numstat', '-z', patchFile]).split('\0');
+    const files = [];
+    for (let index = 0; index < tokens.length; index += 1) {
+        const [, , name] = tokens[index].split('\t');
+        if (name === undefined) continue;
+        if (name) {
+            files.push(name);
+        } else {
+            files.push(tokens[index + 1], tokens[index + 2]);
+            index += 2;
+        }
+    }
+    return files;
 }
 
 function refuseOutside(files, options) {
@@ -139,7 +152,7 @@ function refuseOutside(files, options) {
 
 function checkPatch(options) {
     need(options, 'patch', 'base', 'head');
-    refuseOutside(patchFiles(fs.readFileSync(options.patch, 'utf8')), options);
+    refuseOutside(patchFiles(options.patch), options);
     console.log('patch stays inside the pull request diff');
 }
 
@@ -167,7 +180,7 @@ function fix(options) {
     console.log(reply);
     git(['add', '-A']);
     refuseOutside(changedFiles(['--cached']), options);
-    const patch = git(['diff', '--cached', '--binary']);
+    const patch = git(['diff', '--cached', '--binary', '--no-renames']);
     if (!patch) return;
     fs.writeFileSync(path.join(dir, 'fix.patch'), patch);
     fs.writeFileSync(path.join(dir, 'message.txt'), `${CONFIG.fixSubject}\n`);

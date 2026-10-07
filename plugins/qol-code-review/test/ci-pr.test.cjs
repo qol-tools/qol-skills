@@ -81,7 +81,14 @@ test('the sessions cannot read /proc and the fix cannot write where later steps 
     }
 });
 
-test('patchFiles lists both sides of every file in a patch', () => {
-    const patch = 'diff --git a/src/x.rs b/src/x.rs\n--- a/src/x.rs\n+++ b/src/x.rs\ndiff --git a/old.txt b/.github/new.yml\n';
-    assert.deepStrictEqual(patchFiles(patch), ['src/x.rs', 'src/x.rs', 'old.txt', '.github/new.yml']);
+test('patchFiles reads paths the way git apply does and refuses renames', () => {
+    const dir = require('node:fs').mkdtempSync(path.join(require('node:os').tmpdir(), 'ci-pr-patch-'));
+    const file = path.join(dir, 'fix.patch');
+    require('node:fs').writeFileSync(file, [
+        'diff --git a/src/x.rs b/src/x.rs', '--- a/src/x.rs', '+++ b/src/x.rs', '@@ -0,0 +1 @@', '+a',
+        'diff --git a/old.txt b/old.txt', 'deleted file mode 100644', '--- a/old.txt', '+++ /dev/null', '@@ -1 +0,0 @@', '-a', '',
+    ].join('\n'));
+    assert.deepStrictEqual(patchFiles(file), ['src/x.rs', 'old.txt']);
+    require('node:fs').writeFileSync(file, ['diff --git a/old.txt b/.github/new.yml', 'similarity index 100%', 'rename from old.txt', 'rename to .github/new.yml', ''].join('\n'));
+    assert.throws(() => patchFiles(file), /renames or copies/);
 });
