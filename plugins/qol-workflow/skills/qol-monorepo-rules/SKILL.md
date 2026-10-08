@@ -1,6 +1,6 @@
 ---
 name: qol-monorepo-rules
-description: Always-on delivery rules for work inside qol-tools repositories - PR opt-in, auto-merge on every PR, watching every PR until it merges, standards evolution, guest-VM verification, and the build/test gate before reporting done. Autoinjected in full at session start and after every compaction in repos that list it with `vs autoinject`; these rules must fire without a topic trigger.
+description: Always-on delivery rules for work inside qol-tools repositories - every change on a worktree branch delivered as a PR, auto-merge on every PR, watching every PR until it merges, standards evolution, guest-VM verification, and the build/test gate before reporting done. Autoinjected in full at session start and after every compaction in repos that list it with `vs autoinject`; these rules must fire without a topic trigger.
 ---
 
 # qol-tools delivery rules
@@ -8,11 +8,13 @@ description: Always-on delivery rules for work inside qol-tools repositories - P
 These are unconditional. They previously lived in the monorepo's root `CLAUDE.md`,
 which only Claude Code loaded. They are autoinjected at session start and after every compaction, in repos that list them with `vs autoinject`, so every agent gets them.
 
-## PRs are opt-in. Default is commit-direct-to-main.
+## Every change goes through a worktree and a pull request
 
-Default all work (tests, refactors, fixes, features, configs, docs) direct to
-`main`. Open a PR, issue, or ADR **only when explicitly asked**; never offer one
-as a fallback. Mechanics: `qol-workflow:git-trees`.
+Make all work (tests, refactors, fixes, features, configs, skills, hooks, docs)
+on a branch in its own worktree and deliver it as a pull request. Never commit
+to `main`, in the main clone or anywhere else, unless the user explicitly asks
+for a direct-to-main change or approves one when asked. Issues and ADRs remain
+opt-in. Mechanics: `qol-workflow:git-trees`.
 
 ## Every pull request merges itself
 
@@ -76,6 +78,7 @@ Build, test, fmt, and clippy with real command output before reporting done or
 committing. Never assume. Paste the command and its result; a type-check passing
 is not evidence the feature works.
 
-## No pushing unless asked
+## No pushing to main unless asked
 
-Commit locally; push only when explicitly told.
+Pushing the worktree branch to open or update its pull request is part of the
+delivery and needs no separate ask. Push to `main` only when explicitly told.
