@@ -12,6 +12,7 @@ test("only prompts starting with qols are intercepted", () => {
 test("trailing named flags split off the message in any order", () => {
   const cases = [
     ["qols fork Do this task", { verb: "fork", message: "Do this task", flags: [] }],
+    ["qols test try it --harness pi", { verb: "test", message: "try it", flags: ["--tool", "pi"] }],
     [
       "qols fork Do this --effort max --harness cc",
       { verb: "fork", message: "Do this", flags: ["--effort", "max", "--tool", "cc"] },
@@ -36,9 +37,12 @@ test("a bare, unknown or empty command shows help", () => {
   }
 });
 
-test("fork and bridge map onto the qol sessions CLI", () => {
+test("fork, test and bridge map onto the qol sessions CLI", () => {
   assert.deepEqual(commandFor({ verb: "fork", message: "m", flags: ["--surface", "win"] }, "/repo"), [
     "sessions", "fork", "--cwd", "/repo", "--brief", "m", "--surface", "win",
+  ]);
+  assert.deepEqual(commandFor({ verb: "test", message: "m", flags: [] }, "/repo"), [
+    "sessions", "fork", "--cwd", "/repo", "--brief", "m", "--dry-run",
   ]);
   assert.deepEqual(commandFor({ verb: "bridge", message: "m", flags: [] }, "/repo"), [
     "sessions", "spawn", "--cwd", "/repo", "--task", "m", "--background",

@@ -8,7 +8,9 @@ const FLAGS = { surface: "--surface", harness: "--tool", model: "--model", effor
 const USAGE = [
   "qols fork <problem> [--harness H] [--model M] [--effort E] [--surface S]",
   "qols bridge <task> [--harness H] [--model M] [--effort E] [--surface S]",
-  "fork: detached architect that owns the problem; bridge: lane that reports back here",
+  "qols test <problem> [--harness H] [--model M] [--effort E] [--surface S]",
+  "fork: detached architect that owns the problem; bridge: lane that reports back here;",
+  "test: a fork whose prompt is typed but not submitted, so the launch costs no tokens",
   "values may be [aliases] from sessions.toml; left out, sessions.toml defaults apply",
 ].join("\n");
 
@@ -17,7 +19,7 @@ export function parsePrompt(prompt) {
   if (match === null) return null;
   const tokens = (match[1] ?? "").trim().split(/\s+/).filter(Boolean);
   const verb = tokens.shift()?.toLowerCase();
-  if (verb !== "fork" && verb !== "bridge") return { verb: "help" };
+  if (verb !== "fork" && verb !== "bridge" && verb !== "test") return { verb: "help" };
   const flags = [];
   while (tokens.length >= 2 && tokens.at(-2).startsWith("--")) {
     const name = tokens.at(-2).slice(2);
@@ -33,12 +35,14 @@ export function parsePrompt(prompt) {
 
 export function commandFor({ verb, message, flags }, cwd) {
   if (verb === "fork") return ["sessions", "fork", "--cwd", cwd, "--brief", message, ...flags];
+  if (verb === "test") return ["sessions", "fork", "--cwd", cwd, "--brief", message, "--dry-run", ...flags];
   return ["sessions", "spawn", "--cwd", cwd, "--task", message, "--background", ...flags];
 }
 
 export function summarize(verb, outcome) {
   const launch = [outcome.tool, outcome.model, outcome.effort, outcome.surface].filter(Boolean).join(" ");
   if (verb === "fork") return `qols fork: ${outcome.key} (${launch})`;
+  if (verb === "test") return `qols test: ${outcome.key} (${launch}); the prompt is typed but not submitted`;
   return `qols bridge: ${outcome.key} (${launch}); its report arrives here as the next prompt`;
 }
 
