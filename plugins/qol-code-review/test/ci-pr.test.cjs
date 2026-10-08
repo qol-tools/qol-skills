@@ -4,7 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const path = require('node:path');
 
-const { reviewReply, appliedFiles, refuseOutside, deniedReads, deniedWrites, parseArgs, lastVerdict, reviewJson, withoutJson, fixStatuses, patchHunks, renderComment, renderQueueComment, jobErrors, logTail, CONFIG } = require(path.join(__dirname, '..', 'skills', 'qol-code-review', 'scripts', 'ci-pr.cjs'));
+const { reviewReply, appliedFiles, refuseOutside, deniedReads, deniedWrites, parseArgs, lastVerdict, reviewJson, withoutJson, fixStatuses, patchHunks, renderComment, renderQueueComment, jobErrors, logTail, narrate, claude, CONFIG } = require(path.join(__dirname, '..', 'skills', 'qol-code-review', 'scripts', 'ci-pr.cjs'));
 
 const HEAD = '177805ca3d66cc5c451f77336320b891bb3ee303';
 const FIX = '00a59666596d3fd41327ce1d3c0ed14b4c13a1ad';
@@ -223,4 +223,37 @@ test('renderQueueComment cautions until a fix is pushed', () => {
     assert.ok(fixed.includes('```diff\n@@ a.yml:12 @@\n-  old\n+  new\n```'));
     assert.ok(fixed.includes('<details><summary>Fix session</summary>\n\nShortened nothing.\n\n</details>'));
     assert.ok(fixed.includes(`<sub>qol-code-review · ${CONFIG.queueFixModel} · head \`177805c\``));
+});
+
+test('narrate prints the conversation and cuts tool calls and results to one short line', () => {
+    const event = (e) => JSON.stringify(e);
+    assert.deepStrictEqual(narrate(event({ type: 'system', subtype: 'init', session_id: 's1', model: 'm' })), ['session s1 on m']);
+    assert.deepStrictEqual(narrate(event({ type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'text', text: 'Reading.\nNow.' }, { type: 'tool_use', name: 'Read', input: { file_path: 'x'.repeat(300) } }] } })),
+        ['Reading.', 'Now.', `> Read {"file_path":"${'x'.repeat(186)}...`]);
+    assert.deepStrictEqual(narrate(event({ type: 'user', parent_tool_use_id: 't1', message: { content: [{ type: 'tool_result', is_error: true, content: [{ type: 'text', text: 'no\nsuch file' }] }] } })),
+        ['  [agent]   error: no such file']);
+    assert.deepStrictEqual(narrate(event({ type: 'result', subtype: 'success', num_turns: 3, duration_ms: 61400, total_cost_usd: 0.456 })), ['result: success, 3 turns, 61 s, $0.46']);
+    assert.deepStrictEqual(narrate('not json'), ['not json']);
+});
+
+test('claude streams each event to the log as it arrives and returns the whole stream', { skip: process.platform === 'win32' }, async () => {
+    const fs = require('node:fs');
+    const os = require('node:os');
+    const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'ci-pr-claude-'));
+    const lines = [{ type: 'assistant', message: { content: [{ type: 'text', text: 'first' }] } }, { type: 'result', subtype: 'success', num_turns: 1, duration_ms: 1000, total_cost_usd: 0 }].map((e) => JSON.stringify(e));
+    fs.writeFileSync(path.join(bin, 'claude'), `#!/bin/sh\necho '${lines[0]}'\nsleep 0.2\necho '${lines[1]}'\n`, { mode: 0o755 });
+    const logged = [];
+    const { log } = console;
+    const savedPath = process.env.PATH;
+    console.log = (text) => logged.push([text, Date.now()]);
+    process.env.PATH = `${bin}${path.delimiter}${savedPath}`;
+    try {
+        const raw = await claude('prompt', []);
+        assert.strictEqual(raw, lines.join('\n'));
+        assert.deepStrictEqual(logged.map(([text]) => text), ['first', 'result: success, 1 turns, 1 s, $0.00']);
+        assert.ok(logged[1][1] - logged[0][1] >= 150, 'the first line was logged before the process ended');
+    } finally {
+        console.log = log;
+        process.env.PATH = savedPath;
+    }
 });

@@ -3,7 +3,9 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
+const { spawn, spawnSync } = require('node:child_process');
+const { once } = require('node:events');
+const readline = require('node:readline');
 const { save } = require('./save-review.cjs');
 
 const SKILL = path.resolve(__dirname, '..');
@@ -36,15 +38,56 @@ function git(args, opts = {}) {
     return result.stdout;
 }
 
-function claude(prompt, args, { env = {}, model = CONFIG.model, effort = CONFIG.effort } = {}) {
-    const result = spawnSync('claude', ['-p', prompt, '--model', model, '--effort', effort, ...args], {
-        encoding: 'utf8',
-        maxBuffer: 256 * 1024 * 1024,
+const TOOL_TEXT = 200;
+
+function oneLine(value) {
+    const text = (typeof value === 'string' ? value : JSON.stringify(value) ?? '').replace(/\s+/g, ' ').trim();
+    return text.length > TOOL_TEXT ? `${text.slice(0, TOOL_TEXT)}...` : text;
+}
+
+function narrate(line) {
+    let event;
+    try {
+        event = JSON.parse(line);
+    } catch {
+        return [line];
+    }
+    const prefix = event.parent_tool_use_id ? '  [agent] ' : '';
+    const blocks = Array.isArray(event.message?.content) ? event.message.content : [];
+    if (event.type === 'system' && event.subtype === 'init') return [`session ${event.session_id} on ${event.model}`];
+    if (event.type === 'assistant') {
+        return blocks.flatMap((block) => {
+            if (block.type === 'text' && block.text.trim()) return block.text.trim().split('\n').map((text) => `${prefix}${text}`);
+            if (block.type === 'tool_use') return [`${prefix}> ${block.name} ${oneLine(block.input)}`];
+            return [];
+        });
+    }
+    if (event.type === 'user') {
+        return blocks.filter((block) => block.type === 'tool_result').map((block) => {
+            const content = Array.isArray(block.content) ? block.content.map((part) => part.text || '').join(' ') : block.content;
+            return `${prefix}  ${block.is_error ? 'error: ' : ''}${oneLine(content)}`;
+        });
+    }
+    if (event.type === 'result') return [`result: ${event.subtype}, ${event.num_turns} turns, ${Math.round((event.duration_ms || 0) / 1000)} s, $${(event.total_cost_usd || 0).toFixed(2)}`];
+    return [];
+}
+
+async function claude(prompt, args, { env = {}, model = CONFIG.model, effort = CONFIG.effort } = {}) {
+    const child = spawn('claude', ['-p', prompt, '--model', model, '--effort', effort, ...args], {
         stdio: ['ignore', 'pipe', 'inherit'],
         env: { ...process.env, CLAUDE_CODE_SYNC_PLUGIN_INSTALL: '1', DISABLE_AUTOUPDATER: '1', ...env },
     });
-    if (result.error) throw result.error;
-    return result.stdout;
+    const lines = [];
+    const reader = readline.createInterface({ input: child.stdout, crlfDelay: Infinity });
+    reader.on('line', (line) => {
+        lines.push(line);
+        for (const text of narrate(line)) console.log(text);
+    });
+    const failed = once(child, 'error').then(([error]) => {
+        throw error;
+    });
+    await Promise.race([Promise.all([once(reader, 'close'), once(child, 'close')]), failed]);
+    return lines.join('\n');
 }
 
 function deniedReads() {
@@ -147,11 +190,11 @@ function lastVerdict(markdown) {
     return found.length ? found[found.length - 1][1] : 'unknown';
 }
 
-function review(options) {
+async function review(options) {
     need(options, 'pr', 'base', 'head', 'out');
     fs.mkdirSync(options.out, { recursive: true });
     prepareContext(options);
-    const raw = claude(reviewPrompt(options), [
+    const raw = await claude(reviewPrompt(options), [
         '--settings', writeSettings(options.out),
         '--agents', writeAgents(options.out),
         '--dangerously-skip-permissions',
@@ -197,7 +240,7 @@ function checkPatch(options) {
     console.log('patch stays inside the pull request diff');
 }
 
-function fix(options) {
+async function fix(options) {
     need(options, 'base', 'head', 'out');
     const reviewDir = path.join(options.out, 'review');
     const verdict = fs.existsSync(path.join(reviewDir, 'report.json')) ? JSON.parse(fs.readFileSync(path.join(reviewDir, 'report.json'), 'utf8')).status : 'missing';
@@ -210,20 +253,19 @@ function fix(options) {
         return;
     }
     const prompt = `${fs.readFileSync(path.join(reviewDir, 'review.md'), 'utf8')}\n${fs.readFileSync(path.join(CI, 'fix-prompt.md'), 'utf8')}`;
-    fixSession(options, prompt, { subject: CONFIG.fixSubject });
+    await fixSession(options, prompt, { subject: CONFIG.fixSubject });
 }
 
-function fixSession(options, prompt, { subject, model, effort }) {
+async function fixSession(options, prompt, { subject, model, effort }) {
     const dir = path.join(options.out, 'fix');
     fs.mkdirSync(dir, { recursive: true });
-    const { reply } = reviewReply(claude(prompt, [
+    const { reply } = reviewReply(await claude(prompt, [
         '--settings', writeSettings(options.out),
         '--dangerously-skip-permissions',
         '--disallowedTools', ...CONFIG.fixDeniedTools, ...deniedReads(), ...deniedWrites(),
         '--output-format', 'stream-json', '--verbose',
     ], { model, effort }), 'fixes');
     fs.writeFileSync(path.join(dir, 'reply.md'), reply);
-    console.log(reply);
     git(['add', '-A']);
     try {
         refuseOutside(changedFiles(['--cached']), options);
@@ -305,7 +347,7 @@ function readQueue(out) {
     return out && fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : null;
 }
 
-function queueFix(options) {
+async function queueFix(options) {
     need(options, 'base', 'head', 'out');
     const queue = readQueue(options.out);
     if (!queue) throw new Error('queue-fix needs the context queue-context writes');
@@ -329,7 +371,7 @@ function queueFix(options) {
         '',
         fs.readFileSync(path.join(CI, 'queue-fix-prompt.md'), 'utf8'),
     ].join('\n');
-    fixSession(options, prompt, { subject: CONFIG.queueFixSubject, model: CONFIG.queueFixModel, effort: CONFIG.queueFixEffort });
+    await fixSession(options, prompt, { subject: CONFIG.queueFixSubject, model: CONFIG.queueFixModel, effort: CONFIG.queueFixEffort });
 }
 
 const REVIEWED = /^<!-- reviewed ([0-9a-f]{40}) -->\n/;
@@ -533,7 +575,7 @@ function comment(options) {
     if (!markdown.trim()) process.exitCode = 1;
 }
 
-function run(argv) {
+async function run(argv) {
     const options = parseArgs(argv);
     const commands = {
         plugins: () => console.log(CONFIG.plugins.join('\n')),
@@ -547,16 +589,14 @@ function run(argv) {
         comment,
     };
     if (!commands[options.command]) throw new Error(`usage: ci-pr.cjs ${Object.keys(commands).join('|')} [--flag value ...]`);
-    commands[options.command](options);
+    await commands[options.command](options);
 }
 
 if (require.main === module) {
-    try {
-        run(process.argv.slice(2));
-    } catch (error) {
+    run(process.argv.slice(2)).catch((error) => {
         console.error(error.message);
         process.exitCode = 1;
-    }
+    });
 }
 
-module.exports = { reviewReply, appliedFiles, refuseOutside, deniedReads, deniedWrites, parseArgs, lastVerdict, reviewJson, withoutJson, fixStatuses, patchHunks, renderComment, renderQueueComment, jobErrors, logTail, CONFIG };
+module.exports = { reviewReply, appliedFiles, refuseOutside, deniedReads, deniedWrites, parseArgs, lastVerdict, reviewJson, withoutJson, fixStatuses, patchHunks, renderComment, renderQueueComment, jobErrors, logTail, narrate, claude, CONFIG };
