@@ -10,6 +10,7 @@ const { spawnSync } = require('node:child_process');
 const HOOK = path.join(__dirname, '..', 'bin', 'commit-deny-coauthor.cjs');
 const {
     COMMIT_INVOCATION,
+    PR_INVOCATION,
     findOffendingPattern,
     extractFileArg,
 } = require('../bin/commit-deny-coauthor.cjs');
@@ -115,6 +116,50 @@ test('end-to-end: ignores non-commit Bash', () => {
     const r = run({
         tool_name: 'Bash',
         tool_input: { command: 'echo "Co-Authored-By: Claude"' },
+    });
+    assert.equal(r.exitCode, 0);
+});
+
+test('PR_INVOCATION matches pull request body shapes', () => {
+    assert.ok(PR_INVOCATION.test('gh pr create --title "fix: x" --body "y"'));
+    assert.ok(PR_INVOCATION.test('cd /x && gh pr edit 80 --body-file b.md'));
+    assert.ok(PR_INVOCATION.test('gh pr comment 80 --body "y"'));
+    assert.ok(!PR_INVOCATION.test('gh pr view 80'));
+    assert.ok(!PR_INVOCATION.test('gh pr list'));
+});
+
+test('extractFileArg parses --body-file', () => {
+    assert.equal(extractFileArg('gh pr create --body-file body.md'), 'body.md');
+    assert.equal(extractFileArg('gh pr edit 80 --body-file=body.md'), 'body.md');
+});
+
+test('end-to-end: blocks gh pr create body with attribution', () => {
+    const r = run({
+        tool_name: 'Bash',
+        tool_input: {
+            command: 'gh pr create --title "fix: x" --body "Fixes it.\n\n\u{1F916} Generated with [Claude Code](https://claude.com/claude-code)"',
+        },
+    });
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /BLOCKED/);
+});
+
+test('end-to-end: blocks gh pr edit body file with attribution', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qol-pr-body-'));
+    const body = path.join(dir, 'body.md');
+    fs.writeFileSync(body, 'Fixes it.\n\nCo-Authored-By: Claude <noreply@anthropic.com>\n');
+    const r = run({
+        tool_name: 'Bash',
+        tool_input: { command: `gh pr edit 80 --body-file ${body}` },
+    });
+    fs.rmSync(dir, { recursive: true, force: true });
+    assert.equal(r.exitCode, 2);
+});
+
+test('end-to-end: lets a clean gh pr create through', () => {
+    const r = run({
+        tool_name: 'Bash',
+        tool_input: { command: 'gh pr create --title "fix: x" --body "Fixes the focus return."' },
     });
     assert.equal(r.exitCode, 0);
 });

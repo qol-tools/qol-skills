@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 /*
- * PreToolUse hook (Bash matcher): block any `git commit` whose message
- * contains AI attribution (Co-Authored-By: Claude, "Generated with Claude
- * Code", etc.).
+ * PreToolUse hook (Bash matcher): block any `git commit` message and any
+ * `gh pr create|edit|comment` body that contains AI attribution
+ * (Co-Authored-By: Claude, "Generated with Claude Code", etc.).
  *
  * Fuzzy patterns are intentionally aggressive — false positives are cheap
  * (re-write the message), false negatives are the real failure mode.
  *
  * Scans:
  *   - the bash command itself (catches -m "..." and HEREDOCs inline)
- *   - the file referenced by -F / --file (if present and readable)
+ *   - the file referenced by -F / --file / --body-file (if present and readable)
  */
 
 'use strict';
@@ -17,6 +17,7 @@
 const fs = require('node:fs');
 
 const COMMIT_INVOCATION = /(^|[\s;&|`])git\s+([a-z-]+\s+)*commit(\s|$)/;
+const PR_INVOCATION = /(^|[\s;&|`(])gh\s+pr\s+(create|edit|comment)(\s|$)/;
 
 const ATTRIBUTION_PATTERNS = [
     /co[\s_-]*authored?[\s_-]*by/i,
@@ -36,7 +37,7 @@ function readStdin() {
 }
 
 function extractFileArg(cmd) {
-    const match = cmd.match(/(?:^|\s)(?:-F|--file)(?:=|\s)(\S+)/);
+    const match = cmd.match(/(?:^|\s)(?:-F|--file|--body-file)(?:=|\s)(\S+)/);
     return match ? match[1] : null;
 }
 
@@ -61,17 +62,18 @@ function findOffendingPattern(haystack) {
 
 function emitBlockMessage() {
     process.stderr.write(
-        `git commit BLOCKED by qol-workflow:commit-deny-coauthor hook.
+        `git commit / gh pr BLOCKED by qol-workflow:commit-deny-coauthor hook.
 
-The commit message contains AI / Claude / Anthropic attribution
+The commit message or pull request body contains AI / Claude / Anthropic attribution
 (Co-Authored-By, "Generated with Claude Code", noreply@anthropic.com,
 \u{1F916} Generated, etc.).
 
 qol-tools rule (plugin:qol-workflow:commit skill):
-  NEVER add Co-Authored-By or any Anthropic attribution to commits.
+  NEVER add Co-Authored-By or any Anthropic attribution to commits or
+  pull requests.
   This has been stated repeatedly by the author. It is not negotiable.
 
-Re-attempt the commit with a clean message — subject + optional body only.
+Re-attempt with a clean message — subject + optional body only.
 No trailers. No emoji-attribution footer.
 `,
     );
@@ -93,7 +95,7 @@ function main() {
 
     const cmd = (payload.tool_input && payload.tool_input.command) || '';
     if (!cmd) return 0;
-    if (!COMMIT_INVOCATION.test(cmd)) return 0;
+    if (!COMMIT_INVOCATION.test(cmd) && !PR_INVOCATION.test(cmd)) return 0;
 
     const haystack = buildHaystack(cmd);
     if (findOffendingPattern(haystack)) {
@@ -105,6 +107,7 @@ function main() {
 
 module.exports = {
     COMMIT_INVOCATION,
+    PR_INVOCATION,
     ATTRIBUTION_PATTERNS,
     findOffendingPattern,
     extractFileArg,
