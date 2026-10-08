@@ -275,6 +275,10 @@ function queueContext(options) {
     need(options, 'runId', 'repo', 'out');
     const api = (route) => JSON.parse(gh([`repos/${options.repo}/${route}`]));
     const run = api(`actions/runs/${options.runId}`);
+    if (run.event !== 'merge_group' || run.conclusion !== 'failure') {
+        console.error(`run ${options.runId} is a ${run.event} run that ended ${run.conclusion}, nothing to fix`);
+        return;
+    }
     const pr = Number(String(run.head_branch || '').match(QUEUE_BRANCH)?.[1]);
     if (!pr) {
         console.error(`no pull request in ${run.head_branch}`);
