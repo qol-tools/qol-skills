@@ -401,3 +401,39 @@ x11rb = "0.13"
     assert.equal(r.exitCode, 2);
     assert.match(r.stderr, /x11rb/);
 });
+
+test('blocks platform crate in a qol-monorepo Cargo.toml', () => {
+    const r = run({
+        tool_name: 'Write',
+        tool_input: {
+            file_path: '/x/Git/qol-monorepo/plugins/foo/Cargo.toml',
+            content: `[dependencies]
+x11rb = "0.13"
+`,
+        },
+    });
+    assert.equal(r.exitCode, 2);
+});
+
+test('passes non-reusable release workflow with a linux-only cargo job', () => {
+    const r = run({
+        tool_name: 'Write',
+        tool_input: {
+            file_path: '/x/Git/qol-monorepo/.github/workflows/plugin-version.yml',
+            content: `on:
+  workflow_dispatch:
+
+jobs:
+  linux_candidate:
+    runs-on: ubuntu-latest
+    env:
+      RUSTFLAGS: -D warnings
+    steps:
+      - name: Read every plugin.toml
+        run: python3 plan.py
+      - run: cargo build --release
+`,
+        },
+    });
+    assert.equal(r.exitCode, 0);
+});

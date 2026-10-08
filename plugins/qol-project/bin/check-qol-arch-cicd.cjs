@@ -11,16 +11,16 @@
  *
  * Active on Edit/Write/MultiEdit/NotebookEdit of:
  *
- *   1. .github/workflows/*.yml under any /qol-tools/ path — flags:
+ *   1. .github/workflows/*.yml under any /qol-<name>/ path — flags:
  *      a. cargo (build|test|clippy|deb|run) runs that lack
  *         RUSTFLAGS=-D warnings in the step or job env.
  *      b. Hardcoded `runs-on: ubuntu-latest` in any reusable plugin
- *         workflow that consumes plugin.toml (matrix should derive from
+ *         (workflow_call) workflow that consumes plugin.toml (matrix should derive from
  *         plugin.toml platforms).
  *      c. cargo invocations in workflows whose repo root has
  *         qol-config = { path = "../qol-config" } in Cargo.toml but where
  *         the workflow does not check out qol-tools/qol-config as a sibling.
- *   2. Cargo.toml under any /qol-tools/ path — flags top-level [dependencies] entries for crates
+ *   2. Cargo.toml under any /qol-<name>/ path — flags top-level [dependencies] entries for crates
  *      that are known platform-specific. These belong in
  *      [target.'cfg(target_os = "...")'.dependencies].
  *
@@ -39,7 +39,7 @@ const path = require('node:path');
 
 const INSPECTED_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 
-const QOL_TOOLS_PATH_RE = /[\\/]qol-tools[\\/]/;
+const QOL_TOOLS_PATH_RE = /[\\/]qol-[^\\/]+[\\/]/;
 const WORKFLOW_PATH_RE = /[\\/]\.github[\\/]workflows[\\/][^\\/]+\.ya?ml$/;
 const CARGO_TOML_BASENAME = 'Cargo.toml';
 
@@ -149,8 +149,9 @@ function findEnclosingJobBlock(lines, idx) {
 
 function findHardcodedUbuntu(content) {
     const lines = content.split(/\r?\n/);
+    const isReusable = /^\s*workflow_call\s*:/m.test(content);
     const usesPluginManifest = /plugin\.toml|inputs\.plugin_manifest/.test(content);
-    if (!usesPluginManifest) return [];
+    if (!isReusable || !usesPluginManifest) return [];
     const violations = [];
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
