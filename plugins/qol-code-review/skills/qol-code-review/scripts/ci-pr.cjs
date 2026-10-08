@@ -313,6 +313,10 @@ function queueFix(options) {
         console.log('the pull request moved since the queue run, nothing to fix');
         return;
     }
+    if (git(['log', '-1', '--format=%s', `${options.head}^2`]).trim() === CONFIG.queueFixSubject) {
+        console.log('head is the queue fix commit, nothing to fix');
+        return;
+    }
     const prompt = [
         `The merge queue sent pull request #${queue.pr} back: ${queue.runUrl}`,
         '',
