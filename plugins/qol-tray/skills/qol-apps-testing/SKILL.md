@@ -227,6 +227,20 @@ Steps:
 
 This is a repeat-offender rule. The user has called it out explicitly.
 
+## Never let a passing test race a short clock
+
+A test must never pass only when the code finishes inside a short wall-clock deadline.
+CI runs thousands of tests at once and can stall any step for over a second, so a deadline that holds on a desktop fails there at random.
+PR #72 failed in the merge queue on 2026-10-07 this way: `a_working_modinfo_probe_returns_the_version` took 563 ms against a test-only 300 ms probe timeout.
+
+- Wait at least 5 s for anything the test expects to happen: `recv_timeout(..).unwrap()`, a `tokio::time::timeout(..).await.unwrap()`, a polling loop that panics at its deadline, a socket read timeout before reading a reply. The wait ends as soon as the event arrives, so a passing test pays nothing.
+- An elapsed-time upper bound (`started.elapsed() < ..`) is at least 5 s, and the fixture it guards against hangs far longer (`sleep 30`, a never-released gate). Lengthen the fixture rather than shrink the bound. When the bound must stay below a production deadline to mean anything, compare against that production constant.
+- Never give a production deadline a shorter value under `#[cfg(test)]`; it shortens the deadline for every test that expects success too. Take the deadline as a parameter: the test that expects the timeout passes a short one, every other caller passes the production value or at least 5 s.
+- Short waits stay fine when the test expects nothing to happen (`recv_timeout(50ms).is_err()`) or expects the timeout itself; load only makes those outcomes more certain.
+
+Enforced at write time by `check-qol-arch-code.cjs` in qol-project (filter 7), on test modules, `tests.rs` files and `tests/` paths, for new violations only.
+Residual: deadlines passed through helper arguments or named constants other than a `#[cfg(test)]` twin, polling loops, `sleep`-then-assert checks and `wait_timeout` calls pass the guard; review catches those.
+
 ## Property tests must exercise production parameters
 
 A property test that uses default / zeroed parameters will not catch bugs

@@ -22,6 +22,10 @@
  *   6. Hand-rolled plugin settings: contract-less config loaders, raw config
  *      file paths and the host config tree in plugin src/ production code.
  *      Settings live in qol-config.toml and load through the contract.
+ *   7. Test deadlines that make a passing test race a short clock, in any
+ *      .rs file including tests: elapsed-time upper bounds, recv_timeout and
+ *      tokio timeout waits on expected events under 5 s, and production
+ *      deadline consts given a shorter value under #[cfg(test)].
  *
  * Allowed:
  *   - cfg(target_os) on `mod {linux,macos,windows};` or `pub use
@@ -864,6 +868,112 @@ Bypass for this edit only:
 `);
 }
 
+const TEST_DEADLINE_FLOOR_MS = 5000;
+const DURATION_LITERAL = String.raw`(?:std::time::)?Duration::from_(millis|micros|secs|secs_f32|secs_f64)\(\s*([\d_.]+)\s*\)`;
+const TEST_DEADLINE_SIGNALS = [
+    {
+        label: 'elapsed-time upper bound under 5 s',
+        pattern: new RegExp(String.raw`\belapsed(?:\(\))?\s*<=?\s*` + DURATION_LITERAL, 'g'),
+    },
+    {
+        label: 'recv_timeout under 5 s on an event the test expects',
+        pattern: new RegExp(
+            String.raw`\brecv_timeout\(\s*` + DURATION_LITERAL
+                + String.raw`\s*\)\s*\.\s*(?:unwrap\(\)|expect\(|is_ok\(\)|unwrap_or_else\()`,
+            'g',
+        ),
+    },
+    {
+        label: 'tokio timeout under 5 s on a future the test expects',
+        pattern: new RegExp(
+            String.raw`\btimeout\(\s*` + DURATION_LITERAL
+                + String.raw`\s*,[^;{}]*?\)\s*\.await\s*\.\s*(?:unwrap\(\)|expect\()`,
+            'g',
+        ),
+    },
+];
+const TEST_OVERRIDE_CONST = /#\[cfg\(\s*(not\s*\(\s*test\s*\)|test)\s*\)\]\s*(?:#\[[^\]]*\]\s*)*(?:pub(?:\([^)]*\))?\s+)?const\s+(\w+)\s*:\s*(?:std::time::)?Duration\b/g;
+const DEADLINE_NAME = /TIMEOUT|DEADLINE|BACKSTOP|BUDGET|GRACE/;
+
+function durationMs(unit, value) {
+    const amount = Number(value.replace(/_/g, ''));
+    if (unit === 'millis') return amount;
+    if (unit === 'micros') return amount / 1000;
+    return amount * 1000;
+}
+
+function shortDeadlineCount(code, pattern) {
+    let count = 0;
+    for (const match of code.matchAll(pattern)) {
+        const ms = durationMs(match[1], match[2]);
+        if (ms > 0 && ms < TEST_DEADLINE_FLOOR_MS) count++;
+    }
+    return count;
+}
+
+function testOverrideCount(code) {
+    const testNames = new Set();
+    const productionNames = new Set();
+    for (const match of code.matchAll(TEST_OVERRIDE_CONST)) {
+        if (!DEADLINE_NAME.test(match[2])) continue;
+        (match[1] === 'test' ? testNames : productionNames).add(match[2]);
+    }
+    return [...testNames].filter(name => productionNames.has(name)).length;
+}
+
+function isTestPath(filePath) {
+    const basename = crossPlatformBasename(filePath);
+    return TESTS_PATH_RE.test(filePath)
+        || EXAMPLES_PATH_RE.test(filePath)
+        || basename === 'tests.rs'
+        || basename.endsWith('_test.rs')
+        || basename.endsWith('_tests.rs');
+}
+
+function testDeadlineCounts(filePath, content) {
+    const code = sanitizeSource(content, true);
+    const production = isTestPath(filePath) ? '' : sanitizeSource(maskTestItems(content), true);
+    return [
+        ...TEST_DEADLINE_SIGNALS.map(signal =>
+            shortDeadlineCount(code, signal.pattern) - shortDeadlineCount(production, signal.pattern)),
+        testOverrideCount(code),
+    ];
+}
+
+const TEST_DEADLINE_LABELS = [
+    ...TEST_DEADLINE_SIGNALS.map(signal => signal.label),
+    'production deadline shortened under #[cfg(test)]',
+];
+
+function findNewTestDeadlines(filePath, newContent) {
+    const before = testDeadlineCounts(filePath, readExistingFile(filePath) || '');
+    const after = testDeadlineCounts(filePath, newContent);
+    return TEST_DEADLINE_LABELS.filter((_, index) => after[index] > before[index]);
+}
+
+function blockTestDeadlines(filePath, labels) {
+    const detail = labels.map(label => `  - ${label}`).join('\n');
+    lintMode.report(process.stderr, `qol-arch-code violation in ${filePath}.
+
+This edit makes a passing test race a short clock:
+
+${detail}
+
+CI runs thousands of tests at once and can stall a step for over a second, so
+a test that passes only when the code finishes inside a short deadline fails
+there at random. Wait at least 5 s for anything the test expects to happen
+(the wait ends as soon as it happens), keep an elapsed-time upper bound at
+5 s or more with a fixture that hangs far longer, and pass a short deadline
+as a parameter only to the test that expects the timeout itself.
+
+Reference: qol-tray:qol-apps-testing skill, "Never let a passing test race a
+short clock".
+
+Bypass for this edit only:
+  touch .claude/bypass-qol-arch-code
+`);
+}
+
 function platformViolationKind(violation) {
     if (violation.startsWith('missing target coverage:')) return 'missing target coverage';
     if (violation.startsWith('callable surface differs:')) return 'callable surface differs';
@@ -1232,6 +1342,13 @@ function evaluate(payload) {
 
     if (!filePath.endsWith('.rs')) return 0;
 
+    const deadlineContent = extractNewContent(tool, { ...input, file_path: filePath });
+    const newDeadlines = deadlineContent ? findNewTestDeadlines(filePath, deadlineContent) : [];
+    if (newDeadlines.length > 0 && !consumeBypass(cwd, filePath, basename)) {
+        blockTestDeadlines(filePath, newDeadlines);
+        return 2;
+    }
+
     if (
         TESTS_PATH_RE.test(filePath) ||
         EXAMPLES_PATH_RE.test(filePath) ||
@@ -1313,6 +1430,8 @@ const LOCATORS = [
     { label: 'platform token + storage/path routing', re: PLATFORM_TOKEN },
     { label: 'platform token + branching', re: PLATFORM_TOKEN },
     { label: 'compile_error!', re: COMPILE_ERROR },
+    ...TEST_DEADLINE_SIGNALS.map(signal => ({ label: signal.label, re: signal.pattern })),
+    { label: 'production deadline shortened under #[cfg(test)]', re: TEST_OVERRIDE_CONST },
 ];
 
 module.exports = { lintFile, LOCATORS };
