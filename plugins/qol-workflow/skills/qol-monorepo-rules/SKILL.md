@@ -29,15 +29,19 @@ A pull request you open is yours until it merges. Do not report it done at
 `gh pr create`; listen for its outcome and fix what fails.
 
 <!-- inject:pr-watch:start -->
-[qol-pr-watch] When this command succeeds, start the pull request watcher as one background command whose exit wakes you (Claude Code: Bash `run_in_background`; a harness with no background completion event runs it in the foreground): `node <qol-workflow>/bin/pr-watch.cjs <pr-url> --pretty`. Exit 1 is a failure with the failed steps' logs: fix it on the branch, gate locally, push, and start the watcher again. Exit 0 is merged; exit 6 means arm `gh pr merge --auto`. Never poll with sleep loops or repeated `gh pr checks`. Skip only a pull request the user is testing or holding.
+[qol-pr-watch] When this command succeeds, start the pull request watcher as one background command whose exit wakes you (Claude Code: Bash `run_in_background`; a harness with no background completion event runs it in the foreground): `node <qol-workflow>/bin/pr-watch.cjs <pr-url> --pretty`. Exit 1 is a failure with the failed steps' logs: fix it on the branch, gate locally, push, and start the watcher again. Exit 7 is review feedback from the qol-code-review bot: fix the findings it left for you, pull the branch first when the bot pushed a fix commit, then start the watcher again. Exit 0 is merged; exit 6 means arm `gh pr merge --auto`. Never poll with sleep loops or repeated `gh pr checks`. Skip only a pull request the user is testing or holding.
 <!-- inject:pr-watch:end -->
 
 The watcher polls GitHub inside its own process, so no turn is spent until
 there is an outcome. It exits once: 0 merged, 1 failed (a failed check or
 status on the head commit, a merge conflict, a merge queue removal, or the pull
 request closed), 3 no pull request, 4 `gh` kept failing, 5 still pending after
-two hours, 6 checks green but auto-merge not armed. A push to the branch while
-it runs is followed, because it always reads the latest head commit.
+two hours, 6 checks green but auto-merge not armed, 7 a qol-code-review or
+queue-fix comment posted after the watcher started that needs you: findings
+"left for you", a fix commit the bot pushed to the branch, or a failed review
+or fix. A clean review, or one whose only open findings are low, keeps it
+watching; the latest comment supersedes earlier ones. A push to the branch
+while it runs is followed, because it always reads the latest head commit.
 
 Pushing fixes to the branch of a pull request the user asked for is part of
 that request. Re-arm `gh pr merge --auto` when the merge queue dropped the pull

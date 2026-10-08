@@ -3,7 +3,7 @@
 
 const { spawnSync } = require('node:child_process');
 
-const EXIT = { merged: 0, failed: 1, usage: 2, missing: 3, gh: 4, timeout: 5, idle: 6 };
+const EXIT = { merged: 0, failed: 1, usage: 2, missing: 3, gh: 4, timeout: 5, idle: 6, review: 7 };
 const FAILED_CONCLUSIONS = new Set(['FAILURE', 'CANCELLED', 'TIMED_OUT', 'ACTION_REQUIRED', 'STARTUP_FAILURE']);
 const FAILED_STATES = new Set(['FAILURE', 'ERROR']);
 const AGGREGATE_JOB = /gate/i;
@@ -12,6 +12,11 @@ const LOG_JOBS = 3;
 const GH_RETRIES = 5;
 const ANSI = /\x1b\[[0-9;]*m/g;
 const LOG_NOISE = /^##\[(end)?group\]/;
+const REVIEW_MARKERS = { '<!-- qol-code-review -->': 'review', '<!-- qol-queue-fix -->': 'queue fix' };
+const REVIEW_AUTHOR = /^github-actions/;
+const FIX_COMMIT = /\/commit\/([0-9a-f]{40})\)/;
+const LEFT_FOR_YOU = /(\d+) left for you/;
+const REVIEW_FAILED = /Review failed|Fixing failed|outside this pull request|Nothing was changed/;
 
 const QUERY = `query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){
 number url state isInMergeQueue mergeStateStatus autoMergeRequest{enabledAt}
@@ -19,11 +24,12 @@ commits(last:1){nodes{commit{oid committedDate statusCheckRollup{contexts(first:
 ... on CheckRun{name status conclusion detailsUrl}
 ... on StatusContext{context state targetUrl}}}}}}}
 timelineItems(last:1,itemTypes:[ADDED_TO_MERGE_QUEUE_EVENT,REMOVED_FROM_MERGE_QUEUE_EVENT]){nodes{__typename
-... on RemovedFromMergeQueueEvent{reason createdAt}}}}}}`;
+... on RemovedFromMergeQueueEvent{reason createdAt}}}
+comments(last:20){nodes{author{login} body createdAt url}}}}}`;
 
 const HELP = `usage: pr-watch [<pr-url-or-number>] [--pretty] [--interval <s>] [--timeout <min>]
 Blocks until the pull request merges or fails, then exits once.
-Exit: 0 merged, 1 failed, 2 usage, 3 no pull request, 4 gh error, 5 timeout, 6 idle.`;
+Exit: 0 merged, 1 failed, 2 usage, 3 no pull request, 4 gh error, 5 timeout, 6 idle, 7 review needs you.`;
 
 function gh(args) {
     const result = spawnSync('gh', args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
@@ -105,7 +111,43 @@ function queueRemoval(pr, commit) {
     return `removed from the merge queue: ${event.reason || 'no reason given'}`;
 }
 
-function classify(pr) {
+function unescapeHtml(text) {
+    return text.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+}
+
+function parseReview(body, url) {
+    const marker = Object.keys(REVIEW_MARKERS).find((key) => body.startsWith(key));
+    if (!marker) return null;
+    const alert = body.split('\n').filter((line) => line.startsWith('> ') && !line.startsWith('> [!'));
+    const summary = alert
+        .map((line) => line.slice(2).replace(/\*\*/g, '').replace(/\[`([0-9a-f]+)`\]\([^)]*\)/g, '$1').trim());
+    const findings = [];
+    let severity = null;
+    for (const line of body.split('\n')) {
+        const lane = /^#### (\w+) · \d+$/.exec(line);
+        if (lane) severity = lane[1].toLowerCase();
+        const item = /^<details><summary>(.*?)(?: <code>(fixed|skipped)<\/code>)?<\/summary>/.exec(line);
+        if (item && severity && item[1] !== 'Full review') {
+            findings.push({ severity, title: unescapeHtml(item[1]), status: item[2] || 'open' });
+        }
+    }
+    const left = Number(LEFT_FOR_YOU.exec(body)?.[1] ?? 0);
+    const fixCommit = FIX_COMMIT.exec(alert.join('\n'))?.[1] ?? null;
+    const failed = REVIEW_FAILED.test(summary.join('\n'));
+    return { kind: REVIEW_MARKERS[marker], url, summary, findings, left, fix_commit: fixCommit, needs_you: left > 0 || failed || fixCommit !== null };
+}
+
+function latestReview(pr, since) {
+    const comments = (pr.comments?.nodes ?? [])
+        .filter((node) => REVIEW_AUTHOR.test(node.author?.login ?? '') && (!since || node.createdAt >= since));
+    for (const node of comments.reverse()) {
+        const review = parseReview(node.body ?? '', node.url);
+        if (review) return review;
+    }
+    return null;
+}
+
+function classify(pr, since = null) {
     const commit = pr.commits?.nodes?.[0]?.commit ?? {};
     const base = { head: commit.oid ?? null, reasons: [], failures: [] };
     if (pr.state === 'MERGED') return { ...base, outcome: 'merged' };
@@ -117,7 +159,10 @@ function classify(pr) {
     if (pr.mergeStateStatus === 'DIRTY') reasons.push('merge conflict with the base branch');
     const removal = queueRemoval(pr, commit);
     if (removal) reasons.push(removal);
-    if (reasons.length > 0) return { ...base, outcome: 'failed', reasons, failures };
+    const review = latestReview(pr, since);
+    const actionable = review?.needs_you ? { review } : {};
+    if (reasons.length > 0) return { ...base, outcome: 'failed', reasons, failures, ...actionable };
+    if (review?.needs_you) return { ...base, outcome: 'review', reasons: [`${review.kind}: ${review.summary.join(' ')}`], review };
 
     const settled = checks.length > 0 && checks.every((check) => check.done);
     if (settled && !pr.autoMergeRequest && !pr.isInMergeQueue) {
@@ -147,6 +192,13 @@ function attachLogs(failures, run) {
     return failures.map((failure) => (chosen.has(failure) ? { ...failure, log: failureLog(failure, run) } : failure));
 }
 
+function renderReview(review) {
+    const lines = [`--- ${review.kind} comment: ${review.url}`, ...review.summary];
+    for (const finding of review.findings) lines.push(`  [${finding.severity}, ${finding.status}] ${finding.title}`);
+    if (review.fix_commit) lines.push(`The bot pushed ${review.fix_commit.slice(0, 9)} to the branch: pull it before your next push.`);
+    return lines;
+}
+
 function render(report) {
     const head = report.head ? ` at ${report.head.slice(0, 9)}` : '';
     const lines = [`PR #${report.pr} ${report.outcome}${head} after ${report.elapsed_s ?? 0}s`];
@@ -158,6 +210,7 @@ function render(report) {
     for (const failure of report.failures) {
         if (failure.log) lines.push(`--- ${failure.name}, last lines of the failed steps`, failure.log);
     }
+    if (report.review) lines.push(...renderReview(report.review));
     if (report.error) lines.push(report.error);
     return lines.join('\n');
 }
@@ -168,6 +221,7 @@ function wait(seconds) {
 
 function watch(opts, { run = gh, sleep = wait, now = Date.now } = {}) {
     const started = now();
+    const since = new Date(started).toISOString();
     const target = resolveTarget(opts.target, run);
     if (target.error) {
         return { code: target.code, report: { pr: opts.target, outcome: 'error', reasons: [], failures: [], error: target.error } };
@@ -187,7 +241,7 @@ function watch(opts, { run = gh, sleep = wait, now = Date.now } = {}) {
             }
         } else {
             errors = 0;
-            const verdict = classify(snapshot.pr);
+            const verdict = classify(snapshot.pr, since);
             if (verdict.outcome !== 'pending') {
                 const failures = attachLogs(verdict.failures, run);
                 return {
@@ -224,7 +278,7 @@ function main(argv) {
     return code;
 }
 
-module.exports = { classify, parseArgs, parseTarget, resolveTarget, attachLogs, cleanLogLine, render, watch, EXIT };
+module.exports = { classify, parseReview, parseArgs, parseTarget, resolveTarget, attachLogs, cleanLogLine, render, watch, EXIT };
 
 if (require.main === module) {
     process.exit(main(process.argv.slice(2)));

@@ -3,9 +3,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { classify, parseArgs, parseTarget, attachLogs, cleanLogLine, render, watch, EXIT } = require('../bin/pr-watch.cjs');
+const { classify, parseReview, parseArgs, parseTarget, attachLogs, cleanLogLine, render, watch, EXIT } = require('../bin/pr-watch.cjs');
 
-function pr({ state = 'OPEN', checks = [], merge = 'BLOCKED', auto = true, queued = false, events = [], committed = '2026-10-08T10:00:00Z' } = {}) {
+function pr({ state = 'OPEN', checks = [], merge = 'BLOCKED', auto = true, queued = false, events = [], committed = '2026-10-08T10:00:00Z', comments = [] } = {}) {
     return {
         number: 7,
         url: 'https://github.com/o/r/pull/7',
@@ -15,6 +15,7 @@ function pr({ state = 'OPEN', checks = [], merge = 'BLOCKED', auto = true, queue
         autoMergeRequest: auto ? { enabledAt: '2026-10-08T10:00:00Z' } : null,
         commits: { nodes: [{ commit: { oid: 'abcdef1234567', committedDate: committed, statusCheckRollup: { contexts: { nodes: checks } } } }] },
         timelineItems: { nodes: events },
+        comments: { nodes: comments },
     };
 }
 
@@ -143,4 +144,108 @@ test('watch gives up after repeated gh failures', () => {
 test('watch reports a branch with no pull request', () => {
     const result = watch({ target: null, interval: 1, timeout: 1 }, { run: () => ({ ok: false, error: 'no pull requests found' }) });
     assert.equal(result.code, EXIT.missing);
+});
+
+const FIX = '9b28de83c99ea8259e22491da46ad591bbb06130';
+const REVIEW_FIXED = `<!-- qol-code-review -->
+
+<!-- reviewed 6129040aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -->
+
+> [!WARNING]
+> **Conditional** · 1 medium · 1 low · changes since \`946e83e\`
+> 1 fixed in [\`9b28de8\`](https://github.com/o/r/commit/${FIX}), 0 left for you.
+
+#### Medium · 1
+
+<details><summary>Restore guard &lt;armed&gt; too late <code>fixed</code></summary>
+
+body
+
+</details>
+
+#### Low · 1
+
+<details><summary>Raw mode left on</summary>
+
+</details>
+
+<details><summary>Full review</summary>
+
+text
+
+</details>
+`;
+const REVIEW_LEFT = `<!-- qol-code-review -->
+
+<!-- reviewed 6129040aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -->
+
+> [!CAUTION]
+> **Block** · 2 high
+> Nothing was fixed, 2 left for you.
+`;
+const REVIEW_PASS = `<!-- qol-code-review -->
+
+<!-- reviewed 6129040aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -->
+
+> [!TIP]
+> **Pass** · no findings
+> Nothing to fix.
+`;
+const REVIEW_FAILED = `<!-- qol-code-review -->
+> [!CAUTION]
+> **Review failed.** The review of \`6129040\` failed before it produced a result. See [the run](https://x).
+`;
+const QUEUE_FIX = `<!-- qol-queue-fix -->
+
+> [!TIP]
+> **Merge queue failed** · [lint](https://job/1)
+> Fixed in [\`9b28de8\`](https://github.com/o/r/commit/${FIX}). Queue it again once its checks pass.
+`;
+
+const reviewCases = [
+    ['bot fix pushed', REVIEW_FIXED, { needs_you: true, left: 0, fix_commit: FIX }],
+    ['findings left', REVIEW_LEFT, { needs_you: true, left: 2, fix_commit: null }],
+    ['clean pass', REVIEW_PASS, { needs_you: false, left: 0, fix_commit: null }],
+    ['review failed', REVIEW_FAILED, { needs_you: true, left: 0, fix_commit: null }],
+    ['queue fix pushed', QUEUE_FIX, { needs_you: true, left: 0, fix_commit: FIX }],
+];
+
+for (const [name, body, expected] of reviewCases) {
+    test(`parseReview: ${name}`, () => {
+        const review = parseReview(body, 'https://c');
+        assert.deepEqual({ needs_you: review.needs_you, left: review.left, fix_commit: review.fix_commit }, expected);
+    });
+}
+
+test('parseReview reads the summary and every finding with its lane and status', () => {
+    const review = parseReview(REVIEW_FIXED, 'https://c');
+    assert.equal(review.kind, 'review');
+    assert.deepEqual(review.summary, ['Conditional · 1 medium · 1 low · changes since `946e83e`', '1 fixed in 9b28de8, 0 left for you.']);
+    assert.deepEqual(review.findings, [
+        { severity: 'medium', title: 'Restore guard <armed> too late', status: 'fixed' },
+        { severity: 'low', title: 'Raw mode left on', status: 'open' },
+    ]);
+    assert.equal(parseReview('a human comment', 'u'), null);
+});
+
+const bot = (body, createdAt = '2026-10-08T12:00:00Z') => ({ author: { login: 'github-actions' }, body, createdAt, url: 'https://c' });
+const SINCE = '2026-10-08T11:00:00Z';
+
+test('classify wakes on a new review that needs the agent', () => {
+    const verdict = classify(pr({ checks: [run('lint', 'IN_PROGRESS')], comments: [bot(REVIEW_LEFT)] }), SINCE);
+    assert.equal(verdict.outcome, 'review');
+    assert.equal(verdict.review.left, 2);
+});
+
+test('classify ignores reviews from before the watcher started, clean reviews and human comments', () => {
+    assert.equal(classify(pr({ comments: [bot(REVIEW_LEFT, '2026-10-08T10:30:00Z')] }), SINCE).outcome, 'pending');
+    assert.equal(classify(pr({ comments: [bot(REVIEW_LEFT), bot(REVIEW_PASS, '2026-10-08T12:30:00Z')] }), SINCE).outcome, 'pending');
+    assert.equal(classify(pr({ comments: [{ ...bot(REVIEW_LEFT), author: { login: 'KMRH47' } }] }), SINCE).outcome, 'pending');
+});
+
+test('a failed check wins over a review and still carries it', () => {
+    const verdict = classify(pr({ checks: [run('lint', 'COMPLETED', 'FAILURE')], comments: [bot(REVIEW_FIXED)] }), SINCE);
+    assert.equal(verdict.outcome, 'failed');
+    assert.equal(verdict.review.fix_commit, FIX);
+    assert.match(render({ pr: 7, ...verdict, failures: [] }), /pull it before your next push/);
 });
