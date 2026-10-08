@@ -9,28 +9,38 @@ test("only prompts starting with qols are intercepted", () => {
   }
 });
 
-test("trailing dash picks split off the message and inner dash words stay in it", () => {
+test("trailing named flags split off the message in any order", () => {
   const cases = [
-    ["qols fork Do this task", { verb: "fork", message: "Do this task", picks: [] }],
-    ["qols fork Do this -win --sonnet", { verb: "fork", message: "Do this", picks: ["-win", "-sonnet"] }],
-    ["QOLS Bridge add -1 to the counter", { verb: "bridge", message: "add -1 to the counter", picks: [] }],
-    ["qols bridge fix it\nnow -cc", { verb: "bridge", message: "fix it now", picks: ["-cc"] }],
-    ["qols fork drop the - sign", { verb: "fork", message: "drop the - sign", picks: [] }],
+    ["qols fork Do this task", { verb: "fork", message: "Do this task", flags: [] }],
+    [
+      "qols fork Do this --effort max --harness cc",
+      { verb: "fork", message: "Do this", flags: ["--effort", "max", "--tool", "cc"] },
+    ],
+    [
+      "QOLS Bridge add -1 to the counter --model sonnet",
+      { verb: "bridge", message: "add -1 to the counter", flags: ["--model", "sonnet"] },
+    ],
+    ["qols bridge fix it\nnow --surface win", { verb: "bridge", message: "fix it now", flags: ["--surface", "win"] }],
   ];
   for (const [prompt, expected] of cases) assert.deepEqual(parsePrompt(prompt), expected, prompt);
 });
 
+test("a trailing unknown flag is refused instead of joining the message", () => {
+  assert.deepEqual(parsePrompt("qols fork x --modle opus"), { verb: "help", error: "unknown flag --modle" });
+  assert.deepEqual(parsePrompt("qols fork x --constructor y"), { verb: "help", error: "unknown flag --constructor" });
+});
+
 test("a bare, unknown or empty command shows help", () => {
-  for (const prompt of ["qols", "qols help", "qols nope x", "qols fork", "qols fork -win"]) {
+  for (const prompt of ["qols", "qols help", "qols nope x", "qols fork", "qols fork --model opus"]) {
     assert.deepEqual(parsePrompt(prompt), { verb: "help" }, prompt);
   }
 });
 
 test("fork and bridge map onto the qol sessions CLI", () => {
-  assert.deepEqual(commandFor({ verb: "fork", message: "m", picks: ["-win"] }, "/repo"), [
-    "sessions", "fork", "--cwd", "/repo", "--brief", "m", "-win",
+  assert.deepEqual(commandFor({ verb: "fork", message: "m", flags: ["--surface", "win"] }, "/repo"), [
+    "sessions", "fork", "--cwd", "/repo", "--brief", "m", "--surface", "win",
   ]);
-  assert.deepEqual(commandFor({ verb: "bridge", message: "m", picks: [] }, "/repo"), [
+  assert.deepEqual(commandFor({ verb: "bridge", message: "m", flags: [] }, "/repo"), [
     "sessions", "spawn", "--cwd", "/repo", "--task", "m", "--background",
   ]);
 });

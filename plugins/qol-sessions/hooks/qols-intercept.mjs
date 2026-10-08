@@ -3,10 +3,13 @@ import { execFileSync, spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
+const FLAGS = { surface: "--surface", harness: "--tool", model: "--model", effort: "--effort" };
+
 const USAGE = [
-  "qols fork <problem> [-picks]   detached architect that owns the problem",
-  "qols bridge <task> [-picks]    lane that reports back to this session",
-  "picks: -tab -win, -<harness>, -<model>, -<effort>, or an [aliases] entry in sessions.toml",
+  "qols fork <problem> [--harness H] [--model M] [--effort E] [--surface S]",
+  "qols bridge <task> [--harness H] [--model M] [--effort E] [--surface S]",
+  "fork: detached architect that owns the problem; bridge: lane that reports back here",
+  "values may be [aliases] from sessions.toml; left out, sessions.toml defaults apply",
 ].join("\n");
 
 export function parsePrompt(prompt) {
@@ -15,18 +18,22 @@ export function parsePrompt(prompt) {
   const tokens = (match[1] ?? "").trim().split(/\s+/).filter(Boolean);
   const verb = tokens.shift()?.toLowerCase();
   if (verb !== "fork" && verb !== "bridge") return { verb: "help" };
-  const picks = [];
-  while (tokens.length > 0 && /^--?[^-\s]\S*$/.test(tokens.at(-1))) {
-    picks.unshift(tokens.pop().replace(/^--?/, "-"));
+  const flags = [];
+  while (tokens.length >= 2 && tokens.at(-2).startsWith("--")) {
+    const name = tokens.at(-2).slice(2);
+    if (!Object.hasOwn(FLAGS, name)) return { verb: "help", error: `unknown flag --${name}` };
+    const value = tokens.pop();
+    tokens.pop();
+    flags.unshift(FLAGS[name], value);
   }
   const message = tokens.join(" ");
   if (message === "") return { verb: "help" };
-  return { verb, message, picks };
+  return { verb, message, flags };
 }
 
-export function commandFor({ verb, message, picks }, cwd) {
-  if (verb === "fork") return ["sessions", "fork", "--cwd", cwd, "--brief", message, ...picks];
-  return ["sessions", "spawn", "--cwd", cwd, "--task", message, "--background", ...picks];
+export function commandFor({ verb, message, flags }, cwd) {
+  if (verb === "fork") return ["sessions", "fork", "--cwd", cwd, "--brief", message, ...flags];
+  return ["sessions", "spawn", "--cwd", cwd, "--task", message, "--background", ...flags];
 }
 
 export function summarize(verb, outcome) {
@@ -45,7 +52,7 @@ function main() {
   const parsed = parsePrompt(input.prompt);
   if (parsed === null) process.exit(0);
 
-  let reason = USAGE;
+  let reason = parsed.error ? `${parsed.error}\n${USAGE}` : USAGE;
   if (parsed.verb !== "help") {
     try {
       const output = execFileSync("qol", commandFor(parsed, input.cwd || process.cwd()), {

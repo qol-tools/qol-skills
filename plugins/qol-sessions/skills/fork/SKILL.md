@@ -1,7 +1,7 @@
 ---
 name: fork
-description: Cut one problem loose into a detached architect terminal. Use when the user invokes /fork <problem> [-picks]; writes the brief, picks the launch facts, makes one session_fork call, reports one line, and continues.
-argument-hint: "<problem> [-tab|-win] [-harness] [-model] [-effort]"
+description: Cut one problem loose into a detached architect terminal. Use when the user invokes /fork <problem> [--harness H] [--model M] [--effort E] [--surface S]; writes the brief, picks the launch facts, makes one session_fork call, reports one line, and continues.
+argument-hint: "<problem> [--harness H] [--model M] [--effort E] [--surface S]"
 disable-model-invocation: true
 ---
 
@@ -24,9 +24,8 @@ A fork is not a lane: it never reports back, nothing collects it with `session_b
    - `cwd`: the repo the problem lives in.
    - `key`: a short, stable, unused key naming the tree, for example `chase-lockfile`.
    - `title`: a short human-readable tab name, or omit it to default to the key.
-   - `pick`: the trailing `-` tokens of `$ARGUMENTS`, verbatim, for example `["-win", "-sonnet"]`; leave them out of the brief.
-     Omit `pick` when there are none.
-   Never pass `tool`, `model`, `effort` or `surface`: `sessions.toml` supplies every slot the user did not pick (`fork_model`, `fork_effort`, `fork_surface`, `[aliases]`), and the server refuses an unknown or doubled pick.
+   - `tool`, `model`, `effort`, `surface`: only the values the user gave as trailing `--harness`, `--model`, `--effort` or `--surface` flags in `$ARGUMENTS`, verbatim (`--harness` fills `tool`); leave the flags out of the brief.
+   Everything the user left out stays unset: the server resolves `[aliases]` and fills the rest from `fork_model`, `fork_effort` and `fork_surface` in `sessions.toml`.
 3. When this session is also editing that repo, tell the fork in the brief to create and use its own git worktree and leave this session's checkout alone.
 4. Make exactly one `session_fork` call per problem, then continue this session's own work without waiting.
    Never bridge the fork and never call `session_spawn` for it: a fork is detached and nothing collects its result.
