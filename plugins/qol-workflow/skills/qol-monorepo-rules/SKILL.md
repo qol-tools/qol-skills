@@ -1,6 +1,6 @@
 ---
 name: qol-monorepo-rules
-description: Always-on delivery rules for work inside qol-tools repositories - PR opt-in, standards evolution, guest-VM verification, and the build/test gate before reporting done. Autoinjected in full at session start and after every compaction in repos that list it with `vs autoinject`; these rules must fire without a topic trigger.
+description: Always-on delivery rules for work inside qol-tools repositories - PR opt-in, auto-merge on every PR, standards evolution, guest-VM verification, and the build/test gate before reporting done. Autoinjected in full at session start and after every compaction in repos that list it with `vs autoinject`; these rules must fire without a topic trigger.
 ---
 
 # qol-tools delivery rules
@@ -13,6 +13,15 @@ which only Claude Code loaded. They are autoinjected at session start and after 
 Default all work (tests, refactors, fixes, features, configs, docs) direct to
 `main`. Open a PR, issue, or ADR **only when explicitly asked**; never offer one
 as a fallback. Mechanics: `qol-workflow:git-trees`.
+
+## Every pull request merges itself
+
+Right after `gh pr create` in a qol-tools repository, run `gh pr merge --auto <number>`
+so the merge queue lands the pull request once its checks pass. The CI and the
+merge queue are the gate; do not wait for a merge go-ahead. A draft gets it right
+after `gh pr ready`. The one exception: when the user says they are testing or
+holding a pull request, run `gh pr merge --disable-auto <number>` and wait for
+their word.
 
 ## Standards evolution
 
