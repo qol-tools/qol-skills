@@ -2,6 +2,7 @@
 'use strict';
 
 const fs = require('node:fs');
+const path = require('node:path');
 const { trigger } = require('./pr-watch-context.cjs');
 
 const HOOK_NAME = 'pr-watch-park-guard';
@@ -9,7 +10,10 @@ const WATCHER_RUN = /(^|[\s;&|`(])node\s+\S*pr-watch\.cjs(\s|$)/;
 const PARKED_RUN = /(^|[\s;&|`(])qol\s+sessions\s+park\b[^;&|\n]*\s--\s+node\s+\S*pr-watch\.cjs(\s|$)/;
 const WATCHER_HELP = /pr-watch\.cjs\s+(-h|--help)(\s|$)/;
 const HOLD = /(^|[\s;&|`(])gh\s+pr\s+merge\s[^;&|\n]*--disable-auto(\s|$)/;
-const PARK_COMMAND = 'qol sessions park -- node <qol-workflow>/bin/pr-watch.cjs <pr-url> --pretty';
+function parkCommand(url) {
+    const root = process.env.CLAUDE_PLUGIN_ROOT || path.resolve(__dirname, '..');
+    return `qol sessions park -- node ${path.join(root, 'bin', 'pr-watch.cjs')} ${url ?? '<pr-url>'} --pretty`;
+}
 
 function readPayload() {
     try {
@@ -31,7 +35,7 @@ function denyUnparked() {
             permissionDecision: 'deny',
             permissionDecisionReason:
                 'The pull request watcher runs only under a parked session, so no terminal stays open while it waits.\n' +
-                `[${HOOK_NAME}] run \`${PARK_COMMAND}\` and end your turn; qol resumes this conversation when the watcher exits`,
+                `[${HOOK_NAME}] run \`${parkCommand()}\` and end your turn; qol resumes this conversation when the watcher exits`,
         },
     };
 }
@@ -72,11 +76,10 @@ function unparkedPullRequest(calls, cwd, exec) {
 }
 
 function blockStop(hit) {
-    const target = hit.url ?? '<pr-url>';
     return {
         decision: 'block',
         reason:
-            `A pull request you opened or pushed is not being watched yet. Park this session on its watcher before ending the turn: \`${PARK_COMMAND.replace('<pr-url>', target)}\`. ` +
+            `A pull request you opened or pushed is not being watched yet. Park this session on its watcher before ending the turn: \`${parkCommand(hit.url)}\`. ` +
             `If the user said they are testing or holding it, run \`gh pr merge --disable-auto <number>\` instead. [${HOOK_NAME}]`,
     };
 }
