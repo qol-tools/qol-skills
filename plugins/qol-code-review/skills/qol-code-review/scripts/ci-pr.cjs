@@ -146,7 +146,7 @@ function sinceLines(options) {
     return [
         `- Changes since the last review of \`${options.since.slice(0, 7)}\`: ${CONTEXT}/since-last-review.diff`,
         `- The last review comment: ${CONTEXT}/last-review.md`,
-        '- This is a follow-up review. Report a finding only on code those changes add or alter, or on code they break. Never repeat a finding of the last review, whether it was fixed, skipped or left open. When the changes hold no defect, the verdict is pass.',
+        '- This is a follow-up review. Report a new finding only on code those changes add or alter, or on code they break. Carry every finding of the last review that the changes do not fix into this review with its id, severity, file, line and title unchanged, and drop the ones they fix. A finding the last review marked fixed stays dropped. The verdict counts the carried findings, so it is pass only when no blocker, high or medium finding is left.',
     ];
 }
 
