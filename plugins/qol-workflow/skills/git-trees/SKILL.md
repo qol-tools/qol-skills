@@ -81,7 +81,7 @@ Follow `qol-workflow:commit` for message and hook rules before invoking `git com
 The user set this on 2026-10-08 for qol-monorepo: "always create worktrees and PRs - never directly to main unless specifically asked to do so or with approval". It does not apply to qol-skills, which commits direct to `main`.
 CI and the merge queue gate every change before it reaches `main`, and the PR is where the qol-code-review bot reviews it.
 
-- **Default route:** worktree branch, commit, push the branch, `gh pr create`, `gh pr merge --auto <number>`, then watch it with `bin/pr-watch.cjs` until it merges.
+- **Default route:** worktree branch, commit, push the branch, `gh pr create`, `gh pr merge --auto <number>`, then park the session on `bin/pr-watch.cjs` until it merges.
 - **Direct route:** only when the user explicitly asks for a direct-to-main change in the current request, or approves your question for this change. A request to "commit" or "push" alone is not that ask.
 - Do not ask for direct-to-main approval to save time; the PR route is the default, not the fallback.
 
@@ -96,7 +96,7 @@ Atomic-commit rule still holds (one logical change per commit, repo always green
 
 This applies to both routes:
 
-- **PR route (default):** open the pull request from the worktree branch and run `gh pr merge --auto <number>` right after `gh pr create` (after `gh pr ready` for a draft); the merge queue squashes it once its checks pass. Then watch it until it merges with `bin/pr-watch.cjs` as one background command and fix what fails (qol-workflow:qol-monorepo-rules, "Every pull request is watched until it merges"). Do not merge-commit or rebase-merge the branch stack into `main`.
+- **PR route (default):** open the pull request from the worktree branch and run `gh pr merge --auto <number>` right after `gh pr create` (after `gh pr ready` for a draft); the merge queue squashes it once its checks pass. Then park the session on `bin/pr-watch.cjs` with `qol sessions park` until it merges and fix what fails (qol-workflow:qol-monorepo-rules, "Every pull request is watched until it merges"). Do not merge-commit or rebase-merge the branch stack into `main`.
 - **Direct route (explicit ask only):** from the main clone, `git merge --squash <feature-branch>`, commit, then push `main`. Never push `HEAD:main` directly from the worktree.
 
 If an agent thinks a worktree should land as multiple commits, it must ask first and name the independently revertible deliveries.
@@ -138,7 +138,7 @@ Delivery through a pull request (the default):
 git push -u origin $FEAT
 gh pr create --title "<type>(scope): summary" --body "<why>"
 gh pr merge --auto <number>
-node <qol-workflow>/bin/pr-watch.cjs <pr-url> --pretty   # one background command
+qol sessions park -- node <qol-workflow>/bin/pr-watch.cjs <pr-url> --pretty   # then end the turn
 ```
 
 After it merges, `git worktree remove ../worktrees/$FEAT/qol-monorepo` from the main clone and `git branch -D $FEAT` if the local branch lingers.
