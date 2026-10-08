@@ -38,7 +38,7 @@ When you add a workflow that runs `cargo`, match the strictness of the existing 
 
 **Lockfile strictness is part of parity.** Release builds pass `--locked` (`.github/scripts/release_candidate.py`), and production installs do too, so every earlier gate must as well.
 A `Cargo.toml` that declares a dependency `Cargo.lock` does not record is invisible to a lenient gate: cargo simply rewrites the lockfile and carries on.
-Two consequences make that failure expensive rather than merely late - the rewrite dirties the working tree mid-build, which trips the clean-tree gate in `qol install` and in the release identity export, and because the repo commits direct to `main`, a post-merge discovery means `main` is already broken.
+Two consequences make that failure expensive rather than merely late - the rewrite dirties the working tree mid-build, which trips the clean-tree gate in `qol install` and in the release identity export, and a discovery after the pull request merges means `main` is already broken.
 
 Do not mistake `cargo metadata --locked --no-deps` for a freshness check.
 `--no-deps` skips dependency resolution and exits 0 against a stale lockfile; only a full resolve (`cargo metadata --locked`) or a `--locked` build detects it.

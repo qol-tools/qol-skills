@@ -50,6 +50,8 @@ Squash only unpushed commits. Once a commit is on the remote, it stays.
 
 Never run `git push` or another remote-affecting git command unless the user explicitly asked for a push in the current turn. A request to commit is not a request to push.
 
+Pushing a worktree branch to open or update its pull request is part of the default PR route in `git-trees` and needs no separate ask; a push to `main` always does.
+
 An explicit combined request such as "commit and push" authorizes both operations in the same turn. Keep them as separate commands and verify the commit before pushing; do not require another user round trip between them.
 
 This applies to every repository in the qol-tools workspace.
@@ -68,7 +70,7 @@ driver with a manual lockfile conflict resolution.
 
 ## Match the checkout to the branch
 
-- Direct-to-`main` work belongs in the main clone and may be pushed from there when requested.
+- Direct-to-`main` work happens only on an explicit ask, belongs in the main clone, and may be pushed from there when requested.
 - Feature branches belong in worktrees. Follow `git-trees` for creation and delivery.
 - Never push a worktree branch directly to `main`. Deliver it through the documented squash route in the main clone.
 - If a main clone is unexpectedly on a feature branch, follow the `git-trees` recovery flow instead of normalizing the mistake.

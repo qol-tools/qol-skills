@@ -1,6 +1,6 @@
 ---
 name: git-trees
-description: Use whenever modifying files, creating commits, or creating, switching, or branching in the qol-monorepo or qol-skills repo. Defines completion-as-commit, the mandatory Cargo.lock merge driver, the branch-based worktree workflow where new feature work is done, the direct-vs-PR route, and final squash delivery.
+description: Use whenever modifying files, creating commits, or creating, switching, or branching in the qol-monorepo or qol-skills repo. Defines completion-as-commit, the mandatory Cargo.lock merge driver, the worktree-and-PR route every change takes, the explicit-ask exception for direct-to-main, and final squash delivery.
 ---
 
 # git-trees
@@ -11,19 +11,16 @@ Feature branches live in dedicated worktree directories.
 
 ## The hard rule (read this first, every time)
 
-**Default changes do NOT get a PR.** Tests, configs, rules, hooks, skill edits, doc fixes, lockfile bumps, normal fixes, refactors, and features commit straight to `main` unless the user asks for branch isolation or a PR. No draft PR. No mark-ready. No squash-merge dance.
+**Every change gets a worktree and a PR.** Tests, configs, rules, hooks, skill edits, doc fixes, lockfile bumps, normal fixes, refactors, and features all start on a branch in a new worktree and land on `main` through a pull request with auto-merge armed.
 
-**There are only two normal modes:** direct work on `main`, or feature-branch work in a worktree.
-If the user asks for a branch, PR, or isolated review, create a worktree.
-If the change is direct-to-main, stay on `main` in the main clone.
-
-**If unsure, ASK first.** Don't default to ceremony. Asking takes 30 seconds; an unwanted PR wastes 5+ minutes on both sides and creates noise.
+**Never commit to `main` directly** unless the user explicitly asks for a direct-to-main change, or you asked and they approved it for this change. Approval covers that one change, not the next.
+A commit on local `main` is the mistake this rule exists to prevent; create the worktree before the first edit.
 
 **NEVER `git checkout -b`, `git checkout <other-branch>`, `git switch -c`, or `git switch <other-branch>` inside a qol main clone.**
 
 The branch-switch ban is enforced by the `branch-deny-checkout-in-main-clone` PreToolUse hook.
 It exists to keep the main clone on `main` so `qol sync` and `qol dev` see fresh code.
-Direct-to-main work happens on `main` without switching branches.
+Work happens in worktrees, so the main clone never needs to switch branches.
 
 ## Cargo.lock uses a mandatory merge driver
 
@@ -77,21 +74,18 @@ Follow `qol-workflow:commit` for message and hook rules before invoking `git com
 - Anything inside a `worktrees/<feature>/` directory (you're already in a worktree - branch ops are expected)
 - Any command suffixed with ` # intentional` (rare recovery path; document why in the same turn)
 
-## PRs are opt-in. Default is commit-direct-to-main.
+## Worktree and PR by default. Direct-to-main only on an explicit ask.
 
-**The qol-tools workspace is solo.** There is no async team to coordinate with via PR. PRs add review-cycle ceremony that is pure friction when the only reviewer is the same person who wrote the code. Default behaviour: edit on `main`, `git add && git commit`, push when asked.
+The user set this on 2026-10-08: "always create worktrees and PRs - never directly to main unless specifically asked to do so or with approval".
+CI and the merge queue gate every change before it reaches `main`, and the PR is where the qol-code-review bot reviews it.
 
-**Open a PR ONLY when the user explicitly asks for one** with phrases like "open a PR", "draft a PR", or "make a PR for this". A request to review/test on a branch means "use a worktree branch"; it does not imply PR. **Never offer "or open a PR" as a fallback option** in a "Want me to fix or X?" prompt - drop the X. The choice is fix-now-direct-or-not-now.
+- **Default route:** worktree branch, commit, push the branch, `gh pr create`, `gh pr merge --auto <number>`, then watch it with `bin/pr-watch.cjs` until it merges.
+- **Direct route:** only when the user explicitly asks for a direct-to-main change in the current request, or approves your question for this change. A request to "commit" or "push" alone is not that ask.
+- Do not ask for direct-to-main approval to save time; the PR route is the default, not the fallback.
 
-### Tests, refactors, fixes, features
+### Bundled commits are fine in one PR
 
-All commit direct to `main` by default, including substantive `src/` / `ui/` changes.
-The user is the reviewer; they review by reading the commit on `main`, not by clicking through PR UI.
-If they want to inspect first, they will say so explicitly.
-
-### Bundled commits are fine on main
-
-Tests + a small refactor that makes them testable, in the same atomic commit, is fine when committing direct.
+Tests + a small refactor that makes them testable, in the same atomic commit, is fine.
 Atomic-commit rule still holds (one logical change per commit, repo always green).
 
 ## Final delivery invariant
@@ -100,8 +94,8 @@ Atomic-commit rule still holds (one logical change per commit, repo always green
 
 This applies to both routes:
 
-- **Direct route:** from the main clone, `git merge --squash <feature-branch>`, commit, then push `main`. Never push `HEAD:main` directly from the worktree.
-- **PR route:** open the pull request from the worktree branch and run `gh pr merge --auto <number>` right after `gh pr create` (after `gh pr ready` for a draft); the merge queue squashes it once its checks pass. Then watch it until it merges with `bin/pr-watch.cjs` as one background command and fix what fails (qol-workflow:qol-monorepo-rules, "Every pull request is watched until it merges"). Do not merge-commit or rebase-merge the branch stack into `main`.
+- **PR route (default):** open the pull request from the worktree branch and run `gh pr merge --auto <number>` right after `gh pr create` (after `gh pr ready` for a draft); the merge queue squashes it once its checks pass. Then watch it until it merges with `bin/pr-watch.cjs` as one background command and fix what fails (qol-workflow:qol-monorepo-rules, "Every pull request is watched until it merges"). Do not merge-commit or rebase-merge the branch stack into `main`.
+- **Direct route (explicit ask only):** from the main clone, `git merge --squash <feature-branch>`, commit, then push `main`. Never push `HEAD:main` directly from the worktree.
 
 If an agent thinks a worktree should land as multiple commits, it must ask first and name the independently revertible deliveries.
 
@@ -136,7 +130,18 @@ cd $ROOT/../worktrees/$FEAT/qol-monorepo
 # ... edit and commit freely while iterating ...
 ```
 
-Delivery and cleanup:
+Delivery through a pull request (the default):
+
+```bash
+git push -u origin $FEAT
+gh pr create --title "<type>(scope): summary" --body "<why>"
+gh pr merge --auto <number>
+node <qol-workflow>/bin/pr-watch.cjs <pr-url> --pretty   # one background command
+```
+
+After it merges, `git worktree remove ../worktrees/$FEAT/qol-monorepo` from the main clone and `git branch -D $FEAT` if the local branch lingers.
+
+Direct delivery, only when the user explicitly asked for a direct-to-main change:
 
 ```bash
 git status --short          # worktree must be clean; commit/stash first if not
@@ -172,4 +177,4 @@ If the work on the feature branch was unmerged and worth saving, push it first t
 
 - Do not mix unrelated feature branches in the same feature directory.
 - Do not branch from the main clone to "save time". The hook will block you, and the recovery cost is higher than the worktree-add you avoided.
-- Do not run skill / hook / doc edits through the issue + PR flow. The ceremony is for product code; the direct-push route exists for everything else.
+- Do not skip the PR for skill, hook, or doc edits. They take the same worktree and PR route as product code; issues stay opt-in.

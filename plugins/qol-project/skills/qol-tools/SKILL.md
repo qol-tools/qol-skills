@@ -33,10 +33,10 @@ Plugins remain separate executables loaded by the host at runtime; they are neve
 
 ## Branch and commit policy
 
-- `qol-workflow:git-trees` is the canonical contribution-flow skill. It owns the worktree-only rule, direct-vs-PR decision, and final squash delivery invariant.
+- `qol-workflow:git-trees` is the canonical contribution-flow skill. It owns the worktree-only rule, the worktree-and-PR default route, and final squash delivery invariant.
 - **The main clone stays on `main`.** Feature branches live in worktrees, never in the main clone.
 - **Worktree commits are scratch history.** Before a worktree branch reaches `main`, land it as one polished conventional commit unless the user explicitly asks for multiple delivered commits.
-- **PRs are rare and explicit.** Default is direct commit to `main`. If the user asks for a PR, land it with GitHub squash merge.
+- **Every change lands through a PR.** Never commit direct to `main` unless the user explicitly asks or approves it; the merge queue squashes each PR.
 - **Clean up after landing.** Remove the worktree and delete local/remote feature branches.
 - **Conventional commits.** `feat:`, `fix:`, `refactor:`, `docs:`, `chore:`, `test:`. One-liners. No fluff, no co-authors in the message.
 - **Atomic delivered commits.** The commit that lands on `main` is one coherent delivery.
