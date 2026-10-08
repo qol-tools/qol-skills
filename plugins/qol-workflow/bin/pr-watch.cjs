@@ -13,7 +13,7 @@ const GH_RETRIES = 5;
 const ANSI = /\x1b\[[0-9;]*m/g;
 const LOG_NOISE = /^##\[(end)?group\]/;
 const REVIEW_MARKERS = { '<!-- qol-code-review -->': 'review', '<!-- qol-queue-fix -->': 'queue fix' };
-const REVIEW_AUTHOR = /^github-actions/;
+const REVIEW_AUTHOR = 'github-actions';
 const FIX_COMMIT = /\/commit\/([0-9a-f]{40})\)/;
 const LEFT_FOR_YOU = /(\d+) left for you/;
 const REVIEW_FAILED = /Review failed|Fixing failed|outside this pull request|Nothing was changed/;
@@ -25,7 +25,7 @@ commits(last:1){nodes{commit{oid committedDate statusCheckRollup{contexts(first:
 ... on StatusContext{context state targetUrl}}}}}}}
 timelineItems(last:1,itemTypes:[ADDED_TO_MERGE_QUEUE_EVENT,REMOVED_FROM_MERGE_QUEUE_EVENT]){nodes{__typename
 ... on RemovedFromMergeQueueEvent{reason createdAt}}}
-comments(last:20){nodes{author{login} body createdAt url}}}}}`;
+comments(last:20){nodes{author{__typename login} body createdAt url}}}}}`;
 
 const HELP = `usage: pr-watch [<pr-url-or-number>] [--pretty] [--interval <s>] [--timeout <min>]
 Blocks until the pull request merges or fails, then exits once.
@@ -137,9 +137,13 @@ function parseReview(body, url) {
     return { kind: REVIEW_MARKERS[marker], url, summary, findings, left, fix_commit: fixCommit, needs_you: left > 0 || failed || fixCommit !== null };
 }
 
+function isReviewBot(author) {
+    return author?.__typename === 'Bot' && author.login === REVIEW_AUTHOR;
+}
+
 function latestReview(pr, since) {
     const comments = (pr.comments?.nodes ?? [])
-        .filter((node) => REVIEW_AUTHOR.test(node.author?.login ?? '') && (!since || node.createdAt >= since));
+        .filter((node) => isReviewBot(node.author) && (!since || node.createdAt >= since));
     for (const node of comments.reverse()) {
         const review = parseReview(node.body ?? '', node.url);
         if (review) return review;

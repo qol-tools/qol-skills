@@ -228,7 +228,7 @@ test('parseReview reads the summary and every finding with its lane and status',
     assert.equal(parseReview('a human comment', 'u'), null);
 });
 
-const bot = (body, createdAt = '2026-10-08T12:00:00Z') => ({ author: { login: 'github-actions' }, body, createdAt, url: 'https://c' });
+const bot = (body, createdAt = '2026-10-08T12:00:00Z') => ({ author: { __typename: 'Bot', login: 'github-actions' }, body, createdAt, url: 'https://c' });
 const SINCE = '2026-10-08T11:00:00Z';
 
 test('classify wakes on a new review that needs the agent', () => {
@@ -240,7 +240,9 @@ test('classify wakes on a new review that needs the agent', () => {
 test('classify ignores reviews from before the watcher started, clean reviews and human comments', () => {
     assert.equal(classify(pr({ comments: [bot(REVIEW_LEFT, '2026-10-08T10:30:00Z')] }), SINCE).outcome, 'pending');
     assert.equal(classify(pr({ comments: [bot(REVIEW_LEFT), bot(REVIEW_PASS, '2026-10-08T12:30:00Z')] }), SINCE).outcome, 'pending');
-    assert.equal(classify(pr({ comments: [{ ...bot(REVIEW_LEFT), author: { login: 'KMRH47' } }] }), SINCE).outcome, 'pending');
+    assert.equal(classify(pr({ comments: [{ ...bot(REVIEW_LEFT), author: { __typename: 'User', login: 'KMRH47' } }] }), SINCE).outcome, 'pending');
+    assert.equal(classify(pr({ comments: [{ ...bot(REVIEW_LEFT), author: { __typename: 'User', login: 'github-actions' } }] }), SINCE).outcome, 'pending');
+    assert.equal(classify(pr({ comments: [{ ...bot(REVIEW_LEFT), author: { __typename: 'Bot', login: 'github-actions-lookalike' } }] }), SINCE).outcome, 'pending');
 });
 
 test('a failed check wins over a review and still carries it', () => {
