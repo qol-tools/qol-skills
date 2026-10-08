@@ -45,8 +45,9 @@ request closed), 3 no pull request, 4 `gh` kept failing, 5 still pending after
 two hours, 6 checks green but auto-merge not armed, 7 a qol-code-review or
 queue-fix comment posted after the watcher started that needs you: findings
 "left for you", a fix commit the bot pushed to the branch, or a failed review
-or fix. A clean review, or one whose only open findings are low, keeps it
-watching; the latest comment supersedes earlier ones. A push to the branch
+or fix. Only a pass verdict lets the pull request into the merge queue, so
+every open finding of a conditional or block review is left for you. A pass
+keeps it watching; the latest comment supersedes earlier ones. A push to the branch
 while it runs is followed, because it always reads the latest head commit.
 
 Pushing fixes to the branch of a pull request the user asked for is part of

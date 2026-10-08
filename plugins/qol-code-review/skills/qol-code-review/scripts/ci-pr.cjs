@@ -477,7 +477,7 @@ function renderComment({ markdown, headSha, runUrl, repoUrl, since, fixSha, fixO
     const statuses = fixSha ? fixStatuses(fixReply) : new Map();
     const statusOf = (f) => statuses.get(f.id) || {};
     const fixed = findings.filter((f) => statusOf(f).status === 'fixed');
-    const left = findings.filter((f) => statusOf(f).status !== 'fixed' && ['blocker', 'high', 'medium'].includes(f.severity));
+    const left = data.verdict === 'pass' ? [] : findings.filter((f) => statusOf(f).status !== 'fixed' && LANES.some(([key]) => key === f.severity));
     const { byId, other } = assignHunks(withDiffs ? patchHunks(patch) : [], fixSha ? fixed : []);
     const commit = fixSha ? `[\`${short(fixSha)}\`](${repoUrl}/commit/${fixSha})` : '';
     const counts = LANES.filter(([key]) => data.counts?.[key] > 0).map(([key]) => `${data.counts[key]} ${key}`).join(' · ') || 'no findings';

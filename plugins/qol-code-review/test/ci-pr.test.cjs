@@ -56,7 +56,7 @@ const FIX_REPLY = 'Done.\n\n```json\n{"fixes": [{"id": "security-1", "status": "
 
 test('renderComment draws severity lanes, a fold per finding and the fix diff in the open', () => {
     const body = renderComment({ ...BASE, markdown: REVIEW, fixSha: FIX, fixReply: FIX_REPLY, patch: PATCH });
-    assert.ok(body.startsWith(`${CONFIG.commentMarker}\n\n<!-- reviewed ${HEAD} -->\n\n> [!CAUTION]\n> **Block** · 1 high · 1 low\n> 1 fixed in [\`00a5966\`](https://github.com/o/r/commit/${FIX}), 0 left for you.`));
+    assert.ok(body.startsWith(`${CONFIG.commentMarker}\n\n<!-- reviewed ${HEAD} -->\n\n> [!CAUTION]\n> **Block** · 1 high · 1 low\n> 1 fixed in [\`00a5966\`](https://github.com/o/r/commit/${FIX}), 1 left for you.`));
     assert.ok(body.includes('#### High · 1\n\n<details><summary>Allow only | Read <code>fixed</code></summary>'));
     assert.ok(body.includes(`[\`a.yml:12\`](https://github.com/o/r/blob/${HEAD}/.github/workflows/a.yml#L12) · \`security-1\``));
     assert.ok(body.includes('**Fix:** Allowlisted tools'));
