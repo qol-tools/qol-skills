@@ -4,7 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const path = require('node:path');
 
-const { reviewReply, appliedFiles, refuseOutside, deniedReads, deniedWrites, parseArgs, lastVerdict, reviewJson, withoutJson, fixStatuses, patchHunks, renderComment, CONFIG } = require(path.join(__dirname, '..', 'skills', 'qol-code-review', 'scripts', 'ci-pr.cjs'));
+const { reviewReply, appliedFiles, refuseOutside, deniedReads, deniedWrites, parseArgs, lastVerdict, reviewJson, withoutJson, fixStatuses, patchHunks, renderComment, renderQueueComment, jobErrors, logTail, CONFIG } = require(path.join(__dirname, '..', 'skills', 'qol-code-review', 'scripts', 'ci-pr.cjs'));
 
 const HEAD = '177805ca3d66cc5c451f77336320b891bb3ee303';
 const FIX = '00a59666596d3fd41327ce1d3c0ed14b4c13a1ad';
@@ -191,4 +191,36 @@ test('previous picks the last review comment that recorded its head', () => {
     const none = spawnSync('node', [script, 'previous', '--out', out], { input: '', encoding: 'utf8' });
     assert.strictEqual(none.stdout.trim(), '');
     fs.rmSync(out, { recursive: true, force: true });
+});
+
+const QUEUE = { pr: 73, headRef: 'b', headSha: HEAD, runUrl: 'https://github.com/o/r/actions/runs/2', jobs: [{ name: 'Plan affected crates', url: 'https://job/1' }] };
+
+test('jobErrors keeps failure annotations with their place and drops exit codes', () => {
+    const note = (message, extra = {}) => ({ annotation_level: 'failure', path: '.github', message, ...extra });
+    assert.deepStrictEqual(jobErrors([
+        note('races a\n short clock', { path: 'a.rs', start_line: 3 }),
+        note('plan failed'),
+        note('Process completed with exit code 1.'),
+        note('old', { annotation_level: 'warning' }),
+    ]), ['- a.rs:3: races a short clock', '- plan failed']);
+});
+
+test('logTail starts at the step that failed and drops timestamps and colours', () => {
+    const log = ['2026-10-08T05:46:12.1Z ##[group]Run early', '2026-10-08T05:46:12.2Z fine', '2026-10-08T05:46:12.3Z ##[group]Run lint', '2026-10-08T05:46:12.4Z \x1b[36mchecking\x1b[0m', '2026-10-08T05:46:12.5Z ##[error]boom', '2026-10-08T05:46:12.6Z ##[group]Run cleanup'].join('\n');
+    assert.strictEqual(logTail(log), '##[group]Run lint\nchecking\n##[error]boom\n##[group]Run cleanup');
+});
+
+test('renderQueueComment cautions until a fix is pushed', () => {
+    const base = { queue: QUEUE, runUrl: 'https://run', repoUrl: 'https://github.com/o/r' };
+    const none = renderQueueComment(base);
+    assert.ok(none.startsWith(`${CONFIG.queueCommentMarker}\n\n> [!CAUTION]\n> **Merge queue failed** · [Plan affected crates](https://job/1)\n> Nothing was changed, so queueing this head again fails the same way`));
+    assert.ok(renderQueueComment({ ...base, fixRefused: 'x' }).includes('> The fix needed files outside this pull request'));
+    assert.ok(renderQueueComment({ ...base, fixOutcome: 'failure' }).includes('> Fixing failed, nothing was pushed.'));
+    const reply = 'Shortened nothing.\n\n```json\n{"fixes": [{"job": "Plan affected crates", "status": "fixed", "note": "Raised the timeout"}]}\n```\n';
+    const fixed = renderQueueComment({ ...base, fixSha: FIX, fixReply: reply, patch: PATCH });
+    assert.ok(fixed.includes(`> [!TIP]\n> **Merge queue failed** · [Plan affected crates](https://job/1)\n> Fixed in [\`00a5966\`](https://github.com/o/r/commit/${FIX}). Queue it again once its checks pass.`));
+    assert.ok(fixed.includes('- **Plan affected crates** <code>fixed</code> Raised the timeout'));
+    assert.ok(fixed.includes('```diff\n@@ a.yml:12 @@\n-  old\n+  new\n```'));
+    assert.ok(fixed.includes('<details><summary>Fix session</summary>\n\nShortened nothing.\n\n</details>'));
+    assert.ok(fixed.includes(`<sub>qol-code-review · ${CONFIG.queueFixModel} · head \`177805c\``));
 });

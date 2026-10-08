@@ -36,8 +36,8 @@ function git(args, opts = {}) {
     return result.stdout;
 }
 
-function claude(prompt, args, env = {}) {
-    const result = spawnSync('claude', ['-p', prompt, '--model', CONFIG.model, '--effort', CONFIG.effort, ...args], {
+function claude(prompt, args, { env = {}, model = CONFIG.model, effort = CONFIG.effort } = {}) {
+    const result = spawnSync('claude', ['-p', prompt, '--model', model, '--effort', effort, ...args], {
         encoding: 'utf8',
         maxBuffer: 256 * 1024 * 1024,
         stdio: ['ignore', 'pipe', 'inherit'],
@@ -157,7 +157,7 @@ function review(options) {
         '--dangerously-skip-permissions',
         '--disallowedTools', ...CONFIG.reviewDeniedTools, ...deniedReads(),
         '--output-format', 'stream-json', '--verbose',
-    ], { CLAUDE_CODE_SUBAGENT_MODEL: CONFIG.model, CLAUDE_CODE_SUBAGENT_MODEL_FORCE: '1' });
+    ], { env: { CLAUDE_CODE_SUBAGENT_MODEL: CONFIG.model, CLAUDE_CODE_SUBAGENT_MODEL_FORCE: '1' } });
     fs.writeFileSync(path.join(options.out, 'stream.jsonl'), raw);
     const { result, reply } = reviewReply(raw);
     console.log(`permission denials: ${JSON.stringify(result.permission_denials || [])}`);
@@ -199,8 +199,6 @@ function checkPatch(options) {
 
 function fix(options) {
     need(options, 'base', 'head', 'out');
-    const dir = path.join(options.out, 'fix');
-    fs.mkdirSync(dir, { recursive: true });
     const reviewDir = path.join(options.out, 'review');
     const verdict = fs.existsSync(path.join(reviewDir, 'report.json')) ? JSON.parse(fs.readFileSync(path.join(reviewDir, 'report.json'), 'utf8')).status : 'missing';
     if (!CONFIG.fixVerdicts.includes(verdict)) {
@@ -212,12 +210,18 @@ function fix(options) {
         return;
     }
     const prompt = `${fs.readFileSync(path.join(reviewDir, 'review.md'), 'utf8')}\n${fs.readFileSync(path.join(CI, 'fix-prompt.md'), 'utf8')}`;
+    fixSession(options, prompt, { subject: CONFIG.fixSubject });
+}
+
+function fixSession(options, prompt, { subject, model, effort }) {
+    const dir = path.join(options.out, 'fix');
+    fs.mkdirSync(dir, { recursive: true });
     const { reply } = reviewReply(claude(prompt, [
         '--settings', writeSettings(options.out),
         '--dangerously-skip-permissions',
         '--disallowedTools', ...CONFIG.fixDeniedTools, ...deniedReads(), ...deniedWrites(),
         '--output-format', 'stream-json', '--verbose',
-    ]), 'fixes');
+    ], { model, effort }), 'fixes');
     fs.writeFileSync(path.join(dir, 'reply.md'), reply);
     console.log(reply);
     git(['add', '-A']);
@@ -231,8 +235,93 @@ function fix(options) {
     const patch = git(['diff', '--cached', '--binary', '--no-renames']);
     if (!patch) return;
     fs.writeFileSync(path.join(dir, 'fix.patch'), patch);
-    fs.writeFileSync(path.join(dir, 'message.txt'), `${CONFIG.fixSubject}\n`);
+    fs.writeFileSync(path.join(dir, 'message.txt'), `${subject}\n`);
     console.log(`patch: ${path.join(dir, 'fix.patch')}`);
+}
+
+const QUEUE_BRANCH = /\/pr-(\d+)-[0-9a-f]{40}$/;
+const LOG_LINES = 120;
+const FAILURES_LIMIT = 60000;
+
+function gh(args) {
+    const call = (extra) => spawnSync('gh', ['api', ...extra, ...args], { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 });
+    let result = call([]);
+    if (result.status !== 0 && result.stderr.includes('--allow-escape-sequences')) result = call(['--allow-escape-sequences']);
+    if (result.status !== 0) throw new Error(`gh api ${args[0]} failed: ${result.stderr}`);
+    return result.stdout;
+}
+
+function logTail(log) {
+    const lines = String(log || '').split('\n')
+        .map((line) => line.replace(/^\uFEFF?\d{4}-\d\d-\d\dT[\d:.]+Z ?/, '').replace(/\x1b\[[0-9;]*m/g, '').trimEnd())
+        .filter((line) => line.trim());
+    const error = lines.findIndex((line) => line.startsWith('##[error]'));
+    const step = error < 0 ? 0 : lines.slice(0, error).map((line) => line.startsWith('##[group]Run ')).lastIndexOf(true);
+    return lines.slice(Math.max(0, step)).slice(-LOG_LINES).join('\n');
+}
+
+function jobErrors(annotations) {
+    return annotations
+        .filter((note) => note.annotation_level === 'failure' && note.message && !/^Process completed with exit code \d+\.$/.test(note.message.trim()))
+        .map((note) => `- ${note.path && note.path !== '.github' ? `${note.path}${note.start_line ? `:${note.start_line}` : ''}: ` : ''}${note.message.replace(/\s+/g, ' ').trim()}`);
+}
+
+function failuresMarkdown(jobs) {
+    const text = jobs.map((job) => [`## ${job.name}`, '', ...job.errors, '', '```text', job.log.replace(/```/g, "'''"), '```'].join('\n')).join('\n\n');
+    return text.length > FAILURES_LIMIT ? `${text.slice(0, FAILURES_LIMIT)}\n\n(cut at ${FAILURES_LIMIT} characters)` : text;
+}
+
+function queueContext(options) {
+    need(options, 'runId', 'repo', 'out');
+    const api = (route) => JSON.parse(gh([`repos/${options.repo}/${route}`]));
+    const run = api(`actions/runs/${options.runId}`);
+    const pr = Number(String(run.head_branch || '').match(QUEUE_BRANCH)?.[1]);
+    if (!pr) {
+        console.error(`no pull request in ${run.head_branch}`);
+        return;
+    }
+    const pull = api(`pulls/${pr}`);
+    if (pull.state !== 'open' || pull.head?.repo?.full_name !== options.repo) {
+        console.error(`#${pr} is ${pull.state} or comes from another repository, nothing to fix`);
+        return;
+    }
+    const jobs = api(`actions/runs/${options.runId}/jobs?per_page=100`).jobs
+        .filter((job) => ['failure', 'timed_out'].includes(job.conclusion))
+        .map((job) => ({ name: job.name, url: job.html_url, errors: jobErrors(api(`check-runs/${job.id}/annotations`)), log: logTail(gh([`repos/${options.repo}/actions/jobs/${job.id}/logs`])) }));
+    const dir = path.join(options.out, 'queue');
+    fs.mkdirSync(dir, { recursive: true });
+    const context = { pr, headRef: pull.head.ref, headSha: pull.head.sha, runUrl: run.html_url, jobs: jobs.map(({ name, url }) => ({ name, url })) };
+    fs.writeFileSync(path.join(dir, 'context.json'), JSON.stringify(context, null, 2));
+    fs.writeFileSync(path.join(dir, 'failures.md'), failuresMarkdown(jobs));
+    console.log([`pr=${pr}`, `head-ref=${pull.head.ref}`, `head-sha=${pull.head.sha}`, `merge-ref=refs/pull/${pr}/merge`].join('\n'));
+}
+
+function readQueue(out) {
+    const file = path.join(out || '', 'queue', 'context.json');
+    return out && fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : null;
+}
+
+function queueFix(options) {
+    need(options, 'base', 'head', 'out');
+    const queue = readQueue(options.out);
+    if (!queue) throw new Error('queue-fix needs the context queue-context writes');
+    if (git(['rev-parse', `${options.head}^2`]).trim() !== queue.headSha) {
+        console.log('the pull request moved since the queue run, nothing to fix');
+        return;
+    }
+    const prompt = [
+        `The merge queue sent pull request #${queue.pr} back: ${queue.runUrl}`,
+        '',
+        'Files the pull request changes:',
+        ...changedFiles([options.base, options.head]).map((file) => `- ${file}`),
+        '',
+        '# Failed jobs',
+        '',
+        fs.readFileSync(path.join(options.out, 'queue', 'failures.md'), 'utf8'),
+        '',
+        fs.readFileSync(path.join(CI, 'queue-fix-prompt.md'), 'utf8'),
+    ].join('\n');
+    fixSession(options, prompt, { subject: CONFIG.queueFixSubject, model: CONFIG.queueFixModel, effort: CONFIG.queueFixEffort });
 }
 
 const REVIEWED = /^<!-- reviewed ([0-9a-f]{40}) -->\n/;
@@ -375,9 +464,48 @@ function renderComment({ markdown, headSha, runUrl, repoUrl, since, fixSha, fixO
     return body.length > COMMENT_LIMIT && withDiffs ? renderComment({ markdown, headSha, runUrl, repoUrl, since, fixSha, fixOutcome, fixRefused, fixReply, patch, withDiffs: false }) : body;
 }
 
+function renderQueueComment({ queue, runUrl, repoUrl, fixSha, fixOutcome, fixRefused, fixReply, patch }) {
+    const short = (sha) => String(sha).slice(0, 7);
+    const jobs = queue.jobs.map((job) => `[${job.name}](${job.url})`).join(', ') || 'no job reported';
+    const again = 'Push a fix before queueing it again.';
+    const outcome = fixSha
+        ? `Fixed in [\`${short(fixSha)}\`](${repoUrl}/commit/${fixSha}). Queue it again once its checks pass.`
+        : fixRefused
+            ? `The fix needed files outside this pull request, so nothing was pushed. ${again}`
+            : fixOutcome === 'failure'
+                ? `Fixing failed, nothing was pushed. See [the run](${runUrl}). ${again}`
+                : `Nothing was changed, so queueing this head again fails the same way unless the failure was flaky. ${again}`;
+    const notes = (reviewJson(fixReply || '')?.fixes || []).filter((f) => f && f.note).map((f) => `- **${f.job || f.id}** <code>${f.status}</code> ${String(f.note).replace(/\s+/g, ' ')}`);
+    const prose = withoutJson(fixReply || '').trim();
+    return `${[
+        CONFIG.queueCommentMarker,
+        alert(fixSha ? 'TIP' : 'CAUTION', [`**Merge queue failed** · ${jobs}`, outcome]),
+        notes.join('\n'),
+        fixSha ? diffBlock(patchHunks(patch)) : '',
+        prose ? `<details><summary>Fix session</summary>\n\n${prose}\n\n</details>` : '',
+        `<sub>qol-code-review · ${CONFIG.queueFixModel} · head \`${short(queue.headSha)}\` · [queue run](${queue.runUrl}) · [run](${runUrl})</sub>`,
+    ].filter(Boolean).join('\n\n')}\n`;
+}
+
 function comment(options) {
     need(options, 'out', 'headSha', 'runUrl', 'repoUrl');
     const read = (file) => (fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '');
+    const queue = readQueue(options.out);
+    if (queue) {
+        const file = path.join(options.out, 'comment.md');
+        fs.writeFileSync(file, renderQueueComment({
+            queue,
+            runUrl: options.runUrl,
+            repoUrl: options.repoUrl,
+            fixSha: options.fixSha,
+            fixOutcome: options.fixOutcome,
+            fixRefused: read(path.join(options.out, 'fix', 'refused.txt')).trim(),
+            fixReply: read(path.join(options.out, 'fix', 'reply.md')),
+            patch: read(path.join(options.out, 'fix', 'fix.patch')),
+        }));
+        console.log(file);
+        return;
+    }
     const markdown = read(path.join(options.out, 'review', 'review.md')) || read(path.join(options.out, 'reply.md'));
     const body = renderComment({
         markdown,
@@ -401,9 +529,11 @@ function run(argv) {
     const options = parseArgs(argv);
     const commands = {
         plugins: () => console.log(CONFIG.plugins.join('\n')),
-        marker: () => console.log(CONFIG.commentMarker),
+        marker: () => console.log(readQueue(options.out) ? CONFIG.queueCommentMarker : CONFIG.commentMarker),
         review,
         fix,
+        'queue-context': queueContext,
+        'queue-fix': queueFix,
         'check-patch': checkPatch,
         previous,
         comment,
@@ -421,4 +551,4 @@ if (require.main === module) {
     }
 }
 
-module.exports = { reviewReply, appliedFiles, refuseOutside, deniedReads, deniedWrites, parseArgs, lastVerdict, reviewJson, withoutJson, fixStatuses, patchHunks, renderComment, CONFIG };
+module.exports = { reviewReply, appliedFiles, refuseOutside, deniedReads, deniedWrites, parseArgs, lastVerdict, reviewJson, withoutJson, fixStatuses, patchHunks, renderComment, renderQueueComment, jobErrors, logTail, CONFIG };

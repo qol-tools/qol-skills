@@ -12,5 +12,9 @@
   "fixDeniedTools": ["Bash", "Agent", "NotebookEdit", "WebFetch", "WebSearch"],
   "fixVerdicts": ["conditional", "block"],
   "fixSubject": "chore(review): address review findings",
-  "commentMarker": "<!-- qol-code-review -->"
+  "commentMarker": "<!-- qol-code-review -->",
+  "queueFixModel": "claude-opus-5-5",
+  "queueFixEffort": "high",
+  "queueFixSubject": "fix: make the merge queue checks pass",
+  "queueCommentMarker": "<!-- qol-queue-fix -->"
 }
