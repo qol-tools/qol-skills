@@ -1,6 +1,6 @@
 ---
 name: qol-monorepo-rules
-description: Always-on delivery rules for work inside qol-tools repositories - PR opt-in, auto-merge on every PR, standards evolution, guest-VM verification, and the build/test gate before reporting done. Autoinjected in full at session start and after every compaction in repos that list it with `vs autoinject`; these rules must fire without a topic trigger.
+description: Always-on delivery rules for work inside qol-tools repositories - PR opt-in, auto-merge on every PR, watching every PR until it merges, standards evolution, guest-VM verification, and the build/test gate before reporting done. Autoinjected in full at session start and after every compaction in repos that list it with `vs autoinject`; these rules must fire without a topic trigger.
 ---
 
 # qol-tools delivery rules
@@ -22,6 +22,34 @@ merge queue are the gate; do not wait for a merge go-ahead. A draft gets it righ
 after `gh pr ready`. The one exception: when the user says they are testing or
 holding a pull request, run `gh pr merge --disable-auto <number>` and wait for
 their word.
+
+## Every pull request is watched until it merges
+
+A pull request you open is yours until it merges. Do not report it done at
+`gh pr create`; listen for its outcome and fix what fails.
+
+<!-- inject:pr-watch:start -->
+[qol-pr-watch] When this command succeeds, start the pull request watcher as one background command whose exit wakes you (Claude Code: Bash `run_in_background`; a harness with no background completion event runs it in the foreground): `node <qol-workflow>/bin/pr-watch.cjs <pr-url> --pretty`. Exit 1 is a failure with the failed steps' logs: fix it on the branch, gate locally, push, and start the watcher again. Exit 0 is merged; exit 6 means arm `gh pr merge --auto`. Never poll with sleep loops or repeated `gh pr checks`. Skip only a pull request the user is testing or holding.
+<!-- inject:pr-watch:end -->
+
+The watcher polls GitHub inside its own process, so no turn is spent until
+there is an outcome. It exits once: 0 merged, 1 failed (a failed check or
+status on the head commit, a merge conflict, a merge queue removal, or the pull
+request closed), 3 no pull request, 4 `gh` kept failing, 5 still pending after
+two hours, 6 checks green but auto-merge not armed. A push to the branch while
+it runs is followed, because it always reads the latest head commit.
+
+Pushing fixes to the branch of a pull request the user asked for is part of
+that request. Re-arm `gh pr merge --auto` when the merge queue dropped the pull
+request. Report to the user when it merges, or when a failure needs their
+decision; a failure you cannot attribute to the change (a flake that passes on
+rerun, an outage) is reported with the evidence, never silently rerun forever.
+
+A PreToolUse hook (`pr-watch-context.cjs`) injects the paragraph above, with
+the absolute path filled in, before `gh pr create`, `gh pr ready`,
+`gh pr merge --auto`, and a `git push` to a branch with an open pull request.
+`~/.claude/.qol-pr-watch-reminder-off` silences it. Residual: the hook cannot
+see a pull request opened from the web UI or through an API call.
 
 ## Standards evolution
 
