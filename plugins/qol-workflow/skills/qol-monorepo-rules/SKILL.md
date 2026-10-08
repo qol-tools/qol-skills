@@ -1,6 +1,6 @@
 ---
 name: qol-monorepo-rules
-description: Always-on delivery rules for work inside qol-tools repositories - every change on a worktree branch delivered as a PR, auto-merge on every PR, watching every PR until it merges, standards evolution, guest-VM verification, and the build/test gate before reporting done. Autoinjected in full at session start and after every compaction in repos that list it with `vs autoinject`; these rules must fire without a topic trigger.
+description: Always-on delivery rules for work inside qol-tools repositories - every qol-monorepo change on a worktree branch delivered as a PR, qol-skills direct to main, auto-merge on every PR, watching every PR until it merges, standards evolution, guest-VM verification, and the build/test gate before reporting done. Autoinjected in full at session start and after every compaction in repos that list it with `vs autoinject`; these rules must fire without a topic trigger.
 ---
 
 # qol-tools delivery rules
@@ -8,13 +8,17 @@ description: Always-on delivery rules for work inside qol-tools repositories - e
 These are unconditional. They previously lived in the monorepo's root `CLAUDE.md`,
 which only Claude Code loaded. They are autoinjected at session start and after every compaction, in repos that list them with `vs autoinject`, so every agent gets them.
 
-## Every change goes through a worktree and a pull request
+## qol-monorepo: every change goes through a worktree and a pull request
 
-Make all work (tests, refactors, fixes, features, configs, skills, hooks, docs)
-on a branch in its own worktree and deliver it as a pull request. Never commit
-to `main`, in the main clone or anywhere else, unless the user explicitly asks
-for a direct-to-main change or approves one when asked. Issues and ADRs remain
-opt-in. Mechanics: `qol-workflow:git-trees`.
+In qol-monorepo, make all work (tests, refactors, fixes, features, configs,
+docs) on a branch in its own worktree and deliver it as a pull request. Never
+commit to its `main` unless the user explicitly asks for a direct-to-main change
+or approves one when asked.
+
+qol-skills is the exception: commit skill, hook, and plugin edits direct to
+`main` in its main clone, with no worktree and no pull request.
+
+Issues and ADRs remain opt-in. Mechanics: `qol-workflow:git-trees`.
 
 ## Every pull request merges itself
 
@@ -80,5 +84,6 @@ is not evidence the feature works.
 
 ## No pushing to main unless asked
 
-Pushing the worktree branch to open or update its pull request is part of the
-delivery and needs no separate ask. Push to `main` only when explicitly told.
+Pushing a qol-monorepo worktree branch to open or update its pull request is
+part of the delivery and needs no separate ask. Push to `main` only when
+explicitly told.

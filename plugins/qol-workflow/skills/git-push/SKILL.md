@@ -50,7 +50,7 @@ Squash only unpushed commits. Once a commit is on the remote, it stays.
 
 Never run `git push` or another remote-affecting git command unless the user explicitly asked for a push in the current turn. A request to commit is not a request to push.
 
-Pushing a worktree branch to open or update its pull request is part of the default PR route in `git-trees` and needs no separate ask; a push to `main` always does.
+Pushing a qol-monorepo worktree branch to open or update its pull request is part of the default PR route in `git-trees` and needs no separate ask; a push to `main` always does.
 
 An explicit combined request such as "commit and push" authorizes both operations in the same turn. Keep them as separate commands and verify the commit before pushing; do not require another user round trip between them.
 

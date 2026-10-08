@@ -1,6 +1,6 @@
 ---
 name: git-trees
-description: Use whenever modifying files, creating commits, or creating, switching, or branching in the qol-monorepo or qol-skills repo. Defines completion-as-commit, the mandatory Cargo.lock merge driver, the worktree-and-PR route every change takes, the explicit-ask exception for direct-to-main, and final squash delivery.
+description: Use whenever modifying files, creating commits, or creating, switching, or branching in the qol-monorepo or qol-skills repo. Defines completion-as-commit, the mandatory Cargo.lock merge driver, the worktree-and-PR route every qol-monorepo change takes, qol-skills direct-to-main commits, and final squash delivery.
 ---
 
 # git-trees
@@ -11,10 +11,12 @@ Feature branches live in dedicated worktree directories.
 
 ## The hard rule (read this first, every time)
 
-**Every change gets a worktree and a PR.** Tests, configs, rules, hooks, skill edits, doc fixes, lockfile bumps, normal fixes, refactors, and features all start on a branch in a new worktree and land on `main` through a pull request with auto-merge armed.
+**In qol-monorepo, every change gets a worktree and a PR.** Tests, configs, hooks, doc fixes, lockfile bumps, normal fixes, refactors, and features all start on a branch in a new worktree and land on `main` through a pull request with auto-merge armed.
 
-**Never commit to `main` directly** unless the user explicitly asks for a direct-to-main change, or you asked and they approved it for this change. Approval covers that one change, not the next.
-A commit on local `main` is the mistake this rule exists to prevent; create the worktree before the first edit.
+**Never commit to qol-monorepo `main` directly** unless the user explicitly asks for a direct-to-main change, or you asked and they approved it for this change. Approval covers that one change, not the next.
+A commit on its local `main` is the mistake this rule exists to prevent; create the worktree before the first edit.
+
+**qol-skills commits direct to `main`** in its main clone. No worktree, no PR, unless the user asks for one.
 
 **NEVER `git checkout -b`, `git checkout <other-branch>`, `git switch -c`, or `git switch <other-branch>` inside a qol main clone.**
 
@@ -74,9 +76,9 @@ Follow `qol-workflow:commit` for message and hook rules before invoking `git com
 - Anything inside a `worktrees/<feature>/` directory (you're already in a worktree - branch ops are expected)
 - Any command suffixed with ` # intentional` (rare recovery path; document why in the same turn)
 
-## Worktree and PR by default. Direct-to-main only on an explicit ask.
+## qol-monorepo: worktree and PR by default. Direct-to-main only on an explicit ask.
 
-The user set this on 2026-10-08: "always create worktrees and PRs - never directly to main unless specifically asked to do so or with approval".
+The user set this on 2026-10-08 for qol-monorepo: "always create worktrees and PRs - never directly to main unless specifically asked to do so or with approval". It does not apply to qol-skills, which commits direct to `main`.
 CI and the merge queue gate every change before it reaches `main`, and the PR is where the qol-code-review bot reviews it.
 
 - **Default route:** worktree branch, commit, push the branch, `gh pr create`, `gh pr merge --auto <number>`, then watch it with `bin/pr-watch.cjs` until it merges.
@@ -177,4 +179,5 @@ If the work on the feature branch was unmerged and worth saving, push it first t
 
 - Do not mix unrelated feature branches in the same feature directory.
 - Do not branch from the main clone to "save time". The hook will block you, and the recovery cost is higher than the worktree-add you avoided.
-- Do not skip the PR for skill, hook, or doc edits. They take the same worktree and PR route as product code; issues stay opt-in.
+- Do not skip the PR for qol-monorepo doc or config edits. They take the same worktree and PR route as product code; issues stay opt-in.
+- Do not open a worktree or PR for qol-skills edits unless asked. They commit direct to `main`.
