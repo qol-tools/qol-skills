@@ -4,9 +4,9 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const USAGE = [
-  "qols fork <problem> [+picks]   detached architect that owns the problem",
-  "qols bridge <task> [+picks]    lane that reports back to this session",
-  "picks: +tab +win, +<harness>, +<model>, +<effort>, or an [aliases] entry in sessions.toml",
+  "qols fork <problem> [-picks]   detached architect that owns the problem",
+  "qols bridge <task> [-picks]    lane that reports back to this session",
+  "picks: -tab -win, -<harness>, -<model>, -<effort>, or an [aliases] entry in sessions.toml",
 ].join("\n");
 
 export function parsePrompt(prompt) {
@@ -16,7 +16,9 @@ export function parsePrompt(prompt) {
   const verb = tokens.shift()?.toLowerCase();
   if (verb !== "fork" && verb !== "bridge") return { verb: "help" };
   const picks = [];
-  while (tokens.length > 0 && /^\+\S+$/.test(tokens.at(-1))) picks.unshift(tokens.pop());
+  while (tokens.length > 0 && /^--?[^-\s]\S*$/.test(tokens.at(-1))) {
+    picks.unshift(tokens.pop().replace(/^--?/, "-"));
+  }
   const message = tokens.join(" ");
   if (message === "") return { verb: "help" };
   return { verb, message, picks };

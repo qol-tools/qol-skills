@@ -9,25 +9,26 @@ test("only prompts starting with qols are intercepted", () => {
   }
 });
 
-test("trailing picks split off the message and inner + words stay in it", () => {
+test("trailing dash picks split off the message and inner dash words stay in it", () => {
   const cases = [
     ["qols fork Do this task", { verb: "fork", message: "Do this task", picks: [] }],
-    ["qols fork Do this +win +sonnet", { verb: "fork", message: "Do this", picks: ["+win", "+sonnet"] }],
-    ["QOLS Bridge add +1 to the counter", { verb: "bridge", message: "add +1 to the counter", picks: [] }],
-    ["qols bridge fix it\nnow +cc", { verb: "bridge", message: "fix it now", picks: ["+cc"] }],
+    ["qols fork Do this -win --sonnet", { verb: "fork", message: "Do this", picks: ["-win", "-sonnet"] }],
+    ["QOLS Bridge add -1 to the counter", { verb: "bridge", message: "add -1 to the counter", picks: [] }],
+    ["qols bridge fix it\nnow -cc", { verb: "bridge", message: "fix it now", picks: ["-cc"] }],
+    ["qols fork drop the - sign", { verb: "fork", message: "drop the - sign", picks: [] }],
   ];
   for (const [prompt, expected] of cases) assert.deepEqual(parsePrompt(prompt), expected, prompt);
 });
 
 test("a bare, unknown or empty command shows help", () => {
-  for (const prompt of ["qols", "qols help", "qols nope x", "qols fork", "qols fork +win"]) {
+  for (const prompt of ["qols", "qols help", "qols nope x", "qols fork", "qols fork -win"]) {
     assert.deepEqual(parsePrompt(prompt), { verb: "help" }, prompt);
   }
 });
 
 test("fork and bridge map onto the qol sessions CLI", () => {
-  assert.deepEqual(commandFor({ verb: "fork", message: "m", picks: ["+win"] }, "/repo"), [
-    "sessions", "fork", "--cwd", "/repo", "--brief", "m", "+win",
+  assert.deepEqual(commandFor({ verb: "fork", message: "m", picks: ["-win"] }, "/repo"), [
+    "sessions", "fork", "--cwd", "/repo", "--brief", "m", "-win",
   ]);
   assert.deepEqual(commandFor({ verb: "bridge", message: "m", picks: [] }, "/repo"), [
     "sessions", "spawn", "--cwd", "/repo", "--task", "m", "--background",
