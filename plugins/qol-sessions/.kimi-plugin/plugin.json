@@ -1,6 +1,6 @@
 {
   "name": "qol-sessions",
-  "version": "0.5.60",
+  "version": "0.6.0",
   "description": "Architect-to-implementer feature loop for independent terminals with event-signalled rounds, explicit closure, and a canonical final report.",
   "author": {
     "name": "KMRH47"
@@ -9,6 +9,10 @@
     "./skills/"
   ],
   "hooks": [
+    {
+      "event": "UserPromptSubmit",
+      "command": "node hooks/qols-intercept.mjs"
+    },
     {
       "event": "UserPromptSubmit",
       "command": "node bin/inject-session-bridge-context.cjs"

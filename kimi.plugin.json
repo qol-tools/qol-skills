@@ -107,6 +107,10 @@
     },
     {
       "event": "UserPromptSubmit",
+      "command": "node plugins/qol-sessions/hooks/qols-intercept.mjs"
+    },
+    {
+      "event": "UserPromptSubmit",
       "command": "node plugins/qol-sessions/bin/inject-session-bridge-context.cjs"
     },
     {

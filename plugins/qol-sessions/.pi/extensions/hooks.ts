@@ -9,6 +9,7 @@ const PRE_TOOL_USE_HOOKS = [
 ];
 
 const USER_PROMPT_SUBMIT_HOOKS = [
+    { script: "hooks/qols-intercept.mjs" },
     { script: "bin/inject-session-bridge-context.cjs" },
 ];
 
