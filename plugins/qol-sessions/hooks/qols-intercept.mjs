@@ -3,7 +3,7 @@ import { execFileSync, spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-const FLAGS = { surface: "--surface", harness: "--tool", model: "--model", effort: "--effort" };
+const FLAGS = { harness: "--tool", model: "--model", effort: "--effort", surface: "--surface" };
 
 const USAGE = [
   "qols fork <problem> [--harness H] [--model M] [--effort E] [--surface S]",
@@ -14,23 +14,114 @@ const USAGE = [
   "values may be [aliases] from sessions.toml; left out, sessions.toml defaults apply",
 ].join("\n");
 
+const VERBS = ["fork", "bridge", "test"];
+
+function distance(a, b) {
+  let row = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const next = [i];
+    for (let j = 1; j <= b.length; j++) {
+      next[j] = Math.min(row[j] + 1, next[j - 1] + 1, row[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    row = next;
+  }
+  return row[b.length];
+}
+
+function closest(word, options) {
+  const [best] = options.map((option) => [option, distance(word, option)]).sort((a, b) => a[1] - b[1]);
+  return best && best[1] <= Math.max(2, Math.floor(word.length / 3)) ? best[0] : null;
+}
+
+function usageFor(verb) {
+  return USAGE.split("\n").find((line) => line.startsWith(`qols ${verb} `));
+}
+
 export function parsePrompt(prompt) {
-  const match = /^qols(?:\s+([\s\S]*))?$/i.exec((prompt ?? "").trim());
+  const source = (prompt ?? "").trim();
+  const match = /^qols(?:\s+([\s\S]*))?$/i.exec(source);
   if (match === null) return null;
-  const tokens = (match[1] ?? "").trim().split(/\s+/).filter(Boolean);
-  const verb = tokens.shift()?.toLowerCase();
-  if (verb !== "fork" && verb !== "bridge" && verb !== "test") return { verb: "help" };
+  const tokens = [...source.matchAll(/\S+/g)].map((m) => ({ text: m[0], start: m.index, end: m.index + m[0].length }));
+  tokens.shift();
+  const verbToken = tokens.shift();
+  const verb = verbToken?.text.toLowerCase();
+  if (verbToken === undefined || verb === "help") return { verb: "help" };
+  if (!VERBS.includes(verb)) {
+    const guess = closest(verb, VERBS);
+    return {
+      verb: "help",
+      diagnostic: {
+        title: `unknown command \`${verbToken.text}\``,
+        source,
+        start: verbToken.start,
+        end: verbToken.end,
+        label: "qols has no such command",
+        notes: [
+          ...(guess ? [`help: did you mean \`${guess}\`?`] : []),
+          `note: commands are ${VERBS.join(", ")}`,
+        ],
+      },
+    };
+  }
   const flags = [];
-  while (tokens.length >= 2 && tokens.at(-2).startsWith("--")) {
-    const name = tokens.at(-2).slice(2);
-    if (!Object.hasOwn(FLAGS, name)) return { verb: "help", error: `unknown flag --${name}` };
+  while (tokens.length >= 2 && tokens.at(-2).text.startsWith("--")) {
+    const flag = tokens.at(-2);
+    const name = flag.text.slice(2);
+    if (!Object.hasOwn(FLAGS, name)) {
+      const guess = closest(name, Object.keys(FLAGS));
+      return {
+        verb: "help",
+        diagnostic: {
+          title: `unknown flag \`${flag.text}\``,
+          source,
+          start: flag.start,
+          end: flag.end,
+          label: "not a flag qols knows",
+          notes: [
+            ...(guess ? [`help: did you mean \`--${guess}\`?`] : []),
+            `note: flags are ${Object.keys(FLAGS).map((key) => `--${key}`).join(", ")}`,
+            `usage: ${usageFor(verb)}`,
+          ],
+        },
+      };
+    }
     const value = tokens.pop();
     tokens.pop();
-    flags.unshift(FLAGS[name], value);
+    flags.unshift(FLAGS[name], value.text);
   }
-  const message = tokens.join(" ");
-  if (message === "") return { verb: "help" };
-  return { verb, message, flags };
+  if (tokens.length === 0) {
+    return {
+      verb: "help",
+      diagnostic: {
+        title: `\`qols ${verb}\` needs a task`,
+        source,
+        start: verbToken.end,
+        end: verbToken.end + 1,
+        label: "expected a task here",
+        notes: [`usage: ${usageFor(verb)}`],
+      },
+    };
+  }
+  return { verb, message: tokens.map((t) => t.text).join(" "), flags };
+}
+
+export function renderDiagnostic({ title, source, start, end, label, notes }) {
+  const lineStart = source.lastIndexOf("\n", start - 1) + 1;
+  const lineEnd = source.indexOf("\n", start) === -1 ? source.length : source.indexOf("\n", start);
+  const line = source.slice(lineStart, lineEnd);
+  const lineNumber = source.slice(0, lineStart).split("\n").length;
+  const column = start - lineStart;
+  const width = Math.max(1, Math.min(end, lineEnd + 1) - start);
+  const gutter = " ".repeat(String(lineNumber).length);
+  return [
+    `error: ${title}`,
+    `${gutter}--> prompt:${lineNumber}:${column + 1}`,
+    `${gutter} |`,
+    `${lineNumber} | ${line}`,
+    `${gutter} | ${" ".repeat(column)}${"^".repeat(width)} ${label}`,
+    `${gutter} |`,
+    ...notes.map((note) => `${gutter} = ${note}`),
+  ].join("\n");
 }
 
 export function commandFor({ verb, message, flags }, cwd) {
@@ -56,7 +147,7 @@ function main() {
   const parsed = parsePrompt(input.prompt);
   if (parsed === null) process.exit(0);
 
-  let reason = parsed.error ? `${parsed.error}\n${USAGE}` : USAGE;
+  let reason = parsed.diagnostic ? renderDiagnostic(parsed.diagnostic) : USAGE;
   if (parsed.verb !== "help") {
     try {
       const output = execFileSync("qol", commandFor(parsed, input.cwd || process.cwd()), {
