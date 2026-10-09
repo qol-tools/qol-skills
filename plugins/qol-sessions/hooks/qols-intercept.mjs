@@ -1,7 +1,11 @@
 #!/usr/bin/env node
 import { execFileSync, spawn } from "node:child_process";
-import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+
+import { closest, renderDiagnostic } from "./_kit/diagnostic.mjs";
+import { runPromptCommand } from "./_kit/prompt-command.mjs";
+
+export { renderDiagnostic };
 
 const FLAGS = { harness: "--tool", model: "--model", effort: "--effort", surface: "--surface" };
 
@@ -15,23 +19,6 @@ const USAGE = [
 ].join("\n");
 
 const VERBS = ["fork", "bridge", "test"];
-
-function distance(a, b) {
-  let row = Array.from({ length: b.length + 1 }, (_, i) => i);
-  for (let i = 1; i <= a.length; i++) {
-    const next = [i];
-    for (let j = 1; j <= b.length; j++) {
-      next[j] = Math.min(row[j] + 1, next[j - 1] + 1, row[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
-    }
-    row = next;
-  }
-  return row[b.length];
-}
-
-function closest(word, options) {
-  const [best] = options.map((option) => [option, distance(word, option)]).sort((a, b) => a[1] - b[1]);
-  return best && best[1] <= Math.max(2, Math.floor(word.length / 3)) ? best[0] : null;
-}
 
 function usageFor(verb) {
   return USAGE.split("\n").find((line) => line.startsWith(`qols ${verb} `));
@@ -105,25 +92,6 @@ export function parsePrompt(prompt) {
   return { verb, message: tokens.map((t) => t.text).join(" "), flags };
 }
 
-export function renderDiagnostic({ title, source, start, end, label, notes }) {
-  const lineStart = source.lastIndexOf("\n", start - 1) + 1;
-  const lineEnd = source.indexOf("\n", start) === -1 ? source.length : source.indexOf("\n", start);
-  const line = source.slice(lineStart, lineEnd);
-  const lineNumber = source.slice(0, lineStart).split("\n").length;
-  const column = start - lineStart;
-  const width = Math.max(1, Math.min(end, lineEnd + 1) - start);
-  const gutter = " ".repeat(String(lineNumber).length);
-  return [
-    `error: ${title}`,
-    `${gutter}--> prompt:${lineNumber}:${column + 1}`,
-    `${gutter} |`,
-    `${lineNumber} | ${line}`,
-    `${gutter} | ${" ".repeat(column)}${"^".repeat(width)} ${label}`,
-    `${gutter} |`,
-    ...notes.map((note) => `${gutter} = ${note}`),
-  ].join("\n");
-}
-
 export function commandFor({ verb, message, flags }, cwd) {
   if (verb === "fork") return ["sessions", "fork", "--cwd", cwd, "--brief", message, ...flags];
   if (verb === "test") return ["sessions", "fork", "--cwd", cwd, "--brief", message, "--dry-run", ...flags];
@@ -137,34 +105,26 @@ export function summarize(verb, outcome) {
   return `qols bridge: ${outcome.key} (${launch}); its report arrives here as the next prompt`;
 }
 
-function main() {
-  let input;
+function reply(parsed, cwd) {
+  if (parsed === null) return null;
+  if (parsed.verb === "help") return { reason: parsed.diagnostic ? renderDiagnostic(parsed.diagnostic) : USAGE };
   try {
-    input = JSON.parse(readFileSync(0, "utf8") || "{}");
-  } catch {
-    process.exit(0);
-  }
-  const parsed = parsePrompt(input.prompt);
-  if (parsed === null) process.exit(0);
-
-  let reason = parsed.diagnostic ? renderDiagnostic(parsed.diagnostic) : USAGE;
-  if (parsed.verb !== "help") {
-    try {
-      const output = execFileSync("qol", commandFor(parsed, input.cwd || process.cwd()), {
-        encoding: "utf8",
-        stdio: ["ignore", "pipe", "pipe"],
-      });
-      const outcome = JSON.parse(output);
-      if (parsed.verb === "bridge") {
-        spawn("qol", ["sessions", "watch", outcome.session], { detached: true, stdio: "ignore" }).unref();
-      }
-      reason = summarize(parsed.verb, outcome);
-    } catch (error) {
-      reason = `qols ${parsed.verb}: ${`${error.stderr ?? ""}`.trim() || error.message}`;
+    const output = execFileSync("qol", commandFor(parsed, cwd), {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    const outcome = JSON.parse(output);
+    if (parsed.verb === "bridge") {
+      spawn("qol", ["sessions", "watch", outcome.session], { detached: true, stdio: "ignore" }).unref();
     }
+    return { reason: summarize(parsed.verb, outcome) };
+  } catch (error) {
+    return { reason: `qols ${parsed.verb}: ${`${error.stderr ?? ""}`.trim() || error.message}` };
   }
-  process.stdout.write(JSON.stringify({ decision: "block", reason }) + "\n");
-  process.exit(0);
+}
+
+function main() {
+  runPromptCommand({ parse: (prompt, cwd) => reply(parsePrompt(prompt), cwd), prefix: "qols", cwd: "input" });
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) main();
