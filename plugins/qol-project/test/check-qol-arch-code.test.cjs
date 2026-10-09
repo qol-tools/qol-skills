@@ -514,6 +514,101 @@ test('passes explicit fallback shim for an unsupported OS', () => {
     assert.equal(r.exitCode, 0, r.stderr);
 });
 
+function writeFacade(files, content) {
+    const { modFile } = fixturePlatform(files);
+    return run({ tool_name: 'Write', tool_input: { file_path: modFile, content } });
+}
+
+test('passes a facade that selects its adapters under any visibility or alias', () => {
+    const r = writeFacade(
+        {
+            'linux.rs': 'pub(super) fn run() {}\n',
+            'macos.rs': 'pub(super) fn run() {}\n',
+            'windows.rs': 'pub(super) fn run() {}\n',
+        },
+        [
+            '#[cfg(target_os = "linux")]',
+            'pub(crate) mod linux;',
+            '#[cfg(target_os = "macos")]',
+            'mod macos;',
+            '#[cfg(target_os = "windows")]',
+            'mod windows;',
+            '#[cfg(target_os = "linux")]',
+            'use linux as active;',
+            '#[cfg(target_os = "macos")]',
+            'use macos as active;',
+            '#[cfg(target_os = "windows")]',
+            'use self::windows as active;',
+            '',
+        ].join('\n'),
+    );
+    assert.equal(r.exitCode, 0, r.stderr);
+});
+
+test('still blocks a facade that gates an external import by target', () => {
+    const r = writeFacade(
+        { 'linux.rs': '', 'macos.rs': '', 'windows.rs': '' },
+        ['mod linux;', '#[cfg(target_os = "linux")]', 'use std::sync::OnceLock;', ''].join('\n'),
+    );
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /canonical mod.rs/);
+});
+
+test('counts a not(target_os) fallback selection as target coverage', () => {
+    const r = writeFacade(
+        { 'linux.rs': 'pub(super) fn run() {}\n', 'fallback.rs': 'pub(super) fn run() {}\n' },
+        [
+            '#[cfg(not(target_os = "linux"))]',
+            'mod fallback;',
+            '#[cfg(target_os = "linux")]',
+            'mod linux;',
+            '#[cfg(not(target_os = "linux"))]',
+            'use fallback as imp;',
+            '#[cfg(target_os = "linux")]',
+            'use linux as imp;',
+            '',
+            'pub(super) fn run() { imp::run() }',
+            '',
+        ].join('\n'),
+    );
+    assert.equal(r.exitCode, 0, r.stderr);
+});
+
+test('counts unix and windows family selections as target coverage', () => {
+    const r = writeFacade(
+        { 'unix.rs': 'pub(crate) fn run() {}\n', 'windows.rs': 'pub(crate) fn run() {}\n' },
+        [
+            '#[cfg(unix)]',
+            'mod unix;',
+            '#[cfg(windows)]',
+            'mod windows;',
+            '#[cfg(unix)]',
+            'pub(crate) use unix::run;',
+            '#[cfg(windows)]',
+            'pub(crate) use windows::run;',
+            '',
+        ].join('\n'),
+    );
+    assert.equal(r.exitCode, 0, r.stderr);
+});
+
+test('does not count a feature-gated selection as target coverage', () => {
+    const r = writeFacade(
+        { 'linux.rs': 'pub(super) fn run() {}\n', 'macos.rs': 'pub(super) fn run() {}\n' },
+        [
+            '#[cfg(target_os = "linux")]',
+            'pub(super) use linux::run;',
+            '#[cfg(target_os = "macos")]',
+            'pub(super) use macos::run;',
+            '#[cfg(all(target_os = "windows", feature = "shim"))]',
+            'pub(super) use macos::run;',
+            '',
+        ].join('\n'),
+    );
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /missing target coverage: windows/);
+});
+
 test('blocks direct re-export surface drift between OS adapters', () => {
     const { modFile } = fixturePlatform({
         'linux.rs': 'pub(super) fn run() {}\npub(super) fn notify() {}\n',

@@ -505,8 +505,29 @@ function productionCode(content) {
     return sanitizeSource(maskTestItems(content), false);
 }
 
+const FACADE_MOD_DECLARATION = /^\s*(?:pub(?:\([^)]*\))?\s+)?mod\s+([A-Za-z_]\w*)\s*;/;
+const FACADE_SIBLING_USE = /^\s*(?:pub(?:\([^)]*\))?\s+)?use\s+(?:self::)?([A-Za-z_]\w*)(?:\s+as\b|::)/;
+
+function declaredModules(lines) {
+    const names = new Set();
+    for (const line of lines) {
+        const match = line.match(FACADE_MOD_DECLARATION);
+        if (match) names.add(match[1]);
+    }
+    return names;
+}
+
+// A platform/mod.rs facade declares its adapter modules and selects one per
+// target, whatever the visibility or the alias it selects them under.
+function isFacadeSelection(line, siblings) {
+    if (FACADE_MOD_DECLARATION.test(line)) return true;
+    const use = line.match(FACADE_SIBLING_USE);
+    return use !== null && siblings.has(use[1]);
+}
+
 function findCfgViolations(content, allowTargetAdapterAlias = false) {
     const lines = content.split(/\r?\n/);
+    const siblings = allowTargetAdapterAlias ? declaredModules(lines) : new Set();
     const violations = [];
     let pending = null; // { lineno, text }
 
@@ -519,7 +540,8 @@ function findCfgViolations(content, allowTargetAdapterAlias = false) {
             }
             if (
                 CANONICAL_TARGET.test(line) ||
-                (allowTargetAdapterAlias && TARGET_ADAPTER_ALIAS.test(line))
+                (allowTargetAdapterAlias &&
+                    (TARGET_ADAPTER_ALIAS.test(line) || isFacadeSelection(line, siblings)))
             ) {
                 pending = null;
                 continue;
@@ -571,14 +593,76 @@ function isOsAdapterFile(filePath) {
     return context !== null && context.target !== null;
 }
 
+// Evaluates a cfg predicate for one target. Returns null when the predicate
+// names anything other than the target platform (a feature, test, ...), so a
+// selection that depends on it never counts as target coverage.
+function cfgHolds(expression, target) {
+    let index = 0;
+    const skipSpace = () => {
+        while (index < expression.length && /\s/.test(expression[index])) index++;
+    };
+    const parse = () => {
+        skipSpace();
+        const word = expression.slice(index).match(/^[A-Za-z_]\w*/);
+        if (!word) throw new Error('cfg');
+        index += word[0].length;
+        skipSpace();
+        if (expression[index] === '(') {
+            index++;
+            const values = [];
+            skipSpace();
+            while (expression[index] !== ')') {
+                values.push(parse());
+                skipSpace();
+                if (expression[index] === ',') index++;
+                skipSpace();
+                if (index >= expression.length) throw new Error('cfg');
+            }
+            index++;
+            if (word[0] === 'not' && values.length === 1) return values[0] === null ? null : !values[0];
+            if (values.includes(null)) return null;
+            if (word[0] === 'all') return values.every(Boolean);
+            if (word[0] === 'any') return values.some(Boolean);
+            throw new Error('cfg');
+        }
+        if (expression[index] === '=') {
+            index++;
+            skipSpace();
+            const literal = expression.slice(index).match(/^"([^"]*)"/);
+            if (!literal) throw new Error('cfg');
+            index += literal[0].length;
+            if (word[0] === 'target_os') return literal[1] === target;
+            if (word[0] === 'target_family') return literal[1] === (target === 'windows' ? 'windows' : 'unix');
+            return null;
+        }
+        if (word[0] === 'unix') return target !== 'windows';
+        if (word[0] === 'windows') return target === 'windows';
+        return null;
+    };
+    try {
+        const value = parse();
+        skipSpace();
+        return index === expression.length ? value : null;
+    } catch {
+        return null;
+    }
+}
+
+function cfgTargets(attribute) {
+    const match = attribute.match(/^\s*#\[cfg\(([\s\S]*)\)\]\s*$/);
+    if (!match) return [];
+    return TARGET_OS_NAMES.filter(target => cfgHolds(match[1], target) === true);
+}
+
 function targetScopedUses(content) {
     const lines = content.split(/\r?\n/);
     const selections = new Map();
     for (let i = 0; i < lines.length; i++) {
-        const cfg = lines[i];
-        if (!cfg.includes('target_os') || cfg.includes('not(')) continue;
-        const targets = [...cfg.matchAll(/target_os\s*=\s*"(linux|macos|windows)"/g)]
-            .map(match => match[1]);
+        if (!/^\s*#\[cfg\(/.test(lines[i])) continue;
+        let attribute = lines[i];
+        while (!/\)\]\s*$/.test(attribute) && i + 1 < lines.length) attribute += ` ${lines[++i].trim()}`;
+        if (!/target_os|target_family|\bunix\b|\bwindows\b/.test(attribute)) continue;
+        const targets = cfgTargets(attribute);
         if (targets.length === 0) continue;
 
         let itemIndex = i + 1;
@@ -591,7 +675,7 @@ function targetScopedUses(content) {
         }
         const item = itemLines.join('\n');
         const match = item.match(
-            /^\s*(?:pub(?:\([^)]*\))?\s+)?use\s+([A-Za-z_]\w*)(?:(::(?:\*|[A-Za-z_]\w*|\{[\s\S]*\}))|\s+as\s+([A-Za-z_]\w*))\s*;/,
+            /^\s*(?:pub(?:\([^)]*\))?\s+)?use\s+(?:self::)?([A-Za-z_]\w*)(?:(::(?:\*|[A-Za-z_]\w*|\{[\s\S]*\}))|\s+as\s+([A-Za-z_]\w*))\s*;/,
         );
         if (!match) continue;
         const moduleName = match[1];
