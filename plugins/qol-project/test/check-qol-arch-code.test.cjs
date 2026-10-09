@@ -735,6 +735,15 @@ test('blocks OS-named files placed outside a platform/ directory', () => {
     assert.match(r.stderr, /must live inside[\s\S]*`platform\/`/);
 });
 
+test('leaves cfg(target_os) on a use statement outside platform/ to the cross-platform guard', () => {
+    const file = fixtureFile('src/feature/mod.rs');
+    const r = run({
+        tool_name: 'Write',
+        tool_input: { file_path: file, content: '#[cfg(target_os = "linux")]\nuse std::sync::OnceLock;\n' },
+    });
+    assert.equal(r.exitCode, 0, r.stderr);
+});
+
 test('blocks cfg(target_os) gating a pub fn in business code', () => {
     const r = run({
         tool_name: 'Edit',

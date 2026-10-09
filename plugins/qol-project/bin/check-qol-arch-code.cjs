@@ -314,6 +314,12 @@ function readExistingFile(filePath) {
     }
 }
 
+// The content a rule about added code compares against: the file before the
+// edit, or the file at the lint base.
+function readBaseline(filePath) {
+    return lintMode.isTarget(filePath) ? lintMode.baseline() : readExistingFile(filePath);
+}
+
 function replaceFirst(source, oldString, newString) {
     const idx = source.indexOf(oldString);
     if (idx < 0) return null;
@@ -525,7 +531,11 @@ function isFacadeSelection(line, siblings) {
     return use !== null && siblings.has(use[1]);
 }
 
-function findCfgViolations(content, allowTargetAdapterAlias = false) {
+const USE_STATEMENT = /^\s*(?:pub(?:\([^)]*\))?\s+)?use\s+/;
+
+// qol-arch-cross-platform owns cfg(target_os) on a use statement outside a
+// platform/ directory, so this guard leaves those lines to it.
+function findCfgViolations(content, allowTargetAdapterAlias = false, usesOwnedElsewhere = false) {
     const lines = content.split(/\r?\n/);
     const siblings = allowTargetAdapterAlias ? declaredModules(lines) : new Set();
     const violations = [];
@@ -539,6 +549,7 @@ function findCfgViolations(content, allowTargetAdapterAlias = false) {
                 continue; // stacked attributes — keep waiting
             }
             if (
+                (usesOwnedElsewhere && USE_STATEMENT.test(line)) ||
                 CANONICAL_TARGET.test(line) ||
                 (allowTargetAdapterAlias &&
                     (TARGET_ADAPTER_ALIAS.test(line) || isFacadeSelection(line, siblings)))
@@ -925,7 +936,7 @@ function settingsSignalCounts(content) {
 
 function findNewSettingsSignals(filePath, newContent) {
     if (findPluginContext(filePath)?.area !== 'src') return [];
-    const before = settingsSignalCounts(readExistingFile(filePath) || '');
+    const before = settingsSignalCounts(readBaseline(filePath) || '');
     const after = settingsSignalCounts(newContent);
     return SETTINGS_SIGNALS
         .filter((_, index) => after[index] > before[index])
@@ -1030,7 +1041,7 @@ const TEST_DEADLINE_LABELS = [
 ];
 
 function findNewTestDeadlines(filePath, newContent) {
-    const before = testDeadlineCounts(filePath, readExistingFile(filePath) || '');
+    const before = testDeadlineCounts(filePath, readBaseline(filePath) || '');
     const after = testDeadlineCounts(filePath, newContent);
     return TEST_DEADLINE_LABELS.filter((_, index) => after[index] > before[index]);
 }
@@ -1142,7 +1153,7 @@ function platformDecisionSignals(content) {
 }
 
 function findNewPlatformDecisionSignals(filePath, newContent) {
-    const before = new Set(platformDecisionSignals(readExistingFile(filePath) || ''));
+    const before = new Set(platformDecisionSignals(readBaseline(filePath) || ''));
     return platformDecisionSignals(newContent).filter(signal => !before.has(signal));
 }
 
@@ -1378,7 +1389,7 @@ function findNewDesignViolations(tool, input, filePath) {
     const relative = design.relativeTo(root, filePath);
     const after = extractNewContent(tool, { ...input, file_path: filePath });
     if (!after) return null;
-    const violations = design.newViolations(relative, readExistingFile(filePath), after, root);
+    const violations = design.newViolations(relative, readBaseline(filePath), after, root);
     return violations.length > 0 ? { relative, violations } : null;
 }
 
@@ -1483,6 +1494,7 @@ function evaluate(payload) {
     const violations = findCfgViolations(
         productionCode(newContent),
         platformContext(filePath)?.facade === true,
+        !/[\\/]platform[\\/]/.test(filePath),
     );
     if (violations.length > 0) {
         blockCfgViolations(filePath, violations);
@@ -1500,12 +1512,12 @@ function evaluate(payload) {
     return 0;
 }
 
-function lintFile(filePath, content) {
+function lintFile(filePath, content, baseline = null) {
     return lintMode.run(filePath, () => evaluate({
         tool_name: 'Write',
         tool_input: { file_path: filePath, content },
         cwd: path.dirname(filePath),
-    }));
+    }), baseline);
 }
 
 const LOCATORS = [

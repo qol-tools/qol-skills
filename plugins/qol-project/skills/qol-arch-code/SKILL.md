@@ -817,7 +817,16 @@ Residual: a path built by hand from `HOME` or `XDG_CONFIG_HOME`, or a settings w
 
 ### Lint: `qac`
 
-The edit-time hooks only see new violations, so existing debt stays invisible until someone touches the file. `qac lint [path ...]` runs the qol-arch-code, cross-platform, cicd and logging hooks over whole tracked and untracked files (the whole repo when no path is given), counting every violation already there. It never consumes a bypass marker, and it skips `vendor/` and `third_party/`. Each hook exposes `lintFile(path, content)` through `bin/hook-lint-mode.cjs`, so a new filter in any of them is linted too.
+The edit-time hooks only see new violations, so existing debt stays invisible until someone touches the file. `qac lint [path ...]` runs the qol-arch-code, cross-platform, cicd and logging hooks over whole tracked and untracked files (the whole repo when no path is given), counting every violation already there. It never consumes a bypass marker, and it skips `vendor/` and `third_party/`. Each hook exposes `lintFile(path, content, baseline)` through `bin/hook-lint-mode.cjs`, so a new filter in any of them is linted too.
+
+The rules come in two kinds, and lint treats them differently.
+Rules about the code as it stands (cfg placement, facade coverage, source layout, adapter-exclusive helpers, allow attributes) hold or fail on a file alone, so lint checks them on every file.
+Rules about added code (platform decision signals, settings, design, test deadlines, logging) compare a file with its earlier content, which a static file does not have.
+Without a base, lint counts every line as added, which turns "do not add X" into "X must never exist".
+`qac lint --base=<rev>` compares those rules with each file at `<rev>` instead: an unchanged file finds nothing, a changed file finds only what it added, and a file new since `<rev>` counts in full.
+CI runs `qac lint --base=<merge base>` over the whole repo, so rules about the code as it stands hold everywhere and rules about added code judge only the pull request.
+A rule goes in one kind or the other, never both: a new rule reads `readBaseline` only when it is about added code.
+`#[cfg(target_os)]` on a `use` outside `platform/` is owned by qol-arch-cross-platform; qol-arch-code leaves those lines to it so one line is never two findings.
 
 Type `qac lint` as a bare prompt (the `hooks/qac-intercept.mjs` typed-verb hook answers with no model turn), run `/qac [path ...]`, or call `node scripts/qac.mjs lint --pretty`. Without `--pretty` it prints JSON; exit 0 is clean, 1 has findings, 2 is a bad verb, 3 is outside a git repository.
 

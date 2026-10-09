@@ -49,7 +49,7 @@ function readStdin() {
 }
 
 function readExistingFile(filePath) {
-    if (lintMode.isTarget(filePath)) return null;
+    if (lintMode.isTarget(filePath)) return lintMode.baseline();
     try {
         return fs.readFileSync(filePath, 'utf8');
     } catch {
@@ -262,11 +262,11 @@ function evaluate(payload) {
     return 2;
 }
 
-function lintFile(filePath, content) {
+function lintFile(filePath, content, baseline = null) {
     return lintMode.run(filePath, () => evaluate({
         tool_name: 'Write',
         tool_input: { file_path: filePath, content },
-    }));
+    }), baseline);
 }
 
 const LOCATORS = SIGNALS.map(signal => ({ label: signal.name, re: signal.re }));

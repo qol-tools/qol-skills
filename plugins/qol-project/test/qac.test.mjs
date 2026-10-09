@@ -50,6 +50,35 @@ test("lint reports existing debt that the edit-time hooks would let stand", () =
   assert.match(result.findings[0].summary, /raw config file path/);
 });
 
+function commitAll(root) {
+  const git = args => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...args], { cwd: root });
+  git(["add", "-A"]);
+  git(["commit", "-q", "-m", "base"]);
+  return execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim();
+}
+
+test("lint --base judges rules about added code against the base revision", () => {
+  const config = "plugins/fixture/src/config/mod.rs";
+  const raw = "    let _ = qol_config::plugin_config_paths(&[ID]);\n";
+  const root = repo({ ...PLUGIN, [config]: `pub fn paths() {\n${raw}}\n` });
+  const base = commitAll(root);
+  assert.equal(lint(root, [], { base }).findings.length, 0);
+
+  writeFileSync(path.join(root, config), `pub fn paths() {\n${raw}${raw}}\n`);
+  writeFileSync(path.join(root, "plugins/fixture/src/config/fresh.rs"), `pub fn more() {\n${raw}}\n`);
+  const files = lint(root, [], { base }).findings.map(finding => finding.file).sort();
+  assert.deepEqual(files, ["plugins/fixture/src/config/fresh.rs", config]);
+});
+
+test("lint --base still judges rules about the code as it stands on every file", () => {
+  const root = repo({
+    ...PLUGIN,
+    "plugins/fixture/src/feature/mod.rs": "#[cfg(target_os = \"linux\")]\npub fn run() {}\n",
+  });
+  const base = commitAll(root);
+  assert.equal(lint(root, [], { base }).findings.length, 1);
+});
+
 test("lint passes clean files and narrows to the given paths", () => {
   const root = repo({
     ...PLUGIN,

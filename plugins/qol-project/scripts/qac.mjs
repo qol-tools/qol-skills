@@ -11,6 +11,7 @@ export function parseArgs(argv) {
   const positionals = argv.filter(arg => !arg.startsWith("--"));
   const prefix = flags.find(flag => flag.startsWith("--prefix="))?.slice("--prefix=".length) || "qac";
   const cwd = flags.find(flag => flag.startsWith("--cwd="))?.slice("--cwd=".length) || process.cwd();
+  const base = flags.find(flag => flag.startsWith("--base="))?.slice("--base=".length) || null;
   return {
     verb: (positionals[0] ?? "help").toLowerCase(),
     paths: positionals.slice(1),
@@ -18,6 +19,7 @@ export function parseArgs(argv) {
     open: flags.includes("--open"),
     prefix,
     cwd,
+    base,
   };
 }
 
@@ -47,7 +49,7 @@ export function run(argv, {
   const bar = progress("qac", `${args.prefix} ${args.verb}`);
   let result;
   try {
-    result = lint(args.cwd, args.paths, { ...deps, onProgress: bar.step });
+    result = lint(args.cwd, args.paths, { ...deps, base: args.base, onProgress: bar.step });
   } catch (error) {
     bar.finish("not a git repository", "bad");
     out(`${args.prefix} lint: ${args.cwd} is not inside a git repository (${error.message.split("\n")[0]})`);

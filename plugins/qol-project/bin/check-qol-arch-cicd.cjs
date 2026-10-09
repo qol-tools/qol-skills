@@ -443,12 +443,12 @@ function evaluate(payload) {
     return 0;
 }
 
-function lintFile(filePath, content) {
+function lintFile(filePath, content, baseline = null) {
     return lintMode.run(filePath, () => evaluate({
         tool_name: 'Write',
         tool_input: { file_path: filePath, content },
         cwd: path.dirname(filePath),
-    }));
+    }), baseline);
 }
 
 module.exports = { lintFile };

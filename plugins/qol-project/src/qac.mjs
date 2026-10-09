@@ -56,7 +56,27 @@ export function splitRule(summary, file = "") {
   };
 }
 
-export function lintFiles(root, files, { hooks = HOOKS, read = readFileSync, onProgress = () => {}, sources = {} } = {}) {
+// Rules about added code compare each file with its content at the base
+// revision: an unchanged file is its own baseline, a file new since the base
+// has none. Without a base every line counts as added.
+export function baselineReader(root, base, exec = execFileSync) {
+  if (!base) return () => null;
+  const run = args => exec("git", args, { cwd: root, encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
+  const changed = new Set([
+    ...run(["diff", "--name-only", "-z", base, "--"]).split("\0"),
+    ...run(["ls-files", "-z", "--others", "--exclude-standard"]).split("\0"),
+  ].filter(Boolean));
+  return (file, content) => {
+    if (!changed.has(file)) return content;
+    try {
+      return run(["show", `${base}:${file}`]);
+    } catch {
+      return null;
+    }
+  };
+}
+
+export function lintFiles(root, files, { hooks = HOOKS, read = readFileSync, onProgress = () => {}, sources = {}, baseline = () => null } = {}) {
   const findings = [];
   for (const [index, file] of files.entries()) {
     onProgress(index, files.length);
@@ -67,8 +87,9 @@ export function lintFiles(root, files, { hooks = HOOKS, read = readFileSync, onP
     } catch {
       continue;
     }
+    const before = baseline(file, content);
     for (const [hook, module] of hooks) {
-      for (const message of module.lintFile(absolute, content)) {
+      for (const message of module.lintFile(absolute, content, before)) {
         const summary = summarize(message);
         const lines = locate(message, content, file, module.LOCATORS);
         findings.push({ file, hook, summary, ...splitRule(summary, file), lines, message });
@@ -84,7 +105,8 @@ export function lint(cwd, paths = [], deps = {}) {
   const root = repoRoot(cwd, exec);
   const files = listFiles(root, paths, exec);
   const sources = {};
-  const findings = lintFiles(root, files, { ...deps, sources });
+  const baseline = baselineReader(root, deps.base, exec);
+  const findings = lintFiles(root, files, { ...deps, sources, baseline });
   deps.onProgress?.(files.length, files.length);
   const byHook = {};
   for (const finding of findings) byHook[finding.hook] = (byHook[finding.hook] ?? 0) + 1;
@@ -94,6 +116,7 @@ export function lint(cwd, paths = [], deps = {}) {
 export function renderHelp(prefix = "qac") {
   return [
     `${prefix} lint [path ...]  run the qol-arch-code, cross-platform, cicd and logging hooks over whole files (default: the whole repo)`,
+    `  --base=<rev>           judge rules about added code against <rev>, as the edit-time hooks judge an edit`,
     `${prefix} fix [path ...]   hand the findings to this session to fix, then re-lint (default: the ${FIX_FILE_LIMIT} files with most findings)`,
   ].join("\n");
 }
