@@ -459,6 +459,17 @@ test('passes OS-named files when nested in a platform/ directory', () => {
     }
 });
 
+test('passes OS-named files in a nested family under platform/', () => {
+    const r = run({
+        tool_name: 'Write',
+        tool_input: {
+            file_path: '/x/Git/qol-monorepo/src/daemon/platform/unix/macos.rs',
+            content: 'pub fn anything() {}\n',
+        },
+    });
+    assert.equal(r.exitCode, 0, r.stderr);
+});
+
 test('passes per-feature platform/ directory', () => {
     const r = run({
         tool_name: 'Write',
@@ -607,6 +618,64 @@ test('does not count a feature-gated selection as target coverage', () => {
     );
     assert.equal(r.exitCode, 2);
     assert.match(r.stderr, /missing target coverage: windows/);
+});
+
+test('checks a trait on every module a target selects', () => {
+    const impl = 'pub(super) struct Platform;\nimpl Run for Platform {\n    fn run(&self) {}\n}\n';
+    const r = writeFacade(
+        { 'unix.rs': impl, 'windows.rs': impl, 'termios.rs': 'pub(crate) fn capture() {}\n', 'stub.rs': 'pub(crate) fn capture() {}\n' },
+        [
+            '#[cfg(unix)]',
+            'mod termios;',
+            '#[cfg(unix)]',
+            'mod unix;',
+            '#[cfg(windows)]',
+            'mod stub;',
+            '#[cfg(windows)]',
+            'mod windows;',
+            '#[cfg(unix)]',
+            'pub(crate) use termios::capture;',
+            '#[cfg(windows)]',
+            'pub(crate) use stub::capture;',
+            '#[cfg(unix)]',
+            'use unix::Platform;',
+            '#[cfg(windows)]',
+            'use windows::Platform;',
+            '',
+            'trait Run {',
+            '    fn run(&self);',
+            '}',
+            '',
+        ].join('\n'),
+    );
+    assert.equal(r.exitCode, 0, r.stderr);
+});
+
+test('ignores a trait an adapter implements only for a type the facade never selects', () => {
+    const r = writeFacade(
+        {
+            'unix.rs': 'pub(super) fn connect() {}\nimpl Connection for std::os::unix::net::UnixStream {\n    fn close(&self) {}\n}\n',
+            'fallback.rs': 'pub(super) fn connect() {}\n',
+        },
+        [
+            '#[cfg(not(unix))]',
+            'mod fallback;',
+            '#[cfg(unix)]',
+            'mod unix;',
+            '#[cfg(not(unix))]',
+            'use fallback as active;',
+            '#[cfg(unix)]',
+            'use unix as active;',
+            '',
+            'pub(crate) trait Connection {',
+            '    fn close(&self);',
+            '}',
+            '',
+            'pub(crate) fn connect() { active::connect() }',
+            '',
+        ].join('\n'),
+    );
+    assert.equal(r.exitCode, 0, r.stderr);
 });
 
 test('blocks direct re-export surface drift between OS adapters', () => {

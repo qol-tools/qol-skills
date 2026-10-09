@@ -79,6 +79,16 @@ test("lint --base still judges rules about the code as it stands on every file",
   assert.equal(lint(root, [], { base }).findings.length, 1);
 });
 
+test("lint reports a platform tree property once, on the file that owns it", () => {
+  const root = repo({
+    "libs/fixture/Cargo.toml": "[package]\nname = \"fixture\"\nversion = \"0.1.0\"\n",
+    "libs/fixture/src/feature/platform/mod.rs": "#[cfg(target_os = \"linux\")]\nmod linux;\n#[cfg(target_os = \"linux\")]\npub(crate) use linux::run;\n",
+    "libs/fixture/src/feature/platform/linux.rs": "pub(crate) fn run() {}\n",
+  });
+  const files = lint(root).findings.map(finding => finding.file);
+  assert.deepEqual(files, ["libs/fixture/src/feature/platform/mod.rs"]);
+});
+
 test("lint passes clean files and narrows to the given paths", () => {
   const root = repo({
     ...PLUGIN,

@@ -245,7 +245,10 @@ function findAdapterExclusiveHelpers(filePath, newContent) {
     });
 }
 
+// A helper's consumers are one property of the feature tree. Lint reports it
+// once, on the shared parent; an edit to an adapter still checks it.
 function findNewAdapterExclusiveHelpers(filePath, newContent) {
+    if (lintMode.isTarget(filePath) && PLATFORM_PATH_RE.test(filePath)) return [];
     const before = new Set(
         findAdapterExclusiveHelpers(filePath, readExistingFile(filePath) || '')
             .map(({ name, target }) => `${name}:${target}`),

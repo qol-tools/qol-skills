@@ -76,12 +76,6 @@ function crossPlatformBasename(p) {
     return parts[parts.length - 1] || p;
 }
 
-function crossPlatformDirname(p) {
-    const parts = p.split(/[\\/]/);
-    parts.pop();
-    return parts.join('/');
-}
-
 function isDirectory(p) {
     try {
         return fs.statSync(p).isDirectory();
@@ -693,15 +687,12 @@ function targetScopedUses(content) {
         const alias = match[3] || null;
         const exports = exportedNames(match[2]);
         for (const target of targets) {
-            const selection = selections.get(target) || {
-                moduleName,
-                alias,
-                exports: new Set(),
-            };
-            if (selection.moduleName !== moduleName) continue;
+            const modules = selections.get(target) || new Map();
+            const selection = modules.get(moduleName) || { moduleName, alias: null, exports: new Set() };
             for (const name of exports) selection.exports.add(name);
             if (alias) selection.alias = alias;
-            selections.set(target, selection);
+            modules.set(moduleName, selection);
+            selections.set(target, modules);
         }
     }
     return selections;
@@ -731,8 +722,8 @@ function prospectiveContent(sourcePath, filePath, newContent) {
     return readExistingFile(sourcePath);
 }
 
-function facadeConsumers(content) {
-    return new Set([...content.matchAll(/\bimp::([A-Za-z_]\w*)/g)].map(match => match[1]));
+function facadeConsumers(content, alias) {
+    return new Set([...content.matchAll(new RegExp(`\\b${alias}::([A-Za-z_]\\w*)`, 'g'))].map(match => match[1]));
 }
 
 function sourceExposes(content, name) {
@@ -773,15 +764,19 @@ function traitRequirements(content) {
     return requirements;
 }
 
-function traitImplementationMethods(content, traitName) {
+// Methods of traitName implemented for a type the facade selects. A trait
+// implemented only for other types (a std stream behind a dyn trait) is a
+// product of the adapter, not its contract.
+function traitImplementationMethods(content, traitName, selectedTypes) {
     const escaped = traitName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const implementation = new RegExp(
-        `\\bimpl(?:\\s*<[^>{}]*>)?\\s+(?:(?:[A-Za-z_]\\w*)::)*${escaped}(?:\\s*<[^>{}]*>)?\\s+for\\b[^{}]*\\{`,
+        `\\bimpl(?:\\s*<[^>{}]*>)?\\s+(?:(?:[A-Za-z_]\\w*)::)*${escaped}(?:\\s*<[^>{}]*>)?\\s+for\\s+(?:(?:[A-Za-z_]\\w*)::)*([A-Za-z_]\\w*)[^{}]*\\{`,
         'g',
     );
     const methods = new Set();
     let found = false;
     for (const match of content.matchAll(implementation)) {
+        if (!selectedTypes.has(match[1])) continue;
         found = true;
         const openingBrace = match.index + match[0].lastIndexOf('{');
         const body = bracedBody(content, openingBrace);
@@ -809,10 +804,8 @@ function findPlatformFacadeViolations(filePath, newContent) {
         return violations;
     }
 
-    const directSurfaces = TARGET_OS_NAMES.map(target => {
-        const selection = selections.get(target);
-        return [...selection.exports].sort().join(',');
-    });
+    const directSurfaces = TARGET_OS_NAMES.map(target =>
+        [...selections.get(target).values()].flatMap(selection => [...selection.exports]).sort().join(','));
     if (
         directSurfaces.some(surface => surface.length > 0) &&
         new Set(directSurfaces).size > 1
@@ -824,34 +817,40 @@ function findPlatformFacadeViolations(filePath, newContent) {
         );
     }
 
-    const consumers = facadeConsumers(modContent);
+    const selectedTypes = new Set();
     const adapterSources = new Map();
     for (const target of TARGET_OS_NAMES) {
-        const selection = selections.get(target);
-        const sourcePath = adapterSourcePath(context.platformDir, selection.moduleName);
-        const source = prospectiveContent(sourcePath, filePath, newContent);
-        adapterSources.set(target, { selection, source });
-        if (!source) {
-            violations.push(`${selection.moduleName} adapter is missing for ${target}`);
-            continue;
-        }
-        const required = new Set([
-            ...[...selection.exports].filter(name => name !== '*'),
-            ...(selection.alias === 'imp' ? consumers : []),
-        ]);
-        for (const name of required) {
-            if (!sourceExposes(source, name)) {
-                violations.push(`${selection.moduleName} adapter is missing ${name} for ${target}`);
+        const sources = [];
+        for (const selection of selections.get(target).values()) {
+            const sourcePath = adapterSourcePath(context.platformDir, selection.moduleName);
+            const source = prospectiveContent(sourcePath, filePath, newContent);
+            if (!source) {
+                violations.push(`${selection.moduleName} adapter is missing for ${target}`);
+                continue;
+            }
+            sources.push(source);
+            const required = new Set([
+                ...[...selection.exports].filter(name => name !== '*'),
+                ...(selection.alias ? facadeConsumers(modContent, selection.alias) : []),
+            ]);
+            for (const name of required) {
+                selectedTypes.add(name);
+                if (!sourceExposes(source, name)) {
+                    violations.push(`${selection.moduleName} adapter is missing ${name} for ${target}`);
+                }
             }
         }
+        adapterSources.set(target, sources);
     }
 
     for (const [traitName, requiredMethods] of traitRequirements(modContent)) {
         const implementations = new Map(
-            [...adapterSources].map(([target, { source }]) => [
-                target,
-                source ? traitImplementationMethods(source, traitName) : null,
-            ]),
+            [...adapterSources].map(([target, sources]) => {
+                const found = sources
+                    .map(source => traitImplementationMethods(source, traitName, selectedTypes))
+                    .filter(methods => methods !== null);
+                return [target, found.length > 0 ? new Set(found.flatMap(methods => [...methods])) : null];
+            }),
         );
         if (![...implementations.values()].some(methods => methods !== null)) continue;
         for (const target of TARGET_OS_NAMES) {
@@ -1075,7 +1074,10 @@ function platformViolationKind(violation) {
     return violation;
 }
 
+// A facade's coverage is one property of its platform/ tree. Lint reports it
+// once, on the facade; an edit to any file in the tree still checks it.
 function findNewPlatformFacadeViolations(filePath, newContent) {
+    if (lintMode.isTarget(filePath) && !platformContext(filePath)?.facade) return [];
     const beforeContent = readExistingFile(filePath) || '';
     const before = new Set(
         findPlatformFacadeViolations(filePath, beforeContent).map(platformViolationKind),
@@ -1201,8 +1203,7 @@ function blockOsFileOutsidePlatform(filePath) {
     lintMode.report(process.stderr, `qol-arch-code violation in ${filePath}.
 
 OS-named files (linux.rs, macos.rs, windows.rs) must live inside a
-\`platform/\` directory. Found this one as a direct child of its feature
-directory instead.
+\`platform/\` directory. Found this one outside any \`platform/\` directory.
 
 Fix the layout to one of:
 
@@ -1420,7 +1421,6 @@ function evaluate(payload) {
     if (!QOL_TOOLS_PATH_RE.test(filePath)) return 0;
 
     const basename = crossPlatformBasename(filePath);
-    const parentDir = crossPlatformBasename(crossPlatformDirname(filePath));
 
     const layoutViolation = findSourceLayoutViolation(filePath) || findPluginLayoutViolation(filePath);
     if (layoutViolation) {
@@ -1455,7 +1455,7 @@ function evaluate(payload) {
     }
 
     if (OS_BASENAMES.has(basename)) {
-        if (parentDir !== 'platform' && !isOsAdapterFile(filePath)) {
+        if (!filePath.split(/[\\/]/).includes('platform')) {
             blockOsFileOutsidePlatform(filePath);
             return 2;
         }
