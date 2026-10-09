@@ -192,10 +192,37 @@ function prospectiveFileContent(candidate, filePath, newContent) {
     return readExistingFile(candidate) || '';
 }
 
+// Free functions only: a method's name (new, acquire) collides with every
+// other type's method of the same name, so counting its uses proves nothing.
 function internalCallables(content) {
     return [...content.matchAll(
-        /\bpub\s*\(\s*(?:crate|super|in\s+[^)]+)\s*\)\s+(?:async\s+)?fn\s+([A-Za-z_]\w*)/g,
+        /^pub\s*\(\s*(?:crate|super|in\s+[^)]+)\s*\)\s+(?:async\s+)?fn\s+([A-Za-z_]\w*)/gm,
     )].map(match => match[1]);
+}
+
+function crateSourceRoot(featureDir) {
+    const parts = path.resolve(featureDir).split(path.sep);
+    const src = parts.lastIndexOf('src');
+    return src < 0 ? featureDir : parts.slice(0, src + 1).join(path.sep) || path.sep;
+}
+
+// Every module under platform/ is an adapter, fallbacks and family modules
+// included, so a helper shared by linux and a fallback is not exclusive.
+function adapterContents(platformDir, filePath, newContent) {
+    let entries;
+    try {
+        entries = fs.readdirSync(platformDir, { withFileTypes: true });
+    } catch {
+        return new Map();
+    }
+    const names = entries
+        .filter(entry => entry.name !== 'mod.rs' && (entry.isDirectory() || entry.name.endsWith('.rs')))
+        .map(entry => entry.name.replace(/\.rs$/, ''));
+    const relative = path.relative(platformDir, path.resolve(filePath)).split(path.sep);
+    if (relative.length > 0 && relative[0] !== '..' && relative[0] !== 'mod.rs') {
+        names.push(relative[0].replace(/\.rs$/, ''));
+    }
+    return new Map([...new Set(names)].map(name => [name, adapterContent(platformDir, name, filePath, newContent)]));
 }
 
 function wordCount(content, name) {
@@ -225,16 +252,11 @@ function findAdapterExclusiveHelpers(filePath, newContent) {
     );
     if (!parentContent) return [];
 
-    const sharedFiles = rustFiles(featureDir, platformDir, filePath);
+    const sharedFiles = rustFiles(crateSourceRoot(featureDir), platformDir, filePath);
     const sharedContent = sharedFiles
         .map(file => productionContent(prospectiveFileContent(file, filePath, newContent)))
         .join('\n');
-    const adapters = new Map(
-        ['linux', 'macos', 'windows'].map(target => [
-            target,
-            adapterContent(platformDir, target, filePath, newContent),
-        ]),
-    );
+    const adapters = adapterContents(platformDir, filePath, newContent);
 
     return internalCallables(parentContent).flatMap(name => {
         if (wordCount(sharedContent, name) > 1) return [];

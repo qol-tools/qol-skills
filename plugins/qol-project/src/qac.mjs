@@ -61,7 +61,12 @@ export function splitRule(summary, file = "") {
 // has none. Without a base every line counts as added.
 export function baselineReader(root, base, exec = execFileSync) {
   if (!base) return () => null;
-  const run = args => exec("git", args, { cwd: root, encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
+  const run = args => exec("git", args, {
+    cwd: root,
+    encoding: "utf8",
+    maxBuffer: 256 * 1024 * 1024,
+    stdio: ["ignore", "pipe", "ignore"],
+  });
   const changed = new Set([
     ...run(["diff", "--name-only", "-z", base, "--"]).split("\0"),
     ...run(["ls-files", "-z", "--others", "--exclude-standard"]).split("\0"),

@@ -198,6 +198,44 @@ test('passes shared helper with a non-platform production consumer', () => {
     assert.equal(r.exitCode, 0, r.stderr);
 });
 
+function writeLinuxCaller(platformDir, name) {
+    return run({
+        tool_name: 'Write',
+        tool_input: {
+            file_path: path.join(platformDir, 'linux.rs'),
+            content: `use super::super::${name};\npub(crate) fn loaded() { ${name}() }\n`,
+        },
+    });
+}
+
+test('passes a helper whose shared caller lives elsewhere in the crate', () => {
+    const { platformDir } = fixtureFeature('mod platform;\npub(crate) fn plane() {}\n', {
+        'macos.rs': '',
+        'windows.rs': '',
+    });
+    const app = path.join(platformDir, '..', '..', 'app.rs');
+    fs.writeFileSync(app, 'pub(crate) fn start() { crate::feature::plane() }\n');
+    const r = writeLinuxCaller(platformDir, 'plane');
+    assert.equal(r.exitCode, 0, r.stderr);
+});
+
+test('passes a helper that a fallback adapter also consumes', () => {
+    const { platformDir } = fixtureFeature('mod platform;\npub(crate) fn checksum() {}\n', {
+        'fallback.rs': 'use super::super::checksum;\npub(crate) fn loaded() { checksum() }\n',
+    });
+    const r = writeLinuxCaller(platformDir, 'checksum');
+    assert.equal(r.exitCode, 0, r.stderr);
+});
+
+test('ignores methods whose names collide with other types', () => {
+    const { platformDir } = fixtureFeature(
+        'mod platform;\npub(crate) struct Plane;\nimpl Plane {\n    pub(crate) fn new() -> Self { Plane }\n}\n',
+        { 'macos.rs': '', 'windows.rs': '' },
+    );
+    const r = writeLinuxCaller(platformDir, 'new');
+    assert.equal(r.exitCode, 0, r.stderr);
+});
+
 test('blocks parent edit that creates a single-adapter helper leak', () => {
     const { parent } = fixtureFeature(
         'mod platform;\n',
