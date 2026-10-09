@@ -1,9 +1,13 @@
 #!/usr/bin/env node
 import { execFileSync, spawn } from "node:child_process";
-import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-const FLAGS = { surface: "--surface", harness: "--tool", model: "--model", effort: "--effort" };
+import { closest, renderDiagnostic } from "./_kit/diagnostic.mjs";
+import { runPromptCommand } from "./_kit/prompt-command.mjs";
+
+export { renderDiagnostic };
+
+const FLAGS = { harness: "--tool", model: "--model", effort: "--effort", surface: "--surface" };
 
 const USAGE = [
   "qols fork <problem> [--harness H] [--model M] [--effort E] [--surface S]",
@@ -14,23 +18,78 @@ const USAGE = [
   "values may be [aliases] from sessions.toml; left out, sessions.toml defaults apply",
 ].join("\n");
 
+const VERBS = ["fork", "bridge", "test"];
+
+function usageFor(verb) {
+  return USAGE.split("\n").find((line) => line.startsWith(`qols ${verb} `));
+}
+
 export function parsePrompt(prompt) {
-  const match = /^qols(?:\s+([\s\S]*))?$/i.exec((prompt ?? "").trim());
+  const source = (prompt ?? "").trim();
+  const match = /^qols(?:\s+([\s\S]*))?$/i.exec(source);
   if (match === null) return null;
-  const tokens = (match[1] ?? "").trim().split(/\s+/).filter(Boolean);
-  const verb = tokens.shift()?.toLowerCase();
-  if (verb !== "fork" && verb !== "bridge" && verb !== "test") return { verb: "help" };
+  const tokens = [...source.matchAll(/\S+/g)].map((m) => ({ text: m[0], start: m.index, end: m.index + m[0].length }));
+  tokens.shift();
+  const verbToken = tokens.shift();
+  const verb = verbToken?.text.toLowerCase();
+  if (verbToken === undefined || verb === "help") return { verb: "help" };
+  if (!VERBS.includes(verb)) {
+    const guess = closest(verb, VERBS);
+    return {
+      verb: "help",
+      diagnostic: {
+        title: `unknown command \`${verbToken.text}\``,
+        source,
+        start: verbToken.start,
+        end: verbToken.end,
+        label: "qols has no such command",
+        notes: [
+          ...(guess ? [`help: did you mean \`${guess}\`?`] : []),
+          `note: commands are ${VERBS.join(", ")}`,
+        ],
+      },
+    };
+  }
   const flags = [];
-  while (tokens.length >= 2 && tokens.at(-2).startsWith("--")) {
-    const name = tokens.at(-2).slice(2);
-    if (!Object.hasOwn(FLAGS, name)) return { verb: "help", error: `unknown flag --${name}` };
+  while (tokens.length >= 2 && tokens.at(-2).text.startsWith("--")) {
+    const flag = tokens.at(-2);
+    const name = flag.text.slice(2);
+    if (!Object.hasOwn(FLAGS, name)) {
+      const guess = closest(name, Object.keys(FLAGS));
+      return {
+        verb: "help",
+        diagnostic: {
+          title: `unknown flag \`${flag.text}\``,
+          source,
+          start: flag.start,
+          end: flag.end,
+          label: "not a flag qols knows",
+          notes: [
+            ...(guess ? [`help: did you mean \`--${guess}\`?`] : []),
+            `note: flags are ${Object.keys(FLAGS).map((key) => `--${key}`).join(", ")}`,
+            `usage: ${usageFor(verb)}`,
+          ],
+        },
+      };
+    }
     const value = tokens.pop();
     tokens.pop();
-    flags.unshift(FLAGS[name], value);
+    flags.unshift(FLAGS[name], value.text);
   }
-  const message = tokens.join(" ");
-  if (message === "") return { verb: "help" };
-  return { verb, message, flags };
+  if (tokens.length === 0) {
+    return {
+      verb: "help",
+      diagnostic: {
+        title: `\`qols ${verb}\` needs a task`,
+        source,
+        start: verbToken.end,
+        end: verbToken.end + 1,
+        label: "expected a task here",
+        notes: [`usage: ${usageFor(verb)}`],
+      },
+    };
+  }
+  return { verb, message: tokens.map((t) => t.text).join(" "), flags };
 }
 
 export function commandFor({ verb, message, flags }, cwd) {
@@ -46,34 +105,26 @@ export function summarize(verb, outcome) {
   return `qols bridge: ${outcome.key} (${launch}); its report arrives here as the next prompt`;
 }
 
-function main() {
-  let input;
+function reply(parsed, cwd) {
+  if (parsed === null) return null;
+  if (parsed.verb === "help") return { reason: parsed.diagnostic ? renderDiagnostic(parsed.diagnostic) : USAGE };
   try {
-    input = JSON.parse(readFileSync(0, "utf8") || "{}");
-  } catch {
-    process.exit(0);
-  }
-  const parsed = parsePrompt(input.prompt);
-  if (parsed === null) process.exit(0);
-
-  let reason = parsed.error ? `${parsed.error}\n${USAGE}` : USAGE;
-  if (parsed.verb !== "help") {
-    try {
-      const output = execFileSync("qol", commandFor(parsed, input.cwd || process.cwd()), {
-        encoding: "utf8",
-        stdio: ["ignore", "pipe", "pipe"],
-      });
-      const outcome = JSON.parse(output);
-      if (parsed.verb === "bridge") {
-        spawn("qol", ["sessions", "watch", outcome.session], { detached: true, stdio: "ignore" }).unref();
-      }
-      reason = summarize(parsed.verb, outcome);
-    } catch (error) {
-      reason = `qols ${parsed.verb}: ${`${error.stderr ?? ""}`.trim() || error.message}`;
+    const output = execFileSync("qol", commandFor(parsed, cwd), {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    const outcome = JSON.parse(output);
+    if (parsed.verb === "bridge") {
+      spawn("qol", ["sessions", "watch", outcome.session], { detached: true, stdio: "ignore" }).unref();
     }
+    return { reason: summarize(parsed.verb, outcome) };
+  } catch (error) {
+    return { reason: `qols ${parsed.verb}: ${`${error.stderr ?? ""}`.trim() || error.message}` };
   }
-  process.stdout.write(JSON.stringify({ decision: "block", reason }) + "\n");
-  process.exit(0);
+}
+
+function main() {
+  runPromptCommand({ parse: (prompt, cwd) => reply(parsePrompt(prompt), cwd), prefix: "qols", cwd: "input" });
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) main();

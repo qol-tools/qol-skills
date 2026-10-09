@@ -26,6 +26,12 @@ jobs:
       - name: Check skill invariants
         shell: bash
         run: node scripts/check-skill-invariants.cjs --check
+      - name: Check vendored hook-kit copies
+        shell: bash
+        run: node scripts/vendor-hook-kit.mjs --check
+      - name: Run hook-kit tests
+        shell: bash
+        run: node --test kit-src/hook-kit/test/*.test.mjs test/vendor-hook-kit.test.mjs
       - name: Run all hook tests
         shell: bash
         run: |

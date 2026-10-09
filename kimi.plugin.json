@@ -173,12 +173,21 @@
     },
     {
       "event": "PreToolUse",
+      "matcher": "Bash",
+      "command": "node plugins/qol-workflow/bin/pr-watch-park-guard.cjs"
+    },
+    {
+      "event": "PreToolUse",
       "matcher": "Edit|Write|MultiEdit",
       "command": "node plugins/qol-workflow/bin/deny-tool-matches.cjs"
     },
     {
       "event": "UserPromptSubmit",
       "command": "node plugins/qol-workflow/bin/qol-cicd-context.cjs"
+    },
+    {
+      "event": "Stop",
+      "command": "node plugins/qol-workflow/bin/pr-watch-park-guard.cjs"
     },
     {
       "event": "UserPromptSubmit",
