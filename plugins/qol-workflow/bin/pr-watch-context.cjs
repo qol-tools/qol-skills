@@ -77,8 +77,14 @@ function trigger(command, cwd, exec = run) {
     return null;
 }
 
-function render(text, root, url) {
-    const filled = text.replace('<qol-workflow>', root);
+function parkBinary(env = process.env, home = os.homedir(), exists = fs.existsSync) {
+    const config = env.XDG_CONFIG_HOME || path.join(home, '.config');
+    const plugin = path.join(config, 'qol-tray', 'plugins', 'qol-cli-sessions', process.platform === 'win32' ? 'qol-cli-sessions.exe' : 'qol-cli-sessions');
+    return exists(plugin) ? plugin : 'qol-cli-sessions';
+}
+
+function render(text, root, url, park = parkBinary()) {
+    const filled = text.replace('<qol-workflow>', root).replace('<qol-cli-sessions>', park);
     return url ? filled.replace('<pr-url>', url) : filled;
 }
 
@@ -109,7 +115,7 @@ function main() {
     return 0;
 }
 
-module.exports = { trigger, render, reminderText, silenced, pushDir, openPullRequestUrl };
+module.exports = { trigger, render, parkBinary, reminderText, silenced, pushDir, openPullRequestUrl };
 
 if (require.main === module) {
     process.exit(main());

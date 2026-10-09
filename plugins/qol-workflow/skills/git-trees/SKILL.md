@@ -138,7 +138,7 @@ Delivery through a pull request (the default):
 git push -u origin $FEAT
 gh pr create --title "<type>(scope): summary" --body "<why>"
 gh pr merge --auto <number>
-qol sessions park -- node <qol-workflow>/bin/pr-watch.cjs <pr-url> --pretty   # then end the turn
+qol-cli-sessions park -- node <qol-workflow>/bin/pr-watch.cjs <pr-url> --pretty   # then end the turn
 ```
 
 After it merges, `git worktree remove ../worktrees/$FEAT/qol-monorepo` from the main clone and `git branch -D $FEAT` if the local branch lingers.
