@@ -3,16 +3,16 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { trigger } = require('./pr-watch-context.cjs');
+const { trigger, parkBinary } = require('./pr-watch-context.cjs');
 
 const HOOK_NAME = 'pr-watch-park-guard';
 const WATCHER_RUN = /(^|[\s;&|`(])node\s+\S*pr-watch\.cjs(\s|$)/;
-const PARKED_RUN = /(^|[\s;&|`(])qol\s+sessions\s+park\b[^;&|\n]*\s--\s+node\s+\S*pr-watch\.cjs(\s|$)/;
+const PARKED_RUN = /(^|[\s;&|`(])\S*qol-cli-sessions(?:\.exe)?\s+park\b[^;&|\n]*\s--\s+node\s+\S*pr-watch\.cjs(\s|$)/;
 const WATCHER_HELP = /pr-watch\.cjs\s+(-h|--help)(\s|$)/;
 const HOLD = /(^|[\s;&|`(])gh\s+pr\s+merge\s[^;&|\n]*--disable-auto(\s|$)/;
 function parkCommand(url) {
     const root = process.env.CLAUDE_PLUGIN_ROOT || path.resolve(__dirname, '..');
-    return `qol sessions park -- node ${path.join(root, 'bin', 'pr-watch.cjs')} ${url ?? '<pr-url>'} --pretty`;
+    return `${parkBinary()} park -- node ${path.join(root, 'bin', 'pr-watch.cjs')} ${url ?? '<pr-url>'} --pretty`;
 }
 
 function readPayload() {

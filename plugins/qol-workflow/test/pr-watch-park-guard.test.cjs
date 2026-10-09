@@ -9,14 +9,16 @@ const HOOK = path.join(__dirname, '..', 'bin', 'pr-watch-park-guard.cjs');
 const { decide, unparkedWatcher } = require('../bin/pr-watch-park-guard.cjs');
 
 const URL = 'https://github.com/o/r/pull/7';
-const PARK = `qol sessions park -- node /p/bin/pr-watch.cjs ${URL} --pretty`;
+const PARK = `qol-cli-sessions park -- node /p/bin/pr-watch.cjs ${URL} --pretty`;
 
 const watcherCases = [
     ['bare watcher', `node /p/bin/pr-watch.cjs ${URL} --pretty`, true],
     ['watcher after cd', `cd /wt && node /p/bin/pr-watch.cjs 7`, true],
     ['parked watcher', PARK, false],
-    ['parked watcher with flags', `qol sessions park --model m -- node /p/bin/pr-watch.cjs 7`, false],
-    ['park on another command then a bare watcher', `qol sessions park -- sleep 1; node /p/bin/pr-watch.cjs 7`, true],
+    ['parked watcher with flags', `qol-cli-sessions park --model m -- node /p/bin/pr-watch.cjs 7`, false],
+    ['park on another command then a bare watcher', `qol-cli-sessions park -- sleep 1; node /p/bin/pr-watch.cjs 7`, true],
+    ['parked watcher by plugin path', `/h/.config/qol-tray/plugins/qol-cli-sessions/qol-cli-sessions park -- node /p/bin/pr-watch.cjs 7`, false],
+    ['the removed qol sessions park form', `qol sessions park -- node /p/bin/pr-watch.cjs 7`, true],
     ['watcher help', 'node /p/bin/pr-watch.cjs --help', false],
     ['watcher tests', 'node --test test/pr-watch.test.cjs', false],
     ['reading the file', 'cat /p/bin/pr-watch.cjs', false],
@@ -32,7 +34,7 @@ for (const [name, command, expected] of watcherCases) {
 test('PreToolUse denies an unparked watcher with the hook name and the park command', () => {
     const out = decide({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'node /p/bin/pr-watch.cjs 7' } });
     assert.equal(out.hookSpecificOutput.permissionDecision, 'deny');
-    assert.match(out.hookSpecificOutput.permissionDecisionReason, /\[pr-watch-park-guard\] run `qol sessions park -- node/);
+    assert.match(out.hookSpecificOutput.permissionDecisionReason, /\[pr-watch-park-guard\] run `\S*qol-cli-sessions park -- node/);
     assert.equal(decide({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: PARK } }), null);
     assert.equal(decide({ hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { command: 'node /p/bin/pr-watch.cjs 7' } }), null);
 });
@@ -72,7 +74,7 @@ for (const [name, lines, exec, allowed] of stopCases) {
         if (allowed) assert.equal(out, null);
         else {
             assert.equal(out.decision, 'block');
-            assert.match(out.reason, /qol sessions park -- node/);
+            assert.match(out.reason, /qol-cli-sessions park -- node/);
             assert.match(out.reason, /\[pr-watch-park-guard\]/);
         }
     });

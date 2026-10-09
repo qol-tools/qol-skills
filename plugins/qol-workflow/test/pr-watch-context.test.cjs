@@ -9,7 +9,7 @@ const { spawnSync } = require('node:child_process');
 
 const HOOK = path.join(__dirname, '..', 'bin', 'pr-watch-context.cjs');
 const PLUGIN_ROOT = path.resolve(__dirname, '..');
-const { trigger, render, reminderText, silenced, pushDir } = require('../bin/pr-watch-context.cjs');
+const { trigger, render, reminderText, silenced, pushDir, parkBinary } = require('../bin/pr-watch-context.cjs');
 
 const URL = 'https://github.com/o/r/pull/7';
 
@@ -61,6 +61,15 @@ test('render fills the plugin path and a known URL', () => {
     const text = reminderText(PLUGIN_ROOT);
     assert.match(render(text, '/plug', URL), /node \/plug\/bin\/pr-watch\.cjs https:\/\/github\.com\/o\/r\/pull\/7 --pretty/);
     assert.match(render(text, '/plug', null), /node \/plug\/bin\/pr-watch\.cjs <pr-url> --pretty/);
+});
+
+test('parkBinary prefers the installed plugin binary and falls back to the bare name', () => {
+    assert.equal(parkBinary({ XDG_CONFIG_HOME: '/c' }, '/h', () => true).replace(/\.exe$/, ''), path.join('/c', 'qol-tray', 'plugins', 'qol-cli-sessions', 'qol-cli-sessions'));
+    assert.equal(parkBinary({}, '/h', () => false), 'qol-cli-sessions');
+});
+
+test('render fills the park binary', () => {
+    assert.match(render(reminderText(PLUGIN_ROOT), '/plug', URL, '/bin/qcs'), /`\/bin\/qcs park -- node \/plug\/bin\/pr-watch\.cjs/);
 });
 
 test('the reader flag silences the reminder', () => {
