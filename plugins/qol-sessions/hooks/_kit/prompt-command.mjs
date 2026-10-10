@@ -1,4 +1,4 @@
-// @generated hook-kit prompt-command.mjs sha256:9f32af71ae4cd3fa6a0863440acb493cfb6c32052c3d4779c2653650fe75a332 - do not edit; change qol-skills/kit-src/hook-kit, then run vs vendor
+// @generated hook-kit prompt-command.mjs sha256:a2bd541af1987ea8b8de3141440260ff274ca14dfe49cb9c2ee8e0c881c673e7 - do not edit; change qol-skills/kit-src/hook-kit, then run vs vendor
 import { execFileSync } from "node:child_process";
 
 import { gitRoot, readHookInput } from "./input.mjs";
@@ -18,7 +18,11 @@ function resolveCwd(input, mode) {
   return mode === "git" ? gitRoot(cwd) : cwd;
 }
 
-export function decidePrompt(input, { parse, cli, prefix, cwd = "input", handle = execCli }) {
+export function hidesPrompt(input, env = process.env) {
+  return env.CLAUDECODE === "1" && input?.turn_id === undefined;
+}
+
+export function decidePrompt(input, { parse, cli, prefix, cwd = "input", handle = execCli, env = process.env }) {
   const prompt = typeof input?.prompt === "string" ? input.prompt : "";
   const dir = resolveCwd(input ?? {}, cwd);
   const parsed = parse(prompt, dir);
@@ -30,7 +34,7 @@ export function decidePrompt(input, { parse, cli, prefix, cwd = "input", handle 
   if (typeof parsed.context === "string") {
     return contextJson("UserPromptSubmit", parsed.context);
   }
-  return blockJson(parsed.reason);
+  return blockJson(parsed.reason, { suppressPrompt: parsed.sent === true && hidesPrompt(input, env) });
 }
 
 export function runPromptCommand(opts) {

@@ -117,7 +117,7 @@ function reply(parsed, cwd) {
     if (parsed.verb === "bridge") {
       spawn("qol", ["sessions", "watch", outcome.session], { detached: true, stdio: "ignore" }).unref();
     }
-    return { reason: summarize(parsed.verb, outcome) };
+    return { reason: summarize(parsed.verb, outcome), sent: true };
   } catch (error) {
     return { reason: `qols ${parsed.verb}: ${`${error.stderr ?? ""}`.trim() || error.message}` };
   }

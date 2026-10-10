@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { decidePrompt, execCli } from "../prompt-command.mjs";
+import { decidePrompt, execCli, hidesPrompt } from "../prompt-command.mjs";
 
 const MODULE = new URL("../prompt-command.mjs", import.meta.url).href;
 
@@ -54,6 +54,23 @@ test("decidePrompt injects context and blocks with a computed reason", () => {
     decidePrompt({ prompt: "qols" }, { parse: () => ({ reason: "qols fork <problem>" }), prefix: "qols" }),
     '{"decision":"block","reason":"qols fork <problem>"}',
   );
+});
+
+test("decidePrompt hides a sent prompt only under Claude Code", () => {
+  const claude = { CLAUDECODE: "1" };
+  const sent = () => ({ reason: "qols fork: k", sent: true });
+  const hidden = '{"decision":"block","reason":"qols fork: k","hookSpecificOutput":{"hookEventName":"UserPromptSubmit","suppressOriginalPrompt":true}}';
+  const shown = '{"decision":"block","reason":"qols fork: k"}';
+  assert.equal(decidePrompt({ prompt: "qols fork x" }, { parse: sent, prefix: "qols", env: claude }), hidden);
+  assert.equal(decidePrompt({ prompt: "qols fork x", turn_id: "t1" }, { parse: sent, prefix: "qols", env: claude }), shown);
+  assert.equal(decidePrompt({ prompt: "qols fork x" }, { parse: sent, prefix: "qols", env: {} }), shown);
+  assert.equal(decidePrompt({ prompt: "qols x" }, { parse: () => ({ reason: "qols fork: k" }), prefix: "qols", env: claude }), shown);
+});
+
+test("hidesPrompt needs the Claude Code env and no Codex turn id", () => {
+  assert.equal(hidesPrompt({}, { CLAUDECODE: "1" }), true);
+  assert.equal(hidesPrompt({ turn_id: "t1" }, { CLAUDECODE: "1" }), false);
+  assert.equal(hidesPrompt({}, {}), false);
 });
 
 test("execCli returns the output of the cli, and its stdout and stderr when it fails", () => {

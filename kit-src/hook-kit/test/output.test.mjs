@@ -27,6 +27,14 @@ test("blockJson matches the sw-intercept fallback reply", () => {
   assert.equal(blockJson("sw: nothing to do"), '{"decision":"block","reason":"sw: nothing to do"}');
 });
 
+test("blockJson can hide the original prompt from the block notice", () => {
+  assert.deepEqual(JSON.parse(blockJson("qols fork: k", { suppressPrompt: true })), {
+    decision: "block",
+    reason: "qols fork: k",
+    hookSpecificOutput: { hookEventName: "UserPromptSubmit", suppressOriginalPrompt: true },
+  });
+});
+
 test("contextJson matches the vs-intercept autoinject setup context", () => {
   assert.equal(
     contextJson("UserPromptSubmit", "[autoinject] Run the guided setup"),

@@ -8,8 +8,12 @@ export function denyJson({ hook, why, hint, decision = "deny", event = "PreToolU
   });
 }
 
-export function blockJson(reason) {
-  return JSON.stringify({ decision: "block", reason });
+export function blockJson(reason, { suppressPrompt = false } = {}) {
+  return JSON.stringify({
+    decision: "block",
+    reason,
+    ...(suppressPrompt && { hookSpecificOutput: { hookEventName: "UserPromptSubmit", suppressOriginalPrompt: true } }),
+  });
 }
 
 export function contextJson(event, text) {
