@@ -101,9 +101,35 @@ export function formatBytes(bytes) {
 export function sessionMessage(report) {
   if (!report || report.shown) return null;
   if (report.state === OUTDATED) return `${TAG} the installed qol cannot prune cargo caches yet; run qol setup`;
-  if (report.problems.length) return `${TAG} cargo cache sweep of ${path.basename(report.root)} hit ${report.problems.length} problem(s): ${report.problems[0]}`;
+  if (report.problems.length) return `${TAG} the last cargo cache sweep hit ${report.problems.length} problem(s); /qol-project:cache-sweep --dry-run shows them`;
   if (report.freedBytes < 1024 ** 3) return null;
-  return `${TAG} freed ${formatBytes(report.freedBytes)} of cargo caches no build still uses (${path.basename(report.root)})`;
+  return `${TAG} freed ${formatBytes(report.freedBytes)} of cargo caches no build still uses`;
+}
+
+export function findExecutable(name, { env = process.env, platform = process.platform, isFile = isExecutableFile } = {}) {
+  const paths = platform === "win32" ? path.win32 : path.posix;
+  const suffixes = platform === "win32" ? [".exe", ".com"] : [""];
+  for (const dir of `${env.PATH ?? ""}`.split(paths.delimiter)) {
+    if (!paths.isAbsolute(dir)) continue;
+    for (const suffix of suffixes) {
+      const candidate = paths.join(dir, `${name}${suffix}`);
+      if (isFile(candidate)) return candidate;
+    }
+  }
+  return null;
+}
+
+function isExecutableFile(file) {
+  try {
+    fs.accessSync(file, fs.constants.X_OK);
+    return fs.statSync(file).isFile();
+  } catch {
+    return false;
+  }
+}
+
+export function parseDefaultToolchain(stdout) {
+  return `${stdout ?? ""}`.trim().split(/\s+/)[0] || null;
 }
 
 export function render(report) {

@@ -1,15 +1,30 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { classifyRun, keyFor, render, stateDir, summarize, workspaceRoot, writeReport } from "../src/cache-sweep.mjs";
+import { classifyRun, findExecutable, keyFor, parseDefaultToolchain, render, stateDir, summarize, workspaceRoot, writeReport } from "../src/cache-sweep.mjs";
 
 export const EXIT = { ok: 0, usage: 2, notWorkspace: 3, qolFailed: 4 };
 const SWEEP_TIMEOUT_MS = 30 * 60 * 1000;
 
 function runQol(root, dryRun) {
+  const qol = findExecutable("qol");
+  if (!qol) return { status: null, error: { code: "ENOENT" } };
+  const toolchain = pinnedToolchain();
+  if (toolchain.error) return { status: null, error: { message: toolchain.error } };
   const args = ["clean", "--prune", "--json", ...(dryRun ? ["--dry-run"] : [])];
-  return spawnSync("qol", args, { cwd: root, encoding: "utf8", timeout: SWEEP_TIMEOUT_MS, maxBuffer: 16 * 1024 * 1024, windowsHide: true });
+  return spawnSync(qol, args, { cwd: root, env: toolchain.env, encoding: "utf8", timeout: SWEEP_TIMEOUT_MS, maxBuffer: 16 * 1024 * 1024, windowsHide: true });
+}
+
+function pinnedToolchain() {
+  if (process.env.RUSTUP_TOOLCHAIN) return { env: process.env };
+  const rustup = findExecutable("rustup");
+  if (!rustup) return { env: process.env };
+  const result = spawnSync(rustup, ["default"], { cwd: os.homedir(), encoding: "utf8", timeout: 10_000, windowsHide: true });
+  const name = result.status === 0 ? parseDefaultToolchain(result.stdout) : null;
+  if (!name) return { error: "rustup has no default toolchain, so a workspace's rust-toolchain file would choose the cargo qol runs; sweep skipped" };
+  return { env: { ...process.env, RUSTUP_TOOLCHAIN: name } };
 }
 
 export function sweep(dir, { dryRun = false, run = runQol, now = Date.now(), cache = stateDir() } = {}) {

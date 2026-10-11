@@ -30,6 +30,15 @@ The rules live in `libs/dev-build/src/target_cache` in qol-monorepo; `qol clean 
 | Incremental caches of crates no build compiled in 3 days | removed |
 
 A disk that does not record file reads (noatime) only loses caches cargo can no longer use: replaced sessions and outputs without a fingerprint.
+A dir without cargo's own `CACHEDIR.TAG` or `.rustc_info.json` is refused untouched, so a `target` symlink or a `build-dir` pointing at a folder of repositories prunes nothing.
+
+## Nothing a workspace ships runs
+
+The hook fires in any cargo workspace, including freshly cloned ones, so the sweep:
+
+- runs the `qol` found in an absolute `PATH` entry, never one in the workspace (Windows would otherwise try the working directory first);
+- sets `RUSTUP_TOOLCHAIN` to `rustup default` for `qol`, because `qol` runs `cargo metadata` there and a `rust-toolchain.toml` with `path` would otherwise pick the cargo binary;
+- keeps the session line to fixed text and numbers; error text and paths stay in the report file.
 Removals first move into `.qol-sweep-trash` inside the cache dir, which is emptied at the end; the next sweep empties any trash an interrupted one left.
 
 ## Running it by hand
