@@ -19,6 +19,7 @@ const USER_PROMPT_SUBMIT_HOOKS = [
 
 const SESSION_START_CONTEXT_HOOKS = [
     { script: "bin/inject-qol-cli-context.cjs" },
+    { script: "hooks/cache-sweep-session-start.mjs" },
 ];
 
 let stashedContext = "";
