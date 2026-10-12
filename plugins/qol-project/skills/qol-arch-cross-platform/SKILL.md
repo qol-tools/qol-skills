@@ -74,6 +74,41 @@ The repository-aware hook checks this parent-to-single-adapter leak.
 
 The compiler enforces this for traits. The skill calls it out so you don't reach for the easy escape ("I'll just gate the trait method on Linux") which produces exactly the dead-code-on-other-OS class this skill exists to prevent.
 
+### 6. Windows system tools run by absolute path
+
+`Command::new("cmd")`, `"reg.exe"`, `"netsh"`, `"explorer.exe"` and the other
+Windows system tools resolve through the program's own directory and the
+current directory before System32, so a planted `cmd.exe` next to qol or in
+the working directory runs instead. Start them with
+`qol_process::system_command("cmd.exe")`, or build the path with
+`qol_process::system_program_path`; both resolve System32. The hook blocks a
+new bare-name spawn of a Windows system tool anywhere outside the Linux and
+macOS adapters and tests.
+
+### 7. Child processes of the tray and plugins hide their console
+
+On Windows the tray and plugin processes have no console, so every console
+program they start opens its own console window on screen. Every new
+`Command::new(..)` in `apps/tray` or a plugin crate goes through
+`qol_process::hide_console_window` (a tokio command through `as_std_mut()`),
+or is started by `qol_process::spawn_detached` or `qol_process::spawn_owned`,
+which hide it themselves. `qol_process::system_command` only resolves the
+path, so its command needs the same. Libraries are exempt: the CLI shares
+them and needs its children to write to its console. The hook blocks a new
+`Command::new` in those crates that comes without one of these in the same
+file.
+
+### 8. A plugin that changes host state on Windows listens for the stop request
+
+The tray stops a Windows daemon by signalling its stop request and terminates
+it after a grace period. A daemon that changes session-scoped host state
+(`SetSystemCursor`, `SetDeviceGammaRamp`, `BluetoothSetServiceState`,
+`SystemParametersInfoW(SPI_SET...)`) restores it on that request, so its crate
+registers a hook with `qol_process::on_stop_request` (or waits on
+`qol_process::wait_for_stop_request`, or installs a
+`qol_process::CancellationToken`). The hook blocks a new host-state call in a
+plugin crate that has none of these.
+
 ## Refactor recipe: relocating a leaky shared symbol
 
 When you discover a symbol in a shared module is causing dead_code on another platform (typical CI signal: `unused: KEY_LEFTCTRL` on macOS), do this:

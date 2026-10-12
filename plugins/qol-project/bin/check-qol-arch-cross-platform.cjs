@@ -47,6 +47,32 @@ function crossPlatformBasename(p) {
     return parts[parts.length - 1] || p;
 }
 
+const WINDOWS_SYSTEM_TOOLS = [
+    'cmd', 'reg', 'explorer', 'netsh', 'icacls', 'taskkill', 'tasklist', 'schtasks', 'sc',
+    'powershell', 'where', 'wmic', 'msiexec', 'rundll32', 'regsvr32', 'clip',
+];
+const SYSTEM_TOOL_ARGUMENT = `\\(\\s*"(?:${WINDOWS_SYSTEM_TOOLS.join('|')})(?:\\.exe)?"\\s*\\)`;
+const BARE_SYSTEM_TOOL = new RegExp(`\\bCommand::new${SYSTEM_TOOL_ARGUMENT}`, 'gi');
+const QUALIFIED_BARE_SYSTEM_TOOL = new RegExp(
+    `\\bprocess::Command::new${SYSTEM_TOOL_ARGUMENT}`,
+    'gi',
+);
+const CONSOLE_SPAWN = /\bCommand::new\s*\(/g;
+const QUALIFIED_PROCESS_SPAWN = /\bprocess::Command::new\s*\(/g;
+const FOREIGN_COMMAND_IMPORT =
+    /^\s*(?:pub(?:\([^)]*\))?\s+)?use\s+(?!std::process|tokio::process)[\w:]+::(?:Command\b|\{[^}]*\bCommand\b)/m;
+const CONSOLE_HIDDEN = /\b(?:hide_console_window|spawn_detached|spawn_owned)\s*\(/g;
+const HOST_STATE_CALL =
+    /\b(?:SetSystemCursor|SetDeviceGammaRamp|BluetoothSetServiceState)\s*\(|\bSystemParametersInfoW\s*\(\s*SPI_SET/g;
+const STOP_LISTENER = /\b(?:on_stop_request|wait_for_stop_request|CancellationToken::install)\b/;
+const OTHER_OS_PATH_RE = /[\\/]platform[\\/](?:linux|macos|unix)[^\\/]*(?:[\\/]|\.rs$)/;
+const TEST_SUPPORT_PATH_RE =
+    /[\\/](?:tests|testing|examples)[\\/]|[\\/](?:tests|build)\.rs$|_tests?\.rs$|[\\/]test_[^\\/]*\.rs$|test_support|testkit/;
+const GUI_CRATE_PATH_RE = /[\\/](?:apps[\\/]tray|plugins[\\/][^\\/]+)[\\/]src[\\/]/;
+const PLUGIN_CRATE_PATH_RE = /[\\/]plugins[\\/][^\\/]+[\\/]src[\\/]/;
+const BLOCK_COMMENT = new RegExp('/\\*[\\s\\S]*?\\*/', 'g');
+const LINE_COMMENT = new RegExp('/{2}.*$', 'gm');
+
 const ALLOW_DEAD_CODE = /#\[allow\([^)]*\bdead_code\b[^)]*\)\]/;
 const ALLOW_UNUSED_MUT = /#\[allow\([^)]*\bunused_mut\b[^)]*\)\]/;
 const CFG_ON_USE_SAMELINE = /#\[cfg\((?:not\(|all\(|any\()?target_os\s*=[^\]]*\]\s*(?:pub(?:\([^)]*\))?\s+)?use\s+/;
@@ -297,6 +323,107 @@ Bypass for this edit only:
 `);
 }
 
+function addedCodeBaseline(filePath) {
+    if (lintMode.isTarget(filePath)) return lintMode.baseline() || '';
+    return readExistingFile(filePath) || '';
+}
+
+function productionView(content) {
+    return content
+        .split(/\n\s*#\[cfg\(test\)\]\s*\n\s*mod\s+\w+\s*\{/)[0]
+        .replace(BLOCK_COMMENT, '')
+        .replace(LINE_COMMENT, '');
+}
+
+function occurrences(content, pattern) {
+    return (content.match(pattern) || []).length;
+}
+
+function added(before, after, pattern) {
+    return occurrences(after, pattern) - occurrences(before, pattern);
+}
+
+function matchingLines(content, pattern) {
+    const single = new RegExp(pattern.source, pattern.flags.replace('g', ''));
+    return content
+        .split(/\r?\n/)
+        .map((text, index) => ({ lineno: index + 1, text }))
+        .filter(line => single.test(line.text));
+}
+
+function crateHasStopListener(filePath, newContent) {
+    const root = crateSourceRoot(path.dirname(path.resolve(filePath)));
+    return rustFiles(root, '', path.resolve(filePath))
+        .map(file => productionView(prospectiveFileContent(file, filePath, newContent)))
+        .some(content => STOP_LISTENER.test(content));
+}
+
+function findWindowsViolations(filePath, newContent) {
+    if (OTHER_OS_PATH_RE.test(filePath) || TEST_SUPPORT_PATH_RE.test(filePath)) return [];
+    const before = productionView(addedCodeBaseline(filePath));
+    const after = productionView(newContent);
+    const violations = [];
+    const foreignCommand = FOREIGN_COMMAND_IMPORT.test(after);
+    const systemTool = foreignCommand ? QUALIFIED_BARE_SYSTEM_TOOL : BARE_SYSTEM_TOOL;
+    if (added(before, after, systemTool) > 0) {
+        violations.push({
+            rule: 'a Windows system tool started by its bare name',
+            lines: matchingLines(after, systemTool),
+            fix: 'Start it with qol_process::system_command("<tool>.exe"), or build the path with\n'
+                + 'qol_process::system_program_path; both resolve System32.',
+        });
+    }
+    const spawn = foreignCommand ? QUALIFIED_PROCESS_SPAWN : CONSOLE_SPAWN;
+    const spawns = added(before, after, spawn);
+    if (
+        GUI_CRATE_PATH_RE.test(filePath)
+        && spawns > 0
+        && spawns > added(before, after, CONSOLE_HIDDEN)
+    ) {
+        violations.push({
+            rule: 'a child process of the tray or a plugin that opens a console window on Windows',
+            lines: matchingLines(after, spawn),
+            fix: 'Pass every new command through qol_process::hide_console_window(&mut command)\n'
+                + '(a tokio command through as_std_mut()), or start it with qol_process::spawn_detached\n'
+                + 'or qol_process::spawn_owned, which hide it. system_command only resolves the path.\n'
+                + 'GUI children ignore the flag.',
+        });
+    }
+    if (
+        PLUGIN_CRATE_PATH_RE.test(filePath)
+        && added(before, after, HOST_STATE_CALL) > 0
+        && !crateHasStopListener(filePath, newContent)
+    ) {
+        violations.push({
+            rule: 'a host-state change in a plugin that never listens for the stop request',
+            lines: matchingLines(after, HOST_STATE_CALL),
+            fix: 'Restore the state when the tray stops the daemon: register a hook with\n'
+                + 'qol_process::on_stop_request (or wait on qol_process::wait_for_stop_request).',
+        });
+    }
+    return violations;
+}
+
+function blockWindowsViolations(filePath, violations) {
+    const detail = violations
+        .map(({ rule, lines, fix }) => [
+            `Found ${rule}:`,
+            ...lines.map(line => `  line ${line.lineno}: ${line.text.trim()}`),
+            '',
+            fix,
+        ].join('\n'))
+        .join('\n\n');
+    lintMode.report(process.stderr, `qol-arch-cross-platform violation in ${filePath}.
+
+${detail}
+
+Reference: qol-project:qol-arch-cross-platform skill, rules 6 to 8.
+
+Bypass for this edit only:
+  touch .claude/bypass-qol-arch-cross-platform
+`);
+}
+
 function isExempt(filePath) {
     const basename = crossPlatformBasename(filePath);
     if (PLATFORM_PATH_RE.test(filePath)) return true;
@@ -452,6 +579,13 @@ function evaluate(payload) {
     if (adapterExclusive.length > 0) {
         if (consumeBypass(marker, crossPlatformBasename(filePath))) return 0;
         blockAdapterExclusiveHelpers(filePath, adapterExclusive);
+        return 2;
+    }
+
+    const windowsViolations = findWindowsViolations(filePath, newContent);
+    if (windowsViolations.length > 0) {
+        if (consumeBypass(marker, crossPlatformBasename(filePath))) return 0;
+        blockWindowsViolations(filePath, windowsViolations);
         return 2;
     }
 
