@@ -122,6 +122,15 @@ Capped lanes show up under `systemctl --user status qol-agents.slice`; the scope
 
 `qol env` guest VMs (qemu) are spawned by the qol CLI, not by `session_spawn`; their admission control is a separate lease-based system in the qol-dev-env crate and is not covered by these keys.
 
+## Lean claude lanes
+
+Two `sessions.toml` tables decide what a claude lane loads, so parallel lanes do not each start the architect's plugins, MCP servers and status line. Every claude `session_spawn` launch takes them (single lanes, lane sets, respawns); `session_fork`, park resumes and other harnesses keep the full environment. Both are read at spawn time, so an edit applies to the next lane without a restart.
+
+- `[spawn_claude_settings]` - a Claude Code settings object passed as `--settings <json>`, layered over the user's settings. Turn plugins off with `[spawn_claude_settings.enabledPlugins]` entries set to `false`; a `[spawn_claude_settings.statusLine]` with `command = "true"` stops the status line script.
+- `[spawn_claude_mcp_servers]` - the only MCP servers a lane gets, passed as `--strict-mcp-config --mcp-config=<json>`. An empty table means none.
+
+Keep `qol-sessions` enabled in a lane profile: it injects the lane rules. A value that is not a table fails the spawn with a parse error naming the key.
+
 ## Orchestrated review
 
 When the delegated work is a code review, load `qol-code-review`; it is the invariant owner of the reviewer catalog, checklists, severity rubric, and the tiered review protocol. This skill supplies only lanes, tiers, and gating: one flash lane per reviewer role runs in parallel, adversarial flash lanes are gated on review completion, and the architect synthesizes the verdict in-session before the loop closes. Never copy review-domain content into this skill; when the protocol evolves, it evolves in `qol-code-review` and this reference picks it up unchanged. The same ownership rule applies to every domain: implementation, research, debugging, and adversarial protocols live in their owning skills, and sessions only orchestrates them.
