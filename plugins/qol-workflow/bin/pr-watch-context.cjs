@@ -80,7 +80,12 @@ function queuedPullRequest(ref, cwd, exec) {
     }
 }
 
-function trigger(command, cwd, exec = run) {
+function withoutHeredocs(command) {
+    return command.replace(/<<-?\s*(['"]?)(\w+)\1([^\n]*)\n[\s\S]*?\n\s*\2(?=\n|$)/g, '$3');
+}
+
+function trigger(rawCommand, cwd, exec = run) {
+    const command = rawCommand && withoutHeredocs(rawCommand);
     if (!command || WATCHER_RUN.test(command)) return null;
     if (PR_START.test(command)) return { url: null };
     if (PR_AUTO_MERGE.test(command)) return queuedPullRequest(MERGE_REF.exec(command)?.[1], cwd, exec);
