@@ -8,6 +8,7 @@ const { spawnSync } = require('node:child_process');
 
 const PR_START = /(^|[\s;&|`(])gh\s+pr\s+(create|ready)(\s|$)/;
 const PR_AUTO_MERGE = /(^|[\s;&|`(])gh\s+pr\s+merge\s[^;&|\n]*--auto(\s|$)/;
+const MERGE_REF = /gh\s+pr\s+merge\s(?:[^;&|\n]*?\s)?(https:\/\/\S+\/pull\/\d+|\d+)(?=\s|$)/;
 const GIT_PUSH = /(^|[\s;&|`(])git\s+(-C\s+\S+\s+)?push(\s|$)/;
 const WATCHER_RUN = /pr-watch\.cjs/;
 const DEFAULT_BRANCHES = new Set(['main', 'master', 'HEAD']);
@@ -67,9 +68,22 @@ function openPullRequestUrl(dir, exec = run) {
     }
 }
 
+function queuedPullRequest(ref, cwd, exec) {
+    if (!ref) return { url: null };
+    const view = exec('gh', ['pr', 'view', ref, '--json', 'url,state'], cwd);
+    if (!view) return { url: null };
+    try {
+        const pr = JSON.parse(view);
+        return pr.state === 'OPEN' ? { url: pr.url } : null;
+    } catch {
+        return { url: null };
+    }
+}
+
 function trigger(command, cwd, exec = run) {
     if (!command || WATCHER_RUN.test(command)) return null;
-    if (PR_START.test(command) || PR_AUTO_MERGE.test(command)) return { url: null };
+    if (PR_START.test(command)) return { url: null };
+    if (PR_AUTO_MERGE.test(command)) return queuedPullRequest(MERGE_REF.exec(command)?.[1], cwd, exec);
     if (GIT_PUSH.test(command)) {
         const url = openPullRequestUrl(pushDir(command, cwd), exec);
         return url ? { url } : null;
