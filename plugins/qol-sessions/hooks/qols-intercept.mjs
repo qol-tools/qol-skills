@@ -127,7 +127,7 @@ export function cliSessionsBinary(env = process.env, home = homedir(), exists = 
   const config = env.XDG_CONFIG_HOME || join(home, ".config");
   const name = process.platform === "win32" ? "qol-cli-sessions.exe" : "qol-cli-sessions";
   const plugin = join(config, "qol-tray", "plugins", "qol-cli-sessions", name);
-  return exists(plugin) ? plugin : "qol-cli-sessions";
+  return exists(plugin) ? plugin : null;
 }
 
 export function summarizePark(state) {
@@ -152,7 +152,7 @@ export function summarize(verb, outcome) {
 function reply(parsed, cwd) {
   if (parsed === null) return null;
   if (parsed.verb === "help") return { reason: parsed.diagnostic ? renderDiagnostic(parsed.diagnostic) : USAGE };
-  if (parsed.verb === "park") return park(cwd);
+  if (parsed.verb === "park") return park();
   try {
     const output = execFileSync("qol", commandFor(parsed, cwd), {
       encoding: "utf8",
@@ -168,10 +168,11 @@ function reply(parsed, cwd) {
   }
 }
 
-function park(cwd) {
+function park() {
+  const binary = cliSessionsBinary();
+  if (binary === null) return { reason: "qols park: CLI Sessions is not installed in qol-tray" };
   try {
-    const state = execFileSync(cliSessionsBinary(), ["parking", "toggle"], {
-      cwd,
+    const state = execFileSync(binary, ["parking", "toggle"], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
     }).trim();
