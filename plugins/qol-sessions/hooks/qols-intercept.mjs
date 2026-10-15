@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 import { execFileSync, spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { closest, renderDiagnostic } from "./_kit/diagnostic.mjs";
@@ -8,20 +11,24 @@ import { runPromptCommand } from "./_kit/prompt-command.mjs";
 export { renderDiagnostic };
 
 const FLAGS = { harness: "--tool", model: "--model", effort: "--effort", surface: "--surface" };
+const SWITCHES = { park: "--park" };
 
 const USAGE = [
-  "qols fork <problem> [--harness H] [--model M] [--effort E] [--surface S]",
+  "qols fork <problem> [--harness H] [--model M] [--effort E] [--surface S] [--park]",
   "qols bridge <task> [--harness H] [--model M] [--effort E] [--surface S]",
   "qols test <problem> [--harness H] [--model M] [--effort E] [--surface S]",
+  "qols park",
   "fork: detached architect that owns the problem; bridge: lane that reports back here;",
   "test: a fork whose prompt is typed but not submitted, so the launch costs no tokens",
+  "--park lets a fork close its terminal while it waits on a long command and reopen when it ends",
+  "park: toggle parking for this terminal; on, a park closes it and reopens the conversation later",
   "values may be [aliases] from sessions.toml; left out, sessions.toml defaults apply",
 ].join("\n");
 
-const VERBS = ["fork", "bridge", "test"];
+const VERBS = ["fork", "bridge", "test", "park"];
 
 function usageFor(verb) {
-  return USAGE.split("\n").find((line) => line.startsWith(`qols ${verb} `));
+  return USAGE.split("\n").find((line) => line === `qols ${verb}` || line.startsWith(`qols ${verb} `));
 }
 
 export function parsePrompt(prompt) {
@@ -50,8 +57,16 @@ export function parsePrompt(prompt) {
       },
     };
   }
+  if (verb === "park") return parsePark(source, tokens);
   const flags = [];
-  while (tokens.length >= 2 && tokens.at(-2).text.startsWith("--")) {
+  while (tokens.length >= 1) {
+    const last = tokens.at(-1).text;
+    if (verb !== "bridge" && last.startsWith("--") && Object.hasOwn(SWITCHES, last.slice(2))) {
+      tokens.pop();
+      flags.unshift(SWITCHES[last.slice(2)]);
+      continue;
+    }
+    if (tokens.length < 2 || !tokens.at(-2).text.startsWith("--")) break;
     const flag = tokens.at(-2);
     const name = flag.text.slice(2);
     if (!Object.hasOwn(FLAGS, name)) {
@@ -92,6 +107,35 @@ export function parsePrompt(prompt) {
   return { verb, message: tokens.map((t) => t.text).join(" "), flags };
 }
 
+function parsePark(source, tokens) {
+  if (tokens.length === 0) return { verb: "park" };
+  const [wrong] = tokens;
+  return {
+    verb: "help",
+    diagnostic: {
+      title: `\`qols park\` does not take \`${wrong.text}\``,
+      source,
+      start: wrong.start,
+      end: wrong.end,
+      label: "qols park only toggles",
+      notes: [`usage: ${usageFor("park")}`],
+    },
+  };
+}
+
+export function cliSessionsBinary(env = process.env, home = homedir(), exists = existsSync) {
+  const config = env.XDG_CONFIG_HOME || join(home, ".config");
+  const name = process.platform === "win32" ? "qol-cli-sessions.exe" : "qol-cli-sessions";
+  const plugin = join(config, "qol-tray", "plugins", "qol-cli-sessions", name);
+  return exists(plugin) ? plugin : "qol-cli-sessions";
+}
+
+export function summarizePark(state) {
+  return state === "parking on"
+    ? "qols park: on; a park closes this terminal and reopens the conversation when the wait ends"
+    : "qols park: off; a park keeps this terminal open and submits the result here";
+}
+
 export function commandFor({ verb, message, flags }, cwd) {
   if (verb === "fork") return ["sessions", "fork", "--cwd", cwd, "--brief", message, ...flags];
   if (verb === "test") return ["sessions", "fork", "--cwd", cwd, "--brief", message, "--dry-run", ...flags];
@@ -108,6 +152,7 @@ export function summarize(verb, outcome) {
 function reply(parsed, cwd) {
   if (parsed === null) return null;
   if (parsed.verb === "help") return { reason: parsed.diagnostic ? renderDiagnostic(parsed.diagnostic) : USAGE };
+  if (parsed.verb === "park") return park(cwd);
   try {
     const output = execFileSync("qol", commandFor(parsed, cwd), {
       encoding: "utf8",
@@ -120,6 +165,19 @@ function reply(parsed, cwd) {
     return { reason: summarize(parsed.verb, outcome), sent: true };
   } catch (error) {
     return { reason: `qols ${parsed.verb}: ${`${error.stderr ?? ""}`.trim() || error.message}` };
+  }
+}
+
+function park(cwd) {
+  try {
+    const state = execFileSync(cliSessionsBinary(), ["parking", "toggle"], {
+      cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    }).trim();
+    return { reason: summarizePark(state), sent: true };
+  } catch (error) {
+    return { reason: `qols park: ${`${error.stderr ?? ""}`.trim() || error.message}` };
   }
 }
 

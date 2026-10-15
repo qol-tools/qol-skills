@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { commandFor, parsePrompt, renderDiagnostic, summarize } from "../hooks/qols-intercept.mjs";
+import { cliSessionsBinary, commandFor, parsePrompt, renderDiagnostic, summarize, summarizePark } from "../hooks/qols-intercept.mjs";
 
 test("only prompts starting with qols are intercepted", () => {
   for (const prompt of ["fork this", "qolsfork x", "please qols fork x", "", undefined]) {
@@ -22,6 +22,19 @@ test("trailing named flags split off the message in any order", () => {
       { verb: "bridge", message: "add -1 to the counter", flags: ["--model", "sonnet"] },
     ],
     ["qols bridge fix it\nnow --surface win", { verb: "bridge", message: "fix it now", flags: ["--surface", "win"] }],
+  ];
+  for (const [prompt, expected] of cases) assert.deepEqual(parsePrompt(prompt), expected, prompt);
+});
+
+test("a trailing --park switch opts a fork into parking and stays message text on a bridge", () => {
+  const cases = [
+    ["qols fork wait on the PR --park", { verb: "fork", message: "wait on the PR", flags: ["--park"] }],
+    [
+      "qols fork wait --park --model opus",
+      { verb: "fork", message: "wait", flags: ["--park", "--model", "opus"] },
+    ],
+    ["qols test try --model opus --park", { verb: "test", message: "try", flags: ["--model", "opus", "--park"] }],
+    ["qols bridge explain --park", { verb: "bridge", message: "explain --park", flags: [] }],
   ];
   for (const [prompt, expected] of cases) assert.deepEqual(parsePrompt(prompt), expected, prompt);
 });
@@ -81,4 +94,27 @@ test("fork, test and bridge map onto the qol sessions CLI", () => {
 test("the summary names the key and the resolved launch", () => {
   const outcome = { key: "fork-1a2b", tool: "claude", model: "claude-opus-5-5", effort: "high", surface: "tab" };
   assert.equal(summarize("fork", outcome), "qols fork: fork-1a2b (claude claude-opus-5-5 high tab)");
+});
+
+test("qols park toggles and takes nothing else", () => {
+  assert.deepEqual(parsePrompt("qols park"), { verb: "park" });
+  assert.deepEqual(parsePrompt("QOLS Park"), { verb: "park" });
+  for (const prompt of ["qols park on", "qols park now please"]) {
+    const { verb, diagnostic } = parsePrompt(prompt);
+    assert.equal(verb, "help", prompt);
+    assert.match(diagnostic.title, /^`qols park` does not take/, prompt);
+    assert.match(renderDiagnostic(diagnostic), /usage: qols park$/, prompt);
+  }
+});
+
+test("qols park reports the state after the toggle", () => {
+  assert.match(summarizePark("parking on"), /^qols park: on; a park closes this terminal/);
+  assert.match(summarizePark("parking off"), /^qols park: off; a park keeps this terminal open/);
+});
+
+test("qols park runs the installed CLI Sessions plugin when it exists", () => {
+  const binary = process.platform === "win32" ? "qol-cli-sessions.exe" : "qol-cli-sessions";
+  const env = { XDG_CONFIG_HOME: "/cfg" };
+  assert.equal(cliSessionsBinary(env, "/home", () => true), `/cfg/qol-tray/plugins/qol-cli-sessions/${binary}`);
+  assert.equal(cliSessionsBinary(env, "/home", () => false), "qol-cli-sessions");
 });
