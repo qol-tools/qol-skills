@@ -5,14 +5,14 @@ const assert = require('node:assert/strict');
 
 const { classify, parseReview, parseArgs, parseTarget, attachLogs, cleanLogLine, render, watch, EXIT } = require('../bin/pr-watch.cjs');
 
-function pr({ state = 'OPEN', checks = [], merge = 'BLOCKED', auto = true, queued = false, events = [], committed = '2026-10-08T10:00:00Z', comments = [] } = {}) {
+function pr({ state = 'OPEN', checks = [], merge = 'BLOCKED', auto = true, armed = '2026-10-08T10:00:00Z', queued = false, events = [], committed = '2026-10-08T10:00:00Z', comments = [] } = {}) {
     return {
         number: 7,
         url: 'https://github.com/o/r/pull/7',
         state,
         isInMergeQueue: queued,
         mergeStateStatus: merge,
-        autoMergeRequest: auto ? { enabledAt: '2026-10-08T10:00:00Z' } : null,
+        autoMergeRequest: auto ? { enabledAt: armed } : null,
         commits: { nodes: [{ commit: { oid: 'abcdef1234567', committedDate: committed, statusCheckRollup: { contexts: { nodes: checks } } } }] },
         timelineItems: { nodes: events },
         comments: { nodes: comments },
@@ -41,6 +41,8 @@ const cases = [
     ['green, not armed', pr({ auto: false, checks: [run('lint', 'COMPLETED', 'SUCCESS')] }), 'idle'],
     ['removed from queue after head', pr({ auto: false, events: [{ __typename: 'RemovedFromMergeQueueEvent', reason: 'failed checks', createdAt: '2026-10-08T11:00:00Z' }] }), 'failed'],
     ['removal older than head', pr({ events: [{ __typename: 'RemovedFromMergeQueueEvent', reason: 'x', createdAt: '2026-10-08T09:00:00Z' }] }), 'pending'],
+    ['removal superseded by a later auto-merge arm', pr({ armed: '2026-10-08T12:00:00Z', events: [{ __typename: 'RemovedFromMergeQueueEvent', reason: 'manual', createdAt: '2026-10-08T11:00:00Z' }] }), 'pending'],
+    ['removal after the auto-merge arm', pr({ events: [{ __typename: 'RemovedFromMergeQueueEvent', reason: 'failed checks', createdAt: '2026-10-08T11:00:00Z' }] }), 'failed'],
     ['re-added after removal', pr({ queued: true, events: [{ __typename: 'AddedToMergeQueueEvent' }] }), 'pending'],
 ];
 

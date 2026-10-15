@@ -108,6 +108,7 @@ function queueRemoval(pr, commit) {
     const event = pr.timelineItems?.nodes?.[0];
     if (event?.__typename !== 'RemovedFromMergeQueueEvent' || pr.isInMergeQueue) return null;
     if (commit.committedDate && event.createdAt < commit.committedDate) return null;
+    if (pr.autoMergeRequest?.enabledAt && event.createdAt < pr.autoMergeRequest.enabledAt) return null;
     return `removed from the merge queue: ${event.reason || 'no reason given'}`;
 }
 
