@@ -227,6 +227,8 @@ selects) are documented in `qol-project:qol-shared-libs`.
   `pick_active_monitor` decision. Never re-derive from raw focus or
   cursor indices (`snapshot_monitor_focus_first` pins panels to the
   last-focused window's monitor). Toasts use `snapshot_cursor` corners.
+  qol-arch-code's active-monitor guard denies windows opened outside the
+  kit and `ActiveMonitor`s built outside `qol_gpui::monitor`.
 - **Panels reveal only after placement and fresh content settle.** Muffin
   places WM-managed Normal windows itself; `Surface` maps the real view behind
   a zero-opacity/input-passthrough native gate and asserts the origin. On Linux

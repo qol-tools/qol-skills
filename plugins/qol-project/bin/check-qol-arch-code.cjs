@@ -962,6 +962,66 @@ Bypass for this edit only:
 `);
 }
 
+const MONITOR_KIT_PACKAGE = 'qol-gpui';
+const VENDORED_PATH_RE = /[\\/](?:vendor|third_party)[\\/]/;
+
+const MONITOR_SIGNALS = [
+    {
+        label: 'gpui window opened outside the qol-gpui kit',
+        pattern: /\.open_window\s*\(/g,
+        owns: source => source.packageName === MONITOR_KIT_PACKAGE,
+    },
+    {
+        label: 'ActiveMonitor built outside qol_gpui::monitor',
+        pattern: /\bActiveMonitor::from_(?!(?:event|key)\b)\w+\s*\(/g,
+        owns: source => source.packageName === MONITOR_KIT_PACKAGE
+            && (source.parts[0] === 'monitor.rs' || source.parts[0] === 'monitor'),
+    },
+    {
+        label: 'window centered on the primary display',
+        pattern: /\bBounds::centered\s*\(\s*None\b/g,
+        owns: () => false,
+    },
+];
+
+function monitorSignalCounts(content, signals) {
+    const code = productionCode(content);
+    return signals.map(signal => (code.match(signal.pattern) || []).length);
+}
+
+function findNewMonitorSignals(filePath, newContent) {
+    if (VENDORED_PATH_RE.test(filePath)) return [];
+    const source = findRustSourceContext(filePath);
+    if (!source) return [];
+    const signals = MONITOR_SIGNALS.filter(signal => !signal.owns(source));
+    const before = monitorSignalCounts(readBaseline(filePath) || '', signals);
+    const after = monitorSignalCounts(newContent, signals);
+    return signals
+        .filter((_, index) => after[index] > before[index])
+        .map(signal => signal.label);
+}
+
+function blockMonitorSignals(filePath, labels) {
+    const detail = labels.map(label => `  - ${label}`).join('\n');
+    lintMode.report(process.stderr, `qol-arch-code violation in ${filePath}.
+
+This edit places a gpui window outside the active-monitor signal:
+
+${detail}
+
+qol-tray picks the active monitor once and every window follows it. Open
+windows through the qol-gpui kit with the monitor from
+MonitorTracker::snapshot_monitor() or resolve_active_monitor(); only
+qol_gpui::monitor builds an ActiveMonitor. Saved placement, the cursor, a
+window's own display and gpui's primary display are not the signal.
+
+Reference: qol-project:qol-arch-code skill, "Enforcement: active-monitor guard".
+
+Bypass for this edit only:
+  touch .claude/bypass-qol-arch-code
+`);
+}
+
 const TEST_DEADLINE_FLOOR_MS = 5000;
 const DURATION_LITERAL = String.raw`(?:std::time::)?Duration::from_(millis|micros|secs|secs_f32|secs_f64)\(\s*([\d_.]+)\s*\)`;
 const TEST_DEADLINE_SIGNALS = [
@@ -1484,6 +1544,12 @@ function evaluate(payload) {
         return 2;
     }
 
+    const monitorSignals = findNewMonitorSignals(filePath, newContent);
+    if (monitorSignals.length > 0) {
+        blockMonitorSignals(filePath, monitorSignals);
+        return 2;
+    }
+
     if (isOsAdapterFile(filePath)) return 0;
 
     if (COMPILE_ERROR.test(newContent)) {
@@ -1522,6 +1588,7 @@ function lintFile(filePath, content, baseline = null) {
 
 const LOCATORS = [
     ...SETTINGS_SIGNALS.map(signal => ({ label: signal.label, re: signal.pattern })),
+    ...MONITOR_SIGNALS.map(signal => ({ label: signal.label, re: signal.pattern })),
     ...STRONG_PLATFORM_SIGNALS,
     { label: 'platform token + storage/path routing', re: PLATFORM_TOKEN },
     { label: 'platform token + branching', re: PLATFORM_TOKEN },

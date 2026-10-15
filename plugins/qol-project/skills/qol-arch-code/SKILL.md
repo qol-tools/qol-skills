@@ -815,13 +815,29 @@ Counts are compared before and after the edit, so existing uses (the shot doctor
 
 Residual: a path built by hand from `HOME` or `XDG_CONFIG_HOME`, or a settings window drawn outside the contract, passes this guard. The per-plugin `validate_contract_defaults_match_type` test catches a config type that drifts from the contract.
 
+### Enforcement: active-monitor guard
+
+Every gpui window is placed from the runtime's monitor signal. qol-tray picks the active monitor once (`pick_active_monitor`, the newer of cursor and focus), windows open through the `qol-gpui` kit with a monitor from `MonitorTracker` (`snapshot_monitor()` or `resolve_active_monitor()`; toasts take `snapshot_cursor` corners), and only `qol_gpui::monitor` builds an `ActiveMonitor`. Saved window placement, a cursor read outside the tracker, a window's own display and gpui's primary display are not the signal.
+
+PR #96 (fe96b1504) built an `ActiveMonitor` from saved window placement (`from_gpui_bounds` in `surface/mod.rs`, now `from_bounds` in `surface/memory/mod.rs`) and ranked it above the signal, so settings opened from the launcher on the secondary monitor reopened on the monitor it was saved on.
+
+`bin/check-qol-arch-code.cjs` enforces this at edit time for production Rust under a crate's `src/`, outside `vendor/` and `third_party/`. It denies an edit that adds any of:
+
+- a gpui window opened outside the kit: `.open_window(` in any crate but `qol-gpui`
+- an `ActiveMonitor` built outside `qol_gpui::monitor`: any `ActiveMonitor::from_*(` constructor but the signal decoders `from_event` and `from_key`, anywhere but `qol-gpui`'s `src/monitor.rs`
+- a window centered on the primary display: `Bounds::centered(None, ..)`
+
+Counts are compared before and after the edit, so existing uses (the launcher and alt-tab ghosts, the shot windows, the kit fallbacks and keepalive) only block when they grow. `qac lint` without `--base` lists them all. Bypass one edit with `touch .claude/bypass-qol-arch-code`.
+
+Residual: the guard sees tokens, not data flow. It misses a kit opener that ranks another value above the signal without building an `ActiveMonitor`, a cross-process open that carries no monitor (the settings POST), and the tray's own focus and cursor stamping. Placement tests in `libs/gpui/tests/placement.rs` and guest runs cover those.
+
 ### Lint: `qac`
 
 The edit-time hooks only see new violations, so existing debt stays invisible until someone touches the file. `qac lint [path ...]` runs the qol-arch-code, cross-platform, cicd and logging hooks over whole tracked and untracked files (the whole repo when no path is given), counting every violation already there. It never consumes a bypass marker, and it skips `vendor/` and `third_party/`. Each hook exposes `lintFile(path, content, baseline)` through `bin/hook-lint-mode.cjs`, so a new filter in any of them is linted too.
 
 The rules come in two kinds, and lint treats them differently.
 Rules about the code as it stands (cfg placement, facade coverage, source layout, adapter-exclusive helpers, allow attributes) hold or fail on a file alone, so lint checks them on every file.
-Rules about added code (platform decision signals, settings, design, test deadlines, logging) compare a file with its earlier content, which a static file does not have.
+Rules about added code (platform decision signals, settings, active monitor, design, test deadlines, logging) compare a file with its earlier content, which a static file does not have.
 Without a base, lint counts every line as added, which turns "do not add X" into "X must never exist".
 `qac lint --base=<rev>` compares those rules with each file at `<rev>` instead: an unchanged file finds nothing, a changed file finds only what it added, and a file new since `<rev>` counts in full.
 CI runs `qac lint --base=<merge base>` over the whole repo, so rules about the code as it stands hold everywhere and rules about added code judge only the pull request.
