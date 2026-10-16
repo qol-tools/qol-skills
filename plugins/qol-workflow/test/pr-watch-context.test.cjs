@@ -51,8 +51,8 @@ for (const [name, command, exec, expected] of triggers) {
 }
 
 test('pushDir follows git -C and a leading cd', () => {
-    assert.equal(pushDir('git -C /wt push', '/repo'), '/wt');
-    assert.equal(pushDir('cd ../wt && git push', '/repo/a'), '/repo/wt');
+    assert.equal(pushDir('git -C /wt push', '/repo'), path.resolve('/wt'));
+    assert.equal(pushDir('cd ../wt && git push', '/repo/a'), path.resolve('/repo/wt'));
     assert.equal(pushDir('git push', '/repo'), '/repo');
 });
 
@@ -100,7 +100,7 @@ test('the hook emits PreToolUse additionalContext before gh pr create', () => {
     assert.equal(result.status, 0);
     const out = JSON.parse(result.stdout);
     assert.equal(out.hookSpecificOutput.hookEventName, 'PreToolUse');
-    assert.match(out.hookSpecificOutput.additionalContext, new RegExp(`node ${PLUGIN_ROOT}/bin/pr-watch\\.cjs`));
+    assert.match(out.hookSpecificOutput.additionalContext, new RegExp(`node ${PLUGIN_ROOT.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/bin/pr-watch\\.cjs`));
 });
 
 test('the hook stays silent on unrelated commands and bad input', () => {
