@@ -1,11 +1,11 @@
 ---
 name: qol-tray-rust
-description: Use when working on qol-tray's Rust backend — plugin system, daemon supervision, hosted settings surfaces, IPC/runtime endpoints, feature modules, shared qol-* crate placement, cross-platform strategy pattern, tokio concurrency and thiserror/anyhow error handling. Use when modifying files under src/plugins/, src/settings_surface/, src/daemon/, src/runtime/, src/features/, src/sync/, src/menu/, src/tray/, src/app/, src/updates/, or src/profile/, or when adding socket/HTTP endpoints, wiring a new feature module, touching Cargo.toml dependencies, deciding whether logic belongs in qol-tray or a shared qol-* crate, or reviewing Rust concurrency and error-handling patterns in qol-tray.
+description: Use when working on qol-tray's Rust backend - plugin system, daemon supervision, hosted settings surfaces, IPC/runtime endpoints, feature modules, shared qol-* crate placement, cross-platform strategy pattern, tokio concurrency and thiserror/anyhow error handling. Use when modifying files under src/plugins/, src/settings_surface/, src/daemon/, src/runtime/, src/features/, src/sync/, src/menu/, src/tray/, src/app/, src/updates/, or src/profile/, or when adding socket/HTTP endpoints, wiring a new feature module, touching Cargo.toml dependencies, deciding whether logic belongs in qol-tray or a shared qol-* crate, or reviewing Rust concurrency and error-handling patterns in qol-tray.
 ---
 
 # qol-tray Rust Backend Reference
 
-Pairs with the `qol-tray-core` (cross-platform overview + make commands) and `qol-world-canvas` (UI side of dive targets) skills. This skill focuses on the Rust internals: plugin system, daemon supervision, IPC, feature modules, concurrency and error-handling idioms, and shared-crate placement.
+Pairs with the `qol-tray-core` skill for the cross-platform overview. This skill focuses on the Rust internals: plugin system, daemon supervision, IPC, feature modules, concurrency and error-handling idioms, and shared-crate placement.
 
 ## Layout discovery and invariants
 
@@ -30,10 +30,9 @@ Plugins are separate binaries, not dynamic libraries:
 - Opts into hot-reload in dev mode (linked plugins rebuild and restart their daemon on change).
 
 Invariants to preserve when touching plugin-system code:
-- **Isolation** — a panic in a plugin must never take down the tray.
-- **Hot-reload** — linked plugins detect rebuilds and restart cleanly.
-- **Contract versioning** — `qol-plugin-api` is a public surface; keep it backwards-compatible.
-- **Dive-target claims** — changes to dive-target registration ripple to the world canvas; coordinate with `qol-world-canvas`.
+- **Isolation** - a panic in a plugin must never take down the tray.
+- **Hot-reload** - linked plugins detect rebuilds and restart cleanly.
+- **Contract versioning** - `qol-plugin-api` is a public surface; keep it backwards-compatible.
 
 ## Shared qol-* crates
 
@@ -50,8 +49,7 @@ Before adding new functionality directly into qol-tray, check whether it belongs
 | Fuzzy search | `qol-search` |
 | Frecency ranking | `qol-frecency` |
 | Color handling | `qol-color` |
-| FX / animations | `qol-fx` |
-| WASM integration | `qol-wasm` |
+| Theme tokens and surfaces | `qol-theme` |
 
 If code belongs in a shared lib, put it there. qol-tray should not become a dumping ground for logic other consumers need.
 
@@ -73,7 +71,7 @@ Rule for new code: do **not** scatter `#[cfg(target_os = "...")]` across feature
 
 - Tokio for I/O-bound work; `std::thread` for CPU-bound.
 - Shared state: prefer `tokio::sync::{mpsc, oneshot, watch}` over `Arc<Mutex<T>>`.
-- When `Arc<Mutex<T>>` is unavoidable, keep lock scope narrow — **never** hold a lock across `.await`.
+- When `Arc<Mutex<T>>` is unavoidable, keep lock scope narrow - **never** hold a lock across `.await`.
 - Cancellation: explicit via `CancellationToken` or dropped senders, never ad-hoc `AtomicBool` flags.
 - Track every `tokio::spawn` `JoinHandle`. Detached unbounded tasks are how leaks and zombie daemons happen.
 
@@ -96,11 +94,11 @@ When reviewing background code, the question is not "is this fast?" but "does th
 
 Boot runs in three ordered phases; respect the boundary when adding startup work:
 
-1. **Pre-tokio (synchronous, main thread)** — CLI-flag/subcommand handling, logging, install registration, the already-running probe, runtime-dir reset, the migration **pre-flight** (`qol_migrations::run_pre_flight`, which runs *before* housekeeping — housekeeping is cleanup, not "the migrations"), and doctor self-heal.
-2. **Tokio multi-thread (`block_on` async init)** — update check, the desktop-state socket, plugin load, profile sync (spawned, non-blocking), the daemon, feature registry, the axum server, hotkey capture, the daemon supervisor, and the post-auth migration pass (`run_post_auth_if_authed`).
-3. **Main thread (after init returns)** — `TrayManager::new` then the native OS event loop.
+1. **Pre-tokio (synchronous, main thread)** - CLI-flag/subcommand handling, logging, install registration, the already-running probe, runtime-dir reset, the migration **pre-flight** (`qol_migrations::run_pre_flight`, which runs *before* housekeeping - housekeeping is cleanup, not "the migrations"), and doctor self-heal.
+2. **Tokio multi-thread (`block_on` async init)** - update check, the desktop-state socket, plugin load, profile sync (spawned, non-blocking), the daemon, feature registry, the axum server, hotkey capture, the daemon supervisor, and the post-auth migration pass (`run_post_auth_if_authed`).
+3. **Main thread (after init returns)** - `TrayManager::new` then the native OS event loop.
 
-New startup work goes in the phase that matches its dependency, not wherever is convenient. Data migrations are pre-flight (phase 1) or post-auth (phase 2) — never folded into housekeeping.
+New startup work goes in the phase that matches its dependency, not wherever is convenient. Data migrations are pre-flight (phase 1) or post-auth (phase 2) - never folded into housekeeping.
 
 ## Boot path: never block on networked I/O
 
@@ -125,7 +123,7 @@ as a non-blocking status the user sees, not as a startup stall.
 
 UI ↔ backend communication lives in `src/runtime/`. When adding an endpoint:
 - Define request/response shapes as serde-friendly structs with explicit `#[serde(rename_all = ...)]` if the UI expects a specific casing.
-- Keep the handler thin. Business logic belongs in a feature module or shared crate — the runtime layer is transport only.
+- Keep the handler thin. Business logic belongs in a feature module or shared crate - the runtime layer is transport only.
 - Match existing URL/path conventions (`/api/<area>/<resource>`).
 - Return structured errors, not stringly-typed ones. Let the serializer render them.
 
@@ -134,9 +132,9 @@ UI ↔ backend communication lives in `src/runtime/`. When adding an endpoint:
 IPC mechanisms have distinct roles. Discover the maintained set from the host
 routers/listeners and do not conflate their contracts:
 
-1. **axum HTTP** (`127.0.0.1:42700`) — the dashboard, the `qol-tray exec` CLI, and the plugin-store API. The CLI does *not* speak a plugin's socket directly; it POSTs to axum, which dispatches onward.
-2. **desktop-state Unix socket** (Unix only) — a one-way feed of monitor/cursor/focus state that plugin daemons and external tools *read*. Never used for action dispatch.
-3. **per-plugin Unix socket** (path from each `plugin.toml` `daemon.socket`) — the actual plugin RPC; tray + axum dispatch actions here.
+1. **axum HTTP** (`127.0.0.1:42700`) - the `qol dev` dashboard, the `qol-tray exec` CLI, and the plugin-store API. The CLI does *not* speak a plugin's socket directly; it POSTs to axum, which dispatches onward.
+2. **desktop-state Unix socket** (Unix only) - a one-way feed of monitor/cursor/focus state that plugin daemons and external tools *read*. Never used for action dispatch.
+3. **per-plugin Unix socket** (path from each `plugin.toml` `daemon.socket`) - the actual plugin RPC; tray + axum dispatch actions here.
 
 The native settings host's singleton socket is internal qtray process control,
 not a fourth host/plugin channel. It only asks the retained GPUI host to
@@ -148,19 +146,19 @@ the abnormal host-death watchdog. See
 `qol-project:qol-plugin-gpui-surfaces` for the one-window and fallback
 invariants.
 
-**EventBus is broadcast, not a dispatch path.** `EventBus` is a `tokio::sync::broadcast` of `DaemonEvent`s — *outbound* state-change notifications from the daemon to subscribers (tray menu, dashboard SSE). Tray clicks never publish to it. A click flows on the request side (native menu callback → menu router → action executor → one-shot subprocess or plugin socket); the bus only appears on the response side, e.g. the tray re-subscribes to rebuild its menu on `PluginsChanged`. When wiring a feature, ask "is this an outbound state change (bus) or a request dispatch (router/socket)?" — they are never the same edge.
+**EventBus is broadcast, not a dispatch path.** `EventBus` is a `tokio::sync::broadcast` of `DaemonEvent`s - *outbound* state-change notifications from the daemon to subscribers (tray menu, dashboard SSE). Tray clicks never publish to it. A click flows on the request side (native menu callback → menu router → action executor → one-shot subprocess or plugin socket); the bus only appears on the response side, e.g. the tray re-subscribes to rebuild its menu on `PluginsChanged`. When wiring a feature, ask "is this an outbound state change (bus) or a request dispatch (router/socket)?" - they are never the same edge.
 
 ## Feature modules
 
 Each cross-cutting feature (hotkeys, shortcuts, task-runner, logs, profile, sync) is self-contained:
 - Public surface is a small facade.
-- Internals are private — don't leak internal state types into the facade.
+- Internals are private - don't leak internal state types into the facade.
 - If a feature grows beyond a single file, extract a sub-module with its own error type and tests.
 
 ## Build and release
 
-- `Cargo.toml` version and any peer manifest (e.g., `plugin.toml` for plugins) must stay in lockstep — qol-cicd's version workflow fails on drift.
-- Release trigger: a `chore(release): vX.Y.Z` commit subject.
+- `Cargo.toml` version and any peer manifest (e.g., `plugin.toml` for plugins) must stay in lockstep - qol-cicd's version workflow fails on drift.
+- Release trigger: the versioner's `chore(plugins): bump plugin versions` commit subject.
 - Feature flags live in `[features]`: `default = []`, `dev = []` unlocks the Developer tab.
 - `build.rs` is compile-time only (asset embedding, version stamping).
 
@@ -179,10 +177,10 @@ Run `cargo fmt -- --check` when you've touched files likely to drift; CI enforce
 ## Review checklist
 
 When reviewing Rust PRs in qol-tray, evaluate in order:
-1. **Idiomatic Rust** — `?` over match ladders, iterators over hand-rolled loops, correct borrowing, no stray clones.
-2. **Cross-platform** — new platform-specific code behind a trait, no scattered `#[cfg]`.
-3. **Error handling** — `thiserror` for libs, `anyhow` at the boundary, no `.unwrap()` in production.
-4. **Concurrency safety** — no locks across `.await`, no detached unbounded tasks, no data races.
-5. **Deep modules** — hidden complexity behind clean APIs; no shallow wrappers that just forward.
-6. **Shared-lib placement** — is this in the right crate? Would another plugin reuse it?
-7. **Testability** — pure logic extractable and testable without tokio/platform deps.
+1. **Idiomatic Rust** - `?` over match ladders, iterators over hand-rolled loops, correct borrowing, no stray clones.
+2. **Cross-platform** - new platform-specific code behind a trait, no scattered `#[cfg]`.
+3. **Error handling** - `thiserror` for libs, `anyhow` at the boundary, no `.unwrap()` in production.
+4. **Concurrency safety** - no locks across `.await`, no detached unbounded tasks, no data races.
+5. **Deep modules** - hidden complexity behind clean APIs; no shallow wrappers that just forward.
+6. **Shared-lib placement** - is this in the right crate? Would another plugin reuse it?
+7. **Testability** - pure logic extractable and testable without tokio/platform deps.

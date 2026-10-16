@@ -1,6 +1,6 @@
 ---
 name: gpui-conventions
-description: Use when writing gpui UI code in this workspace. Verified workspace patterns and gotchas for the GPUI dependencies selected by Cargo, built through hands-on exploration — NOT a generic gpui reference. Covers views, input, lists, focus, window management, testing, and source-checking version-sensitive behavior.
+description: Use when writing gpui UI code in this workspace. Verified workspace patterns and gotchas for the GPUI dependencies selected by Cargo, built through hands-on exploration, NOT a generic gpui reference. Covers views, input, lists, focus, window management, testing, and source-checking version-sensitive behavior.
 ---
 
 # GPUI Knowledge Base
@@ -12,7 +12,6 @@ Bespoke documentation for gpui, built through hands-on exploration.
 - [gpui.rs](https://www.gpui.rs/) - Official site
 - [docs.rs/gpui](https://docs.rs/gpui) - API docs
 - [Zed gpui crate](https://github.com/zed-industries/zed/tree/main/crates/gpui) - Source of truth
-- [gpui-component](https://github.com/longbridge/gpui-component) - component library
 - [WindowOptions docs](https://docs.rs/gpui/latest/gpui/struct.WindowOptions.html)
 
 ## Project Setup
@@ -121,104 +120,22 @@ div()
 
 ## Text Input
 
-Use `gpui-component` for a robust input field.
-
-```rust
-use gpui_component::input::{Input, InputState};
-
-struct MyView {
-    input: Entity<InputState>,
-}
-
-impl MyView {
-    fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        // Create state (needs window access)
-        let input = cx.new(|cx| 
-            InputState::new(window, cx)
-                .placeholder("Search...")
-        );
-        
-        // Listen to changes
-        cx.subscribe_in(&input, window, |_, _, event, _, _| {
-            if let gpui_component::input::InputEvent::Change = event {
-                log::debug!("input changed");
-            }
-        }).detach();
-
-        Self { input }
-    }
-}
-
-impl Render for MyView {
-    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        Input::new(&self.input)
-    }
-}
-```
+Use `qol_gpui::text_edit::{TextField, TextFieldElement}` (see Shared plugin
+surfaces below). The workspace has no component-library dependency.
 
 ## List Rendering
 
-Use `gpui-component`'s `List` for virtualized lists with keyboard navigation.
-
-```rust
-use gpui_component::list::{List, ListDelegate, ListState, ListItem};
-
-struct MyDelegate {
-    items: Vec<String>,
-    selected_index: Option<IndexPath>,
-}
-
-impl ListDelegate for MyDelegate {
-    type Item = ListItem;
-
-    fn items_count(&self, _section: usize, _cx: &App) -> usize {
-        self.items.len()
-    }
-
-    fn render_item(&mut self, ix: IndexPath, _window: &mut Window, _cx: &mut Context<ListState<Self>>) -> Option<Self::Item> {
-        Some(ListItem::new(("item", ix.row))
-            .child(self.items[ix.row].clone()))
-    }
-
-    fn set_selected_index(&mut self, ix: Option<IndexPath>, _window: &mut Window, _cx: &mut Context<ListState<Self>>) {
-        self.selected_index = ix;
-    }
-}
-
-// In your view:
-let list_state = cx.new(|cx| ListState::new(delegate, window, cx));
-
-// Render:
-List::new(&list_state).h_full()
-```
-
-## Keyboard Navigation
-
-`gpui-component::List` handles Up/Down/Enter automatically if focused.
-To confirm selection:
-
-```rust
-// In MyDelegate
-fn confirm(&mut self, _secondary: bool, _window: &mut Window, _cx: &mut Context<ListState<Self>>) {
-    if let Some(ix) = self.selected_index {
-        log::debug!("confirmed item at index {:?}", ix);
-    }
-}
-```
+Lists are gpui-native: a `div().id(..).overflow_y_scroll()` container with
+plugin-owned rows and selection. Keep the keyboard selection in view with
+`qol_gpui::scroll_list::SelectionScroll` (used by launcher and cli-sessions).
+Keyboard navigation is an `on_key_down` handler on the focused view; see
+Low-Level Patterns.
 
 ## Focus Management
 
-GPUI uses `FocusHandle` to track focus. `gpui-component` manages this internally for Input and List.
-
-To focus an element programmatically:
-
-```rust
-// Focus input
-self.input_state.update(cx, |state, cx| state.focus(window, cx));
-
-// Focus list
-self.list_state.update(cx, |state, cx| state.focus(window, cx));
-```
+GPUI uses `FocusHandle` to track focus. The view owns its handle, implements
+`Focusable`, and calls `.track_focus(&self.focus_handle)` on its root element;
+see Low-Level Patterns.
 
 ## Window Resize
 
@@ -240,12 +157,12 @@ fn update_window_height(&self, item_count: usize, window: &mut Window) {
 ## State Updates
 
 Use `cx.notify()` to trigger a re-render of the current view.
-When updating `Entity` state (like `ListState`), use `.update()`:
+When updating another `Entity`'s state, use `.update()` and notify inside it:
 
 ```rust
-self.list_state.update(cx, |state, cx| {
-    state.delegate_mut().items = new_items;
-    cx.notify(); // Notify the ListState view
+self.results.update(cx, |results, cx| {
+    results.items = new_items;
+    cx.notify();
 });
 ```
 
@@ -356,9 +273,9 @@ contract-driven settings actions are hosted by qol-tray through one retained
 and explicit fallbacks. Ownership, routing, and verification live in
 `qol-project:qol-plugin-gpui-surfaces`.
 
-Use the shared `qol_gpui::Spinner` rather than depending directly on the
-spinner or animation surface of the selected GPUI version. Never draw
-plugin-local spinners or drive them with view-owned timers and frame state.
+Use the shared `qol_gpui::Busy` (`Busy::ring`, or `Busy::new` with a label)
+rather than depending directly on the spinner or animation surface of the
+selected GPUI version. Never draw plugin-local spinners or drive them with view-owned timers and frame state.
 This keeps plugin code independent of dependency churn, host assets, and
 rendering backends. Source-check the selected crate before changing the shared
 wrapper.
@@ -501,7 +418,7 @@ creation) before subscribing.
 
 ### Set full window size at creation
 
-Don't create a tiny window and resize in `render()` — you get a glitched square. Set the final size in
+Don't create a tiny window and resize in `render()`: you get a glitched square. Set the final size in
 `WindowOptions::window_bounds` upfront.
 
 ### `Pixels` and `DisplayId` fields are private
@@ -514,7 +431,7 @@ No need for `cx.app_mut()`. Call `cx.quit()` from any view context.
 
 ### Event handlers: use method references
 
-`cx.listener(Self::handle_key)` — cleaner than inline closures, and the method gets `&mut self` automatically.
+`cx.listener(Self::handle_key)` is cleaner than inline closures, and the method gets `&mut self` automatically.
 
 ### `on_click` or `overflow_y_scroll` not found on Div
 
@@ -530,15 +447,11 @@ The `.hover(|h| ...)` closure on elements does not pass a `Div`, it passes a bla
 })
 ```
 
-### gpui_component::Scrollable breaks flex-wrap
-
-Wrapping elements in `gpui_component::Scrollable` violently breaks native GPUI `flex-wrap` width resolution because it intercepts constraints. If you just need a standard scrolling grid, drop `Scrollable` and use a native `div().id("grid").overflow_y_scroll()`.
-
 ### Eagerly stealing OS window focus
 
 If you launch a popup window and it doesn't immediately receive input (you have to click it first), ensure you are calling BOTH `window.focus(handle)` AND `window.activate_window()` when opening it. `activate_window` tells the GPUI platform layer to physically raise and steal focus from the compositor.
 
-This is about your OWN window. To foreground ANOTHER app's window on macOS (alt-tab/window-actions), `window.activate_window()` does not apply — see the `macos-window-activation` skill (SkyLight, AXRaise).
+This is about your OWN window. To foreground ANOTHER app's window on macOS (alt-tab/window-actions), `window.activate_window()` does not apply; see the `macos-window-activation` skill (SkyLight, AXRaise).
 
 ### Shared image / atlas refcount lifecycle (Metal backend)
 
@@ -549,7 +462,7 @@ This is about your OWN window. To foreground ANOTHER app's window on macOS (alt-
 
 ### `window_bounds()` can report a stale tiny size during warmup
 
-Beyond "set full size at creation": a pre-created / ghost window can have `window.window_bounds()` return a stale tiny size (e.g. 720x321) during the warmup render *before* a programmatic resize lands. Never feed `window_bounds()` into layout math on the first frames — use your intended size, not the reported one.
+Beyond "set full size at creation": a pre-created / ghost window can have `window.window_bounds()` return a stale tiny size (e.g. 720x321) during the warmup render *before* a programmatic resize lands. Never feed `window_bounds()` into layout math on the first frames; use your intended size, not the reported one.
 
 ### Blocking work must not occupy GPUI executor workers
 
@@ -562,7 +475,7 @@ GPUI caches a window's backing scale factor. When the window moves to a monitor 
 ### Fraction heights on absolutely-positioned elements resolve to zero
 
 `.h(fraction(0.20))` (or any percentage height) on an `absolute` div inside a
-`relative().size_full()` parent lays out at height 0 in this GPUI revision —
+`relative().size_full()` parent lays out at height 0 in this GPUI revision:
 the element keeps its x/width but collapses vertically (verified live: a
 recording canvas inside such a band received 960x0). Percentage `top`, `left`,
 and `width` resolve fine; only height fails on absolute elements. Use pixel
@@ -570,7 +483,7 @@ heights for absolute elements: compute `px(pane_height * FRACTION)` yourself.
 
 ### Canvas paths are window-space: always offset by `bounds.origin`
 
-`window.paint_path` inserts a path at its raw coordinates — a canvas's paint
+`window.paint_path` inserts a path at its raw coordinates. A canvas's paint
 closure receives the element's `bounds`, and paths built from only
 `bounds.size` land at the window's top-left (under the title bar / other UI),
 invisible. The workspace convention is to build every point in window
@@ -580,8 +493,6 @@ qol-gpui gamepad `at(bounds, x, y)`). Do local math against
 the `Path`.
 
 ## Low-Level Patterns (verified)
-
-Alternative to gpui-component for full control.
 
 ### Borderless Popup Window
 
@@ -630,116 +541,4 @@ div()
             _ => {}
         }
     }))
-```
-
-## Complete Example
-
-A fully functional launcher with Input, List, and dynamic resizing.
-
-```rust
-use gpui::*;
-use gpui_component::{
-    input::{Input, InputState},
-    list::{List, ListDelegate, ListState, ListItem},
-    IndexPath, Sizable,
-};
-
-struct MyDelegate {
-    items: Vec<String>,
-    matches: Vec<String>,
-    selected_index: Option<IndexPath>,
-}
-
-impl MyDelegate {
-    fn new(items: Vec<String>) -> Self {
-        Self {
-            matches: items.clone(),
-            items,
-            selected_index: None,
-        }
-    }
-
-    fn filter(&mut self, query: &str) {
-        if query.is_empty() {
-            self.matches = self.items.clone();
-        } else {
-            self.matches = self.items
-                .iter()
-                .filter(|i| i.to_lowercase().contains(&query.to_lowercase()))
-                .cloned()
-                .collect();
-        }
-    }
-}
-
-impl ListDelegate for MyDelegate {
-    type Item = ListItem;
-
-    fn items_count(&self, _section: usize, _cx: &App) -> usize {
-        self.matches.len()
-    }
-
-    fn render_item(&mut self, ix: IndexPath, _window: &mut Window, _cx: &mut Context<ListState<Self>>) -> Option<Self::Item> {
-        Some(ListItem::new(("item", ix.row))
-            .child(self.matches[ix.row].clone()))
-    }
-
-    fn set_selected_index(&mut self, ix: Option<IndexPath>, _window: &mut Window, _cx: &mut Context<ListState<Self>>) {
-        self.selected_index = ix;
-    }
-}
-
-struct AppView {
-    input_state: Entity<InputState>,
-    list_state: Entity<ListState<MyDelegate>>,
-}
-
-impl AppView {
-    fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let items = vec!["Apple", "Banana", "Cherry"].into_iter().map(String::from).collect();
-        let delegate = MyDelegate::new(items);
-        let list_state = cx.new(|cx| ListState::new(delegate, window, cx));
-        let input_state = cx.new(|cx| InputState::new(window, cx).placeholder("Search..."));
-        
-        Self { input_state, list_state }
-    }
-
-    fn on_input_change(&mut self, _: &gpui_component::input::InputEvent, window: &mut Window, cx: &mut Context<Self>) {
-        let query = self.input_state.read(cx).value();
-        self.list_state.update(cx, |state, cx| {
-             state.delegate_mut().filter(&query);
-             cx.notify();
-        });
-        
-        let count = self.list_state.read(cx).delegate().matches.len();
-        let height = 40.0 + (count as f32 * 24.0).min(300.0);
-        window.resize(size(px(300.0), px(height)));
-    }
-}
-
-impl Render for AppView {
-    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        div()
-            .size_full()
-            .flex()
-            .flex_col()
-            .child(Input::new(&self.input_state))
-            .child(List::new(&self.list_state).h_full())
-    }
-}
-
-fn main() {
-    Application::new().run(|cx: &mut App| {
-        cx.open_window(WindowOptions::default(), |window, cx| {
-            cx.new(|cx| {
-                let mut view = AppView::new(window, cx);
-                let input = view.input_state.clone();
-                cx.subscribe_in(&input, window, |this: &mut AppView, _, event, window, cx| {
-                    this.on_input_change(event, window, cx);
-                }).detach();
-                view
-            })
-        }).unwrap();
-    });
-}
 ```

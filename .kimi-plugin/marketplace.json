@@ -14,10 +14,6 @@
       "source": "../plugins/qol-plugin-pointz"
     },
     {
-      "id": "qol-plugin-ide-checkout",
-      "source": "../plugins/qol-plugin-ide-checkout"
-    },
-    {
       "id": "qol-plugin-keyremap",
       "source": "../plugins/qol-plugin-keyremap"
     },

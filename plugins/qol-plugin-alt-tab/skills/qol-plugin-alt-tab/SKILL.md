@@ -21,7 +21,7 @@ Change a public action across the manifest, host binding, daemon parser, and tes
 | Path | Responsibility |
 |---|---|
 | `src/main.rs` | Thin module wiring and process entrypoint. |
-| `src/runtime/` | Argument routing, daemon action transport/startup, and settings fallback. |
+| `src/runtime/` | Argument routing, daemon action transport/startup, and the settings handoff to qol-tray. |
 | `src/config/` | Typed settings consumed by the picker. |
 | `src/picker/` | Show dispatch, retained-window creation/reuse, cache types, layout, state, gathering, and monitor updates. |
 | `src/app/` | GPUI view state, input, live-preview coordination, and element rendering. |
@@ -40,7 +40,6 @@ Keep target cfg wiring inside feature-owned `platform/mod.rs` files. Picker/app 
 - Keep `PickerState` in `picker/state.rs`; do not hide large named modules inline inside `picker/mod.rs`.
 - Never combine `foo.rs` with `foo/`. In particular, monitor listeners and live previews use directory modules because they own child modules.
 - Within each feature-owned `platform/`, use one OS module form consistently and keep target selection in its `mod.rs`.
-- Keep browser settings assets in top-level `ui/`, outside Rust `src/`.
 
 ## Retained picker invariants
 
@@ -174,7 +173,7 @@ For blank or stale previews, determine whether the limitation is the compositor/
 
 ## Settings ownership
 
-The settings action is hosted by qol-tray when the manifest/config capability contract selects native GPUI settings. The daemon may keep a shared-panel or browser fallback, but it must not create a second bespoke settings implementation. Every renderer reads and writes through the same config API.
+The settings action is hosted by qol-tray as a native GPUI panel built from `qol-config.toml`; the plugin's `--settings` path only asks the tray to open it (`open_plugin_settings_via_tray`). Do not create a bespoke settings implementation in the plugin.
 
 ## Common changes
 

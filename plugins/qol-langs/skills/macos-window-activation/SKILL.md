@@ -18,8 +18,8 @@ deprecated in macOS 14 and will have no effect.
 
 It can still **return `true`** while doing nothing forceful, so a `let ok = app.activate(...)` check is not success evidence. Reproduce against an app that re-asserts frontmost and classify failures by these durable shapes:
 
-- **Mode A** — target app never comes forward (the user's "selected app didn't focus").
-- **Mode B** — right app, wrong window (a floating window like Teams' "Sharing Indicator" wins).
+- **Mode A**: target app never comes forward (the user's "selected app didn't focus").
+- **Mode B**: right app, wrong window (a floating window like Teams' "Sharing Indicator" wins).
 
 ## The fix: authoritative activation via SkyLight
 
@@ -35,7 +35,7 @@ extern "C" {
     fn GetProcessForPID(pid: i32, psn: *mut ProcessSerialNumber) -> i32; // deprecated, still works
 }
 
-// dlopen/dlsym live in libSystem (always linked) — NO #[link], NO build.rs,
+// dlopen/dlsym live in libSystem (always linked): NO #[link], NO build.rs,
 // NO framework search path needed. This is how you reach a PRIVATE framework
 // (SkyLight is in /System/Library/PrivateFrameworks, which the linker won't
 // search) without a link-time dependency.
@@ -97,7 +97,7 @@ A one-shot activation can still lose even with `set_front` + `AXFrontmost`. Root
 
 ## Reading the TRUE frontmost window (telemetry / verification)
 
-To check whether activation actually worked, read the user-perceived frontmost window from CoreGraphics — not `NSWorkspace.frontmostApplication` alone (that's app-level and async-settling):
+To check whether activation actually worked, read the user-perceived frontmost window from CoreGraphics, not `NSWorkspace.frontmostApplication` alone (that's app-level and async-settling):
 
 - Enumerate `CGWindowListCopyWindowInfo(onScreenOnly | excludeDesktopElements, ...)`. The list is front-to-back.
 - The **first window with `kCGWindowLayer == 0`** is the frontmost *normal* window. Popups/ghosts sit at `NSPopUpMenuWindowLevel` (layer != 0) and are correctly skipped.
@@ -107,26 +107,26 @@ This is callable from any thread (no `MainThreadMarker`), so it works from a bac
 
 ## Accessory-app + key-ghost pitfall
 
-An `Accessory` (`LSUIElement`) app that shows a key popup it never `orderOut`s / `resignKey`s does **not cleanly yield activation** — it stays the active app holding key. The authoritative SkyLight call sidesteps this. But if you are stuck on the public API, `orderOut` / resign your popup *before* activating the target so the WindowServer can hand off. (Historically a regression: dropping the `orderOut` on dismiss in favour of an alpha=0 keep-alive ghost is what left the app holding key.)
+An `Accessory` (`LSUIElement`) app that shows a key popup it never `orderOut`s / `resignKey`s does **not cleanly yield activation**: it stays the active app holding key. The authoritative SkyLight call sidesteps this. But if you are stuck on the public API, `orderOut` / resign your popup *before* activating the target so the WindowServer can hand off. (Historically a regression: dropping the `orderOut` on dismiss in favour of an alpha=0 keep-alive ghost is what left the app holding key.)
 
 ## Click-gesture pitfall (focus-related)
 
-Native gestures fire **before** your app reacts — e.g. Option+Click on the Dock = "hide others". A click-to-dismiss popup **cannot** intercept them. To prevent a stray modifier-click from triggering an OS gesture while your picker is up, lay a **full-monitor backdrop overlay that swallows mouse-down** (`stop_propagation`); clicks that miss your panel dismiss the picker instead of reaching the OS.
+Native gestures fire **before** your app reacts, e.g. Option+Click on the Dock = "hide others". A click-to-dismiss popup **cannot** intercept them. To prevent a stray modifier-click from triggering an OS gesture while your picker is up, lay a **full-monitor backdrop overlay that swallows mouse-down** (`stop_propagation`); clicks that miss your panel dismiss the picker instead of reaching the OS.
 
 ## Modifier-event pitfall (hold-to-switch)
 
-`on_modifiers_changed` can be **silently dropped while your window is not yet `keyWindow`** (notably right after window reuse). For reliable alt/modifier-**release** detection, poll `CGEventSourceFlagsState(.combinedSessionState)` on a short timer as a ground-truth fallback — don't trust the event alone.
+`on_modifiers_changed` can be **silently dropped while your window is not yet `keyWindow`** (notably right after window reuse). For reliable alt/modifier-**release** detection, poll `CGEventSourceFlagsState(.combinedSessionState)` on a short timer as a ground-truth fallback; don't trust the event alone.
 
 ## Cross-platform contrast
 
-Linux has no equivalent reliability problem: send an EWMH `_NET_ACTIVE_WINDOW` client message to the root window and the **window manager** performs the activation atomically. There is no userspace "activate" race because the WM owns focus policy. macOS has no public equivalent — hence SkyLight.
+Linux has no equivalent reliability problem: send an EWMH `_NET_ACTIVE_WINDOW` client message to the root window and the **window manager** performs the activation atomically. There is no userspace "activate" race because the WM owns focus policy. macOS has no public equivalent, hence SkyLight.
 
 ## Reproduce / verify a focus bug (method)
 
 A focus bug is "sometimes" by nature. Make it deterministic:
 
 1. Instrument the activation to log the CG-frontmost window (pid + window id) at three checkpoints: **BEFORE**, **AFTER-SYNC** (same tick), **AFTER-250ms** (background thread). Write to a **file sink**, not stderr, so logging survives whoever owns the process (the daemon is supervised by qol-tray).
-2. Drive real switches, then **isolate clean reads**: discard any commit whose 250ms read overlaps the next commit (timestamp filter) — fast spamming pollutes deferred reads.
+2. Drive real switches, then **isolate clean reads**: discard any commit whose 250ms read overlaps the next commit (timestamp filter); fast spamming pollutes deferred reads.
 3. Classify each clean commit: `app_match=false` → Mode A; `app_match=true, win_match=false` → Mode B; capture `ax_found` and the activate return to refute alternative theories (e.g. an AX-timeout hypothesis dies the moment `ax_found=true` on every failure).
 4. Verify the fix by the same probe: every clean commit must reach the requested app/window and remain there after teardown, including against a known focus-fighter.
 

@@ -26,11 +26,11 @@ Use this skill when the user asks to:
 
 Verdicts like "this isn't testable without a refactor", "we'd need to inject the path", "the seam doesn't exist" must be backed by `path:line` evidence from a survey of the relevant modules. Without that, the verdict is a guess. qol-tools modules already carry test seams that are not obvious from the function signature, so the guess is wrong often enough that you cannot trust it.
 
-**Mandatory grep before declaring a seam absent:**
+**Mandatory search before declaring a seam absent:**
 
 ```
-grep -rn "test_path_root\|TestPathRootGuard\|push_test_path_root\|TEST_.*ENV\|cfg(test)" src/
-grep -rn "QOL_.*TEST\|_TEST_PATH" src/
+rg "test_path_root|TestPathRootGuard|push_test_path_root|TEST_.*ENV|cfg(test)" src/
+rg "QOL_.*TEST|_TEST_PATH" src/
 ```
 
 Also: read `paths/mod.rs` (or whatever owns config/data path resolution) end-to-end. Functions with no path parameter often resolve through a `cfg`-gated override and look hardcoded only at first glance.
@@ -46,7 +46,7 @@ Both routes redirect every `paths::*` call (`legacy_config_dir`, `base_data_dir`
 
 **Recorded miss:** A profile sync survey claimed `SyncService` needed a `config_root` injection because its storage helpers take no path argument. The existing path-root override already covered the calls. Lesson: a no-arg signature is not evidence of global coupling; verify the current path seam first.
 
-**Rule:** if you cannot quote `path:line` for the missing seam, you have not finished the survey. Keep grepping. Do not generalise from "this function takes no path parameter" to "this code is coupled to global paths". Architecture verdicts without `path:line` citations are inadmissible.
+**Rule:** if you cannot quote `path:line` for the missing seam, you have not finished the survey. Keep searching with `rg`. Do not generalise from "this function takes no path parameter" to "this code is coupled to global paths". Architecture verdicts without `path:line` citations are inadmissible.
 
 ## Test Triage Template (apply every time)
 
@@ -254,14 +254,14 @@ that only trigger at production values. Examples:
 When writing a property test:
 - Generate over the full realistic range of every parameter that affects the
   invariant being tested, not just the easy ones.
-- If a parameter has a meaningful production default (e.g. `MINIMAP_MIN_SLOT_PX`),
-  include that exact value in the case set.
+- If a parameter has a meaningful production default, include that exact value
+  in the case set.
 - A property test that holds a key parameter constant is really an example
-  test in disguise — say so or expand the generation.
+  test in disguise - say so or expand the generation.
 
 ## UI and app guidance
 
-- For GPUI or Preact flows, extract decision logic into pure functions and test those.
+- For GPUI flows, extract decision logic into pure functions and test those.
 - Avoid expensive UI integration tests unless the behavior cannot be validated below the view layer.
 - For platform-specific bugs, add tests to the platform module rather than broad shared-code tests.
 
@@ -402,7 +402,7 @@ axum's `Json<T>` is a `pub struct Json<T>(pub T)`, so handler tests can destruct
 
 ### Recipe: testing decision/dispatcher logic without mocking I/O
 
-Extract the gating decision into a pure function that takes state by reference and returns an enum (`Skip(&'static str) | Proceed`, etc.). The orchestrator stays one-line. Table-test the pure function across all enum variants. Same shape worked for `launch_pull_decision` in qol-tray's sync service.
+Extract the gating decision into a pure function that takes state by reference and returns an enum (`PlanDisposition::Build | Skip(SkipRecord)`, etc.). The orchestrator stays one-line. Table-test the pure function across all enum variants. This shape is used by `classify_plan` in `libs/dev-build/src/planning/queue.rs`.
 
 ### Recipe: integration tests that need real config dirs
 

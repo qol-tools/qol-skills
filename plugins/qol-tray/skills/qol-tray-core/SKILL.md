@@ -1,6 +1,6 @@
 ---
 name: qol-tray-core
-description: Use when working on the core qol-tray application - the plugin system, tray, feature architecture, and the plugin contract formats (plugin.toml / qol-config.toml / qol-runtime.toml). Rust internals, UI systems, world canvas, and the Profile feature have their own skills.
+description: Use when working on the core qol-tray application - the plugin system, tray, feature architecture, and the plugin contract formats (plugin.toml / qol-config.toml / qol-runtime.toml). Rust internals and the Profile feature have their own skills.
 ---
 
 # qol-tray (core)
@@ -26,8 +26,6 @@ Adjacent durable knowledge lives in dedicated skills - do not duplicate it here:
 | Host-owned native plugin settings | `qol-plugin-gpui-surfaces` |
 | Generic workspace Rust style (error handling, graceful shutdown, idle-cost loops) | `rust-conventions` |
 | Cross-platform compartmentalization methodology | `qol-arch-code` |
-| UI components, Surface system, keyboard nav, styling | `qol-tray-ui-systems` |
-| World canvas / dive / minimap | `qol-world-canvas` |
 | Profile export/import, sync, backups | `qol-tray-feature-profile` |
 | Verification stack | `qol-tray-rust` |
 
@@ -134,8 +132,8 @@ collisions). Cross-validation happens at three layers: the `qol-config` CLI
 with dangling references), and a per-plugin `validate_qol_contracts` test.
 
 The field kinds that reference the runable contract (`action`, `list`, `status`,
-`qr_code`, plus `color` against config) are what auto-config renders into live,
-keyboard-navigable controls.
+`qr_code`, plus `color` against config) are what the native settings host renders
+into live, keyboard-navigable controls.
 
 ## Daemon protocol
 
@@ -150,14 +148,14 @@ HTTP surface for the contracts:
 
 ## Contract-driven settings rendering
 
-The web auto-config frontend and the shared native GPUI panel both render
-directly from `qol-config.toml`; neither owns a second schema. On Linux and
-macOS, a settings action with `capabilities.gpui = true` and a config contract
-is intercepted by one tray-owned native settings host. Other platforms and
-failed host starts continue through the plugin's mapped settings target.
+The shared native GPUI settings host renders directly from `qol-config.toml`;
+it owns no second schema. On Linux and macOS, a settings action with
+`capabilities.gpui = true` and a config contract is intercepted by one
+tray-owned native settings host. Other platforms and failed host starts
+continue through the plugin's mapped settings target.
 
-There is no per-plugin iframe/custom-UI path. New settings express their UI
-through field kinds; expand the shared contract and both renderers if a kind is
+There is no per-plugin custom-UI path. New settings express their UI through
+field kinds; expand the shared contract and the host renderer if a kind is
 missing. The host lifecycle, one-window rule, and fallback contract live in
 `qol-project:qol-plugin-gpui-surfaces`.
 
@@ -174,8 +172,11 @@ missing. The host lifecycle, one-window rule, and fallback contract live in
 ## Hotkeys
 
 qol-tray grabs global hotkeys at the X11 level (`src/hotkeys/`), intercepting them
-before the window manager. Bindings live in `~/.config/qol-tray/hotkeys.json`
-(`id`, `key`, `plugin_uid`, `action`, `enabled`; legacy `plugin_id` still read via
+before the window manager. Bindings are profile-scoped across two layers:
+`<profile>/core/hotkeys.json` (shared across machines) merged with
+`<profile>/os/<os>/hotkeys.json` (OS-specific), read through
+`paths::core_hotkeys_path()` and `paths::hotkeys_path()`. Each binding carries
+`id`, `key`, `plugin_uid`, `action`, `enabled` (legacy `plugin_id` still read via
 serde alias); key/modifier names are defined in
 `src/hotkeys/types.rs`. To replace an OS shortcut: disable it in System Settings,
 add the binding, restart so qol-tray grabs the key exclusively.
@@ -189,18 +190,6 @@ Condvar blocking). The **one hard host-app invariant**: the macOS tray icon and
 background thread. Broader Rust platform gotchas → `qol-tray-rust`; the
 strategy-pattern methodology that replaces scattered `#[cfg]` → `qol-arch-code`.
 
-## New-view integration
-
-Every dashboard view is a citizen of all infrastructure or it is broken. A new
-view must integrate, at minimum:
-
-- **Global keyboard routing** via the view-keyboard registration hook - never local `onKeyDown`/`tabIndex` on divs.
-- **Command-palette** search (filter on the shared query) and actions (register view commands).
-- **The shared view registry** - one label/order map; never a second local registry.
-- **The `display:none` lifecycle** - views are hidden, never unmounted, so polling/intervals/subscriptions must stop while inactive.
-
-Component, Surface, and styling details → `qol-tray-ui-systems`.
-
 ## Icon
 
 The tray icon is embedded at compile time from `assets/icon.rgba` (raw RGBA,
@@ -208,6 +197,6 @@ generated from `assets/icon.png`). Update the PNG, regenerate the RGBA, rebuild.
 
 ## Verification
 
-Run the repo-native build + test first (via `qol`/`make`), then the cargo
+Run the repo-native build + test first (via `qol`), then the cargo
 `-D warnings` stack. The full command set and rules live in `qol-tray-rust`
 (Verification) - do not report core work green until they pass.

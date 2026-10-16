@@ -11,12 +11,7 @@ For each finding, include a concrete, reproducible signal:
 - confidence level
 - Behavioral claims about focus, visibility, or lifecycle cite runtime trace output (for example qol trace probes) when the repo has it, never inference alone.
 
-Use this severity scale:
-- blocker: corruption, release breakage, privilege/security escape, irreversible data loss
-- high: likely functional regression with clear user impact
-- medium: non-trivial risk with clear follow-through path
-- low: optimization and maintainability defects
-- note: useful observations with limited risk
+Apply the Severity and Confidence Rubric in the qol-code-review SKILL.md: it owns the severity scale (`blocker`, `high`, `medium`, `low`, `note`) and the confidence levels, and this file does not restate them.
 
 Use these checklists to tailor agent prompts. Do not paste every item into every prompt; choose the concerns that match the change.
 

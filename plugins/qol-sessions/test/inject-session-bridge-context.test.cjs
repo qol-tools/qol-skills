@@ -179,13 +179,12 @@ test('matching prompts receive the event-driven feature loop', () => {
         assert.match(context, /session token as opaque and instance-bound/);
         assert.match(context, /never scan terminal sockets, override backend environment variables/);
         assert.match(context, /one bounded implementation round at a time/);
-        assert.match(context, /completion hook wake you/);
-        assert.match(context, /resumes any unfinished prior bridge and surfaces its latest response/);
+        assert.match(context, /let the watcher wake you with its report/);
+        assert.match(context, /session_bridge takes only a session/);
         assert.match(context, /submitted=false/);
         assert.match(context, /completion_marker as acknowledge_marker/);
         assert.match(context, /does not prove delivery or activity/);
-        assert.match(context, /only report lifecycle states emitted by session_bridge/);
-        assert.match(context, /never send a final response while its transaction is pending/);
+        assert.match(context, /only report lifecycle states the sessions surface emits/);
         assert.match(context, /Never wake the reasoning loop to poll/);
         assert.match(context, /background completion waiter/);
         assert.match(context, /ready for review, not feature acceptance/);

@@ -1,6 +1,6 @@
 ---
 name: qol-dev-environments
-description: Operate, debug, and evolve the `qol dev` Sandbox panel and its disposable OS environments. Use for typed sandbox workers, artifact-backed `qol dev` guests, host-built bundle transport, verified qcow2 import, `qol env`, `qol flow`, prepared desktop images, guest control, QEMU lifecycle or recovery, resource admission, clean-session plugin testing, and parallel guest work that must stay off the user's active desktop session. Also use whenever a task reproduces, debugs, or verifies qol runtime desktop behavior — plugin windows, hotkeys, previews, popups, tray actions — which happens in a guest, not on the host session.
+description: Operate, debug, and evolve the `qol dev` Sandbox panel and its disposable OS environments. Use for typed sandbox workers, artifact-backed `qol dev` guests, host-built bundle transport, verified qcow2 import, `qol env`, `qol flow`, prepared desktop images, guest control, QEMU lifecycle or recovery, resource admission, clean-session plugin testing, and parallel guest work that must stay off the user's active desktop session. Also use whenever a task reproduces, debugs, or verifies qol runtime desktop behavior (plugin windows, hotkeys, previews, popups, tray actions) which happens in a guest, not on the host session.
 ---
 
 # qol-dev-environments
@@ -89,13 +89,13 @@ Never let an agent fall back to host mouse, keyboard, window, display, or sessio
 When the task is a runtime bug repro or fix verification for a qol feature (a preview that closes, a hotkey that misfires, a window that will not focus), run the loop below in an artifact-backed guest. Do not verify on the host session unless the user explicitly asks; do not claim a repro or a fix from code reading alone.
 
 1. Build debug artifacts on the host first: debug builds carry `qol_runtime::probe!` tracing; a release bundle is evidence-blind. Then `qol env up <environment> --dev-worktree <worktree>`.
-2. Trigger the behavior through the same route the user's gesture takes. For plugin actions that means the tray action endpoint inside the guest (`POST /api/plugins/<id>/actions/<action>` on the tray port), which dispatches to the plugin daemon exactly like a hotkey. Invoking the plugin binary directly is a different dispatch path (CLI-inline instead of daemon) and produces false repros — entry probes record which path ran; check before trusting the run.
-3. Drive input and commands through guest control only: `qol env exec` for in-guest commands (they run as the desktop user with the session display — no sudo, no runuser), `qol env drag` / `qol emu key` for pointer and keyboard. Resolve ports and identity from the case run directory (`report.json`, `qemu-command.txt`); never hardcode them.
+2. Trigger the behavior through the same route the user's gesture takes. For plugin actions that means the tray action endpoint inside the guest (`POST /api/plugins/<id>/actions/<action>` on the tray port), which dispatches to the plugin daemon exactly like a hotkey. Invoking the plugin binary directly is a different dispatch path (CLI-inline instead of daemon) and produces false repros; entry probes record which path ran; check before trusting the run.
+3. Drive input and commands through guest control only: `qol env exec` for in-guest commands (they run as the desktop user with the session display; no sudo, no runuser), `qol env drag` / `qol emu key` for pointer and keyboard. Resolve ports and identity from the case run directory (`report.json`, `qemu-command.txt`); never hardcode them.
 4. Collect evidence, not impressions: burst `qol env shot` around the interaction (the state right after a gesture is the one that matters), and read the guest probe log (`qol_conventions::TRACE_LOG_PATH`) via `qol env exec`. Decision-level probe lines beat screenshots; screenshots corroborate.
 5. A fix claim needs both directions on a fresh lane: the failure no longer occurs from a cold first run, and the adjacent designed behavior (the dismiss, the timeout, the focus return) still fires.
 6. `qol env down` when finished. Reports stay; the host stays as found.
 
-If the loop needs a control surface the CLI lacks, extend the `qol env`/`qol emu` control verbs at their owners (see below) instead of hand-rolling a socket client in scratch space — the protocol clients already exist in `libs/qol-dev-guest` and the emu backend.
+If the loop needs a control surface the CLI lacks, extend the `qol env`/`qol emu` control verbs at their owners (see below) instead of hand-rolling a socket client in scratch space; the protocol clients already exist in `libs/dev-guest` and the emu backend.
 
 ## Respect the desktop runtime boundary
 
@@ -163,17 +163,17 @@ Do not manually delete case directories, leases, pidfiles, or overlays merely be
 Inspect these source-of-truth areas before editing:
 
 - Environment definitions: `flows/envs/*.toml`
-- Shared registry, inventory, reports, cancellation, payload, and resource admission: `libs/qol-dev-env/`
-- Typed guest-control protocol: `libs/qol-dev-guest/`
-- Typed worker requests, tickets, and handles: `libs/qol-dev-orchestrator/`
-- Prepared desktop-session runner: `tools/qol-guest-runner/`
-- Development-bundle selection and packaging: `tools/qol-cli/src/commands/dev_bundle.rs` and `tools/qol-cli/src/commands/dev.rs`
-- Detached orchestration and guest development sessions: `tools/qol-cli/src/commands/env.rs` and `tools/qol-cli/src/commands/env/dev_session.rs`
-- Sandbox panel integration: `tools/qol-cli/src/dev_console/`
-- Parallel orchestration and recovery: `tools/qol-cli/src/commands/flow.rs`
-- Verified prepared-image import: `tools/qol-cli/src/commands/emu/image_import/`
-- VM backend and workflow driving: `tools/qol-cli/src/commands/emu.rs` and `tools/qol-cli/src/commands/emu/`
-- Cross-platform process ownership and worker isolation: `libs/qol-process/`
+- Shared registry, inventory, reports, cancellation, payload, and resource admission: `libs/dev-env/`
+- Typed guest-control protocol: `libs/dev-guest/`
+- Typed worker requests, tickets, and handles: `libs/dev-orchestrator/`
+- Prepared desktop-session runner: `tools/guest-runner/`
+- Development-bundle selection and packaging: `tools/cli/src/commands/dev_bundle/` and `tools/cli/src/commands/dev.rs`
+- Detached orchestration and guest development sessions: `tools/cli/src/commands/env/` and `tools/cli/src/commands/env/dev_session.rs`
+- Sandbox panel integration: `tools/cli/src/dev_console/`
+- Parallel orchestration and recovery: `tools/cli/src/commands/flow.rs`
+- Verified prepared-image import: `tools/cli/src/commands/emu/image_import/`
+- VM backend and workflow driving: `tools/cli/src/commands/emu/`
+- Cross-platform process ownership and worker isolation: `libs/process/`
 
 Extend these owners instead of creating a second registry, launcher, resource ledger, cleanup path, or reporting schema.
 
@@ -181,7 +181,7 @@ Keep `qol dev` presentation thin. Add reusable orchestration below it first, the
 
 Keep environment identity backend-neutral. Put QEMU flags and image mechanics below the environment boundary. Require an explicit flow adapter capability before automating an environment; keep environments without one available for manual sessions.
 
-After changing `tools/qol-cli`, run `qol setup` before trusting the installed `qol` command.
+After changing `tools/cli`, run `qol setup` before trusting the installed `qol` command.
 
 ## Validate behavior in layers
 

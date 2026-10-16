@@ -1,6 +1,6 @@
 ---
 name: qol-gpui-theme
-description: "Use when designing, building, reviewing or restyling any native gpui surface in qol - settings panel, launcher, alt-tab, cli-sessions, remove-app, qol-shot, toasts, gamepad diagram - or the web settings page tokens. Defines Bone and Amber V3: grounds for light, dark and unfocused, the eleven text styles, keys and drawn icons, the spacing/height/radius/depth/motion ladders, one definition per state, the kit parts every window is built from, and the guard tests that fail the build on a mismatch. Companion to qol-plugin-gpui-surfaces, which owns wiring and placement rather than looks."
+description: "Use when designing, building, reviewing or restyling any native gpui surface in qol - settings panel, launcher, alt-tab, cli-sessions, remove-app, qol-shot, toasts, gamepad diagram. Defines Bone and Amber V3: grounds for light, dark and unfocused, the eleven text styles, keys and drawn icons, the spacing/height/radius/depth/motion ladders, one definition per state, the kit parts every window is built from, and the guard tests that fail the build on a mismatch. Companion to qol-plugin-gpui-surfaces, which owns wiring and placement rather than looks."
 ---
 
 # Bone and Amber (V3)
@@ -321,8 +321,7 @@ same `tile_arts`, `choose_step` and `choose_hints`.
 | Hint bar | `Kit::hint_bar()` | h `HEIGHT_HINT_BAR`, px `SPACE_PAD`, gap `SPACE_GUTTER`, border_t hairline, bg `washes.fill_hover`, the Hint style |
 | Hint | `Kit::hint(key, label)` | gap `SPACE_SNUG`: key chip + label |
 | Cards, band bar, filter field | `components::settings_card`, `floating_card`, `settings_band_bar`, `settings_filter_field`, `settings_filter_overlay`, `rail_scrim_layer`, `rail_item_label`, `settings_slider_track`, `settings_swatch`, `settings_accent_dot`, `settings_error_line`, `settings_arrow` | recipes, so the views compose and never style |
-| Buttons | `Kit::button_primary/ghost/danger` | px `SPACE_CELL`, py `SPACE_SNUG` |
-| Dropdown menu | `dropdown.rs` | list item action menus only, never a select: menu p `SPACE_SNUG`, item px `SPACE_INSET`, item gap `SPACE_INSET`, min `MENU_MIN_WIDTH` 214, max `MENU_MAX_WIDTH` 280, label truncated |
+| Buttons | `Kit::button_ghost` | px `SPACE_CELL`, py `SPACE_SNUG` |
 | Row ground | `components::RowGround` | pane at rest, band when the row is selected with the body focused, band hover through `group_hover(SETTINGS_ROW_GROUP)` |
 | Settings tile | `components::SettingsTile` with `TileArt`, `tile_layout`, `settings_tile_rows` and `TILE_HEIGHT` | `TILE_HEIGHT` 116, px `SPACE_SNUG`, gap `layout.gap`, rounded `RADIUS_CARD`; art 112 x 70 at three per row, 104 x 65 at four and 88 x 55 at five; grid gap `SPACE_CELL` at three and four per row and `SPACE_INSET` at five; name `TEXT_CAPTION`, `TEXT_MICRO` at five per row; tick 16 x 12 at top `SPACE_CELL`, right `SPACE_INSET`; `settings_tile_rows` pads the first row by `SPACE_INSET`; `tile_arts` gives each option its valid picture, else `letters_for` letters, else `letters:?`; `choose_step` moves the highlight and stops at every edge; `choose_hints` is `↵ choose` with `←→ move`, or `←→↑↓ move` once the tiles wrap |
 | Hint bar (question) | `components::SettingsHintBar` with `SettingsHint` and `HintTone` | resting: `kit().hint_bar()` with the left hints, a spacer and the right hints; question: the bar fills `translucent(grounds.pane.ink, Alpha::Wash)`, the question in the ListName style in ink, then the hints, with no mark on its edge; `hint_tone_color` gives `success` for `Save` and `danger` for `Discard`, each key chip edged in its hue at `Alpha::Veil`; `SettingsHint::busy(label)` draws `settings_action_spinner` at 12 px where the keycap would be, then its label |
@@ -338,9 +337,9 @@ Rules for settings scope:
 - **R2** No local spacing constant (a `const` whose name contains PAD, GAP, INSET,
   GUTTER or MARGIN and holds a number). Reference `SPACE_*` directly. Widths and
   sizes (`TOGGLE_TRACK_WIDTH`, `FIELD_MIN_WIDTH`, `PANEL_*_WIDTH`,
-  `CRUMB_MAX_WIDTH`, `RAIL_CARD_OVERLAP`, `SWATCH_SIZE`, `MENU_MIN_WIDTH`) are
+  `CRUMB_MAX_WIDTH`, `RAIL_CARD_OVERLAP`, `SWATCH_SIZE`) are
   geometry, not spacing, and stay.
-- **R3** One recipe per component. Recipes live in `settings_panel/components.rs`
+- **R3** One recipe per component. Recipes live in `settings_panel/components/`
   (settings-only) or `kit.rs` (shared by every surface). Other settings-scope files
   compose recipes; they do not call `text_size`, `text_color`, `font_weight`,
   `font_family`, `bg`, `border`, `border_color`, `rounded`, `shadow` on their own.
@@ -371,7 +370,7 @@ Rules for settings scope:
   loading, same frame as `settings_message`). A value cell waiting on a query
   shows the spinner alone, status rows included. A status value that is null
   shows an en dash, not loading. A toast for an operation still running is
-  marked `Toast::busy()` and spins before its title. A core tool saving from
+  marked `Toast::live()` and sits on the menu ground. A core tool saving from
   its question keeps the question up with `SettingsHint::busy("saving")`, the
   action spinner where the keycap would be.
 
@@ -415,8 +414,8 @@ without the user asking for it by name.
    keeps a descender ("plugins") off the clip edge. The
    rail obeys the same law: while the cursor is in the body the rail carries
    no accent at all, so its colophons drop to `text_muted` and the selected
-   item's fill is mixed from `text_muted` instead of the accent
-   (`rail_bg_selected_quiet`). The rail
+   item's fill drops from the band to `qol_theme::band_rest_fill`
+   (`paint_rail_selection`). The rail
    section the selection is not in also drops to `RAIL_SECTION_OPACITY`
    (0.55), which is what makes the live section read as the live one.
 4. **A masthead closes with a hairline, and nothing else in the body has
@@ -465,8 +464,8 @@ without the user asking for it by name.
    pops when the slide ends or on the next key.
 
 Settings scope is `libs/gpui/src/settings_panel/**`,
-`libs/gpui/src/gamepad/**`, `libs/gpui/src/kit.rs`, `dropdown.rs`,
-`hint_bar.rs`, `deck.rs`, and `apps/qol-tray/src/settings_surface/**`.
+`libs/gpui/src/gamepad/**`, `libs/gpui/src/kit.rs`,
+`hint_bar.rs`, `deck.rs`, and `apps/tray/src/settings_surface/**`.
 
 The guard tests live in `libs/theme/tests/theme.rs`, and every debt list is
 empty: a window that picks its own size, weight, key name, symbol, corner,
@@ -494,7 +493,6 @@ colour, shadow, alpha, time or chip does not build.
 - Focus and progress: `settings_surfaces_have_one_focus_owner`,
   `gpui_surfaces_draw_progress_with_the_spinner`,
   `settings_surfaces_build_spinners_through_components`.
-- Web: `the_web_settings_page_takes_sizes_times_and_shadows_from_the_theme`.
 
 ## Behaviour that carries visual weight
 
@@ -652,8 +650,8 @@ a dropdown.
   under the sub header `Size and refresh for this display.`, ticked on the
   staged mode, else the current one; choosing a tile stages that mode and
   returns to the Arrangement card. Locked 2026-09-14 as J1.
-- No select opens a floating dropdown, and `SettingsSelectValue` is gone.
-  `dropdown.rs` serves list item action menus only.
+- No select opens a floating menu, and `SettingsSelectValue` is gone. A select
+  pushes a choice card, and a list item's actions open in its item card.
 
 ## Relationship to qol-theme and kit.rs
 
@@ -664,7 +662,7 @@ above, both sides are named here so the delta is visible instead of argued about
 `LIGHT_REFERENCE` / `DARK_REFERENCE`. That is the SSOT for colour; never introduce
 a colour literal in `libs/gpui`. The same file owns the ground table as `Grounds`:
 the six grounds plus band hover, each with its eight roles and its halo.
-`libs/theme/src/css.rs` writes every token to the web page too: the text styles
+`libs/theme/src/css.rs` renders every token as generated CSS too (`qol-theme-css`): the text styles
 as `--qol-text-*` and `.qol-text-*` classes, spacing, radii, motion, the alpha
 ladder, opacities, the line, the status dot, both shadows and the focus ring,
 plus IBM Plex Mono served from `libs/gpui/assets/fonts`.

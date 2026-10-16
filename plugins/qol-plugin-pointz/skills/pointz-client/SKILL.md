@@ -22,7 +22,7 @@ Inspect those paths before stating a capability, setting default, throttle inter
 
 ## Desktop protocol boundary
 
-Discovery ports and messages must match the desktop plugin's `src/config/mod.rs` and `src/discovery/model.rs`. Command JSON must match `src/command/model.rs`.
+Discovery ports and messages must match qol-tray's PointZ peer transport in `libs/peers/src/service/pointz/` (DISCOVERY_PORT/COMMAND_PORT); the plugin advertises those ports from `src/config/mod.rs` through its `connection_info` query. Command JSON must match the plugin's `src/command/model.rs`.
 
 Change client and server protocol definitions together. Preserve tolerant decoding when adding optional fields; require an intentional compatibility decision for renamed commands, changed enum spelling, or port changes.
 

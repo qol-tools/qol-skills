@@ -25,7 +25,6 @@ Any time you find yourself thinking, suggesting, or about to apply something tha
    | --- | --- |
    | Testing patterns, frameworks, fixtures | `qol-tray:qol-apps-testing` |
    | Rust idioms, error handling, FS, process mgmt | `qol-langs:rust-conventions` |
-   | Preact + htm patterns | `qol-langs:preact-conventions` |
    | gpui patterns | `qol-langs:gpui-conventions` |
    | Branch / worktree / PR ceremony | `qol-workflow:git-trees` |
    | Commit format | `qol-workflow:commit` |

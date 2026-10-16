@@ -34,7 +34,7 @@ optional body explaining WHY when non-obvious
 ```
 
 - `type`: `feat`, `fix`, `refactor`, `chore`, `docs`, `test`, `perf`, `wip`, `style`
-- `scope` is optional; use it when a single area is touched (`fix(minimap): ...`)
+- `scope` is optional; use it when a single area is touched (`fix(alt-tab): ...`)
 - Subject in imperative mood ("Add", not "Added" / "Adds")
 - No trailing period in the subject
 - Wrap body at ~72 chars
@@ -90,19 +90,19 @@ else's HEAD rewrites their work. Commit with explicit paths
 ## What NOT to write
 
 - What the diff already shows ("change X to Y in file Z")
-- File paths or line numbers — those are in the diff
+- File paths or line numbers - those are in the diff
 - Marketing/AI attribution (see hard rule above)
 - Internal task IDs unless the repo convention requires them (qol-tools repos
-  do not — the Brunata AGI repo does, see that plugin's commit skill)
+  do not - the Brunata AGI repo does, see that plugin's commit skill)
 
 ## HEREDOC template (safe)
 
 ```
 git commit -m "$(cat <<'EOF'
-fix(minimap): clamp viewport rect to canvas bounds
+fix(alt-tab): clamp the picker to the active monitor bounds
 
-Off-screen pages were drawing the rect outside the visible area, making
-the active-page indicator drift when the camera was at the far edge.
+On a monitor left of the primary, the picker opened partly off-screen,
+hiding the first column of previews.
 EOF
 )"
 ```

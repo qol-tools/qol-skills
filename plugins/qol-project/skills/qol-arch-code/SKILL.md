@@ -1,6 +1,6 @@
 ---
 name: qol-arch-code
-description: Use when designing or refactoring Rust plugins/libs that need clean source ownership, cross-platform support, capability-specific backend splits, native GPUI or web UI placement, or headless-first CLI/plugin contracts. Defines plugin source-root hygiene, the ui/ versus src/ui/ boundary, Rust module directory form, strategy-pattern compartmentalization (platform/ subfolders, trait + per-OS impls), capability-local backend boundaries, headless binary layering, mandatory help/doctor commands, what a plugin doctor command must report, and plugin doctor output contracts. Triggers on plugin directory structure, loose files under src/, module file-plus-folder hybrids, native or web UI placement, platform-specific code, multi-OS support, OS-named files, Linux X11/Wayland/compositor splits, headless CLI design, plugin runtime action design, doctor commands, output categories (log via `log::`, trace via `qol_runtime::probe!`, command output in `cli` modules; `println!`/`eprintln!`/`dbg!` outside them), or any time you see #[cfg(target_os)] sprawl. For symbol/import hygiene that prevents dead_code warnings under `-D warnings`, see `qol-arch-cross-platform`. For CI/release workflow contracts that enforce cross-platform builds, see `qol-arch-cicd`.
+description: Use when designing or refactoring Rust plugins/libs that need clean source ownership, cross-platform support, capability-specific backend splits, native GPUI placement, or headless-first CLI/plugin contracts. Defines plugin source-root hygiene, the src/ui/ presentation boundary, Rust module directory form, strategy-pattern compartmentalization (platform/ subfolders, trait + per-OS impls), capability-local backend boundaries, headless binary layering, mandatory help/doctor commands, what a plugin doctor command must report, and plugin doctor output contracts. Triggers on plugin directory structure, loose files under src/, module file-plus-folder hybrids, native GPUI placement, platform-specific code, multi-OS support, OS-named files, Linux X11/Wayland/compositor splits, headless CLI design, plugin runtime action design, doctor commands, output categories (log via `log::`, trace via `qol_runtime::probe!`, command output in `cli` modules; `println!`/`eprintln!`/`dbg!` outside them), or any time you see #[cfg(target_os)] sprawl. For symbol/import hygiene that prevents dead_code warnings under `-D warnings`, see `qol-arch-cross-platform`. For CI/release workflow contracts that enforce cross-platform builds, see `qol-arch-cicd`.
 ---
 
 # qol-arch-code: Plugin and Cross-Platform Code Layout
@@ -30,7 +30,6 @@ Layer Rust plugins like this:
 
 ```
 plugin-name/
-  ui/                    # optional host-served HTML, JavaScript, and CSS
   src/
     main.rs              # tiny binary entrypoint
     lib.rs               # crate composition and public facade
@@ -70,7 +69,7 @@ This keeps the tool useful from a terminal, script, test, or future host while s
 
 ## Rust module and directory hygiene
 
-Every crate's `src/` root is a composition layer. Keep public facades and required entrypoints there; place implementation beneath the capability, adapter, or presentation boundary that owns it. The host has the strictest application root: `apps/qol-tray/src/` contains only `main.rs` and `lib.rs`. Plugins allow only `main.rs`, `lib.rs`, and optional `cli.rs` at their source root. Ordinary libraries may keep stable public facade modules at the root, but implementation growth moves behind owned directories.
+Every crate's `src/` root is a composition layer. Keep public facades and required entrypoints there; place implementation beneath the capability, adapter, or presentation boundary that owns it. The host has the strictest application root: `apps/tray/src/` contains only `main.rs` and `lib.rs`. Plugins allow only `main.rs`, `lib.rs`, and optional `cli.rs` at their source root. Ordinary libraries may keep stable public facade modules at the root, but implementation growth moves behind owned directories.
 
 Rules for every Rust crate:
 
@@ -86,13 +85,12 @@ The plugin `src/` root is a composition layer, not a dumping ground. New Rust fi
 
 Rules:
 
-- `ui/` at the plugin root is host-served web content: HTML, JavaScript, CSS, and related browser assets discovered by qol-tray.
-- `src/ui/` is compiled Rust presentation: GPUI windows, views, panels, toasts, and presentation state. Never swap these two roots.
+- `src/ui/` is compiled Rust presentation: GPUI windows, views, panels, toasts, and presentation state. There is no plugin-root web UI.
 - Keep feature-specific OS code in `src/<capability>/platform/`. Use `src/platform/` only for an OS service genuinely shared by multiple capabilities.
 - Keep dependency direction inward: entrypoint/adapter -> capability -> platform facade. Presentation may consume capability state; domain code must not depend on GPUI or qol-tray action ids.
 - Preserve stable public paths with facade re-exports when callers depend on them.
 
-Before changing a grown plugin, inventory direct `src/*.rs` files, native and web UI roots, platform directories, and every `name.rs` + `name/` hybrid. Classify each file by ownership before moving it. The canonical monorepo reference is `docs/plugin-layout.md`.
+Before changing a grown plugin, inventory direct `src/*.rs` files, native UI roots, platform directories, and every `name.rs` + `name/` hybrid. Classify each file by ownership before moving it. The canonical monorepo reference is `docs/plugin-layout.md`.
 
 ## Headless CLI contract
 
@@ -227,7 +225,7 @@ authoritative field set; the shape below only illustrates it:
 
 OS-specific code lives in a `platform/` subfolder. Two valid placements:
 
-**Per-feature** (most common — when the platform surface is specific to one feature):
+**Per-feature** (most common, when the platform surface is specific to one feature):
 
 ```
 src/<feature>/
@@ -249,7 +247,7 @@ src/platform/
   windows.rs             # stub if unsupported
 ```
 
-In both cases the OS-named files (`linux.rs`, `macos.rs`, `windows.rs`) sit inside a directory named `platform`. **Don't put OS files directly under a feature dir** — that's how cfg sprawl creeps back in over time. This is the default shape; only add deeper backend structure when a specific capability has genuinely different runtime contracts.
+In both cases the OS-named files (`linux.rs`, `macos.rs`, `windows.rs`) sit inside a directory named `platform`. **Don't put OS files directly under a feature dir**: that's how cfg sprawl creeps back in over time. This is the default shape; only add deeper backend structure when a specific capability has genuinely different runtime contracts.
 
 Use exactly one Rust module form per `platform/` directory:
 
@@ -298,7 +296,7 @@ pub use macos::Platform;
 pub use windows::Platform;
 ```
 
-Each `<os>.rs` exports a `pub struct Platform;` and `impl WindowOps for Platform`. (For trivial single-fn surfaces it's also fine to skip the trait + struct and just `pub(crate) use linux::install;` — see the simpler section below.)
+Each `<os>.rs` exports a `pub struct Platform;` and `impl WindowOps for Platform`. (For trivial single-fn surfaces it's also fine to skip the trait + struct and just `pub(crate) use linux::install;`, see the simpler section below.)
 
 Business code:
 
@@ -393,7 +391,7 @@ Backend names should describe the real boundary (`x11_snapshot`, `wayland_portal
 
 ## Stubs for unsupported OSes
 
-When a feature genuinely cannot work on an OS, **do not** use `compile_error!` — that breaks cross-compilation, blocks dev on other hosts, and breaks CI matrix builds.
+When a feature genuinely cannot work on an OS, **do not** use `compile_error!`: that breaks cross-compilation, blocks dev on other hosts, and breaks CI matrix builds.
 
 Cover Linux, macOS, and Windows in the target-selection facade. Use either a
 dedicated OS adapter or an explicitly selected `fallback` / `unsupported`
@@ -431,13 +429,13 @@ pub(crate) use fallback::Platform;
 
 Verify the complement by checking the exotic target locally (`rustup target add
 x86_64-unknown-freebsd`, then `cargo check`/`clippy --all-targets` for that
-target) — the exotic-target build also exercises the stub paths in dependency
+target): the exotic-target build also exercises the stub paths in dependency
 crates, so it catches interface drift the three-OS matrix never sees.
 
 Provide a stub impl that returns a typed error at runtime:
 
 ```rust
-// platform/macos.rs (stub — feature genuinely unsupported on macOS)
+// platform/macos.rs (stub: feature genuinely unsupported on macOS)
 use anyhow::{anyhow, Result};
 use crate::platform::WindowOps;
 
@@ -468,7 +466,7 @@ When a fallback guard type (a `ProcessTreeGuard`, lock guard, or similar)
 stands in for a real one, mirror the real guard's surface including a no-op
 `impl Drop`. Shared code that calls `drop(guard)` to bound a lifetime window is
 then a genuine `Drop` invocation on every target, and clippy's
-`drop_non_drop` stays quiet under `-D warnings` on the exotic-target build —
+`drop_non_drop` stays quiet under `-D warnings` on the exotic-target build;
 otherwise the same `drop()` call that runs real cleanup on Linux is a lint
 error on FreeBSD.
 
@@ -520,7 +518,7 @@ core-foundation = "0.10"
 windows = { version = "0.58", features = ["Win32_UI_WindowsAndMessaging"] }
 ```
 
-The `<os>.rs` source files use these unconditionally — the cfg gate at the manifest level guarantees they're only compiled when relevant.
+The `<os>.rs` source files use these unconditionally; the cfg gate at the manifest level guarantees they're only compiled when relevant.
 
 ## Output: log, trace, command output
 
@@ -529,7 +527,7 @@ Every line a qol process writes belongs to exactly one of three categories. Each
 | Category | Write it with | Lands in | In `qol dev` |
 |---|---|---|---|
 | **Log** | `log::error!`, `log::warn!`, `log::info!`, `log::debug!` | qol-tray: its tracing subscriber, which writes stderr and the log file in `qol_log::log_dir()`. Every other process: stderr through `qol_log::init_stderr()`, which the tray relays into its daemon log for plugins. | Logs view, filterable by level and target (the module path). |
-| **Trace** | `qol_runtime::probe!` | The trace file (`qol_conventions::TRACE_LOG_PATH`), debug builds only. See `qol-tools:qol-trace`. | Trace view, and `qol trace <target>`. |
+| **Trace** | `qol_runtime::probe!` | The trace file (`qol_conventions::TRACE_LOG_PATH`), debug builds only. See `qol-trace-discipline`. | Trace view, and `qol trace <target>`. |
 | **Command output** | `println!`, `eprintln!`, or `qol_headless` `PlainTextOutput` | The terminal of the person who ran the command. | Nowhere. Commands do not run under `qol dev`. |
 
 The `qol dev` Logs view is a raw capture of the tray's stdout and stderr, with every plugin's stdout and stderr relayed into it. Anything a daemon or plugin prints lands there whether it is a log or not. That is why a daemon never prints: a print carries no level and no target, so it cannot be filtered.
@@ -573,7 +571,6 @@ Do not prefix a message with `[module]`. The target already names the module.
 - ❌ **Never add implementation modules directly under a plugin's `src/` root.** New root Rust files are limited to `main.rs`, `lib.rs`, and optional `cli.rs`.
 - ❌ **Never add implementation modules directly under qol-tray's `src/` root.** Only `main.rs` and `lib.rs` belong there.
 - ❌ **Never represent one Rust module as both `name.rs` and `name/`.** Once it has children, use `name/mod.rs`.
-- ❌ **Never mix the two UI roots.** Plugin-root `ui/` is browser content; `src/ui/` is Rust/GPUI presentation.
 - ❌ **Never create catch-all source directories** named `common`, `helper(s)`, or `util(s)`. Assign explicit ownership.
 - ❌ **Never `compile_error!("only X is supported")`** at module top.
 - ❌ **Never sprinkle `#[cfg(target_os = "...")]` in business logic.** If you see more than one cfg per file outside `platform/mod.rs`, refactor.
@@ -582,12 +579,12 @@ Do not prefix a message with `[module]`. The target already names the module.
 - ❌ **Never force distinct capability substrates into `linux.rs`** when they have different contracts. Create a capability-local backend split and have the OS adapter select or use it.
 - ❌ **Never have a trait method that exists only on one OS via cfg.** Add it to the trait, stub it on others.
 - ❌ **Never print outside a `cli`, `build` or `tools/` module.** Daemons, plugins and libraries write `log::` or `qol_runtime::probe!`; see "Output: log, trace, command output".
-- ❌ **Never return `unimplemented!()` from a stub** — it panics. Return a typed `Err` so the caller can handle it.
+- ❌ **Never return `unimplemented!()` from a stub**: it panics. Return a typed `Err` so the caller can handle it.
 - ❌ **Never keep load-bearing state only in a daemon's memory.** A plugin daemon is stopped and restarted at any moment: the host reloads it after a config save, an update replaces it, it crashes. Attempt counters and ownership of a host resource belong in a file under the runtime dir, so a restart does not silently reset them.
 - ❌ **Never let two plugins mutate one host resource on intent alone.** There is no plugin-to-plugin channel (`qol-arch-channels`), so "only one of us touches this" is not enforceable by a sentence in a design. Put the neutral contract in `libs/` and give the resource a claim record with an owner and an expiry that the daemon and the standalone CLI both take, so a crashed owner frees it and a terminal command cannot race the daemon.
 - ❌ **Never answer a question the platform could not answer with a success value.** See "Stubs for unsupported OSes".
 - ✅ **Name the backend by capability/substrate** (`x11_snapshot`, `systemd_user`, `dbus_session`, `mqtt_bridge`) when that is the real boundary.
-- ✅ **Always cover every OS and every unlisted target in the facade,** with a dedicated adapter or an explicitly selected fallback. Code must compile on Linux, macOS, and Windows — and on exotic targets via the complement-cfg `fallback`/`unsupported` module (see "Stubs for unsupported OSes").
+- ✅ **Always cover every OS and every unlisted target in the facade,** with a dedicated adapter or an explicitly selected fallback. Code must compile on Linux, macOS, and Windows, and on exotic targets via the complement-cfg `fallback`/`unsupported` module (see "Stubs for unsupported OSes").
 - ✅ **Keep facade parity,** so each selected adapter exposes the same callable surface. Adapter-private helpers do not belong in the facade; follow `qol-arch-cross-platform` for consumer locality.
 
 ## Facade decision points
@@ -613,7 +610,7 @@ Concrete profile lesson: `core/`, `os/<os>/`, and `device/` are not special to t
 |---|---|
 | `pub trait + Platform struct + impls` | Multi-method, stateful, testable. The default. |
 | `pub use <os>::*;` (re-export) | Module-level free functions, all OSes implement same surface. Faster to write but no compile-time enforcement of API parity. Acceptable when stable. |
-| `pub fn` per OS gated by cfg in `mod.rs` | Single function with no shared API. Last resort — usually means you should refactor to a trait. |
+| `pub fn` per OS gated by cfg in `mod.rs` | Single function with no shared API. Last resort, usually means you should refactor to a trait. |
 
 Re-export pattern (acceptable for simple cases):
 
@@ -634,7 +631,7 @@ pub use macos::*;
 pub use windows::*;
 ```
 
-Each `<os>.rs` exports the same set of public symbols. If they drift, you'll get a compile error on the OS that's missing one — useful but less explicit than a trait.
+Each `<os>.rs` exports the same set of public symbols. If they drift, you'll get a compile error on the OS that's missing one, useful but less explicit than a trait.
 
 ## Refactoring an existing plugin
 
@@ -655,7 +652,7 @@ Then migrate cfg-sprawl to the strategy pattern:
 5. **Stub the missing OSes.** For a Linux-only capability, add `macos.rs` and `windows.rs` with stub `Platform` structs returning typed errors.
 6. **Replace cfg gates in business code.** Import `Platform` from the platform module; call methods. Delete inline cfg blocks.
 7. **Verify.** Run `cargo fmt --check`, `cargo clippy --all-targets --all-features --keep-going -- -D warnings`, `cargo build`, `cargo test` on the host you're on. The plugin must now compile on macOS, Linux, and Windows.
-8. **Update `plugin.toml` if needed.** If the manifest declares `platforms = ["linux"]`, decide whether that's still correct (the binary now compiles cross-platform but may be runtime-stub on other OSes — keep `platforms = ["linux"]` so the host doesn't offer it where it's non-functional).
+8. **Update `plugin.toml` if needed.** If the manifest declares `platforms = ["linux"]`, decide whether that's still correct (the binary now compiles cross-platform but may be runtime-stub on other OSes, keep `platforms = ["linux"]` so the host doesn't offer it where it's non-functional).
 
 ## Verification matrix
 
@@ -670,7 +667,7 @@ cargo test
 
 On the host you're on. CI should run the same on Linux + macOS + Windows runners (qol-cicd is the place to set up the matrix). Capability backends that cannot all run on one CI host should still have unit tests or mocks for backend selection and fallback behavior.
 
-If any step fails, the refactor isn't done. No "it compiles on linux so we're good" — the whole point is cross-platform.
+If any step fails, the refactor isn't done. No "it compiles on linux so we're good": the whole point is cross-platform.
 
 ## Anti-pattern reference: what NOT to do
 
@@ -712,18 +709,17 @@ This skill ships with a Claude Code PreToolUse hook (`bin/check-qol-arch-code.cj
 - Mixed flat and directory-backed OS module forms within one `platform/` directory.
 - New files under catch-all Rust source directories named `common`, `helper(s)`, or `util(s)`.
 - New Rust implementation modules at the qol-tray source root; only `main.rs` and `lib.rs` are accepted.
-- Rust files under plugin-root `ui/`, and browser assets under `src/ui/`.
-- `compile_error!(...)` — anywhere.
+- `compile_error!(...)` anywhere.
 - `#[cfg(target_os = ...)]` (including `all/any/not(target_os = ...)`) outside the canonical mod.rs re-export pattern (`#[cfg(target_os = "X")] mod X;` or `#[cfg(target_os = "X")] pub use X::Platform;`).
-- OS-named files (`linux.rs`, `macos.rs`, `windows.rs`) placed outside a `platform/` directory — these must always live under `platform/` (per-feature or top-level).
+- OS-named files (`linux.rs`, `macos.rs`, `windows.rs`) placed outside a `platform/` directory; these must always live under `platform/` (per-feature or top-level).
 - New target-selection facades that omit Linux, macOS, or Windows without selecting an explicit fallback, and callable-surface drift between complete OS adapter sets.
 - Platform decision signals outside an architecture boundary: `cfg!(target_os)`, `std::env::consts::OS`, OS API imports, OS command dispatch, platform-token branching, or platform-token storage/path routing.
 
 Allowed without challenge:
 - Existing legacy root modules and hybrids remain editable so the guard does not freeze plugins awaiting migration. New layout debt is blocked; existing debt should be removed during the next ownership refactor.
-- Host-served browser assets under plugin-root `ui/`, and Rust/GPUI code under `src/ui/`.
-- OS-named files inside any `platform/` directory — those *are* the OS impl, cfg inside is redundant but harmless.
-- Files under `tests/` and `examples/`, or named `*_test.rs` / `*_tests.rs` — cross-platform tests legitimately need cfg gates.
+- Rust/GPUI code under `src/ui/`.
+- OS-named files inside any `platform/` directory; those *are* the OS impl, cfg inside is redundant but harmless.
+- Files under `tests/` and `examples/`, or named `*_test.rs` / `*_tests.rs`, cross-platform tests legitimately need cfg gates.
 - Test-gated items anywhere: a `#[cfg(test)]` module, field, block, or item, and anything carrying `#[test]` / `#[tokio::test]` / `#[rstest]`. A platform cfg on a test states which OS the test can run on; that is correct, not OS branching in business logic. The hook evaluates the compiled non-test view of the file.
 - Comments. Platform names, `cfg!(target_os = ...)`, and `platforms.len() == 1` written in prose or commented-out code are not platform decisions.
 - Non-platform cfg predicates such as `cfg(debug_assertions)` and `cfg(feature = ...)`.
@@ -731,7 +727,7 @@ Allowed without challenge:
 - Platform decision signals that the edit did not introduce. The guard reports only signals absent from the file before the edit, so an unrelated edit is not blocked by pre-existing debt. New debt still blocks.
 - Main-session and subagent edits are checked the same way.
 
-Bypass for one-off legitimate exceptions (and you should be very sure it's legitimate — usually it isn't):
+Bypass for one-off legitimate exceptions (and you should be very sure it's legitimate, usually it isn't):
 
 ```bash
 # next 1 edit passes
@@ -774,11 +770,6 @@ must:
 - route keys through `intent(..)` and `escape_step(..)` rather than raw key names;
 - open every deeper level as a page card: once `settings_breadcrumbs` can name a crumb, the same file draws that level with `deck::render(kit, card, DeckFrame { .. })` over its page, as Shortcuts and Hotkeys do, and never swaps the page's own rows for the level's rows.
 
-Web settings page (`apps/tray/ui`, `plugins/*/ui`):
-
-- CSS takes colour from semantic tokens or `rgba(var(--*-rgb), a)`, sizes from `var(--qol-text-*)` or `var(--fs-*)`, fonts from `var(--font-sans|mono|ui|data)`, times from `var(--qol-motion-*)` or `var(--dur-*)`, shadows from `var(--qol-shadow-*)`, and never draws a coloured left border.
-- Views under `ui/views/` (the dev gallery excepted) use no static `style="…"`, no bare `<p>`, and no `<h3>` to `<h6>`: a group is a `<section>` whose `.section-header` holds an `<h2>`, and prose is a classed part.
-
 Only violations the edit introduces are reported, counted per rule, so an unrelated
 edit to a file with existing debt passes and a second copy of that debt does not.
 Tests, examples, `*_tests.rs`, `*.test.js`, `generated-*` files and `vendor/` are
@@ -787,13 +778,13 @@ skipped.
 To audit a tree, run the guard directly. It exits 1 if any file is flagged:
 
 ```bash
-node plugins/qol-project/bin/qol-design-guard.cjs <qol-monorepo> apps/tray/src/settings_surface apps/tray/ui/views
+node plugins/qol-project/bin/qol-design-guard.cjs <qol-monorepo> apps/tray/src/settings_surface
 ```
 
 Bypass one edit with `touch .claude/bypass-qol-design`, or N edits with
 `echo N > .claude/bypass-qol-design`.
 
-Implementation: Node.js (`bin/check-qol-arch-code.cjs`) — Claude Code requires Node, so the dependency is free across Linux, macOS, and Windows. Wired through the shared hook launcher in `hooks/hooks.json`, which uses `CLAUDE_PLUGIN_ROOT` when Claude provides it and resolves the installed Codex plugin cache when Codex does not.
+Implementation: Node.js (`bin/check-qol-arch-code.cjs`): Claude Code requires Node, so the dependency is free across Linux, macOS, and Windows. Wired through the shared hook launcher in `hooks/hooks.json`, which uses `CLAUDE_PLUGIN_ROOT` when Claude provides it and resolves the installed Codex plugin cache when Codex does not.
 
 ### Enforcement: output guard
 
@@ -854,7 +845,7 @@ While it runs, it writes `$XDG_RUNTIME_DIR/agent-progress/qac.json` (the spool s
 
 This skill covers code *layout*. Two sibling skills ship in the same plugin and cover orthogonal aspects of the same overall infrastructure-health story:
 
-- **`qol-arch-cross-platform`** — symbol/import hygiene that catches dead_code-on-other-platform errors under `-D warnings`. The ones that compile on Linux, fail on macOS, and waste a roundtrip in CI to learn about. Hook bans `#[allow(dead_code)]`/`#[allow(unused_mut)]` outside `platform/` (forces honest cfg-gating instead of hiding the symptom) and `#[cfg(target_os)]` on `use` statements (almost always a refactor leftover that becomes `unused_imports`).
-- **`qol-arch-cicd`** — the CI/release workflow contract. `RUSTFLAGS=-D warnings` everywhere, plugin CI matrix derived from `plugin.toml` `platforms`, qol-config sibling-checkout-and-rewrite parity between ci.yml and release.yml, conditional deps belong in `[target.'cfg(target_os = ...)'.dependencies]`. Hook lints workflow YAML and Cargo.toml at edit time.
+- **`qol-arch-cross-platform`**: symbol/import hygiene that catches dead_code-on-other-platform errors under `-D warnings`. The ones that compile on Linux, fail on macOS, and waste a roundtrip in CI to learn about. Hook bans `#[allow(dead_code)]`/`#[allow(unused_mut)]` outside `platform/` (forces honest cfg-gating instead of hiding the symptom) and `#[cfg(target_os)]` on `use` statements (almost always a refactor leftover that becomes `unused_imports`).
+- **`qol-arch-cicd`**: the CI/release workflow contract. `RUSTFLAGS=-D warnings` everywhere, plugin CI matrix derived from `plugin.toml` `platforms`, strictness parity between CI and release builds (both `-D warnings` and `--locked`), conditional deps belong in `[target.'cfg(target_os = ...)'.dependencies]`. Hook lints workflow YAML and Cargo.toml at edit time.
 
 Together, this skill prevents layout drift, `qol-arch-cross-platform` catches symbol-hygiene cracks, and `qol-arch-cicd` catches platform failures in CI.

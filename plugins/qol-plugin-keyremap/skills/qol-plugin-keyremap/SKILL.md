@@ -1,6 +1,6 @@
 ---
 name: qol-plugin-keyremap
-description: Use when working on the qol-tray key remap plugin. Covers config-to-rule resolution, native event interception, per-app policy, hot reload, daemon lifecycle, editor integration, and target adapters.
+description: Use when working on the qol-tray key remap plugin. Covers config-to-rule resolution, native event interception, per-app policy, hot reload, daemon lifecycle, the macOS virtual HID helper, and target adapters.
 ---
 
 # qol-plugin-keyremap
@@ -10,7 +10,7 @@ Key Remap converts declarative config rules into native input-event transformati
 ## Contract ownership
 
 - Never restate the manifest action, platform, daemon, or menu inventory here.
-- A config rule kind exists only when contract schema, Rust raw/resolved models, native callback behavior, editor schema/components, and tests agree.
+- A config rule kind exists only when contract schema, Rust raw/resolved models, native callback behavior on every supported adapter, and tests agree. Settings are rendered by qol-tray's native GPUI panel from `qol-config.toml`; there is no plugin-local editor.
 - If config references a named runtime action/query, declare it in `qol-runtime.toml`; otherwise do not add an empty runtime contract.
 - Run plugin tests and `qol check` after contract changes.
 
@@ -18,24 +18,26 @@ Key Remap converts declarative config rules into native input-event transformati
 
 | Path | Responsibility |
 |---|---|
-| `src/main.rs` | Thin process entrypoint; collect arguments and delegate to the selected platform adapter. |
-| `src/platform/mod.rs` | Single target-selection boundary. |
-| `src/platform/macos/app/` | Process actions, daemon lifecycle, contract-backed config, rule resolution, and semantic diffs for the supported adapter. |
+| `src/main.rs` | Thin process entrypoint; delegates to the headless surface in `src/cli.rs`. |
+| `src/platform/mod.rs` | Single target-selection boundary and the `PlatformAdapter` trait. |
+| `src/platform/engine/` | Shared macOS/Windows engine: contract-backed config, rule resolution (`remap`), and the reload/swap daemon loop (`serve`, `Remapper`). |
+| `src/platform/macos/app/` | macOS process wiring that plugs the tap, input backends, and layout store into the engine. |
 | `src/platform/macos/app_tracker.rs` | Live frontmost-application tracking. |
-| `src/platform/macos/tap.rs` | CGEventTap ownership and native event transformation. |
-| `src/platform/linux/`, `src/platform/windows/` | Explicit unsupported-target launch behavior needed for cross-compilation. |
+| `src/platform/macos/tap.rs`, `src/platform/macos/input/` | CGEventTap ownership, the event-tap and virtual HID input backends, and native event transformation. |
+| `src/platform/macos/hid_helper/`, `src/platform/macos/virtual_hid/` | Privileged HID helper install/protocol/watchdog and the Karabiner VirtualHIDDevice client. |
+| `src/platform/macos/layout/`, `src/platform/macos/secure_input/` | Keyboard layout snapshots and Secure Input detection and warning. |
+| `src/platform/windows/` | Windows adapter: low-level hooks, foreground tracking, key translation, profile, and the engine-backed service. |
+| `src/platform/linux/`, `src/platform/fallback/`, `src/platform/virtual_keyboard_absent/` | Typed unsupported adapter for targets without input hooks; `linux/` and `fallback/` only name the target. |
 | `qol-hotkeys::macos_keycode` | Shared key name/code translation; do not recreate a plugin-local forwarding module. |
-| `ui/` | Rule editor, schemas, hooks, and persistence. |
 
 Keep native callbacks allocation-light and independent of TOML/UI shapes. Resolve and validate before atomically swapping callback state.
 
 ## Directory invariants
 
 - Keep `src/` limited to `main.rs` plus owned module directories; do not add root-level feature helpers.
-- Keep all three OS adapters in directory form: `platform/<os>/mod.rs`. Never add `platform/macos.rs`, a mixed file/directory module, or a catch-all `non_macos` module.
+- Keep every adapter in directory form: `platform/<name>/mod.rs`. Never add `platform/macos.rs`, a mixed file/directory module, or a catch-all `non_macos` module.
 - Keep target selection gates only in `platform/mod.rs`. Put adapter-local helpers beneath the owning OS directory.
-- Keep the browser editor in top-level `ui/`; do not move web assets beneath Rust `src/`.
-- Because the manifest is macOS-only, keep the remap engine beside the macOS adapter until another real native adapter shares its semantics. When platform support expands, first extract the genuinely shared engine behind an adapter contract; do not duplicate it.
+- The manifest declares macOS and Windows, and both adapters share `platform/engine/`. Put rule semantics in the engine and only native interception in the adapter; never duplicate resolution logic per OS.
 
 ## Daemon lifecycle
 
@@ -48,11 +50,11 @@ An existing daemon may accept a reload from a second process, but process owners
 
 ## Common changes
 
-**Add a rule kind:** extend contract schema, raw/resolved types, native transformation, editor schema/UI, serialization, and tests in one change.
+**Add a rule kind:** extend contract schema, raw/resolved engine types, native transformation on macOS and Windows, serialization, and tests in one change.
 
 **Add per-app behavior:** inspect whether each resolved rule carries an explicit target predicate. If policy is only a global exclusion list, restructure around per-rule predicates instead of stacking inverse filters.
 
-**Expand platform support:** implement a real input adapter and permission story, keep target dependencies scoped, verify cleanup, then change `plugin.toml`. A non-target adapter must return typed errors; never use `compile_error!`.
+**Expand platform support:** implement a real input adapter and permission story on top of `platform/engine/`, keep target dependencies scoped, verify cleanup, then change `plugin.toml`. A non-target adapter must return typed errors; never use `compile_error!`.
 
 ## Native input invariants
 

@@ -115,7 +115,7 @@ footer a { color: var(--acc-ink); }
   <div class="find">
     <div class="num">0</div>
     <div><b>Nothing uses the kit</b>
-    <span>Not one surface constructs <code>Kit</code>. <code>libs/qol-gpui/src/kit.rs</code> is a
+    <span>Not one surface constructs <code>Kit</code>. <code>libs/gpui/src/kit.rs</code> is a
     complete component API with zero callers; only <code>float_shadow</code> is imported anywhere.
     Every surface carries its own ladder instead.</span></div>
   </div>
@@ -140,7 +140,7 @@ footer a { color: var(--acc-ink); }
   <div class="find">
     <div class="num">2</div>
     <div><b>UIs move when the palette moves</b>
-    <span><code>qol-theme</code> generates the web UI's CSS custom properties, pinned by a
+    <span><code>qol-theme</code> generates CSS custom properties, pinned by a
     <code>generated_artifacts_are_current</code> test. A dark-palette change is not a gpui-only change.</span></div>
   </div>
 </div>
@@ -169,7 +169,7 @@ footer a { color: var(--acc-ink); }
   </p>
   <ul>
     <li>Extend the existing <code>gpui_surfaces_only_use_type_scale_sizes</code> scan to heights,
-        padding and radius, and stop excluding <code>apps/qol-tray</code>.</li>
+        padding and radius, and stop excluding <code>apps/tray</code>.</li>
     <li>Assert every <code>PANEL_*</code> constant is a member of the V2 ladder, rather than equal to itself.</li>
     <li>Add contrast-floor tests for the pairs the spec names: body 4.5:1, focus ring and state
         markers 3:1, in both themes.</li>
@@ -181,7 +181,7 @@ footer a { color: var(--acc-ink); }
   <p>
     Add the roughly fourteen missing tokens. Most of them are alpha over a surface, and
     <code>SystemPalette</code> is solid <code>u32</code> only, so this needs a real mechanism rather
-    than fourteen more fields. Bless the generated web-UI CSS in the same commit.
+    than fourteen more fields. Bless the generated CSS in the same commit.
   </p>
 </div>
 
@@ -260,19 +260,9 @@ footer a { color: var(--acc-ink); }
   <span class="why">Decides whether qol-shot is in scope or adjacent to it.</span>
 </div>
 
-<div class="q">
-  <b>Does the web UI follow, or only drift?</b>
-  <p>
-    It inherits palette values automatically through the generated CSS, but it has its own token
-    layer, its own ladders and no V2 surface tokens. It can either be brought along deliberately or
-    left to inherit colour and nothing else.
-  </p>
-  <span class="why">Doubles or halves the size of the whole job.</span>
-</div>
-
 <footer>
-  Recon by five parallel lanes over <span class="mono">libs/qol-theme</span>,
-  <span class="mono">libs/qol-gpui</span>, <span class="mono">apps/qol-tray</span> and the plugin
+  Recon by five parallel lanes over <span class="mono">libs/theme</span>,
+  <span class="mono">libs/gpui</span>, <span class="mono">apps/tray</span> and the plugin
   crates. The spec itself is the <span class="mono">qol-gpui-theme</span> skill in qol-skills; the
   drawings are in the <a href="https://claude.ai/code/artifact/0eeae966-f0e2-4a88-9c2f-2bcf7280f622">Bone and Amber</a> deck.
 </footer>

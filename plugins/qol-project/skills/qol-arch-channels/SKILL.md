@@ -32,7 +32,7 @@ kimi) is a boundary, not a fifth host/plugin channel. The same tools can reach
 every agent; the surface is the contract, not a per-agent fork.
 
 - Own the tool contract once, in the capability's headless layer. Example:
-  `tools/qol-cli/src/commands/sessions/contract.rs` holds name, label,
+  `tools/cli/src/commands/sessions/contract.rs` holds name, label,
   description, and input schema for every tool; nothing else authors them.
 - Render per-client surfaces from the contract behind a facade:
   `qol sessions export <client>` dispatches to one adapter module per client

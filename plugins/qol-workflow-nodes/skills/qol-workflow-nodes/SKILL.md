@@ -162,15 +162,6 @@ Rules:
 - If measurements are noisy, add repeats or mark `inconclusive` before changing code again.
 - Extract a script only after one manual loop identifies stable inputs, commands, and outputs.
 
-Done criteria:
-
-- The ledger has before, after, delta, and correctness for every accepted scenario.
-- Rejected hypotheses or invalid runs are recorded with concrete reasons.
-- Focused tests or builds that guard the changed code pass.
-- A literal live-use smoke test of the changed program passes, or the final response explicitly says it was not live-tested and why.
-- The final response includes the deterministic contextual metrics table when functionality was confirmed.
-- The final response names the ledger path, changed scope, headline deltas, and any remaining tradeoff.
-
 ## Human verdict loops
 
 If a workflow needs human eyeballing, make that explicit instead of pretending it is automated:
@@ -203,3 +194,12 @@ A workflow-node improvement is done when:
 - The desired artifact exists or the failure explains the missing prerequisite.
 - A report records what happened.
 - Another human or agent can run the next command from the output alone.
+
+A measurement-ledger run is done when:
+
+- The ledger has before, after, delta, and correctness for every accepted scenario.
+- Rejected hypotheses or invalid runs are recorded with concrete reasons.
+- Focused tests or builds that guard the changed code pass.
+- A literal live-use smoke test of the changed program passes, or the final response explicitly says it was not live-tested and why.
+- The final response includes the deterministic contextual metrics table when functionality was confirmed.
+- The final response names the ledger path, changed scope, headline deltas, and any remaining tradeoff.

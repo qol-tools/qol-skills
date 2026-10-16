@@ -35,9 +35,9 @@ Load whatever repo-specific skills the target repository's hooks or CLAUDE.md na
 ## Tier
 
 This skill never names a tier or a product, because tiers come from the host sessions configuration.
-Spawn calls omit the model so the host default applies.
-If $ARGUMENTS names a tier, pass it only when the host allow list permits it.
-Otherwise refuse that tier, say so plainly to the user, and continue on the permitted default.
+The qol-sessions tier rule forbids a silent harness default: every spawn passes the host-resolved tool/model binding and an `effort` where the harness takes one, and a missing model is a refusal point, never a default.
+If $ARGUMENTS names a tier, pass its binding only when the host allow list permits it.
+Otherwise refuse that tier, say so plainly to the user, and continue on the permitted binding.
 A lane never runs above the architect's own tier.
 
 ## Procedure
@@ -53,7 +53,7 @@ it remains authorized, preserving any later user redirect.
 
 1. Establish acceptance criteria from $ARGUMENTS, asking the user only when different readings would change the work.
 2. Scout unknown facts with read-only research lanes launched as one grouped set, then synthesize their combined report before writing anything.
-3. Write one spec document that every lane reads, naming exact paths, per-file ownership, signatures, gates, and the acceptance list. The spec never asserts a claim about files the change does not touch from scout inference alone: for each string literal the change removes or alters, run one fixed-string grep over the workspace (on static fragments when the literal is assembled dynamically) and assign every hit to a lane's owned file set. These checks supplement the step 6 gate and never replace it.
+3. Write one spec document that every lane reads, naming exact paths, per-file ownership, signatures, gates, and the acceptance list. The spec never asserts a claim about files the change does not touch from scout inference alone: for each string literal the change removes or alters, run one fixed-string `rg` over the workspace (on static fragments when the literal is assembled dynamically) and assign every hit to a lane's owned file set. These checks supplement the step 6 gate and never replace it.
 4. Fan out one lane per disjoint file set in one spawn call with lanes, each carrying a lane brief as defined below.
 5. End the turn after delivery and resume only on the wake.
 6. Collect each lane, read every changed file against the spec personally, run the gate once for the whole round covering build, test, lint, format, and the repository's own checks, and dispatch correction rounds until the criteria hold.
@@ -63,7 +63,7 @@ it remains authorized, preserving any later user redirect.
 ## Lane brief
 
 Every lane task string carries five parts.
-First, the role word naming the lane's kind: scout, implement, review, adversarial, or debug.
+First, the role word naming the lane's kind: scout, implement, architect, review, or debug (the `task_role` enum; an adversarial lane uses `review`).
 Second, the exact owned paths for that lane.
 Third, the path of the spec document from procedure step three.
 Fourth, the prohibitions: edit only owned paths, never run build, test, lint, format, or git commands, add no code comments, and use no em-dash character anywhere.

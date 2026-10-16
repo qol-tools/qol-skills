@@ -1,7 +1,7 @@
 {
   "name": "qol-skills",
   "version": "1.0.0",
-  "description": "Claude Code skills for the qol-tools ecosystem (qol-tray host app, plugins, shared libs, CI workflows, and general engineering practices) \u2014 split into fine-grained plugins for per-plugin toggling.",
+  "description": "Claude Code skills for the qol-tools ecosystem (qol-tray host app, plugins, shared libs, CI workflows, and general engineering practices), split into fine-grained plugins for per-plugin toggling.",
   "author": {
     "name": "KMRH47"
   },
@@ -15,7 +15,6 @@
     "./plugins/qol-plugin-bluetooth/skills/",
     "./plugins/qol-plugin-cli-sessions/skills/",
     "./plugins/qol-plugin-controllers/skills/",
-    "./plugins/qol-plugin-ide-checkout/skills/",
     "./plugins/qol-plugin-keyremap/skills/",
     "./plugins/qol-plugin-launcher/skills/",
     "./plugins/qol-plugin-lights/skills/",
@@ -134,7 +133,7 @@
     },
     {
       "event": "SubagentStop",
-      "matcher": "qol-tray-frontend|qol-tray-backend",
+      "matcher": "qol-tray-backend",
       "command": "node plugins/qol-tray/bin/reflect-agent.cjs"
     },
     {

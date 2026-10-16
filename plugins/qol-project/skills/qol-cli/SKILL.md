@@ -1,6 +1,6 @@
 ---
 name: qol-cli
-description: Use when answering questions about `qol` CLI commands or changing `tools/qol-cli` behavior. Stable ownership model only; command facts come from `qol --help`, never from memory.
+description: Use when answering questions about `qol` CLI commands or changing `tools/cli` behavior. Stable ownership model only; command facts come from `qol --help`, never from memory.
 ---
 
 # qol CLI
@@ -10,17 +10,17 @@ Use this when you need the `qol` CLI ownership model, source-of-truth paths, or 
 ## Source Of Truth
 
 - `qol --help`
-- `tools/qol-cli/src/main.rs`
-- `tools/qol-cli/src/cli.rs`
-- `tools/qol-cli/src/commands`
+- `tools/cli/src/main.rs`
+- `tools/cli/src/cli/`
+- `tools/cli/src/commands`
 
 Do not treat this skill as a command database. A `qol-project` SessionStart hook injects current `qol --help` output into context. If that context conflicts with this skill, the hook output and source files win.
 
 ## Rules
 
 - For exact command names, flags, or subcommands, use the current `qol --help` output.
-- Before changing command behavior, inspect `tools/qol-cli/src/main.rs`, `tools/qol-cli/src/cli.rs`, and the relevant file under `tools/qol-cli/src/commands`.
-- After changing `tools/qol-cli`, run `qol setup` before trusting the installed `qol` binary.
+- Before changing command behavior, inspect `tools/cli/src/main.rs`, `tools/cli/src/cli/`, and the relevant file under `tools/cli/src/commands`.
+- After changing `tools/cli`, run `qol setup` before trusting the installed `qol` binary.
 
 ## Named build selection
 
@@ -55,7 +55,7 @@ Git. Record materialization mode and duration in the existing check report.
 - `qol` is the terminal CLI and owns the command parser.
 - `qol dev` is a CLI workflow/dashboard that starts `qol-tray --write-mode=dev` as a child process.
 - `qol dev` dashboard rows are CLI-owned status/action panes, not tray launcher commands.
-- `qol-tray` exported launcher commands live separately in `apps/qol-tray/src/commands/mod.rs`.
+- `qol-tray` exported launcher commands live separately in `apps/tray/src/commands/mod.rs`.
 
 ## Dev console design rules
 
@@ -149,7 +149,7 @@ permanently.
 ### One worktree source
 
 The persisted worktree selection lives in exactly one place: the active-worktree
-marker (`qol_dev_build::tray` marker IO), shared with the web UI and the tray boot
+marker (`qol_dev_build::tray` marker IO), shared with the tray boot
 contract. Argv is a transient directive (`<branch>` writes the marker, `--base`
 clears it, absent follows it) and `Dash.worktree_selection` is transient session
 intent.

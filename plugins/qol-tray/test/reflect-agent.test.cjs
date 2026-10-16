@@ -19,11 +19,10 @@ const {
     ELIGIBLE_AGENTS,
 } = require('../bin/reflect-agent.cjs');
 
-test('ELIGIBLE_AGENTS lists qol-tray frontend/backend in both bare and namespaced form', () => {
-    assert.ok(ELIGIBLE_AGENTS.has('qol-tray-frontend'));
+test('ELIGIBLE_AGENTS lists the qol-tray backend agent in both bare and namespaced form', () => {
     assert.ok(ELIGIBLE_AGENTS.has('qol-tray-backend'));
-    assert.ok(ELIGIBLE_AGENTS.has('qol-tray:qol-tray-frontend'));
     assert.ok(ELIGIBLE_AGENTS.has('qol-tray:qol-tray-backend'));
+    assert.ok(!ELIGIBLE_AGENTS.has('qol-tray-frontend'));
     assert.ok(!ELIGIBLE_AGENTS.has('plugin-alt-tab'));
 });
 
@@ -101,11 +100,11 @@ test('truncateToLastN drops oldest lines when content is longer', () => {
 
 test('buildPrompt assembles header, agent, memory, transcript, rules', () => {
     const out = buildPrompt({
-        agentType: 'qol-tray-frontend',
+        agentType: 'qol-tray-backend',
         existingMemory: 'prior memory',
         transcript: 'foo bar',
     });
-    assert.match(out, /qol-tray-frontend/);
+    assert.match(out, /qol-tray-backend/);
     assert.match(out, /<existing_memory>\nprior memory\n<\/existing_memory>/);
     assert.match(out, /<transcript_tail>\nfoo bar\n<\/transcript_tail>/);
 });

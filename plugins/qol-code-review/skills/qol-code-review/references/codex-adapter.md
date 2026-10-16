@@ -1,6 +1,6 @@
 # Codex Adapter
 
-Use this when the `code-review` skill runs in Codex and the user explicitly asks for reviewer agents, a review board, delegated reviewers, parallel reviewers, one agent per point, or invokes `$code-review` / `$code-review:code-review` without explicitly requesting a solo review.
+Use this when the `qol-code-review` skill runs in Codex and the user explicitly asks for reviewer agents, a review board, delegated reviewers, parallel reviewers, one agent per point, or invokes `$qol-code-review` / `$qol-code-review:qol-code-review` without explicitly requesting a solo review.
 
 ## Contract
 

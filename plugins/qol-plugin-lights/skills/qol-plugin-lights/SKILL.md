@@ -22,14 +22,14 @@ Change referenced names across all contract files and their Rust dispatchers in 
 |---|---|
 | `src/main.rs`, `src/lib.rs` | Thin executable boundary and crate exports. |
 | `src/runtime/` | Public action dispatch and client-side daemon communication. |
-| `src/daemon/` | Long-lived process state, socket handling, live transport, and query responses. |
+| `src/daemon/` | Long-lived process state, socket handling, the live color websocket (`ws/`), and query responses. |
 | `src/service/` | Orchestration between public light commands and a selected backend. |
 | `src/backend/` | `LightBackend` plus concrete backend adapters. Adapter availability comes from implementations and tests under this directory. |
-| `libs/qol-zigbee` | Zigbee Network Processor framing, coordinator lifecycle, device discovery, and cluster commands; `src/znp/` re-exports the shared API for the plugin. |
+| `libs/zigbee` (package `qol-zigbee`) | Zigbee Network Processor framing, coordinator lifecycle, device discovery, and cluster commands; `src/znp/` holds dongle detection and re-exports the shared API for the plugin. |
 | `src/domain/` | Transport-independent targets, capabilities, state, colors, and commands. |
 | `src/config/` | Config model, validation, persistence, and source-contract translation. |
-| `src/platform/` | OS-specific settings or device-discovery behavior selected at one cfg wiring boundary. |
-| `ui/` | Compatibility web surface; contract-driven host settings remain canonical. |
+| `src/platform/` | OS-specific serial-port discovery, description, and access checks selected at one cfg wiring boundary, plus the settings handoff to qol-tray. |
+| `src/doctor/` | Read-only coordinator and serial-access checks. |
 
 Do not move backend or protocol details into runtime dispatch. A new adapter implements the backend trait and is selected by service/config wiring; public action identities remain independent of the adapter.
 
@@ -49,7 +49,7 @@ The live color boundary is owned by `src/daemon/` and the corresponding runtime 
 
 **Add a query or stream:** define it in `qol-runtime.toml`, reference it from `qol-config.toml`, and implement the daemon response with the exact declared shape.
 
-**Change Zigbee behavior:** keep serial framing and cluster protocol inside the shared `libs/qol-zigbee` crate; expose device-level behavior through the backend rather than leaking coordinator primitives into service code.
+**Change Zigbee behavior:** keep serial framing and cluster protocol inside the shared `libs/zigbee` crate; expose device-level behavior through the backend rather than leaking coordinator primitives into service code.
 
 **Change configuration:** update the TOML contract, Rust model, validation, and persistence together. The contract defaults are authoritative; do not restate them here.
 
@@ -59,7 +59,7 @@ The live color boundary is owned by `src/daemon/` and the corresponding runtime 
 - Backend health and device discovery failures are visible through declared queries or clear errors.
 - Serial and other platform-only dependencies stay target-scoped in `Cargo.toml`.
 - Dependencies are justified by live source references. Remove an unused dependency instead of preserving it for a prose roadmap.
-- Settings work through the host contract without requiring the compatibility web surface.
+- Settings are rendered by qol-tray as a native GPUI panel from the contract; the plugin only asks the tray to open it.
 - Daemon start, reload, and reconnect paths remain idempotent.
 
 ## Verification

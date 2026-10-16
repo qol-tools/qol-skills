@@ -13,7 +13,7 @@
     ],
     "SubagentStop": [
       {
-        "matcher": "qol-tray-frontend|qol-tray-backend",
+        "matcher": "qol-tray-backend",
         "hooks": [
           {
             "type": "command",

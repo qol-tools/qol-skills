@@ -22,51 +22,51 @@ See `writing` skill (KMRH47 personal style). It owns concision rules, banned wor
 
 Before writing ANY implementation code, ask the user these questions:
 
-1. **Does this pattern already exist?** Search the codebase for existing components, hooks, or utilities that do the same thing. If something similar exists, extend it — do not create a parallel system.
-2. **Will this introduce boilerplate?** If the implementation requires every consumer to repeat the same setup (attributes, state, event handlers, wrapper markup), it is NOT a component — it is a template. Abstract it into a real component first.
+1. **Does this pattern already exist?** Search the codebase for existing components, hooks, or utilities that do the same thing. If something similar exists, extend it - do not create a parallel system.
+2. **Will this introduce boilerplate?** If the implementation requires every consumer to repeat the same setup (attributes, state, event handlers, wrapper markup), it is NOT a component - it is a template. Abstract it into a real component first.
 3. **Is the design identical to existing pages?** If a new page or section uses tabs, forms, status indicators, or any existing UI pattern, it MUST use the same shared component. Ask: "Should this look and behave identically to [existing page]?"
-4. **Does keyboard navigation work automatically?** Any new interactive element must work with the global surface navigation system (`data-selected-surface`). If the answer is "I need to add keyboard handling," the architecture is wrong — it should be automatic.
+4. **Does keyboard navigation work automatically?** Any new interactive element must work with the host surface's focus system (see `qol-langs:gpui-conventions` for gpui surfaces). If the answer is "I need to add keyboard handling," the architecture is wrong - it should be automatic.
 
 If uncertain about any answer, ASK the user before implementing. Do not guess.
 
 ## Code Style
 
-- No comments — code must be self-explanatory. This is a hard rule, not a default.
+- No comments - code must be self-explanatory. This is a hard rule, not a default.
   - No banner comments, no section dividers (`// --- xxx ---`), no docstrings, no "what this does" narration, no rationale paragraphs above functions, no inline "why we picked this constant" notes.
   - When an explanation is genuinely needed (non-obvious WHY, hidden invariant, theme-token sync risk, etc.), write it in the matching SKILL.md, not in code. The skill is the authoritative reference; code stays terse.
   - If a comment already exists and the surrounding code changes, treat the comment as suspect. Either delete it or move its content into the matching skill.
-  - The fix for "this code is unclear" is renaming, splitting, or simplifying — never adding a comment.
+  - The fix for "this code is unclear" is renaming, splitting, or simplifying - never adding a comment.
   - Enforced by the tldr-agent plugin (kmrh47-skills marketplace, skill `/tldr-agent:no-code-comments`) on every CLI this machine runs: Claude Code (hooks.json), pi (`.pi` bridge), codex (installed from the kmrh47-skills marketplace), and kimi (local-path install). A PreToolUse hook denies newly added comments in Edit/Write/MultiEdit in every repo, and a UserPromptSubmit hook reports comments added by any other write path before the next turn is written (on the engines that fire that event). Bypass is the reader's call, and the reader creates the marker: one-shot `touch .claude/bypass-no-comments`, or permanent per-repo `touch .claude/allow-code-comments`. The hooks enforce the same source-language scope as the skill's Scope section; Markdown, JSON, YAML, TOML, and HTML are out of scope.
-  - When a comment is genuinely warranted (an upstream file that must keep its licence header, a generated file, a directive comment such as `# noqa` or `// eslint-disable`), ask the reader; the reader creates the one-shot marker with `touch .claude/bypass-no-comments` in the repo root. The hook consumes it on the next denied edit and re-locks itself. Agents never create or write marker files themselves — the deny hook blocks that write outright.
+  - When a comment is genuinely warranted (an upstream file that must keep its licence header, a generated file, a directive comment such as `# noqa` or `// eslint-disable`), ask the reader; the reader creates the one-shot marker with `touch .claude/bypass-no-comments` in the repo root. The hook consumes it on the next denied edit and re-locks itself. Agents never create or write marker files themselves - the deny hook blocks that write outright.
 - Library / framework / API docs: always consult context7 for the latest reference (resolve-library-id then query-docs) instead of relying on training data, which drifts.
 - No emojis unless explicitly requested
-- Early-return, flatten if statements — max depth is one scope
-- **Control flow**: never use `else` — use early returns and guard clauses
+- Early-return, flatten if statements - max depth is one scope
+- **Control flow**: never use `else` - use early returns and guard clauses
 - **Value expressions**: `if/else` as ternary is acceptable (Rust has no ternary operator). Do NOT use `match bool { true =>, false => }` for simple binary conditions.
 - Prefer declarative and functional patterns over imperative control flow
 - Delegate logic to functions to keep scopes shallow and readable
-- No dead code — remove unused code or gate with feature flags
-- No inline SVGs — SVG markup is opaque noise. Extract into dedicated asset files (e.g., `ui/assets/icon-cog.js`). Components should reference icons by name, not embed raw path data.
-- Warning-free baseline — new changes must not introduce warnings
+- No dead code - remove unused code or gate with feature flags
+- No inline SVGs - SVG markup is opaque noise. Extract into a dedicated asset, or use the drawn icon kit (`qol_gpui::icon::icon(Icon, size, ink)` on a gpui surface). Components should reference icons by name, not embed raw path data.
+- Warning-free baseline - new changes must not introduce warnings
 
 ## Single Responsibility
 
-- Describe without AND — if you need "and" to describe a function, split it
-- Extract by abstraction level — orchestration shouldn't contain low-level details
-- Input → Transform → Output — functions should be one of: gather input, transform data, produce output. Don't mix I/O with business logic.
-- Command/Query separation — functions either change state OR return data, not both
-- One concern per function — don't mix state management, navigation, and action dispatch
+- Describe without AND - if you need "and" to describe a function, split it
+- Extract by abstraction level - orchestration shouldn't contain low-level details
+- Input → Transform → Output - functions should be one of: gather input, transform data, produce output. Don't mix I/O with business logic.
+- Command/Query separation - functions either change state OR return data, not both
+- One concern per function - don't mix state management, navigation, and action dispatch
 
 ## Deep Modules Philosophy (Ousterhout)
 
 - Deep modules over shallow - hide complexity behind simple, clean APIs. A function should do meaningful work, not just delegate.
-- Max 50 lines per function (matches workspace `CLAUDE.md`) - split beyond this only if it creates a genuinely reusable abstraction. The hard rule is "do one thing", not a line count.
+- Max 50 lines per function - split beyond this only if it creates a genuinely reusable abstraction. The hard rule is "do one thing", not a line count.
 - No shallow files (10-30 lines) - think about where the code belongs and colocate with related logic
 - No deep files (200+ lines) unless it's a library/utility with a cohesive purpose - split by concern otherwise
-- Nesting is acceptable — for+if, match in loop, early returns are fine. Extract helpers only when it genuinely clarifies intent or creates reusable logic.
-- Avoid shallow extractions — don't create single-use helpers where inline is equally clear. Three similar lines is better than a premature abstraction.
-- Never over-split — a single-use function referenced once that just wraps 3-5 lines adds indirection without value. Inline it. Splitting should reduce complexity, not scatter it.
-- Clean interfaces — public APIs should be obvious and hard to misuse. Internal complexity is fine if the interface is clean.
+- Nesting is acceptable - for+if, match in loop, early returns are fine. Extract helpers only when it genuinely clarifies intent or creates reusable logic.
+- Avoid shallow extractions - don't create single-use helpers where inline is equally clear. Three similar lines is better than a premature abstraction.
+- Never over-split - a single-use function referenced once that just wraps 3-5 lines adds indirection without value. Inline it. Splitting should reduce complexity, not scatter it.
+- Clean interfaces - public APIs should be obvious and hard to misuse. Internal complexity is fine if the interface is clean.
 
 ## Abstraction-First Architecture (Mandatory)
 
@@ -115,33 +115,11 @@ If uncertain about any answer, ASK the user before implementing. Do not guess.
 
 ## Frontend Architecture
 
-- Functional and declarative — pure render functions, no imperative DOM manipulation
-- Data-driven — UI derived from state, not manually synchronized
-- Single responsibility — split logical chunks into focused modules
-- Separate domain rules from rendering, but do not explode every control or branch into tiny wrapper components
-- Renderer-specific code may stay together when it forms one readable surface; share pure rules/models across surfaces before trying to share UI machinery
-- Avoid hidden UI contracts such as mutable statics, DOM-global side channels, or context bags with renderer-private scratch fields
-- Scalability — design for N items, not hardcoded assumptions
-- Keyboard-first — all interactions via keyboard first, mouse/hover secondary
-- Reuse existing CSS tokens and component classes before creating new styles
-- Prefer style variants (modifier classes) over new visual systems
-- Keep control placement consistent with existing layout grammar
-
-## Component Integration Requirements
-
-Every interactive UI component MUST:
-- Be navigable via keyboard (Tab, arrows, Enter, Escape)
-- Integrate with the host app's selection/focus system (e.g., qol-tray's wedge selection)
-- Live inside the framework's render tree — never use DOM bridges for interactive elements
-- Own its structural CSS (layout, spacing) — consumers provide only theme tokens
-
-**Never use imperative DOM rendering (createElement, appendChild) for interactive components in a framework app.** If a shared library provides DOM-based renderers, rewrite them as native framework components before integrating. DOM bridges bypass the framework's focus management, state tracking, and accessibility systems.
-
-**Shared config UI components** (qol-config renderers) must be framework-agnostic at the data/logic layer but rendered as native components in each consumer framework. The pattern: shared logic module (pure functions) + per-framework component that calls the logic.
+The tray's native surfaces are built with gpui. Their patterns live in `qol-langs:gpui-conventions` (views, input, lists, focus) and `qol-project:qol-gpui-theme` (grounds, text styles, spacing, kit parts). Whatever the renderer, the universal rules hold: declarative and data-driven rendering, one responsibility per component, design for N items, keyboard-first interaction, and reuse of existing theme tokens before adding new styles.
 
 ## Git Commits
 
-See `qol-workflow:commit` (commit message conventions, no co-authors, atomic-commit rules), `qol-workflow:git-trees` (worktree-only flow + trivial-changes carve-out), and `qol-workflow:git-push` (pull-rebase-push contract). Don't restate those rules here.
+See `qol-workflow:commit` (commit message conventions, no co-authors, atomic-commit rules), `qol-workflow:git-trees` (worktree-only flow), and `qol-workflow:git-push` (pull-rebase-push contract). Don't restate those rules here.
 
 ## Testing
 
@@ -153,7 +131,7 @@ Background work must be free-when-idle, not just cheap. Event-driven by default;
 
 ## No band-aids in hot paths
 
-When something runs in a frequent path (shell `chpwd` hook, render frame, keystroke handler, supervisor tick, daemon poll) and it stalls, the right fix is to **remove the slow work from the hot path** — not to add a timeout, retry, fallback, or abort.
+When something runs in a frequent path (shell `chpwd` hook, render frame, keystroke handler, supervisor tick, daemon poll) and it stalls, the right fix is to **remove the slow work from the hot path** - not to add a timeout, retry, fallback, or abort.
 
 A timeout that "bounds" a stall is hiding an architectural mistake. The slow call doesn't belong in the hot path at all.
 
@@ -165,7 +143,7 @@ The structural fix (commit `1c22f5f`) ripped `gh` out of the hook entirely:
 
 - `qol-gh-account set <user>` resolves the token via `gh` once, at configure time.
 - The token is written to `~/.config/qol-tools/gh-token` (mode 0600).
-- The `chpwd` hook becomes `IFS= read -r tok < $cfg` — a pure file read.
+- The `chpwd` hook becomes `IFS= read -r tok < $cfg` - a pure file read.
 - `qol-gh-account refresh` regenerates the token file when the gh token rotates.
 
 Tests were rewritten to assert the new contract: *"the hook never invokes `gh`, regardless of pwd state, config presence, or symlink resolution."* Pin down the new invariant; don't retest the old path.
@@ -178,7 +156,7 @@ Tests were rewritten to assert the new contract: *"the hook never invokes `gh`, 
 
 ### Shell-specific trap: zsh `chpwd` recurses through subshells
 
-`chpwd` fires in subshells too. `qol_root=$(cd "$x" && pwd -P)` inside the hook recurses exponentially — 200 cd events took >18 s in one repro (commit `b6619d2`). After fix: 35 ms.
+`chpwd` fires in subshells too. `qol_root=$(cd "$x" && pwd -P)` inside the hook recurses exponentially - 200 cd events took >18 s in one repro (commit `b6619d2`). After fix: 35 ms.
 
 In a zsh `chpwd` hook:
 
@@ -196,8 +174,8 @@ Both fixes above included a concrete metric (`200 cd events: 18 s → 35 ms`). W
 
 - Push unless explicitly asked
 - Skip hooks (--no-verify) or bypass signing
-- Repeat boilerplate — if two files have the same structural markup, extract a shared component
-- Create parallel systems — if an existing component does something similar, extend it
-- Implement without asking — when the user describes a UI/UX requirement, ask clarifying questions about scope, reuse, and design consistency BEFORE writing code
+- Repeat boilerplate - if two files have the same structural markup, extract a shared component
+- Create parallel systems - if an existing component does something similar, extend it
+- Implement without asking - when the user describes a UI/UX requirement, ask clarifying questions about scope, reuse, and design consistency BEFORE writing code
 - Hardcode per-view logic for things that should be global (keyboard nav, surface system, tab management)
-- Remove or hide UI elements when asked to fix them — "misplaced" or "not navigable" means fix placement/navigation, not delete. If genuinely unsure whether something should exist, ask.
+- Remove or hide UI elements when asked to fix them - "misplaced" or "not navigable" means fix placement/navigation, not delete. If genuinely unsure whether something should exist, ask.

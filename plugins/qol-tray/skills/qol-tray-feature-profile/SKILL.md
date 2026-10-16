@@ -16,10 +16,6 @@ Use this when the task is specifically about the Profile feature in `qol-tray`, 
 - `src/features/profile/http/sync.rs` exposes connect, pull, push, disconnect, and backup actions.
 - `src/features/profile/http/mod.rs` owns the profile HTTP state and route slice mounted into plugin-store settings.
 - `src/features/plugin_store/server/settings/plugin_config_handlers/form.rs` validates plugin configs against config contracts.
-- `ui/views/profile/view.js` is the Profile page.
-- `ui/views/profile/actions.js` is the browser-side API layer for export, import, sync, and backups.
-- `ui/views/profile/use-sync-form.js`, `ui/views/profile/use-sync-actions.js`, `ui/views/profile/use-backups.js`, `ui/views/profile/use-surface-nav.js`, and `ui/views/profile/key-router.js` split the profile UI by concrete responsibility.
-- `ui/views/profile/summary.js` holds profile import/status/backup summaries used by the UI.
 
 ## Working Rules
 
@@ -74,7 +70,7 @@ path.
 `SyncService::connect` never wipes the profile directory before cloning the remote. The wipe pattern deleted gitignored per-machine data (`device/`, `sync/state.json`, `sync/toggles.json`, the active marker, any unrelated local file) in one swing, which is the incident that motivated this section.
 
 Clone the remote into a sibling staging directory, then promote only paths
-accepted by `features/profile/sync/promote.rs`. Move repository metadata through
+accepted by `libs/profile-sync/src/promote.rs`. Move repository metadata through
 its explicit branch so subsequent git operations use the fresh remote. The
 allowlist implementation and its tests own the accepted path set; do not copy
 that inventory into this skill.
@@ -154,5 +150,4 @@ cargo build
 cargo test
 ```
 
-- If the change touches `ui/views/profile/`, run `node --check` on the edited files too, but do not substitute that for the Rust verification stack.
 - If a user says profile work still broke the repo, rerun the exact failing repo-native command first.

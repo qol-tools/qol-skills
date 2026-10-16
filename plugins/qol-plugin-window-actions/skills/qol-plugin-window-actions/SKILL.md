@@ -5,13 +5,13 @@ description: Use when working on the qol-tray Window Actions plugin, including s
 
 # Window Actions
 
-Work in the `plugins/*` directory whose manifest declares `id = "plugin-window-actions"`, from the qol-monorepo root. Treat
+Work in the plugin whose manifest declares `id = "qol-window-actions"`, from the qol-monorepo root. Treat
 `plugin.toml` as the source of truth for supported platforms, runtime commands,
 actions, daemon configuration, and which actions are continuous.
 
 ## Runtime contract
 
-- Keep execution in the Rust `window-actions` binary. Do not add a shell
+- Keep execution in the Rust `qol-window-actions` binary. Do not add a shell
   entrypoint fallback.
 - Validate `plugin.toml` through
   `qol_plugin_api::manifest::PluginManifest::load_and_validate()` in the
@@ -133,6 +133,7 @@ Platform behavior belongs behind `WindowSystem`:
   file.
 - macOS uses Accessibility identities and restores only the window represented
   by the top valid record.
+- Windows uses Win32 window identities and the runtime-directory state file.
 
 Do not move platform-specific window identity or activation rules into shared
 restore logic.
@@ -142,7 +143,7 @@ restore logic.
 When validation is requested, run the scoped plugin suite:
 
 ```bash
-cargo test -p window-actions
+cargo test -p qol-window-actions
 ```
 
 For continuous movement changes, verify at least:
@@ -161,6 +162,6 @@ successful Cargo build alone.
 ## Platform limits
 
 The Cinnamon glide backend is X11-specific. Keep Wayland work behind a separate
-compositor capability boundary. Continuous glide on a platform must return a
-clear unsupported error until that platform has a real controller; do not add
-a partial fallback that can leave motion active.
+compositor capability boundary. Windows has a real glide controller; macOS
+returns a clear unsupported error until it has one. Do not add a partial
+fallback that can leave motion active.

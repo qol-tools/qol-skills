@@ -1,7 +1,7 @@
 {
   "name": "qol-plugin-keyremap",
-  "description": "Skills for the qol-tray key remap plugin (macOS only): CGEventTap daemon, rule kinds, per-app exclusions, and rule editor UI.",
-  "version": "0.1.2",
+  "description": "Skills for the qol-tray key remap plugin (macOS and Windows): the event-tap daemon, rule kinds, and per-app exclusions.",
+  "version": "0.1.3",
   "author": {
     "name": "KMRH47"
   }

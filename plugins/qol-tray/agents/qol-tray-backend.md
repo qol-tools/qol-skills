@@ -5,12 +5,12 @@ model: claude-opus-4-7
 color: orange
 memory: project
 skills:
-  - qol-tray
+  - qol-tray-core
   - qol-tray-rust
   - qol-tray-release-flow
   - qol-tray-feature-profile
   - qol-apps-testing
-  - rust
+  - rust-conventions
   - qol-arch-code
   - qol-arch-cross-platform
   - qol-arch-cicd

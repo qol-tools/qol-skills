@@ -29,7 +29,9 @@ Config scoping is part of the manifest contract: settings that describe this mac
 | `src/turn/` | Turn coordinator, turn policy, and the control model. |
 | `src/voice_session/` | Session lifecycle, typed errors, evidence, and control handles. |
 | `src/app/` | Routing decisions, delivery sinks, target watching, and worker orchestration. |
-| `src/ui/` | gpui surface. |
+
+The settings surface is host-rendered from `qol-config.toml`; the plugin owns no
+local gpui code.
 
 ## Turn coordination
 

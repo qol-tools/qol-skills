@@ -17,7 +17,7 @@ Always persist the finished review to a temporary markdown file via the bundled 
 
 ## Board Mode Contract
 
-- Treat an explicit `$qol-code-review`, `$qol-code-review:code-review`, or "use the qol-code-review skill" invocation as review-board mode unless the user explicitly asks for a solo/no-agent review.
+- Treat an explicit `$qol-code-review`, `$qol-code-review:qol-code-review`, or "use the qol-code-review skill" invocation as review-board mode unless the user explicitly asks for a solo/no-agent review.
 - Spawn agents for review-board mode. Do not perform a parent-thread solo review and present it as a qol-code-review skill result.
 - In Codex, explicit asks include phrases like "spawn agents", "review board", "delegate reviewers", "parallel reviewers", "one agent per point", naming multiple reviewer agents to run, or invoking the qol-code-review skill by name.
 - In Codex review-board mode, read `references/codex-adapter.md` before reviewer selection and obey it as mandatory execution mechanics.
@@ -353,7 +353,7 @@ After producing the output above, persist it (see "Persisting the review"). The 
 
 Every completed review ends by writing the full review to a temporary markdown file. Do not leave the review only in the chat transcript. The chat reply is a summary; the temp file is the durable artifact a human or a follow-up agent reads.
 
-This is a workflow node, not a manual step. A bundled writer owns the canonical temp path and emits a sidecar report, so you never hand-invent a path or reformat by hand. Resolve `scripts/save-review.cjs` against this skill's base directory (the path announced as "Base directory for this skill"; in Claude Code that is `${CLAUDE_PLUGIN_ROOT}/skills/code-review`).
+This is a workflow node, not a manual step. A bundled writer owns the canonical temp path and emits a sidecar report, so you never hand-invent a path or reformat by hand. Resolve `scripts/save-review.cjs` against this skill's base directory (the path announced as "Base directory for this skill"; in Claude Code that is `${CLAUDE_PLUGIN_ROOT}/skills/qol-code-review`).
 
 1. Put the full final review (the human-readable result plus the machine-parseable JSON block) into a file, or stream it on stdin.
 2. Run the writer:

@@ -13,12 +13,12 @@ description: >-
 
 ## Where things live
 
-- Crate: `libs/qol-migrations/` in the qol-monorepo.
-- Root workspace dependency: `Cargo.toml` has `qol-migrations = { path = "libs/qol-migrations" }`.
-- Host dependency: `apps/qol-tray/Cargo.toml` uses `qol-migrations.workspace = true`.
-- Host boot orchestration: `apps/qol-tray/src/app/`.
-- Host post-auth facade: `apps/qol-tray/src/migrations/`; auth/session owners call this facade after credentials become available.
-- Standalone binary: `apps/qol-tray/src/migrate/main.rs`.
+- Crate: `libs/migrations/` in the qol-monorepo (package name `qol-migrations`).
+- Root workspace dependency: `Cargo.toml` has `qol-migrations = { path = "libs/migrations" }`.
+- Host dependency: `apps/tray/Cargo.toml` uses `qol-migrations.workspace = true`.
+- Host boot orchestration: `apps/tray/src/app/`.
+- Host post-auth facade: `apps/tray/src/migrations/`; auth/session owners call this facade after credentials become available.
+- Standalone binary: `apps/tray/src/migrate/main.rs`.
 
 ## Cargo dependency form (read this before touching Cargo.toml)
 
@@ -27,14 +27,14 @@ qol-tray consumes qol-migrations through the workspace dependency, always:
 ```toml
 # Cargo.toml
 [workspace.dependencies]
-qol-migrations = { path = "libs/qol-migrations" }
+qol-migrations = { path = "libs/migrations" }
 
-# apps/qol-tray/Cargo.toml
+# apps/tray/Cargo.toml
 [dependencies]
 qol-migrations.workspace = true
 ```
 
-Do not replace this with `git = "..."`, `branch = "..."`, or a stale sibling path such as `../qol-migrations`. In the monorepo layout, `libs/qol-migrations` is the source of truth and Cargo.lock should resolve it as a path workspace crate.
+Do not replace this with `git = "..."`, `branch = "..."`, or a stale sibling path such as `../qol-migrations`. In the monorepo layout, `libs/migrations` is the source of truth and Cargo.lock should resolve it as a path workspace crate.
 
 ## Two-phase boot model
 

@@ -68,9 +68,11 @@ Follow `qol-workflow:commit` for message and hook rules before invoking `git com
 - After a PR merges with `--delete-branch`, the local feature branch in the main clone becomes orphaned - its remote tracking branch is gone, but the working tree is still checked out on it.
 - Worktrees are cheap and isolate this entirely. The main clone stays pristine.
 
-### What the hook allows
+### What the main-clone hook allows
 
-- `git checkout main` / `git checkout master` / `git switch main` (returning to main is always fine)
+`branch-deny-agent-checkout` still asks the user to approve every checkout or switch below except the path checkout.
+
+- `git checkout main` / `git checkout master` / `git switch main`
 - `git checkout -- <files>` (path checkout, not branch switch)
 - `git checkout HEAD~1` / `git checkout <SHA>` (revision checkout)
 - Anything inside a `worktrees/<feature>/` directory (you're already in a worktree - branch ops are expected)
@@ -96,7 +98,7 @@ Atomic-commit rule still holds (one logical change per commit, repo always green
 
 This applies to both routes:
 
-- **PR route (default):** open the pull request from the worktree branch and run `gh pr merge --auto <number>` right after `gh pr create` (after `gh pr ready` for a draft); the merge queue squashes it once its checks pass. Then park the session on `bin/pr-watch.cjs` with `qol sessions park` until it merges and fix what fails (qol-workflow:qol-monorepo-rules, "Every pull request is watched until it merges"). Do not merge-commit or rebase-merge the branch stack into `main`.
+- **PR route (default):** open the pull request from the worktree branch and run `gh pr merge --auto <number>` right after `gh pr create` (after `gh pr ready` for a draft); the merge queue squashes it once its checks pass. Then park the session on `bin/pr-watch.cjs` with `qol-cli-sessions park --` until it merges and fix what fails (qol-workflow:qol-monorepo-rules, "Every pull request is watched until it merges"). Do not merge-commit or rebase-merge the branch stack into `main`.
 - **Direct route (explicit ask only):** from the main clone, `git merge --squash <feature-branch>`, commit, then push `main`. Never push `HEAD:main` directly from the worktree.
 
 If an agent thinks a worktree should land as multiple commits, it must ask first and name the independently revertible deliveries.
@@ -167,7 +169,7 @@ If you discover the main clone is on a non-main branch (typically because the ho
 
 ```bash
 git stash --include-untracked   # only if dirty
-git checkout main               # always allowed by the hook
+git checkout main               # asks the user to approve (branch-deny-agent-checkout)
 git pull --ff-only
 git stash pop                   # if you stashed
 git branch -D <orphan-branch>   # if the merged branch lingers

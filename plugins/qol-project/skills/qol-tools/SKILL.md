@@ -3,7 +3,7 @@ name: qol-tools
 description: Use when working anywhere in the qol-tools world - the qol-monorepo (apps/, libs/, plugins/, tools/, docs/) or the qol-skills repo. Covers org-level conventions, monorepo layout, dependency model, branch and commit policy, and pointers to more specific skills.
 ---
 
-# qol-tools — org-level knowledge
+# qol-tools: org-level knowledge
 
 ## Scope and audience
 
@@ -50,7 +50,7 @@ Plugins remain separate executables loaded by the host at runtime; they are neve
 - Plugin install is via the in-app plugin store, which resolves each plugin's latest `<id>-v*` GitHub release asset, with a cargo-build fallback.
 - Dev-linking: `POST /api/dev/links` with a path to a plugin source directory. Dev builds resolve the dev-link over the installed plugin.
 
-## Docs and skills — where things live
+## Docs and skills: where things live
 
 - **Design specs:** `docs/specs/YYYY-MM-DD-<topic>.md`. Living proposals, updated in place.
 - **Implementation plans:** `docs/plans/YYYY-MM-DD-<topic>.md`.
@@ -64,12 +64,7 @@ Plugins remain separate executables loaded by the host at runtime; they are neve
 | If you're touching... | Skill |
 |---|---|
 | qol-tray core (plugin loader, resolver, platform, features) | `qol-tray-core` |
-| qol-tray UI (`ui/`) | `qol-tray-ui-systems` |
-| qol-tray frontend diagnostic logging | `qol-tray-dev-logging` |
-| Preact htm + hooks patterns | `preact-conventions` |
-| World canvas / dive traits / spatial nav | `qol-world-canvas` |
 | qol-tray profile sync feature | `qol-tray-feature-profile` |
-| Task runner + IDE checkout | `qol-tray-task-runner-ide-checkout` |
 | Specific plugin internals | `qol-plugin-<id>` (e.g. `qol-plugin-alt-tab`) |
 | Shared libraries before adding plugin-local code | `qol-shared-libs` |
 | CI / release workflows | `qol-cicd` |
@@ -99,7 +94,7 @@ Plugins remain separate executables loaded by the host at runtime; they are neve
 - **Keyboard-first UI.** Every interaction must work via keyboard before mouse is considered.
 - **Deep modules over shallow.** Hide complexity behind clean APIs; max ~50 lines per function as guidance.
 - **Property-based tests preferred** for state machines and invariants. Example-based is fine for simpler logic.
-- **Named constants, not magic numbers.** Named color tokens, not inline hex. (See `qol-tray-ui-systems` for the token taxonomy.)
+- **Named constants, not magic numbers.** Named color tokens, not inline hex. (See `qol-gpui-theme` for the token taxonomy.)
 
 ## Use invariants, not state snapshots
 

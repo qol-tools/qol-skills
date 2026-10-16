@@ -1,6 +1,6 @@
 # Claude Code Adapter
 
-Use this when the `code-review` skill runs in Claude Code and the user asks for reviewer agents, a review board, delegated reviewers, parallel reviewers, or one agent per point.
+Use this when the `qol-code-review` skill runs in Claude Code and the user asks for reviewer agents, a review board, delegated reviewers, parallel reviewers, or one agent per point.
 
 ## Contract
 

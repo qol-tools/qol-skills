@@ -1,17 +1,17 @@
 ---
 name: qol-plugin-pointz
-description: Use when working on the qol-tray PointZ desktop server plugin. Covers daemon IPC, UDP discovery and command transport, status queries, QoL settings integration, and target-specific input injection. Pair with the pointz-client skill when changes touch the mobile-side protocol.
+description: Use when working on the qol-tray PointZ desktop server plugin. Covers daemon IPC, command dispatch, status queries, pairing hand-off to qol-tray, QoL settings integration, and target-specific input injection. Pair with the pointz-client skill when changes touch the mobile-side protocol.
 ---
 
 # qol-plugin-pointz
 
-PointZ is the desktop daemon for remote mouse and keyboard control from the separate PointZ mobile client. The Rust binary is `pointzerver` and the plugin source is the `plugins/*` directory whose manifest declares `id = "plugin-pointz"`.
+PointZ is the desktop daemon for remote mouse and keyboard control from the separate PointZ mobile client. The Rust package and binary are `qol-pointz`, and its manifest declares `id = "qol-pointz"`.
 
 ## Runtime contract
 
 Treat the plugin manifests as the source of truth:
 
-- `plugin.toml` declares the binary, supported platforms, settings action, daemon socket, and inherited UDP ports.
+- `plugin.toml` declares the binary, supported platforms, settings action, and daemon socket.
 - `qol-config.toml` declares the status and QR fields rendered by qol-tray.
 - `qol-runtime.toml` declares the daemon queries used by those fields.
 
@@ -25,27 +25,28 @@ here.
 | Path | Owner |
 |---|---|
 | `src/main.rs` | Thin CLI and plugin-action adapter |
-| `src/app/` | Long-running orchestration and daemon socket transport |
-| `src/command/` | Mobile command model and UDP command service |
-| `src/config/` | Shared protocol and input constants |
-| `src/discovery/` | Discovery response model and UDP responder |
+| `src/app/` | Long-running orchestration, daemon socket transport, and pairing requests |
+| `src/command/` | Mobile command model |
+| `src/config/` | Shared protocol, port, and input constants |
+| `src/firewall/` | Platform-selected firewall rules for the advertised ports |
 | `src/input/` | Platform-neutral input facade and command dispatch |
 | `src/input/platform/` | Target-selected input implementations and typed-error fallback |
-| `src/network/` | Host identity and inherited-or-standalone UDP binding |
+| `src/network/` | Host identity and interface metadata |
+| `src/doctor/` | Read-only health checks |
 | `src/qol/` | qol-tray settings integration |
 
-Keep OS files below `src/input/platform/`; do not move them back beside `input/mod.rs`. Keep qol-tray URLs and action context out of command, discovery, and input domain code.
+Keep OS files below `src/input/platform/`; do not move them back beside `input/mod.rs`. Keep qol-tray URLs and action context out of command, config, and input domain code.
 
 ## Daemon lifecycle
 
-1. qol-tray launches `pointzerver` and provides the daemon socket plus named UDP listeners.
+1. qol-tray launches `qol-pointz` and provides the daemon socket.
 2. `src/app/daemon.rs` starts the shared socket listener. A second process forwards its action to the existing daemon and exits.
-3. `src/app/mod.rs` starts the discovery responder and command service.
-4. Discovery answers the mobile broadcast with host identity.
-5. The command service decodes the mobile JSON model and calls `InputHandler`.
-6. `InputHandler` delegates every operation to the target selected in `input/platform/mod.rs`.
+3. `src/app/mod.rs` runs the daemon loop and dispatches settings, pairing, and input actions.
+4. Input commands decode through `command/model.rs` and call `InputHandler`.
+5. `InputHandler` delegates every operation to the target selected in `input/platform/mod.rs`.
+6. Pairing requests are forwarded to qol-tray, which owns discovery, pairing, and command authentication; see `libs/peers/src/service/pointz/` and `apps/tray/src/features/linked_devices/pointz.rs`.
 
-The UDP ports are defined in `src/config/mod.rs` and declared as named `daemon.extra_ports` entries in `plugin.toml`. Change both sides together and coordinate protocol changes with the PointZ mobile client.
+The UDP ports are defined in `src/config/mod.rs` and reported through the `connection_info` daemon query consumed by `qol-config.toml`. They are not `daemon.extra_ports`; the manifest test asserts that list stays empty. Coordinate protocol changes with the PointZ mobile client.
 
 ## Platform input
 
@@ -55,24 +56,24 @@ when both the selected input adapter and the shared daemon lifecycle work at
 runtime. Verify display-server/session variants explicitly; a target name alone
 does not prove every substrate on that OS.
 
-Windows daemon support depends on a Windows host-death watchdog in
-`qol-plugin-daemon`; add Windows to the manifest only when that shared boundary
-compiles and passes its lifecycle tests. Other targets use the typed-error
+The manifest already declares Windows. Daemon lifecycle on every platform
+relies on the shared host-death watchdog in `qol-runtime`
+(`libs/runtime/src/watchdog/`). Targets outside the manifest use the typed-error
 fallback. Never replace it with `compile_error!` or `unimplemented!()`.
 
 Keep cfg selection in `src/input/platform/mod.rs`. The input facade and the rest of the plugin must remain free of target selection.
 
-## UDP binding
+## Host identity
 
-`network::bind_udp_or_inherit` adopts the listener provided for a named `daemon.extra_ports` entry. When running outside qol-tray, it binds the requested port directly.
-
-The inherited descriptor must be restored, marked non-blocking, and converted to `tokio::net::UdpSocket` in that order. Preserve the regression tests when changing this path.
+`src/network/mod.rs` resolves the hostname and local interface metadata that the
+`connection_info` query reports. Socket binding for discovery and commands lives
+in qol-tray, not this plugin, so do not add UDP binding here.
 
 ## Common changes
 
 **Add a mobile command:** extend `command/model.rs`, route it through `InputHandler`, and implement the method consistently across every input platform module.
 
-**Change discovery:** update `discovery/` and keep the mobile request/response contract synchronized with the PointZ client.
+**Change discovery or pairing:** these are owned by qol-tray in `libs/peers/src/service/pointz/` and `apps/tray/src/features/linked_devices/`; this plugin only reports host identity and forwards pairing requests. Keep the mobile wire contract synchronized with the PointZ client.
 
 **Change daemon status:** update the daemon response and its corresponding `qol-runtime.toml` query plus `qol-config.toml` consumer.
 

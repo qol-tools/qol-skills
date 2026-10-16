@@ -16,9 +16,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const ELIGIBLE_AGENTS = new Set([
-    'qol-tray-frontend',
     'qol-tray-backend',
-    'qol-tray:qol-tray-frontend',
     'qol-tray:qol-tray-backend',
 ]);
 

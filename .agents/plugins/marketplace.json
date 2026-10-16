@@ -41,18 +41,6 @@
       "category": "Productivity"
     },
     {
-      "name": "qol-plugin-ide-checkout",
-      "source": {
-        "source": "local",
-        "path": "./plugins/qol-plugin-ide-checkout"
-      },
-      "policy": {
-        "installation": "INSTALLED_BY_DEFAULT",
-        "authentication": "ON_INSTALL"
-      },
-      "category": "Productivity"
-    },
-    {
       "name": "qol-plugin-keyremap",
       "source": {
         "source": "local",

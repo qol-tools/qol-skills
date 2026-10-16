@@ -69,7 +69,7 @@ test('detects a match inside a MultiEdit pair', () => {
 
 test('detects a match in the shared library cli root', () => {
     const r = run(editPayload(
-        `${REPO}/libs/qol-terminal-sessions/src/cli/interpreter.rs`,
+        `${REPO}/libs/terminal-sessions/src/cli/interpreter.rs`,
         'match tool {\n    _ => {}\n};',
     ));
     assert.ok(r.stdout.includes('deny'));
@@ -85,7 +85,7 @@ test('lets a match in the tool model file through', () => {
 
 test('lets a match in a backend module through', () => {
     const r = run(editPayload(
-        `${REPO}/libs/qol-terminal-sessions/src/cli/builtins/pi/mod.rs`,
+        `${REPO}/libs/terminal-sessions/src/cli/builtins/pi/mod.rs`,
         'match tool {\n    _ => {}\n};',
     ));
     assert.ok(!r.stdout.includes('deny'));
@@ -111,7 +111,7 @@ test('lets edits outside the interpretation roots through', () => {
     for (const filePath of [
         `${REPO}/apps/qol-tray/src/lib.rs`,
         '/tmp/scratch.rs',
-        `${REPO}/libs/qol-terminal-sessions/src/kitty/mod.rs`,
+        `${REPO}/libs/terminal-sessions/src/kitty/mod.rs`,
     ]) {
         const r = run(editPayload(filePath, 'match tool {\n    _ => {}\n};'));
         assert.ok(!r.stdout.includes('deny'), `expected allow for ${filePath}`);
@@ -128,9 +128,9 @@ test('TOOL_MATCH recognizes the observed branch shapes', () => {
 
 test('inScope honors the roots and the exemptions', () => {
     assert.ok(inScope(`${REPO}/plugins/cli-sessions/src/daemon/reconcile.rs`));
-    assert.ok(inScope(`${REPO}/libs/qol-terminal-sessions/src/cli/naming.rs`));
+    assert.ok(inScope(`${REPO}/libs/terminal-sessions/src/cli/naming.rs`));
     assert.ok(!inScope(`${REPO}/apps/qol-tray/src/lib.rs`));
-    assert.ok(!inScope(`${REPO}/libs/qol-terminal-sessions/src/kitty/mod.rs`));
+    assert.ok(!inScope(`${REPO}/libs/terminal-sessions/src/kitty/mod.rs`));
     assert.ok(!inScope(`${REPO}/plugins/cli-sessions/src/session/tool.rs`));
     assert.ok(!inScope(`${REPO}/plugins/cli-sessions/tests/reconcile.rs`));
     assert.ok(!inScope('/tmp/scratch.rs'));

@@ -1,13 +1,13 @@
 ---
 name: qol-mission
-description: Use when weighing trade-offs that touch the mission of qol-tools — what the product is, who it's for, the Portable and Resident host-ownership contracts, and the non-negotiable user-facing promises that any feature, bug fix, or architecture decision must respect. Covers the user experience, portability, persistent host policy, host-OS interaction, hotkeys, settings, sync, and "what qol-tools should do for the user".
+description: Use when weighing trade-offs that touch the mission of qol-tools: what the product is, who it's for, the Portable and Resident host-ownership contracts, and the non-negotiable user-facing promises that any feature, bug fix, or architecture decision must respect. Covers the user experience, portability, persistent host policy, host-OS interaction, hotkeys, settings, sync, and "what qol-tools should do for the user".
 ---
 
 # qol-tools Mission
 
 ## What it is
 
-qol-tools is a **portable quality-of-life layer for any computer you sit down at**. The user configures their flavor once — their plugins, keybindings, settings, colors, and habits — and carries it everywhere. On a borrowed or temporary computer, that flavor leaves with them. On a trusted personal computer, it can remain active between qol-tray runs until they deliberately release it.
+qol-tools is a **portable quality-of-life layer for any computer you sit down at**. The user configures their flavor once (their plugins, keybindings, settings, colors, and habits) and carries it everywhere. On a borrowed or temporary computer, that flavor leaves with them. On a trusted personal computer, it can remain active between qol-tray runs until they deliberately release it.
 
 ## Who it's for
 
@@ -74,7 +74,7 @@ These are invariants. If a proposed change violates the selected ownership contr
 
 ### 1. The user never configures the host OS
 
-qol-tray handles everything. The user does not edit Cinnamon keybindings, GNOME shortcuts, plist files, registry keys, or systemd units to make qol-tools work. If qol-tray needs the OS to behave differently, qol-tray makes it happen — silently, reversibly, and without the user knowing.
+qol-tray handles everything. The user does not edit Cinnamon keybindings, GNOME shortcuts, plist files, registry keys, or systemd units to make qol-tools work. If qol-tray needs the OS to behave differently, qol-tray makes it happen, silently, reversibly, and without the user knowing.
 
 ### 2. qol-tray owns its surface area
 
@@ -94,13 +94,13 @@ If qol-tray needs a runtime, library, or daemon, it ships with qol-tray. It does
 
 ### 6. Failures are visible and self-explanatory
 
-If qol-tray can't do something the user expects (a plugin failed to start, a hotkey couldn't be claimed, a sync conflict happened, a host cannot honor the selected mutation lifetime), the user sees it immediately and clearly — in the tray, in a notification, in the UI. Resident policy and its owned mutations must remain inspectable. Silent failures and invisible persistence are bugs.
+If qol-tray can't do something the user expects (a plugin failed to start, a hotkey couldn't be claimed, a sync conflict happened, a host cannot honor the selected mutation lifetime), the user sees it immediately and clearly: in the tray, in a notification, in the UI. Resident policy and its owned mutations must remain inspectable. Silent failures and invisible persistence are bugs.
 
 ## Extraction decision rules
 
 Structural splits require concrete signal rather than a status timeline.
 
-- **`qol-sdk` package** — extract dev-experience features from qol-tray only after multiple dev-only surfaces establish shared auth/path conventions, need an independent release cadence, and must run without the full daemon. Before that trigger, keep them behind the host's dev feature boundary. Cost of waiting is low; premature extraction creates a repository and release pipeline without a proven shared contract.
+- **`qol-sdk` package**: extract dev-experience features from qol-tray only after multiple dev-only surfaces establish shared auth/path conventions, need an independent release cadence, and must run without the full daemon. Before that trigger, keep them behind the host's dev feature boundary. Cost of waiting is low; premature extraction creates a repository and release pipeline without a proven shared contract.
 
 ## How to use this in design discussions
 

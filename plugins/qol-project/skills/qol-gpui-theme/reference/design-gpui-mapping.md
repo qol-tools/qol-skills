@@ -201,12 +201,12 @@ Focus: the panel owns it. `SettingsPanelView::focus_target()` names the handle
 `reconcile_focus` applies it. Custom bodies never focus themselves; they publish
 a handle and paint from `is_focused`.
 
-Menus: `Dropdown::render_clickable` and `render_items_clickable` take a dismiss closure
-next to the click closure, and the shared menu calls it from `on_mouse_down_out`, so
-every consumer (select and multi-select rows, list-card action menus, the core tool
-editors) closes on an outside click the same way. The settings card's left mouse-down
-leaves the rail (`set_source_menu(false)` then `reconcile_focus`) before the row click
-runs, so a mouse-opened dropdown never sits under rail focus.
+Cards: no settings row opens a floating menu. Select and multi-select rows push a
+choice card (`open_choose_card`), a list row pushes a list card of its items
+(`open_list_card`), and an item's actions open in its item card (`open_item_card`);
+Escape pops each card. The settings card's left mouse-down leaves the rail
+(`set_source_menu(false)` then `reconcile_focus`) before the row click runs, so a
+mouse-opened card never sits under rail focus.
 
 Motion: no surface runs a gpui repeat animation. `ActivityAnimation` is the
 shared timer clock; build it with `.interval(..)` (100 ms for the braille
@@ -220,7 +220,7 @@ Busy: the spinner is the only motion for work that has not finished.
 `Busy` pairs it with a caption. A value cell waiting on a query shows the
 spinner alone, status rows included; a status value that is null shows an en
 dash, not loading. A toast for an operation still running is marked
-`Toast::busy()` and spins before its title. The save row swaps its keycap for
+`Toast::live()` and sits on the menu ground. The save row swaps its keycap for
 the action spinner while saving. The three recipes are `settings_query_spinner`,
 `settings_action_spinner` and `settings_busy_message`; plugin rows and the core
 tools compose the same three, and no settings-scope file builds a spinner any

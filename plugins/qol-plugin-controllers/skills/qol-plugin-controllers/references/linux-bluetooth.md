@@ -61,5 +61,5 @@ Use synthetic addresses and paths in tests. Pin:
 - refusal to guess an adapter;
 - BlueZ and HCI parser ranges;
 - typed daemon JSON shape;
-- browser normalization rejecting unknown kinds or invalid ranges;
+- gpui gamepad model parsing that keeps each signal kind separate;
 - presentation and history that never mix dBm with relative dB.

@@ -19,9 +19,9 @@ function currentQolHelp() {
         'qol --help was not available at session start.',
         detail ? `Reason: ${detail}` : null,
         'Source of truth when inside the repo:',
-        '- tools/qol-cli/src/cli.rs',
-        '- tools/qol-cli/src/main.rs',
-        '- tools/qol-cli/src/commands',
+        '- tools/cli/src/cli/',
+        '- tools/cli/src/main.rs',
+        '- tools/cli/src/commands',
     ].filter(Boolean).join('\n');
 }
 

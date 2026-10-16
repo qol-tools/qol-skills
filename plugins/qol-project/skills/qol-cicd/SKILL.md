@@ -46,7 +46,8 @@ of the same unit run the same invocation, so they share a namespace:
 | ci.yml check (ubuntu, macos) | `ci-${{ matrix.os }}` |
 | ci.yml process-windows | `ci-windows-sandbox` |
 | plugin-version.yml plugin_candidate / release.yml build | `plugin-release-${{ matrix.target }}` |
-| plugin-version.yml qol_tray candidates / qol-tray-release.yml builds | `qol-tray-linux`, `qol-tray-macos` |
+| plugin-version.yml qol_tray candidates / qol-tray-release.yml builds | `qol-tray-linux`, `qol-tray-macos`, `qol-tray-windows` |
+| release.yml / plugin-index.yml / plugin-registry-backfill.yml registry jobs | `plugin-registry` |
 
 Every rust-cache use runs with `save-if: ${{ github.ref == 'refs/heads/main' }}`
 so only main-fed jobs save caches, plus `cache-on-failure: true` so a red

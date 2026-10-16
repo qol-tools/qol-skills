@@ -571,15 +571,6 @@ unit 4 &middot; gutter 20 &middot; pad 16<br>
     </div>
 
     <div class="shot">
-      <div class="s dd" style="box-shadow:var(--float)">
-        <div class="it on"><span class="sw3" style="background:var(--primary)"></span>Amber<span class="check">&#10003;</span></div>
-        <div class="it"><span class="sw3" style="background:#3fa06a"></span>Green</div>
-        <div class="it"><span class="sw3" style="background:#3f97a0"></span>Cyan</div>
-      </div>
-      <span class="cap">dropdown &middot; floats on its own shadow</span>
-    </div>
-
-    <div class="shot">
       <div class="s w340 spec" style="padding:14px 22px">
         <div class="row sel">
           <div class="lg"><div class="lab">Selected row</div><div class="desc">selection lifts to its own plane</div></div>
@@ -854,7 +845,7 @@ no literal colour in a component<br>
       <h2>Same panel, slate</h2>
       <p>
         Every fill above is a palette field rather than a literal, so the dark theme is the same
-        code with a different <code>SettingsPanelPalette</code>. Nothing in the kit hardcodes bone.
+        code with different <code>Grounds</code>. Nothing in the kit hardcodes bone.
       </p>
     </div>
     <div class="right">
@@ -1821,25 +1812,6 @@ body path &middot; 1<br>
   <div class="stage grid mt3">
     <div class="shot">
       <div class="s w460">
-        <div class="band sub"><span class="t14">Appearance</span></div>
-        <div class="plane">
-          <div class="group">
-            <div class="row sel"><div class="lg"><div class="lab">Theme</div></div><span class="val"><span class="chip open">Amber<span class="caret">&#9652;</span></span></span></div>
-            <div style="display:flex;justify-content:flex-end;padding:0 var(--padx)">
-              <div class="s dd" style="box-shadow:var(--float)">
-                <div class="it on"><span class="sw3" style="background:var(--primary)"></span>Amber<span class="check">&#10003;</span></div>
-                <div class="it"><span class="sw3" style="background:#3fa06a"></span>Green</div>
-                <div class="it"><span class="sw3" style="background:#3f97a0"></span>Cyan</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <span class="cap">select &middot; open, anchored to the value edge</span>
-    </div>
-
-    <div class="shot">
-      <div class="s w460">
         <div class="band sub"><span class="t14">Lights</span></div>
         <div class="plane">
           <div class="group">
@@ -2671,16 +2643,15 @@ one value &middot; &crarr; edits in place<br>
     <table class="plan">
       <thead><tr><th>Surface</th><th>Owner</th><th>Geometry today</th><th>Work</th></tr></thead>
       <tbody>
-        <tr><td>Settings panel</td><td>libs/qol-gpui</td><td><span class="n">680 / rail 190 / row 40</span></td><td>Grouped rows, tag list editor, keycaps. Reaches all 16 plugins.</td></tr>
+        <tr><td>Settings panel</td><td>libs/gpui</td><td><span class="n">680 / rail 190 / row 40</span></td><td>Grouped rows, tag list editor, keycaps. Reaches all 16 plugins.</td></tr>
         <tr><td>Launcher</td><td>plugins/launcher</td><td><span class="n">500 / header 42 / row 32</span></td><td>Header becomes the query, kind column, hint bar.</td></tr>
         <tr><td>Alt-tab</td><td>plugins/alt-tab</td><td><span class="n">card 220 &times; scale / hints 48</span></td><td>Accent ring, on-card label strip.</td></tr>
         <tr><td>CLI sessions</td><td>plugins/cli-sessions</td><td><span class="n">360 &times; 400 / strip 32</span></td><td>Status dots, two-line rows, elevation.</td></tr>
         <tr><td>Remove app</td><td>plugins/removeapp</td><td><span class="n">460 &times; 540 / row 38</span></td><td>Tabular sizes, explicit confirm bar.</td></tr>
-        <tr><td>qol-shot</td><td>plugins/qol-shot</td><td><span class="n">thumb 360 &times; 240 / circle 46</span></td><td>Elevated actions, one primary, outcome label.</td></tr>
-        <tr><td>Toast</td><td>libs/qol-gpui</td><td><span class="n">340 &times; 76 and 520 &times; 78</span></td><td>Severity edge, optional progress, one-shot motion.</td></tr>
-        <tr><td>Colour wheel</td><td>libs/qol-gpui</td><td><span class="n">disc 200 / popup 218</span></td><td>Swatch and hex row under the disc.</td></tr>
-        <tr><td>Dropdown</td><td>libs/qol-gpui</td><td><span class="n">ROW_H 26</span></td><td>Accent-free active item, 1px frame.</td></tr>
-        <tr><td>Controller</td><td>libs/qol-gpui</td><td><span class="n">panel 860 &times; 650</span></td><td>Shrink to its own window, keep the live redraw bounded.</td></tr>
+        <tr><td>qol-shot</td><td>plugins/shot</td><td><span class="n">thumb 360 &times; 240 / circle 46</span></td><td>Elevated actions, one primary, outcome label.</td></tr>
+        <tr><td>Toast</td><td>libs/gpui</td><td><span class="n">340 &times; 76 and 520 &times; 78</span></td><td>Severity edge, optional progress, one-shot motion.</td></tr>
+        <tr><td>Colour wheel</td><td>libs/gpui</td><td><span class="n">disc 200 / popup 218</span></td><td>Swatch and hex row under the disc.</td></tr>
+        <tr><td>Controller</td><td>libs/gpui</td><td><span class="n">panel 860 &times; 650</span></td><td>Shrink to its own window, keep the live redraw bounded.</td></tr>
         <tr>
           <td class="all">bluetooth, ide-checkout, keyremap, lights, monitor, os-themes, pointz, qol-voice, template, window-actions</td>
           <td>&middot;</td>

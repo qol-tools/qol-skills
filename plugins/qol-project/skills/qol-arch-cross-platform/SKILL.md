@@ -14,11 +14,11 @@ The `qol-arch-code` skill compartmentalizes platform-specific *bodies* into `pla
 
 The *hard* half is symbols that look cross-platform but in practice are consumed by only one OS's backend. Those symbols compile clean on the host you're on (because the consumer compiles too), and explode under `-D warnings` on the OS where the consumer is cfg'd out:
 
-- **`dead_code`** — `pub fn`, `pub const`, `pub struct` in a shared module whose only callers live behind `#[cfg(target_os = "linux")]`.
-- **`unused_imports`** — `use` statements that pull in symbols only referenced from a cfg-gated function body.
-- **`unused_mut`** — function parameters or local bindings that are only mutated in one platform's branch.
+- **`dead_code`**: `pub fn`, `pub const`, `pub struct` in a shared module whose only callers live behind `#[cfg(target_os = "linux")]`.
+- **`unused_imports`**: `use` statements that pull in symbols only referenced from a cfg-gated function body.
+- **`unused_mut`**: function parameters or local bindings that are only mutated in one platform's branch.
 
-The qol-tools commit history is full of these. The `d797294` refactor moved sixteen `dead_code` errors out of macOS-side `qol-tray` builds by relocating a `BindingMatcher` table from the shared `capture/mod.rs` into the linux-only `capture/platform/linux/matcher.rs`. The `33df35d` follow-up flipped a constants module from `pub` to `pub(crate)` to make the linter quiet on a different OS. These are not "lint nits" — they are full red CI builds that block release.
+The qol-tools commit history is full of these. The `d797294` refactor moved sixteen `dead_code` errors out of macOS-side `qol-tray` builds by relocating a `BindingMatcher` table from the shared `capture/mod.rs` into the linux-only `capture/platform/linux/matcher.rs`. The `33df35d` follow-up flipped a constants module from `pub` to `pub(crate)` to make the linter quiet on a different OS. These are not "lint nits": they are full red CI builds that block release.
 
 This class of bug is **invisible to single-file static analysis** when looking only at the symbol. You need either (a) cross-module symbol-flow analysis or (b) actually compiling on each platform. The deterministic catch lives in `qol-arch-cicd`'s matrix build. This skill catches the *patterns that produce them* at edit time, before they reach CI.
 
@@ -34,14 +34,14 @@ If a symbol is dead on macOS or Windows, the answer is **not** `#[allow(dead_cod
 
 `#[allow(dead_code)]` says "I know this is dead on some platform but I refuse to fix it." That permission slip outlives the situation that justified it and re-rots into mystery code two refactors later. **The hook blocks it in non-`platform/` files.**
 
-Permitted (the hook allows): `#[allow(dead_code)]` *inside* `platform/<os>.rs` files. Inside an OS impl, `dead_code` may legitimately mean "this stub method exists for trait parity but the host doesn't call it on this OS yet" — a defensible case. Outside `platform/`, the symbol is shared, and dead-on-some-OS is a smell.
+Permitted (the hook allows): `#[allow(dead_code)]` *inside* `platform/<os>.rs` files. Inside an OS impl, `dead_code` may legitimately mean "this stub method exists for trait parity but the host doesn't call it on this OS yet", a defensible case. Outside `platform/`, the symbol is shared, and dead-on-some-OS is a smell.
 
 ### 2. No `#[allow(unused_mut)]` outside `platform/`
 
 Same logic. `unused_mut` on a non-platform symbol means one OS's branch never mutates it. Two honest fixes:
 
 - Restructure so the platform that doesn't mutate doesn't see the binding (move the call into the platform impl).
-- Make the mutability conditional via `#[cfg(...)] let mut x` / `#[cfg(...)] let x` — but at that point you're back in cfg-sprawl territory; relocate instead.
+- Make the mutability conditional via `#[cfg(...)] let mut x` / `#[cfg(...)] let x`, but at that point you're back in cfg-sprawl territory; relocate instead.
 
 The hook blocks `#[allow(unused_mut)]` outside `platform/`.
 
@@ -55,14 +55,14 @@ use crate::evdev::KeyState;
 
 This pattern is almost always a refactor leftover. Either:
 
-- The `KeyState` consumer in this file is *also* `#[cfg(target_os = "linux")]` — in which case the consumer (and its `use`) belong in `platform/linux.rs`, not here. Move both.
-- Or the `use` is genuinely only needed on Linux but other items are cross-platform — split the file.
+- The `KeyState` consumer in this file is *also* `#[cfg(target_os = "linux")]`, in which case the consumer (and its `use`) belong in `platform/linux.rs`, not here. Move both.
+- Or the `use` is genuinely only needed on Linux but other items are cross-platform; split the file.
 
 The hook blocks `#[cfg(target_os = ...)] use ...;` outside `platform/`. Inside `platform/<os>.rs` it's redundant (the file is already OS-gated) but harmless; the hook doesn't fire there.
 
 ### 4. Trait method parity: every OS impl must have every method
 
-If `WindowOps::move_to_monitor` exists in `platform/mod.rs`'s trait, then `linux.rs`, `macos.rs`, and `windows.rs` must all `impl WindowOps` with `move_to_monitor`. Stub the unsupported OSes with a typed `Err` return — never `unimplemented!()`, never delete the method from the trait "because only Linux needs it". The trait *is* the contract. Stubs honor the contract.
+If `WindowOps::move_to_monitor` exists in `platform/mod.rs`'s trait, then `linux.rs`, `macos.rs`, and `windows.rs` must all `impl WindowOps` with `move_to_monitor`. Stub the unsupported OSes with a typed `Err` return: never `unimplemented!()`, never delete the method from the trait "because only Linux needs it". The trait *is* the contract. Stubs honor the contract.
 
 ### 5. No adapter-exclusive helpers in the shared parent
 
@@ -115,14 +115,14 @@ When you discover a symbol in a shared module is causing dead_code on another pl
 
 1. **Find every consumer.** `rg "KEY_LEFTCTRL"` across the crate. Note which file each consumer lives in.
 2. **Check if all consumers are platform-gated.** If every consumer is in `platform/<os>.rs` or behind `#[cfg(target_os = "<os>")]`, the symbol belongs in that platform's module. Skip to step 4.
-3. **If consumers span platforms but only some are gated**, the symbol is genuinely cross-platform — but the OS that doesn't have a consumer needs one (perhaps a stub call). Add it.
+3. **If consumers span platforms but only some are gated**, the symbol is genuinely cross-platform, but the OS that doesn't have a consumer needs one (perhaps a stub call). Add it.
 4. **Move the symbol.** Cut from the shared file, paste into `platform/<os>.rs` (or a sibling `platform/<os>/<feature>.rs` if the symbol is large enough to warrant). Update its visibility: `pub` → `pub(crate)` or `pub(super)` as tight as possible.
 5. **Update `use` statements** in consumers.
 6. **Verify.** `RUSTFLAGS="-D warnings" cargo clippy --all-targets --all-features --keep-going` on the host you're on. Then trust CI for the other OSes (or run `qol check` plus a manual `cargo clippy --target <triple>` for each cross-compile toolchain installed locally; see `qol-arch-cicd`).
 
 Concrete example (the `d797294` pattern):
 
-Before — `src/hotkeys/capture/mod.rs`:
+Before: `src/hotkeys/capture/mod.rs`:
 
 ```rust
 pub struct BindingMatcher { ... }   // <-- 16 dead_code errors on macOS
@@ -134,18 +134,18 @@ fn mod_to_key_codes(m: Mod) -> [u16; 2] { ... }
 After:
 
 ```rust
-// src/hotkeys/capture/mod.rs — only cross-platform surface
+// src/hotkeys/capture/mod.rs, only cross-platform surface
 pub use binding::{Binding, parse_combo};
 pub use platform::install;
 
-// src/hotkeys/capture/platform/linux/matcher.rs — all of it lives here
+// src/hotkeys/capture/platform/linux/matcher.rs, all of it lives here
 pub(super) struct BindingMatcher { ... }
 pub(super) struct ModifierState { ... }
 pub(super) mod keycodes { pub(crate) const KEY_LEFTCTRL: u16 = 29; ... }
 fn mod_to_key_codes(m: Mod) -> [u16; 2] { ... }
 ```
 
-macOS now compiles clean — there's nothing for it to find dead.
+macOS now compiles clean: there's nothing for it to find dead.
 
 ## Anti-patterns (the hook blocks these)
 
@@ -178,7 +178,7 @@ pub trait WindowOps {
 
 ## Permitted patterns
 
-Inside `src/<feature>/platform/<os>.rs`, ANY of these are fine — the file is already OS-gated:
+Inside `src/<feature>/platform/<os>.rs`, ANY of these are fine, the file is already OS-gated:
 
 ```rust
 #[allow(dead_code)]
@@ -188,7 +188,7 @@ pub(crate) fn helper_only_used_on_some_paths() { ... }   // ok inside platform/
 fn macos_stub(mut buf: Vec<u8>) { ... }                  // ok inside platform/
 ```
 
-In tests/ and examples/, cfg gates are unrestricted — cross-platform tests legitimately need them.
+In tests/ and examples/, cfg gates are unrestricted; cross-platform tests legitimately need them.
 
 ## Bypass
 
@@ -205,5 +205,5 @@ If you find yourself bypassing more than once a quarter, the rule is wrong, not 
 
 ## Sibling skills
 
-- **`qol-arch-code`** — strategy-pattern code layout (`platform/` subfolders, trait + impls). This skill assumes that layout exists.
-- **`qol-arch-cicd`** — the matrix build that catches the OS-specific failures this skill tries to prevent at edit time. Belt-and-braces: this skill catches the *patterns*, the matrix catches the *escapes*.
+- **`qol-arch-code`**: strategy-pattern code layout (`platform/` subfolders, trait + impls). This skill assumes that layout exists.
+- **`qol-arch-cicd`**: the matrix build that catches the OS-specific failures this skill tries to prevent at edit time. Belt-and-braces: this skill catches the *patterns*, the matrix catches the *escapes*.

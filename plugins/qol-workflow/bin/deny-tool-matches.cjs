@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const HOOK_NAME = 'deny-tool-matches';
 const ROOT_MARKER = '/qol-monorepo/';
 const SCOPED_ROOTS = [
-    '/libs/qol-terminal-sessions/src/cli/',
+    '/libs/terminal-sessions/src/cli/',
     '/plugins/cli-sessions/src/',
 ];
 const EXEMPT = [

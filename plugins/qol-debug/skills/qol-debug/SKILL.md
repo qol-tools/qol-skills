@@ -1,6 +1,6 @@
 ---
 name: qol-debug
-description: Use when asked to locate, hunt for bugs, or find security vulnerabilities in a qol-tools repo (qol-monorepo, qol-skills) - first-pass identification, evidence-gathering, and high-confidence reporting without fixing. Triggers on "locate bugs", "find bugs", "bug hunt", "first pass", "hunt for defects", "report back what you found", "find security vulnerabilities", "security review", "hunt for vulnerabilities", "find exploits", or any read-only debugging or security sweep. Covers baseline verification (clippy + full test suite), live qol-dev session log mining, recent-fix and newest-feature prioritization, the static bug-shape and security grep catalogs, per-suspect source verification, multi-perspective review for high-value targets, guest-VM confirmation of runtime findings, and the report template that ships only high-confidence findings.
+description: Use when asked to locate, hunt for bugs, or find security vulnerabilities in a qol-tools repo (qol-monorepo, qol-skills) - first-pass identification, evidence-gathering, and high-confidence reporting without fixing. Triggers on "locate bugs", "find bugs", "bug hunt", "first pass", "hunt for defects", "report back what you found", "find security vulnerabilities", "security review", "hunt for vulnerabilities", "find exploits", or any read-only debugging or security sweep. Covers baseline verification (clippy + full test suite), live qol-dev session log mining, recent-fix and newest-feature prioritization, the static bug-shape and security scan catalogs, per-suspect source verification, multi-perspective review for high-value targets, guest-VM confirmation of runtime findings, and the report template that ships only high-confidence findings.
 ---
 
 # qol-debug
@@ -36,13 +36,13 @@ The user often runs `qol dev` from the current tree. The live session is the str
 
 - `~/.local/share/qol-tray/logs/qol-dev-<ts>-<pid>.log`: the dev console log of the running session (globbing `qol-dev-*.log` and picking the newest entry is safer than a fixed pattern)
 - `~/.local/share/qol-tray/logs/qol-tray.<date>.log`: structured startup events
-- `~/.local/share/qol-tray/logs/qol-daemons.log`: daemon output (multi-day history; check timestamps before trusting an entry, and check the file size before a full grep: it can grow very large and a naive `error|warn|fail|panic` scan returns thousands of hits)
+- `~/.local/share/qol-tray/logs/qol-daemons.log`: daemon output (multi-day history; check timestamps before trusting an entry, and check the file size before a full `rg`: it can grow very large and a naive `error|warn|fail|panic` scan returns thousands of hits)
 
 These are the Linux host paths; resolve the tray log dir from the host's data dir on other platforms.
 
 Pin what the live session actually runs before trusting its logs: the process list must resolve into the tree under review (for example `target/debug/plugin-*` or `target/qol-dev/runtime/<hash>/qol-tray`). Record that with the evidence: a stale session's logs look authentic but prove nothing. The provenance mechanics belong to `qol-tray:qol-tray-dev-recompile`; reference it instead of re-deriving. Also check `qol env runs` / `qol flow runs` / `qol env doctor`: active guest lanes and stale cleanup warnings contextualize what is really running. When a finding touches a running daemon, read its socket paths and environment from `/proc/<pid>/environ` instead of guessing.
 
-Grep for `error|warn|fail|panic`, then read every hit in context. False positives are common and must be filtered before they become findings:
+Run `rg -n 'error|warn|fail|panic'` over the log, then read every hit in context. False positives are common and must be filtered before they become findings:
 
 - window titles captured by alt-tab that happen to contain "error"
 - handled error strings returned by Cinnamon/BlueZ/shell evals (the plugin surfaces them by design)
@@ -59,7 +59,7 @@ A genuine runtime failure in the current tree outranks any static suspicion. Rea
 - For security hunts, order by attacker position: remote-reachable endpoints first, then local multi-user, then same-user paths.
 - Stop when the sweep stops producing suspects: cover the baseline, the live evidence, and the areas named by recent fix commits, then report. Do not inventory the whole repository.
 
-### 4. Static pattern scans (grep catalog)
+### 4. Static pattern scans (scan catalog)
 
 Every hit is a suspect, not a finding: verify in source before claiming.
 
@@ -74,7 +74,7 @@ Every hit is a suspect, not a finding: verify in source before claiming.
 
 #### Security sweep (vulnerability hunts)
 
-Start with a threat model, not greps: enumerate every listener and IPC endpoint, and for each one record the bind address, authentication mechanism (or none), peer-credential check, payload bounds, and what actions a peer can trigger. Rank by attacker position: remote > local multi-user > same-user > dev-only. Then run the security grep catalog:
+Start with a threat model, not greps: enumerate every listener and IPC endpoint, and for each one record the bind address, authentication mechanism (or none), peer-credential check, payload bounds, and what actions a peer can trigger. Rank by attacker position: remote > local multi-user > same-user > dev-only. Then run the security scan catalog:
 
 - `UdpSocket|TcpListener|UnixListener|\.bind\(` - for each listener: 0.0.0.0 vs loopback, auth, source validation
 - `Command::new` / `sh -c` / `bash -c` / eval - trace every interpolated value back to its source (config, .desktop files, window titles, network input, profile imports)

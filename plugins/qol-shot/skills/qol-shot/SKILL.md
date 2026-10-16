@@ -46,7 +46,7 @@ Keep OS implementation files under `platform/<os>/`; keep cross-platform capture
 
 Preview, editor, pinned, and selector surfaces share the qol-gpui surface boundary.
 Preview, editor, and pinned actions are `Kit::action_circle` rows; the editor chrome
-is `Kit::header`, `Kit::segmented_group` with `Kit::segment`, and `Kit::hint_bar`,
+is `Kit::heading`, `Kit::segmented_group` with `Kit::segment`, and `Kit::hint_bar`,
 never a local button, header, or hint recipe. Shared actions keep one key table
 across surfaces (`c` copy, `p` copy path, `o` open folder, Esc closes); a surface
 adds letters only for actions the others do not offer.

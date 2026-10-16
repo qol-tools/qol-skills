@@ -20,19 +20,23 @@ Change an action name in the manifest, runtime contract, config contract, and di
 
 | Path | Responsibility |
 |---|---|
-| `src/main.rs` | Thin entrypoint delegating to the headless app. |
+| `src/main.rs` | Thin entrypoint routing to the settings handoff, the daemon, or the headless app in `src/lib.rs`. |
 | `src/cli.rs` | Headless command surface, doctor registration, and text rendering. |
 | `src/bluetooth/` | Platform-neutral domain: device facts, discovery state, reconnect selection and reporting, adapter health. |
 | `src/bluetooth/retry.rs` | Reconnect retry policy and its per-device state. |
-| `src/platform/` | Target-selected backend; the Linux adapter talks to BlueZ through the `bluer` D-Bus bindings. |
-| `src/settings/` | Native settings panel with a browser fallback. |
+| `src/connect/` | Connection attempts over ordered routes. |
+| `src/handoff/` | Device hold release and resume between peers. |
+| `src/audio_claim/` | Target-selected audio output reclaim for a connected device. |
+| `src/hostfix/` | Host fix findings such as a wedged service or a competing Bluetooth manager. |
+| `src/platform/` | Target-selected backend: BlueZ through the `bluer` D-Bus bindings on Linux, IOBluetooth on macOS, the Windows Bluetooth APIs on Windows. |
+| `src/settings/` | Asks qol-tray to open its host-rendered settings panel. |
 | `src/config/` | Typed config loading. |
 
 Keep cfg selection in `platform/mod.rs`. Domain code in `src/bluetooth/` must stay free of target gates and backend types so it remains unit-testable without a live adapter.
 
 ## Backend boundary
 
-The Linux backend owns every BlueZ interaction. Prefer the typed D-Bus bindings already in use over shelling out to a CLI: shelling out loses typed errors and turns adapter state into screen-scraping. When an operation needs a helper binary, inspect its metadata for doctor rather than executing it during a read-only check.
+Each target backend owns every native Bluetooth interaction; on Linux that is BlueZ. Prefer the typed D-Bus bindings already in use over shelling out to a CLI: shelling out loses typed errors and turns adapter state into screen-scraping. When an operation needs a helper binary, inspect its metadata for doctor rather than executing it during a read-only check.
 
 Device readiness is a domain question, not a backend one. Audio classification and connection-readiness predicates live in `src/bluetooth/` so both the reconnect path and the settings payload agree on what "ready" means.
 
@@ -48,13 +52,13 @@ Device readiness is a domain question, not a backend one. Audio classification a
 
 ## Invariants
 
-- The domain layer is backend-agnostic; only the target-selected adapter knows about BlueZ.
+- The domain layer is backend-agnostic; only the target-selected adapter knows about BlueZ or another native stack.
 - Addresses are normalized at the boundary and used in normalized form internally.
 - Discovery is bounded and stoppable; a search left running is a defect.
 - Reconnect is best-effort across the selection and reports partial failure rather than hiding it.
 - Unsupported targets return typed errors; never `unimplemented!()` or `compile_error!`.
 - Doctor is read-only by default and never mutates adapter or device state.
-- Settings are host-rendered from the contract; the native panel falls back to the browser rather than failing the action.
+- Settings are rendered by qol-tray as a native GPUI panel from the contract; the plugin never draws its own settings window.
 
 ## Verification
 

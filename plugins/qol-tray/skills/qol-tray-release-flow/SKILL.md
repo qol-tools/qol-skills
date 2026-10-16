@@ -6,7 +6,7 @@ description: Use when cutting, tagging, or preparing a release for qol-tray or a
 # qol-tray-release-flow
 
 This skill defines the release pipeline for `qol-tray` as it lives in the
-`qol-monorepo` workspace. `qol-tray` is the host app under `apps/qol-tray`; it
+`qol-monorepo` workspace. `qol-tray` is the host app under `apps/tray`; it
 is released as one "release unit" alongside the bundled `plugins/*`.
 
 ## 1. Versioning starts from successful CI
@@ -29,7 +29,7 @@ is released as one "release unit" alongside the bundled `plugins/*`.
 ## 2. Release units (plugins + the host)
 
 - Each plugin under `plugins/*` that carries a `plugin.toml` is a release unit.
-- The host app `apps/qol-tray` is also a release unit. It has Cargo metadata
+- The host app `apps/tray` is also a release unit. It has Cargo metadata
   only and NO `plugin.toml`. Never add one - that contaminates plugin semantics.
 - To force one unit's release, dispatch `plugin-version.yml` with the
   `plugin_id` input (for the host, `qol-tray`).
@@ -37,7 +37,7 @@ is released as one "release unit" alongside the bundled `plugins/*`.
 ## 3. Exact release candidate before tags
 
 - The versioner stages `Cargo.lock`, `plugins/*/Cargo.toml`,
-  `plugins/*/plugin.toml`, and `apps/qol-tray/Cargo.toml`, then commits them as
+  `plugins/*/plugin.toml`, and `apps/tray/Cargo.toml`, then commits them as
   the literal message `chore(plugins): bump plugin versions` and pushes.
   `CI`'s plan job skips commits with exactly that prefix.
 - The pushed bump commit is not tagged immediately.
@@ -89,6 +89,6 @@ is released as one "release unit" alongside the bundled `plugins/*`.
   hand-tagging locally.
 - If `qol-tray` stops releasing, check that the script still discovers it as a
   release unit (`python3 .github/scripts/plugin_version.py` prints the plan) and
-  that the bump commit still stages `apps/qol-tray/Cargo.toml`.
+  that the bump commit still stages `apps/tray/Cargo.toml`.
 - Candidate plan, build, source-CI, and attestation reports are retained as
   workflow artifacts. Use them before reconstructing a failed run from logs.

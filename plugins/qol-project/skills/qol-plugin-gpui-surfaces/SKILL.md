@@ -1,6 +1,6 @@
 ---
 name: qol-plugin-gpui-surfaces
-description: "Use when giving a qol plugin a native gpui surface - a contract-driven settings panel, toast, picker, or other summonable window - instead of or beside the web auto-config page. Covers the tray-owned singleton settings host, the shared qol-gpui surface kit, capability routing and fallbacks, runtime queries/actions, and placement/focus/dismiss invariants."
+description: "Use when giving a qol plugin a native gpui surface - a contract-driven settings panel, toast, picker, or other summonable window. Covers the tray-owned singleton settings host, the shared qol-gpui surface kit, capability routing and fallbacks, runtime queries/actions, and placement/focus/dismiss invariants."
 ---
 
 # qol-plugin-gpui-surfaces
@@ -16,13 +16,13 @@ and toasts remain plugin-owned.
 
 | Piece | File | What it owns |
 | --- | --- | --- |
-| `Surface` builder | `surface.rs` | Window creation for `SurfaceKind::Toast` (PopUp, unfocused, corner-anchored, optional timeout), `SurfaceKind::Panel` (Normal, focused, monitor-centered, designed-size locked) and `SurfaceKind::OverlayPanel` (the same contract plus the shared overlay state) |
-| `SurfaceDismisser` | `surface.rs` | Close from anywhere (key handler, click, timer). Deferred out of event dispatch - see invariants |
-| `Toast` + `ToastHost` | `toast.rs` | Theme-backed passive messages with semantic tones, timed or persistent lifetime, optional activation, replacement, and dismissal |
+| `Surface` builder | `surface/` | Window creation for `SurfaceKind::Toast` (PopUp, unfocused, corner-anchored, optional timeout), `SurfaceKind::Panel` (Normal, focused, monitor-centered, designed-size locked) and `SurfaceKind::OverlayPanel` (the same contract plus the shared overlay state) |
+| `SurfaceDismisser` | `surface/` | Close from anywhere (key handler, click, timer). Deferred out of event dispatch - see invariants |
+| `Toast` + `ToastHost` | `toast/` | Theme-backed passive messages with semantic tones, timed or persistent lifetime, optional activation, replacement, and dismissal |
 | `SettingsWindowHost` | `settings_panel/` | Retains exactly one settings window and implements open, focus-same-plugin, replace-with-another-plugin, and park/reveal across Escape |
 | `SettingsRuntime::tray` | `settings_panel/` | Routes hosted runtime queries and actions through qol-tray's existing HTTP API |
-| `settings_panel::open` / `run_standalone` | `settings_panel/` | Plugin-owned fallback entrypoints for code already running GPUI or starting a standalone GPUI app |
-| `Dropdown` + `DropdownStyle` | `dropdown.rs` | Keyboard option picker built on `ScrollList`; caller decorates labels (e.g. `[x]` marks for multi-select) and paints it via `deferred(anchored(...))` so it overlays later rows |
+| `open_from_async` / `open_plugin_settings` | `settings_panel/` | Plugin-owned fallback entrypoints for code already running GPUI |
+| Choose, list and item cards | `settings_panel/view/` | Select and multi-select rows push a choice card (`choose_card.rs`); list rows push a list card and its item cards (`list_card.rs`) |
 | `ScrollList` | `scroll_list.rs` | Selection + scroll-window state shared with launcher/removeapp |
 
 `Surface::show_focused` is for interactive panels (`Render + Focusable`),
@@ -82,22 +82,19 @@ the minimum declared query poll interval. A new contract-driven panel opts in
 through metadata and contracts only.
 
 Windows and host-start failures continue through the plugin's normal
-daemon/runtime settings target. A host that starts but cannot load or render a
-panel opens the web settings URL. Keep that fallback path working; native
+daemon/runtime settings target. Keep that fallback path working; native
 settings must never strand a headless or unsupported environment.
 
 ## Settings panel = contract, not new UI truth
 
 A plugin's gpui settings panel derives everything from the existing
-`qol-config.toml` contract - the same single source the web auto-config
-renders. The host builds `SettingsPanel { plugin_id, contract, heading }`
+`qol-config.toml` contract, the single settings source. The host builds `SettingsPanel { plugin_id, contract, heading }`
 and `SettingsRuntime::tray(plugin_id)`; plugins do not wire a second normal
 settings window.
 
-Use `run_standalone` only for a native runtime fallback that owns its own GPUI
-application. From an existing plugin GPUI daemon, use `open_from_async` and
-retain a browser fallback on `Err`. These are fallbacks or direct plugin entry
-points, not the normal tray settings route.
+From an existing plugin GPUI daemon, use `open_from_async` (or
+`open_plugin_settings`) and keep the plugin's settings fallback on `Err`. These
+are fallbacks or direct plugin entry points, not the normal tray settings route.
 
 Do not re-implement rows, key handling, or persistence per plugin -
 extend `settings_panel/` instead. What the kit module guarantees:
@@ -107,8 +104,8 @@ extend `settings_panel/` instead. What the kit module guarantees:
    when the tray is unreachable; `resolve_config` merges them over the
    contract.
 2. `ResolvedField` kinds map to row controls: boolean → toggle (space),
-   select → dropdown (enter), string_array with `options` or `query` →
-   multi-select dropdown, number → typed edit with min/max clamp,
+   select → choice card, string_array with `options` or `query` →
+   multi-select choice card, number → typed edit with min/max clamp,
    string/string_array → text edit, color → hex text edit with a live
    swatch, status → query-backed shared `StatusIndicator`, action →
    dispatchable row, and list → query-backed live rows. Query-less actions
@@ -148,17 +145,23 @@ extend `settings_panel/` instead. What the kit module guarantees:
    only the external-change backstop. Rearm that backstop from action
    completion so a pre-action or propagation-stale read cannot overwrite the
    authoritative result.
-5. List row actions use `row_action` / `row_actions` in contract order. The
-   first action whose `when` field is truthy is the primary action; Enter on an
-   active list row dispatches it, interpolates its `input` from the row, and
-   shows the shared spinner until the query refreshes. When multiple actions
-   are visible, Space, Right, or the row action affordance opens the shared
-   `Dropdown`; Up/Down select, Enter dispatches, and Escape/Left returns to the
-   list. This mirrors the web `SearchableActionList` primary-action plus
-   `ActionMenu` contract. Wire payload-bearing adapters with
-   `SettingsRuntime::with_input_action`; never decode row data or build action
-   menus in plugin-specific GPUI code.
-6. Every change saves immediately by PUTting **row values merged over
+5. Select and multi-select rows push a choice card (`open_choose_card`,
+   `on_choose_card_key`). Arrow keys move between tiles. In a single-select
+   card, Enter, Space or a click chooses the tile and pops the card; in a
+   multi-select card it toggles the tile and the card stays open.
+6. A list row with items opens a list card of its items (`open_list_card`);
+   Left/Right step the item slider when the list has one. List row actions use
+   `row_action` / `row_actions` in contract order, and the first action whose
+   `when` field is truthy is the primary action. Enter or Space on an item
+   opens its item card (`open_item_card`) when the contract gives an
+   `item_card` or the item has a primary action. The item card lists the
+   actions in contract order with the highlight on the primary action, can
+   carry the `item_card` input row, and Enter runs the selected action
+   (`run_item_card_action`), interpolating its `input` from the item, and pops
+   back to the list card. The shared spinner shows until the query refreshes.
+   Wire payload-bearing adapters with `SettingsRuntime::with_input_action`;
+   never decode row data or build action cards in plugin-specific GPUI code.
+7. Every change saves immediately by PUTting **row values merged over
    the loaded config** to `PUT /api/plugins/{id}/config`. No apply
    button. Merging (not rebuilding from rows) is load-bearing: fields
    the panel does not own (unsupported rows, query-backed rows) must
@@ -169,21 +172,19 @@ extend `settings_panel/` instead. What the kit module guarantees:
    installs root shadows the whole canonical config, because
    first-readable-wins). File write is the offline fallback only; the
    boot-time config drain merges it back into the store.
-7. Whole numbers serialize as JSON integers, and `qol-config`
+8. Whole numbers serialize as JSON integers, and `qol-config`
    canonicalizes whole floats at load as the backstop - a `6.0` in a
    stored config once made a `usize`-typed plugin config fail to parse
    ENTIRELY, silently reverting every setting to compiled defaults.
-8. Rows scroll when the contract is taller than the monitor; selection
+9. Rows scroll when the contract is taller than the monitor; selection
    stays visible, so keyboard-first holds on any screen size.
-9. Colors come from `qol-theme`'s `SettingsPanelPalette`
-   (`settings_panel_runtime()`) - every plugin panel looks the same.
-10. Multiple contract sections open through one shared section menu. Section
-    labels and descriptions come from the contract; Enter or Right opens a
-    section. Inside a section, Left returns to the section menu unless the
-    selected control owns horizontal adjustment: number and select rows keep
-    Left/Right for their values. Escape is the universal back action, and
-    Escape from the section menu dismisses the panel. Plugins do not create
-    local category cards or navigation state.
+10. Colors come from `qol-theme` through the kit (`kit.grounds`,
+    `kit.palette`), so every plugin panel looks the same.
+11. Section labels and descriptions come from the contract; Enter opens a
+    section or card. Escape is the only back key: it closes the filter, then
+    pops one card, then ascends to the rail, then dismisses the panel. Left
+    never goes back; Left/Right only step a number edit or a list card's item
+    slider. Plugins do not create local category cards or navigation state.
 
 Contract field capabilities (options on string_array, query-backed
 selects) are documented in `qol-project:qol-shared-libs`.
@@ -199,15 +200,14 @@ selects) are documented in `qol-project:qol-shared-libs`.
    schema or plugin-local renderer.
 4. **Queries the contract references** are declared in
    `qol-runtime.toml` and answered by the daemon
-   (`ReadResult::HandledWithData(json)`), so the web UI gets the same
-   dynamic data over `GET /api/plugins/<id>/queries/<name>` and the hosted
-   panel reaches it through `SettingsRuntime::tray`.
+   (`ReadResult::HandledWithData(json)`); the hosted panel reaches them over
+   `GET /api/plugins/<id>/queries/<name>` through `SettingsRuntime::tray`.
 5. **Fallback target** remains valid for unsupported platforms or host-start
-   failure. It may open the web settings URL or use the shared standalone
-   panel; never silently do nothing.
+   failure. It may open the shared settings panel from the plugin's own GPUI
+   daemon; never silently do nothing.
 6. **Keyboard-first**: up/down navigate, space toggles, enter activates
-   (opens dropdowns / begins edits / commits), typing a digit starts a
-   number edit directly, ESC closes innermost-first (edit → dropdown →
+   (opens cards / begins edits / commits), typing a digit starts a
+   number edit directly, ESC closes innermost-first (edit → card →
    panel). Mouse is secondary.
 
 ## Invariants (violations are bugs)

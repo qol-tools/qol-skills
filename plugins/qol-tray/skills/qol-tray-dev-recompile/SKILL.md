@@ -9,7 +9,7 @@ Use the host's canonical dev recompile action for an ordered host restart. Do no
 
 ## Source ownership
 
-- Find the frontend trigger and endpoint by searching for `recompile-self`; UI placement and labels are not stable documentation.
+- The trigger is the `qol dev` dashboard (ctrl+r, or Enter on the Tray row), which POSTs `/api/dev/recompile-self` (`tools/cli/src/dev_console/reload.rs`, `tools/cli/src/dev_server.rs`). Find the endpoint by searching for `recompile-self`; dashboard keys are not stable documentation.
 - Trace the endpoint through the recompile service, restart scheduler, plugin-manager shutdown, daemon tracker, and process replacement code.
 - Read dev-link/build-state code to determine whether plugin binaries are rebuilt or merely restarted.
 - Read the running build's response/logs to confirm which path actually executed.
@@ -46,8 +46,6 @@ Avoid root-level copied binaries: resolver precedence may let them shadow worksp
 
 **Plugin Rust change:** first ensure the selected plugin binary was rebuilt, then use the host restart to replace the supervised daemon.
 
-**Frontend-only change:** use the frontend reload path when runtime logs show it handled the changed file; escalate to host restart only when the asset/build boundary requires it.
-
 **Config/data change:** restart is not a substitute for proving which config scope/path the process loaded. Inspect the resolver and live diagnostics.
 
 ## Invariants
@@ -56,4 +54,4 @@ Avoid root-level copied binaries: resolver precedence may let them shadow worksp
 - Restart cleanup preserves user config/profile data and external hardware state unless an explicit migration owns a change.
 - Process freshness and binary freshness are separate claims with separate evidence.
 - A same-PID exec or a new-PID spawn may both be valid; source/runtime evidence decides.
-- Never state that all daemons or binaries are fresh merely because the user clicked a button.
+- Never state that all daemons or binaries are fresh merely because the user triggered a recompile.

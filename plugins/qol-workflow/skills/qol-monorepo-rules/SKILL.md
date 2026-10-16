@@ -43,8 +43,8 @@ there is an outcome. Parking puts it under a detached CLI Sessions process inste
 the harness. The terminal waits open unless parking is on for the session, which
 closes it for the wait and resumes it in a new tab afterwards. `qols park` toggles
 it for the current terminal, and `session_fork` with `park: true` or
-`qols fork --park` starts a fork with it on: `qol-cli-sessions parked`
-lists parked sessions, and `qol-cli-sessions unpark <id>` stops the wait and
+`qols fork --park` starts a fork with it on: `qol sessions parked`
+lists parked sessions, and `qol sessions unpark <id>` stops the wait and
 resumes the conversation early.
 
 Parking is enforced by `pr-watch-park-guard.cjs`. On PreToolUse it denies a

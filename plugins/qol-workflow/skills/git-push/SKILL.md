@@ -86,7 +86,7 @@ driver with a manual lockfile conflict resolution.
    cargo clippy --all-targets --all-features --keep-going -- -D warnings
    cargo test --all-features
    ```
-   `cargo check` or `cargo test` alone is NOT sufficient — clippy is what CI enforces.
+   `cargo check` or `cargo test` alone is NOT sufficient - clippy is what CI enforces.
    `--keep-going` is mandatory so all errors are reported in one pass.
    If a project-local skill defines a stricter stack, use that stack instead of the generic Rust trio above.
 5. If ANY verification command fails, STOP. Fix ALL errors, re-run, and only proceed when everything passes clean.
@@ -108,19 +108,12 @@ driver with a manual lockfile conflict resolution.
 
 ## Troubleshooting auth failures
 
-If `git push` fails with `Permission to qol-tools/<repo>.git denied to <other-account>` and HTTP 403, the remote is HTTPS and the macOS credential helper is serving a credential bound to the wrong account (typically a work GitHub login).
+If `git push` fails with `Permission to qol-tools/<repo>.git denied to <other-account>` and HTTP 403, the HTTPS credential the git credential helper serves belongs to the wrong GitHub account (typically a work login).
 
-Every qol-tools repo on this workstation is expected to use the SSH alias:
-
-```
-git@github-priv:qol-tools/<repo>.git
-```
-
-Fix by switching the remote, then retry the push:
+qol-tools remotes on this workstation use HTTPS:
 
 ```
-git remote set-url origin git@github-priv:qol-tools/<repo>.git
-git push
+https://github.com/qol-tools/<repo>.git
 ```
 
-Before doing this, peek at a sibling qol-tools repo (`qol-tray`, `qol-cicd`, etc.) to confirm the SSH alias is the canonical pattern — do not invent a host alias.
+Check which account is served (`gh auth status` reports the active GitHub account; `git config --get-all credential.helper` names the helper) and fix that account's credential before retrying. Do not invent an SSH host alias: confirm the canonical remote pattern against an existing qol-tools clone (`git -C <sibling> remote -v`) first.

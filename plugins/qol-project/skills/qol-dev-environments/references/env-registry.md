@@ -6,7 +6,7 @@ Keep the registry data-driven. Add or change an OS through its definition and ca
 
 - Store repo-owned definitions under `flows/envs/*.toml`.
 - Read the local config path from `qol env doctor` rather than hard-coding it.
-- Resolve the merged view through the shared registry under `libs/qol-dev-env/`.
+- Resolve the merged view through the shared registry under `libs/dev-env/`.
 - Render CLI or UI state from resolver output instead of rediscovering paths independently.
 
 ## Definition and local configuration
