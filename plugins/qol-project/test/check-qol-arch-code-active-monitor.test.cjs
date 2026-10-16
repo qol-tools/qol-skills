@@ -50,6 +50,7 @@ const BUILT_MONITOR = 'let monitor = ActiveMonitor::from_bounds(saved.bounds)';
 const OWN_DISPLAY = 'let monitor = window.display(cx).map(|d| ActiveMonitor::from_display(d.as_ref()))';
 const RESTORED_MONITOR = 'let monitor = restored.map(|restored| ActiveMonitor::from_gpui_bounds(restored.monitor))';
 const PRIMARY_DISPLAY = 'let bounds = Bounds::centered(None, size(px(400.0), px(300.0)), cx)';
+const SAVED_MONITOR = 'let monitor = settings_surface().remembered_monitor(cx).or_else(|| tracker.snapshot_monitor())';
 const KIT_SHOW = 'Surface::new(SurfaceKind::Panel).show_focused(&tracker, cx, build)';
 
 test('passes a window shown through the kit with the tracker', () => {
@@ -64,6 +65,7 @@ for (const [label, line] of [
     ['ActiveMonitor built outside qol_gpui::monitor', OWN_DISPLAY],
     ['ActiveMonitor built outside qol_gpui::monitor', RESTORED_MONITOR],
     ['window centered on the primary display', PRIMARY_DISPLAY],
+    ['saved window placement picked as the monitor', SAVED_MONITOR],
 ]) {
     test(`blocks ${line} in a plugin on Write`, () => {
         const { file } = fixture('src/ui/mod.rs');
@@ -106,6 +108,13 @@ test('blocks a primary display fallback inside the kit', () => {
     const r = write(file, body(PRIMARY_DISPLAY));
     assert.equal(r.exitCode, 2);
     assert.match(r.stderr, /window centered on the primary display/);
+});
+
+test('blocks saved placement picked as the monitor inside the kit', () => {
+    const { file } = fixture('src/settings_panel/mod.rs', undefined, 'kit');
+    const r = write(file, body(SAVED_MONITOR));
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /saved window placement picked as the monitor/);
 });
 
 test('passes bounds centered on a chosen display', () => {

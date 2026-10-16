@@ -978,6 +978,11 @@ const MONITOR_SIGNALS = [
             && (source.parts[0] === 'monitor.rs' || source.parts[0] === 'monitor'),
     },
     {
+        label: 'saved window placement picked as the monitor',
+        pattern: /\.remembered_monitor\s*\(/g,
+        owns: () => false,
+    },
+    {
         label: 'window centered on the primary display',
         pattern: /\bBounds::centered\s*\(\s*None\b/g,
         owns: () => false,

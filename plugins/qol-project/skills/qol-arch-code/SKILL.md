@@ -817,10 +817,13 @@ PR #96 (fe96b1504) built an `ActiveMonitor` from saved window placement (`from_g
 - a gpui window opened outside the kit: `.open_window(` in any crate but `qol-gpui`
 - an `ActiveMonitor` built outside `qol_gpui::monitor`: any `ActiveMonitor::from_*(` constructor but the signal decoders `from_event` and `from_key`, anywhere but `qol-gpui`'s `src/monitor.rs`
 - a window centered on the primary display: `Bounds::centered(None, ..)`
+- saved window placement picked as the monitor: a new `.remembered_monitor(` call
+
+PR #166's first draft reopened settings after an update with `settings_surface().remembered_monitor(cx)` ranked above the tracker, the PR #96 shape without building an `ActiveMonitor`, and this guard passed it. The bug was in the signal: a fresh tray stamped the cursor before focus, so focus won.
 
 Counts are compared before and after the edit, so existing uses (the launcher and alt-tab ghosts, the shot windows, the kit fallbacks and keepalive) only block when they grow. `qac lint` without `--base` lists them all. Bypass one edit with `touch .claude/bypass-qol-arch-code`.
 
-Residual: the guard sees tokens, not data flow. It misses a kit opener that ranks another value above the signal without building an `ActiveMonitor`, a cross-process open that carries no monitor (the settings POST), and the tray's own focus and cursor stamping. Placement tests in `libs/gpui/tests/placement.rs` and guest runs cover those.
+Residual: the guard sees tokens, not data flow. It misses a kit opener that ranks another value above the signal without building an `ActiveMonitor` or calling `remembered_monitor`, a cross-process open that carries no monitor (the settings POST), and the tray's own focus and cursor stamping. Placement tests in `libs/gpui/tests/placement.rs` and guest runs cover those.
 
 ### Lint: `qac`
 
