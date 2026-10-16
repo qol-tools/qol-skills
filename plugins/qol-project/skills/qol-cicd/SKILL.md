@@ -13,9 +13,9 @@ There are no shared or reusable workflows in a separate repo; each workflow file
 ## Workflow inventory, by role
 
 - `ci.yml` - lint + test on push/PR. Plans affected crates via `.github/scripts/affected_crates.py`, then runs fmt, clippy `-D warnings`, and tests on an ubuntu + macos matrix. Skips itself on version-bump commits.
-- `plugin-version.yml` - versioning. Runs on push to main (or dispatch); computes a bump per release unit from conventional-commit history, commits `chore(plugins): bump plugin versions`, and pushes `<id>-vX.Y.Z` tags.
-- `release.yml` - plugin releases. Fires on a `<id>-vX.Y.Z` tag; resolves the tag to a crate, derives the platform matrix from that plugin's `plugin.toml` `platforms` via `.github/scripts/plugin_matrix.py`, builds, and publishes assets.
-- `qol-tray-release.yml` - host release. Fires on a `qol-tray-vX.Y.Z` tag.
+- `plugin-version.yml` - versioning. Runs on push to main (or dispatch); computes a bump per release unit from conventional-commit history, commits `chore(plugins): bump plugin versions`, builds and packages every release candidate (targets from each plugin's `plugin.toml` `platforms` via `.github/scripts/plugin_matrix.py`), uploads the release files as `dist-<tag>-<target>` artifacts kept 90 days, and pushes `<id>-vX.Y.Z` tags.
+- `release.yml` - plugin releases. Fires on a `<id>-vX.Y.Z` tag; verifies the tag's candidate attestation, downloads the release files from the Versioning run the attestation names, requires one per target, and pushes them to the registry. It builds nothing.
+- `qol-tray-release.yml` - host release. Fires on a `qol-tray-vX.Y.Z` tag and publishes the candidate's Linux, macOS and Windows packages as a GitHub Release, the same way.
 - `release-prune.yml` - scheduled cleanup of old releases.
 
 Release units and tagging rules live in the `qol-tray-release-flow` skill; read it before cutting any release.
@@ -38,15 +38,15 @@ workflow. Setup only: build commands and verify gates stay in the workflows
 and scripts. RUSTFLAGS stays declared per job so warning parity remains
 visible in each workflow file.
 
-Cache namespaces are one per (build family, platform). Candidates and releases
-of the same unit run the same invocation, so they share a namespace:
+Cache namespaces are one per (build family, platform). Release workflows
+build nothing; they publish the candidate's files:
 
 | Workflow / job | cache-key |
 |---|---|
 | ci.yml check (ubuntu, macos) | `ci-${{ matrix.os }}` |
 | ci.yml process-windows | `ci-windows-sandbox` |
-| plugin-version.yml plugin_candidate / release.yml build | `plugin-release-${{ matrix.target }}` |
-| plugin-version.yml qol_tray candidates / qol-tray-release.yml builds | `qol-tray-linux`, `qol-tray-macos`, `qol-tray-windows` |
+| plugin-version.yml plugin_candidate | `plugin-release-${{ matrix.target }}` |
+| plugin-version.yml qol_tray candidates | `qol-tray-linux`, `qol-tray-macos`, `qol-tray-windows` |
 | release.yml / plugin-index.yml / plugin-registry-backfill.yml registry jobs | `plugin-registry` |
 
 Every rust-cache use runs with `save-if: ${{ github.ref == 'refs/heads/main' }}`

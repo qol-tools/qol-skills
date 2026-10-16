@@ -42,12 +42,14 @@ is released as one "release unit" alongside the bundled `plugins/*`.
   `CI`'s plan job skips commits with exactly that prefix.
 - The pushed bump commit is not tagged immediately.
   `.github/scripts/release_candidate.py` derives plugin targets from each
-  `plugin.toml`, runs the same release-profile build commands used by release,
-  and writes machine-readable plan/build reports. `qol-tray` always builds its
-  Linux package and both macOS architectures.
-- When every candidate build passes, the workflow writes one exact-SHA commit
-  status per intended tag, creates immutable tags atomically, and dispatches
-  releases. A failed or timed-out candidate receives no tag:
+  `plugin.toml`; the candidate jobs build each target in the release profile,
+  package it, upload the release files as `dist-<tag>-<target>` artifacts
+  (kept 90 days), and write machine-readable plan/build reports. `qol-tray`
+  always builds and packages Linux, macOS and Windows.
+- `attest` refuses unless every planned candidate has a passing build report.
+  It then writes one exact-SHA commit status per intended tag, creates
+  immutable tags atomically, and dispatches releases. A failed or timed-out
+  candidate receives no tag:
   `<plugin-id>-vX.Y.Z` for plugins, `qol-tray-vX.Y.Z` for the host.
 - Never move or reuse a failed tag. Land the fix and cut the next version.
 - The historical `chore(release): vX.Y.Z` and `chore(qol-tray, release): vX.Y.Z`
@@ -65,14 +67,18 @@ is released as one "release unit" alongside the bundled `plugins/*`.
     explicitly excludes `qol-tray-v*`)
 - Both release workflows also accept a `workflow_dispatch` `tag` input and check
   out `refs/tags/<tag>`; that is the path the dispatch uses.
-- Before any build, both workflows require the intended tag's successful
-  `qol/release-candidate/<tag>` status on the exact checked-out commit. A green
-  status from another commit or release unit is not accepted.
+- Both workflows first require the intended tag's successful
+  `qol/release-candidate/<tag>` status on the exact checked-out commit, posted
+  by `github-actions[bot]` and pointing at a Versioning run on `main`. A green
+  status from another commit, release unit, author or run is not accepted.
+- They then download that run's `dist-<tag>-*` artifacts and refuse a missing
+  target or platform. Neither workflow rebuilds anything.
 
 ## 5. Host release logic and artifacts
 
-- `qol-tray-release.yml` is self-contained in the monorepo. It is NOT a thin
-  caller to `qol-cicd`.
+- The host is built and packaged by the Versioning candidate jobs;
+  `qol-tray-release.yml` only verifies and publishes. It is NOT a thin caller
+  to `qol-cicd`.
 - Linux: a `.deb` (cargo-deb) plus `qol-tray-linux-<arch>.tar.gz`.
 - macOS: a universal (aarch64 + x86_64) `.app` bundle, ad-hoc codesigned
   (`codesign --sign -`), shipped as `qol-tray-macos-universal.tar.gz`. macOS is
@@ -92,3 +98,6 @@ is released as one "release unit" alongside the bundled `plugins/*`.
   that the bump commit still stages `apps/tray/Cargo.toml`.
 - Candidate plan, build, source-CI, and attestation reports are retained as
   workflow artifacts. Use them before reconstructing a failed run from logs.
+- Re-running a release by dispatch works while the candidate's `dist-*`
+  artifacts exist (90 days). An older tag cannot be republished from its
+  candidate; cut the next version instead.
