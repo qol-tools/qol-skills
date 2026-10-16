@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { join } from "node:path";
 
 import { cliSessionsBinary, commandFor, parsePrompt, renderDiagnostic, summarize, summarizePark } from "../hooks/qols-intercept.mjs";
 
@@ -115,6 +116,6 @@ test("qols park reports the state after the toggle", () => {
 test("qols park runs the installed CLI Sessions plugin when it exists", () => {
   const binary = process.platform === "win32" ? "qol-cli-sessions.exe" : "qol-cli-sessions";
   const env = { XDG_CONFIG_HOME: "/cfg" };
-  assert.equal(cliSessionsBinary(env, "/home", () => true), `/cfg/qol-tray/plugins/qol-cli-sessions/${binary}`);
+  assert.equal(cliSessionsBinary(env, "/home", () => true), join("/cfg", "qol-tray", "plugins", "qol-cli-sessions", binary));
   assert.equal(cliSessionsBinary(env, "/home", () => false), null);
 });

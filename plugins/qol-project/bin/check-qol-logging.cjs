@@ -232,7 +232,7 @@ function reviewCommand(payload) {
         }
         const previous = before.files[file] ?? headContent(before.root, file);
         const added = addedSignals(previous, after, inspectedSignals(file));
-        if (added.length) found.push(`${path.relative(before.root, file)} (${added.join(', ')})`);
+        if (added.length) found.push(`${path.relative(before.root, file).split(path.sep).join('/')} (${added.join(', ')})`);
     }
     if (found.length === 0) return;
     process.stdout.write(JSON.stringify({
