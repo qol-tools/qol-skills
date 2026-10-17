@@ -17,12 +17,12 @@ const USAGE = [
   "qols fork <problem> [--harness H] [--model M] [--effort E] [--surface S] [--park]",
   "qols bridge <task> [--harness H] [--model M] [--effort E] [--surface S]",
   "qols test <problem> [--harness H] [--model M] [--effort E] [--surface S]",
-  "qols new [--harness H] [--model M] [--effort E] [--surface S] [--park]",
+  "qols new [prompt] [--harness H] [--model M] [--effort E] [--surface S] [--park]",
   "qols switchboard [--model M] [--effort E] [--surface S]",
   "qols park",
   "fork: detached architect that owns the problem; bridge: lane that reports back here;",
   "test: a fork whose prompt is typed but not submitted, so the launch costs no tokens",
-  "new: a fresh blank session with no brief, no chat copy and no instructions",
+  "new: a fork without the chat copy; with no prompt, a blank session you type into",
   "switchboard: your one control chat; always claude, effort low unless --effort says otherwise",
   "--park lets a fork close its terminal while it waits on a long command and reopen when it ends",
   "park: toggle parking for this terminal; on, a park closes it and reopens the conversation later",
@@ -99,7 +99,8 @@ export function parsePrompt(prompt) {
     tokens.pop();
     flags.unshift(FLAGS[name], value.text);
   }
-  if (verb === "new" || verb === "switchboard") return parseTaskless(source, tokens, verb, flags);
+  if (verb === "new") return tokens.length === 0 ? { verb, flags } : { verb, message: tokens.map((t) => t.text).join(" "), flags };
+  if (verb === "switchboard") return parseTaskless(source, tokens, verb, flags);
   if (tokens.length === 0) {
     return {
       verb: "help",
@@ -127,10 +128,7 @@ function parseTaskless(source, tokens, verb, flags) {
       start: wrong.start,
       end: wrong.end,
       label: "expected only flags here",
-      notes: [
-        ...(verb === "new" ? ["help: use `qols fork <problem>` to hand over a problem"] : []),
-        `usage: ${usageFor(verb)}`,
-      ],
+      notes: [`usage: ${usageFor(verb)}`],
     },
   };
 }
@@ -181,6 +179,7 @@ export function summarizePark(state) {
 export function commandFor({ verb, message, flags }, cwd) {
   if (verb === "fork") return ["sessions", "fork", "--cwd", cwd, "--brief", message, ...flags];
   if (verb === "test") return ["sessions", "fork", "--cwd", cwd, "--brief", message, "--dry-run", ...flags];
+  if (verb === "new" && message !== undefined) return ["sessions", "fork", "--cwd", cwd, "--brief", message, "--no-chat", ...flags];
   if (verb === "new") return ["sessions", "fork", "--cwd", cwd, "--blank", ...flags];
   if (verb === "switchboard") return ["sessions", "switchboard", ...flags];
   return ["sessions", "spawn", "--cwd", cwd, "--task", message, "--background", ...flags];

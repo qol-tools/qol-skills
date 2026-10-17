@@ -137,17 +137,12 @@ test("qols new and qols switchboard parse trailing flags without a task", () => 
   for (const [prompt, expected] of cases) assert.deepEqual(parsePrompt(prompt), expected, prompt);
 });
 
-test("qols new refuses task words and points at the first one", () => {
-  for (const prompt of ["qols new fix the bug", "qols new fix it --model opus"]) {
-    const { verb, diagnostic } = parsePrompt(prompt);
-    assert.equal(verb, "help", prompt);
-    assert.equal(diagnostic.title, "`qols new` takes no task", prompt);
-    assert.equal(prompt.slice(diagnostic.start, diagnostic.end), "fix", prompt);
-    assert.deepEqual(diagnostic.notes, [
-      "help: use `qols fork <problem>` to hand over a problem",
-      "usage: qols new [--harness H] [--model M] [--effort E] [--surface S] [--park]",
-    ]);
-  }
+test("qols new carries a prompt and its trailing flags", () => {
+  const cases = [
+    ["qols new fix the bug", { verb: "new", message: "fix the bug", flags: [] }],
+    ["qols new fix it --model opus --park", { verb: "new", message: "fix it", flags: ["--model", "opus", "--park"] }],
+  ];
+  for (const [prompt, expected] of cases) assert.deepEqual(parsePrompt(prompt), expected, prompt);
 });
 
 test("qols switchboard refuses task words without the fork note", () => {
@@ -179,6 +174,9 @@ test("new and switchboard map onto the qol sessions CLI", () => {
   assert.deepEqual(commandFor({ verb: "new", flags: [] }, "/repo"), ["sessions", "fork", "--cwd", "/repo", "--blank"]);
   assert.deepEqual(commandFor({ verb: "new", flags: ["--tool", "pi", "--park"] }, "/repo"), [
     "sessions", "fork", "--cwd", "/repo", "--blank", "--tool", "pi", "--park",
+  ]);
+  assert.deepEqual(commandFor({ verb: "new", message: "fix it", flags: ["--model", "opus"] }, "/repo"), [
+    "sessions", "fork", "--cwd", "/repo", "--brief", "fix it", "--no-chat", "--model", "opus",
   ]);
   assert.deepEqual(commandFor({ verb: "switchboard", flags: [] }, "/repo"), ["sessions", "switchboard"]);
   assert.deepEqual(commandFor({ verb: "switchboard", flags: ["--effort", "high"] }, "/repo"), [
