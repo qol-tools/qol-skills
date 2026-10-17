@@ -17,15 +17,19 @@ const USAGE = [
   "qols fork <problem> [--harness H] [--model M] [--effort E] [--surface S] [--park]",
   "qols bridge <task> [--harness H] [--model M] [--effort E] [--surface S]",
   "qols test <problem> [--harness H] [--model M] [--effort E] [--surface S]",
+  "qols new [--harness H] [--model M] [--effort E] [--surface S] [--park]",
+  "qols switchboard [--model M] [--effort E] [--surface S]",
   "qols park",
   "fork: detached architect that owns the problem; bridge: lane that reports back here;",
   "test: a fork whose prompt is typed but not submitted, so the launch costs no tokens",
+  "new: a fresh blank session with no brief, no chat copy and no instructions",
+  "switchboard: your one control chat; always claude, effort low unless --effort says otherwise",
   "--park lets a fork close its terminal while it waits on a long command and reopen when it ends",
   "park: toggle parking for this terminal; on, a park closes it and reopens the conversation later",
   "values may be [aliases] from sessions.toml; left out, sessions.toml defaults apply",
 ].join("\n");
 
-const VERBS = ["fork", "bridge", "test", "park"];
+const VERBS = ["fork", "bridge", "test", "new", "switchboard", "park"];
 
 function usageFor(verb) {
   return USAGE.split("\n").find((line) => line === `qols ${verb}` || line.startsWith(`qols ${verb} `));
@@ -62,6 +66,7 @@ export function parsePrompt(prompt) {
   while (tokens.length >= 1) {
     const last = tokens.at(-1).text;
     if (verb !== "bridge" && last.startsWith("--") && Object.hasOwn(SWITCHES, last.slice(2))) {
+      if (verb === "switchboard") return refuse(source, tokens.at(-1), verb, "the switchboard does not park");
       tokens.pop();
       flags.unshift(SWITCHES[last.slice(2)]);
       continue;
@@ -87,10 +92,14 @@ export function parsePrompt(prompt) {
         },
       };
     }
+    if (verb === "switchboard" && name === "harness") {
+      return refuse(source, flag, verb, "the switchboard always runs claude");
+    }
     const value = tokens.pop();
     tokens.pop();
     flags.unshift(FLAGS[name], value.text);
   }
+  if (verb === "new" || verb === "switchboard") return parseTaskless(source, tokens, verb, flags);
   if (tokens.length === 0) {
     return {
       verb: "help",
@@ -105,6 +114,39 @@ export function parsePrompt(prompt) {
     };
   }
   return { verb, message: tokens.map((t) => t.text).join(" "), flags };
+}
+
+function parseTaskless(source, tokens, verb, flags) {
+  if (tokens.length === 0) return { verb, flags };
+  const [wrong] = tokens;
+  return {
+    verb: "help",
+    diagnostic: {
+      title: `\`qols ${verb}\` takes no task`,
+      source,
+      start: wrong.start,
+      end: wrong.end,
+      label: "expected only flags here",
+      notes: [
+        ...(verb === "new" ? ["help: use `qols fork <problem>` to hand over a problem"] : []),
+        `usage: ${usageFor(verb)}`,
+      ],
+    },
+  };
+}
+
+function refuse(source, token, verb, label) {
+  return {
+    verb: "help",
+    diagnostic: {
+      title: `\`qols ${verb}\` does not take \`${token.text}\``,
+      source,
+      start: token.start,
+      end: token.end,
+      label,
+      notes: [`usage: ${usageFor(verb)}`],
+    },
+  };
 }
 
 function parsePark(source, tokens) {
@@ -139,6 +181,8 @@ export function summarizePark(state) {
 export function commandFor({ verb, message, flags }, cwd) {
   if (verb === "fork") return ["sessions", "fork", "--cwd", cwd, "--brief", message, ...flags];
   if (verb === "test") return ["sessions", "fork", "--cwd", cwd, "--brief", message, "--dry-run", ...flags];
+  if (verb === "new") return ["sessions", "fork", "--cwd", cwd, "--blank", ...flags];
+  if (verb === "switchboard") return ["sessions", "switchboard", ...flags];
   return ["sessions", "spawn", "--cwd", cwd, "--task", message, "--background", ...flags];
 }
 
@@ -146,6 +190,10 @@ export function summarize(verb, outcome) {
   const launch = [outcome.tool, outcome.model, outcome.effort, outcome.surface].filter(Boolean).join(" ");
   if (verb === "fork") return `qols fork: ${outcome.key} (${launch})`;
   if (verb === "test") return `qols test: ${outcome.key} (${launch}); the prompt is typed but not submitted`;
+  if (verb === "new") return `qols new: ${outcome.key} (${launch})`;
+  if (verb === "switchboard" && outcome.opened === "focused") return `qols switchboard: focused ${outcome.session}`;
+  if (verb === "switchboard" && outcome.opened === "started_kitty") return `qols switchboard: started ${outcome.program} for it`;
+  if (verb === "switchboard") return `qols switchboard: ${outcome.session} (${launch})`;
   return `qols bridge: ${outcome.key} (${launch}); its report arrives here as the next prompt`;
 }
 

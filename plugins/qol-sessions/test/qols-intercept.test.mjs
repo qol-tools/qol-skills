@@ -119,3 +119,78 @@ test("qols park runs the installed CLI Sessions plugin when it exists", () => {
   assert.equal(cliSessionsBinary(env, "/home", () => true), join("/cfg", "qol-tray", "plugins", "qol-cli-sessions", binary));
   assert.equal(cliSessionsBinary(env, "/home", () => false), null);
 });
+
+test("qols new and qols switchboard parse trailing flags without a task", () => {
+  const cases = [
+    ["qols new", { verb: "new", flags: [] }],
+    [
+      "qols new --harness pi --model opus --effort max --surface win --park",
+      { verb: "new", flags: ["--tool", "pi", "--model", "opus", "--effort", "max", "--surface", "win", "--park"] },
+    ],
+    ["QOLS New --park --model opus", { verb: "new", flags: ["--park", "--model", "opus"] }],
+    ["qols switchboard", { verb: "switchboard", flags: [] }],
+    [
+      "qols switchboard --model sonnet --effort high --surface tab",
+      { verb: "switchboard", flags: ["--model", "sonnet", "--effort", "high", "--surface", "tab"] },
+    ],
+  ];
+  for (const [prompt, expected] of cases) assert.deepEqual(parsePrompt(prompt), expected, prompt);
+});
+
+test("qols new refuses task words and points at the first one", () => {
+  for (const prompt of ["qols new fix the bug", "qols new fix it --model opus"]) {
+    const { verb, diagnostic } = parsePrompt(prompt);
+    assert.equal(verb, "help", prompt);
+    assert.equal(diagnostic.title, "`qols new` takes no task", prompt);
+    assert.equal(prompt.slice(diagnostic.start, diagnostic.end), "fix", prompt);
+    assert.deepEqual(diagnostic.notes, [
+      "help: use `qols fork <problem>` to hand over a problem",
+      "usage: qols new [--harness H] [--model M] [--effort E] [--surface S] [--park]",
+    ]);
+  }
+});
+
+test("qols switchboard refuses task words without the fork note", () => {
+  const prompt = "qols switchboard hello there --effort high";
+  const { verb, diagnostic } = parsePrompt(prompt);
+  assert.equal(verb, "help");
+  assert.equal(diagnostic.title, "`qols switchboard` takes no task");
+  assert.equal(prompt.slice(diagnostic.start, diagnostic.end), "hello");
+  assert.deepEqual(diagnostic.notes, ["usage: qols switchboard [--model M] [--effort E] [--surface S]"]);
+});
+
+test("qols switchboard refuses --harness and --park", () => {
+  const cases = [
+    ["qols switchboard --harness pi", "--harness", "the switchboard always runs claude"],
+    ["qols switchboard --model opus --harness pi", "--harness", "the switchboard always runs claude"],
+    ["qols switchboard --park", "--park", "the switchboard does not park"],
+    ["qols switchboard --park --model opus", "--park", "the switchboard does not park"],
+  ];
+  for (const [prompt, token, label] of cases) {
+    const { verb, diagnostic } = parsePrompt(prompt);
+    assert.equal(verb, "help", prompt);
+    assert.equal(diagnostic.title, `\`qols switchboard\` does not take \`${token}\``, prompt);
+    assert.equal(diagnostic.label, label, prompt);
+    assert.equal(prompt.slice(diagnostic.start, diagnostic.end), token, prompt);
+  }
+});
+
+test("new and switchboard map onto the qol sessions CLI", () => {
+  assert.deepEqual(commandFor({ verb: "new", flags: [] }, "/repo"), ["sessions", "fork", "--cwd", "/repo", "--blank"]);
+  assert.deepEqual(commandFor({ verb: "new", flags: ["--tool", "pi", "--park"] }, "/repo"), [
+    "sessions", "fork", "--cwd", "/repo", "--blank", "--tool", "pi", "--park",
+  ]);
+  assert.deepEqual(commandFor({ verb: "switchboard", flags: [] }, "/repo"), ["sessions", "switchboard"]);
+  assert.deepEqual(commandFor({ verb: "switchboard", flags: ["--effort", "high"] }, "/repo"), [
+    "sessions", "switchboard", "--effort", "high",
+  ]);
+});
+
+test("the new and switchboard summaries name the session and the resolved launch", () => {
+  const forked = { key: "fork-1a2b", tool: "claude", model: "claude-opus-5-5", effort: "high", surface: "tab" };
+  assert.equal(summarize("new", forked), "qols new: fork-1a2b (claude claude-opus-5-5 high tab)");
+  const launched = { opened: "launched", session: "v1:kitty:k1", tool: "claude", model: "claude-opus-5-5", effort: "low", surface: "tab" };
+  assert.equal(summarize("switchboard", launched), "qols switchboard: v1:kitty:k1 (claude claude-opus-5-5 low tab)");
+  assert.equal(summarize("switchboard", { opened: "focused", session: "v1:kitty:k1" }), "qols switchboard: focused v1:kitty:k1");
+  assert.equal(summarize("switchboard", { opened: "started_kitty", program: "kitty" }), "qols switchboard: started kitty for it");
+});
