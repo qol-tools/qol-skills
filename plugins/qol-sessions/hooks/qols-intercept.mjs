@@ -24,7 +24,8 @@ const USAGE = [
   "test: a fork whose prompt is typed but not submitted, so the launch costs no tokens",
   "new: a fork without the chat copy; with no prompt, a blank session you type into",
   "switchboard: your one control chat; always claude, effort low unless --effort says otherwise",
-  "--park lets a fork close its terminal while it waits on a long command and reopen when it ends",
+  "--park lets a fork close its terminal while it waits on a long command and reopen when it ends;",
+  "a fork given a problem or prompt also closes once its turn ends",
   "park: toggle parking for this terminal; on, a park closes it and reopens the conversation later",
   "values may be [aliases] from sessions.toml; left out, sessions.toml defaults apply",
 ].join("\n");
