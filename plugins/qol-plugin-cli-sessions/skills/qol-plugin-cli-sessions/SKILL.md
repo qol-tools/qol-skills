@@ -47,7 +47,9 @@ Keep the reducer pure and total over previous attention and evidence - it is the
 
 ## Switchboard and knocks
 
-The sessions engine (`libs/sessions-engine`) owns the switchboard, the mailbox, the board and the knock records; this plugin serves it as `sessions` and `mcp`, shows the switchboard as the master row, and delivers knocks. The daemon's courier types a pending knock only into a recipient that is one live session, settled (your turn, acknowledged or unknown, never parked) and showing an empty prompt, so it never interrupts a turn or a draft. It claims the knock under the per-recipient lock before typing and puts it back if typing fails, so a knock is neither lost nor typed twice. A knock whose recipient is gone stays on disk until that key is live again.
+The sessions engine (`libs/sessions-engine`) owns the switchboard, the mailbox, the board and the knock records; this plugin serves it as `sessions` and `mcp`, shows the switchboard as the master row, and delivers knocks. The daemon's courier types a pending knock only into a recipient that is one live session, settled (your turn, acknowledged or unknown, never parked) and showing an empty prompt, so it never interrupts a turn or a draft. It claims the knock under the per-recipient lock before typing and puts it back if typing fails, so a knock is neither lost nor typed twice. A knock whose recipient is gone stays on disk until that key is live again. `session_send` still stores a message to a known key with no live terminal, and its result carries `live: false` so the sender, the switchboard first, tells the user the session is closed instead of reporting it sent.
+
+The switchboard's sessions server gets the user's login-shell PATH (`$SHELL -l -i -c 'exec env'`), because the tray opens the switchboard with its own login-session PATH and every session forked from it inherits that server's PATH; without it, hooks that run `node` fail in every fork. `switchboard --here` runs claude as a child and removes the window's spawn tag when it exits, so the next chat in that window is not taken for the switchboard.
 
 ## Naming and per-tool backends (the law)
 
