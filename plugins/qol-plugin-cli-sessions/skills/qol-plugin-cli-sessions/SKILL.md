@@ -1,6 +1,6 @@
 ---
 name: qol-plugin-cli-sessions
-description: Use when working on the qol-tray CLI Sessions plugin. Covers live terminal session discovery, the per-tool interpretation strategy registry, the session status state machine, screen and title signals, the always-on-top gpui overview panel, snapshots, and daemon reconciliation. Triggers on "plugin-cli-sessions", "cli sessions", session overview, needs-you or your-turn status, Kitty remote control, or terminal attention tracking.
+description: Use when working on the qol-tray CLI Sessions plugin. Covers live terminal session discovery, the per-tool interpretation strategy registry, the session status state machine, screen and title signals, the always-on-top gpui overview panel, snapshots, and daemon reconciliation. Triggers on "plugin-cli-sessions", "cli sessions", session overview, needs-you or your-turn status, Kitty remote control, terminal attention tracking, the switchboard, or session knocks.
 ---
 
 # qol-plugin-cli-sessions
@@ -18,12 +18,12 @@ CLI Sessions owns an always-on-top overview of live CLI sessions and the attenti
 
 | Path | Responsibility |
 |---|---|
-| `src/cli.rs` | Headless command surface and doctor registration. |
+| `src/cli.rs` | Headless command surface and doctor registration; `sessions` and `mcp` pass straight through to `libs/sessions-engine`. |
 | `src/host/` | Terminal-host boundary (`TerminalHost`); the implemented host drives Kitty remote control. |
 | `src/session/` | Session identity, registry, tool classification and completion policy, status, git context, and the target-selected service probe. |
 | `src/attention/` | The pure attention reducer: `Evidence` in, `Phase` and next `Attention` out. |
 | `src/signal/` | Screen and title evidence used to detect prompts and input requests. |
-| `src/daemon/` | Reconcile loop that builds `Evidence` per pane and calls the reducer, plus action dispatch. |
+| `src/daemon/` | Reconcile loop that builds `Evidence` per pane and calls the reducer, action dispatch, and the knock courier (`knocks.rs`). |
 | `src/storage/` | Session-state persistence, paths, and snapshots. |
 | `src/config/` | Typed config loading. |
 | `src/park/`, `src/parking.rs` | The `park` and `parking` commands that set a conversation aside and resume it. |
@@ -44,6 +44,10 @@ Ready and Done are the same live state on every harness, confirmed independently
 An unsubmitted draft is never on disk. No harness persists one, confirmed by waiting on live sessions with typed input for 180s, 93s and 3.5 minutes. The only draft evidence is the live composer on screen (`composer_holds_draft` and `composer_draft` in the terminal-sessions library) plus a strategy's `draft_stash` key; never infer a draft from transcripts or file activity.
 
 Keep the reducer pure and total over previous attention and evidence - it is the part worth testing exhaustively, and it is where sticky states are honored: an acknowledged session stays acknowledged at the prompt, and a `NeedsYou` session with a live pending dialog holds instead of re-alerting on every poll.
+
+## Switchboard and knocks
+
+The sessions engine (`libs/sessions-engine`) owns the switchboard, the mailbox, the board and the knock records; this plugin serves it as `sessions` and `mcp`, shows the switchboard as the master row, and delivers knocks. The daemon's courier types a pending knock only into a recipient that is one live session, settled (your turn, acknowledged or unknown, never parked) and showing an empty prompt, so it never interrupts a turn or a draft. It claims the knock under the per-recipient lock before typing and puts it back if typing fails, so a knock is neither lost nor typed twice. A knock whose recipient is gone stays on disk until that key is live again.
 
 ## Naming and per-tool backends (the law)
 
