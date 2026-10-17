@@ -49,6 +49,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const design = require('./qol-design-guard.cjs');
 const lintMode = require('./hook-lint-mode.cjs');
+const owners = require('./qol-owner-guard.cjs');
 
 const INSPECTED_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 const OS_BASENAMES = new Set(['linux.rs', 'macos.rs', 'windows.rs']);
@@ -1459,6 +1460,32 @@ function findNewDesignViolations(tool, input, filePath) {
     return violations.length > 0 ? { relative, violations } : null;
 }
 
+function blockOwner(filePath, relative, violations) {
+    lintMode.report(process.stderr, `qol-arch-code owner violation in ${filePath}.
+
+This edit names a concept that has one owner without going through it:
+
+${owners.formatViolations(relative, violations)}
+
+The repo lists its owners in .qac/owners.json, and a test in the owning crate
+keeps that list equal to the owner's definition. Use the owner's type and
+functions instead of a copy of its names or checks.
+
+Reference: qol-project:qol-arch-code skill, "Enforcement: owner guard".
+
+Bypass for this edit only:
+  touch .claude/bypass-qol-arch-code
+`);
+}
+
+function findNewOwnerViolations(filePath, newContent) {
+    const root = owners.workspaceRoot(filePath);
+    if (!root) return null;
+    const relative = owners.relativeTo(root, filePath);
+    const violations = owners.newViolations(relative, readBaseline(filePath), newContent, root);
+    return violations.length > 0 ? { relative, violations } : null;
+}
+
 function main() {
     const raw = readStdin().trim();
     if (!raw) return 0;
@@ -1506,6 +1533,12 @@ function evaluate(payload) {
     const newDeadlines = deadlineContent ? findNewTestDeadlines(filePath, deadlineContent) : [];
     if (newDeadlines.length > 0 && !consumeBypass(cwd, filePath, basename)) {
         blockTestDeadlines(filePath, newDeadlines);
+        return 2;
+    }
+
+    const ownerViolation = deadlineContent ? findNewOwnerViolations(filePath, deadlineContent) : null;
+    if (ownerViolation && !consumeBypass(cwd, filePath, basename)) {
+        blockOwner(filePath, ownerViolation.relative, ownerViolation.violations);
         return 2;
     }
 

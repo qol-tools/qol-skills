@@ -1,0 +1,252 @@
+'use strict';
+
+const test = require('node:test');
+const assert = require('node:assert');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { spawnSync } = require('node:child_process');
+
+const HOOK = path.join(__dirname, '..', 'bin', 'check-qol-arch-code.cjs');
+const { lintFile } = require(HOOK);
+const { osViolations } = require(path.join(__dirname, '..', 'bin', 'qol-owner-guard.cjs'));
+
+const OWNERS = {
+    os: {
+        owner: 'libs/platform/src/os/',
+        use: 'qol_platform::Os',
+        names: ['linux', 'macos', 'windows'],
+        labels: ['Linux', 'macOS', 'Windows'],
+        allow: [{ path: 'plugins/demo/src/registry.rs', text: 'Windows', why: 'registry key' }],
+    },
+};
+
+const OWNER = {
+    owner: OWNERS.os.owner,
+    use: OWNERS.os.use,
+    text: new Set([...OWNERS.os.names, ...OWNERS.os.labels]),
+    allow: [],
+};
+const AT = 'plugins/demo/src/lib.rs';
+const check = src => osViolations(AT, src, OWNER);
+
+function run(payload) {
+    const result = spawnSync('node', [HOOK], { input: JSON.stringify(payload), encoding: 'utf8' });
+    return { exitCode: result.status, stderr: result.stderr };
+}
+
+function repo({ rulebook = true } = {}) {
+    const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'qol-hook-'));
+    const root = path.join(temp, 'qol-monorepo');
+    fs.mkdirSync(path.join(root, '.git'), { recursive: true });
+    if (rulebook) {
+        fs.mkdirSync(path.join(root, '.qac'));
+        fs.writeFileSync(path.join(root, '.qac', 'owners.json'), JSON.stringify(OWNERS));
+    }
+    const crate = path.join(root, 'plugins', 'demo');
+    fs.mkdirSync(path.join(crate, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(crate, 'Cargo.toml'), '[package]\nname = "qol-demo"\nversion = "0.1.0"\n');
+    return root;
+}
+
+function place(root, relative, content) {
+    const file = path.join(root, relative);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    if (content !== undefined) fs.writeFileSync(file, content);
+    return file;
+}
+
+function write(file, content) {
+    return run({ tool_name: 'Write', tool_input: { file_path: file, content }, cwd: path.dirname(file) });
+}
+
+const LIST = 'pub const PLATFORMS: [&str; 3] = ["linux", "macos", "windows"];\n';
+
+const refused = [
+    ['the #174 list', LIST, 3],
+    ['compare with the std constant', 'fn f(p: &str) -> bool { p == std::env::consts::OS }', 1],
+    ['renamed import', 'use std::env::consts::OS as HOST;', 1],
+    ['module import then use', "use std::env::consts;\nfn f() -> &'static str { consts::OS }", 1],
+    ['renamed module', "use std::env::consts as c;\nfn f() -> &'static str { c::OS }", 1],
+    ['glob import', 'use std::env::consts::*;', 1],
+    ['brace import', 'use std::env::consts::{ARCH, OS};', 1],
+    ['multi-line brace import then use', "use std::env::{\n    consts,\n    var,\n};\nfn f() -> &'static str { consts::OS }", 1],
+    ['runtime cfg!', 'fn f() -> bool { cfg!(target_os = "macos") }', 1],
+    ['multi-line cfg!', 'fn f() -> bool {\n    cfg!(any(\n        target_os = "linux",\n        target_os = "macos"\n    ))\n}', 1],
+    ['env! build variable', 'const OS: &str = env!("CARGO_CFG_TARGET_OS");', 1],
+    ['build script variable', 'fn main() { let _ = std::env::var("CARGO_CFG_TARGET_OS"); }', 1],
+    ['name inside a macro', 'fn f() -> String { format!("{}", "linux") }', 1],
+    ['raw string', 'const W: &str = r#"windows"#;', 1],
+    ['byte string', 'const L: &[u8] = b"linux";', 1],
+    ['serde rename attribute', '#[serde(rename = "macos")]\nstruct M;', 1],
+    ['display label', 'const L: &str = "Windows";', 1],
+    ['macOS label', 'const L: &str = "macOS";', 1],
+    ['match arm', 'fn f(s: &str) -> u8 { match s { "linux" => 1, _ => 0 } }', 1],
+    ['after a quote char literal', "fn f() { let _c = '\"'; let _s = \"linux\"; }", 1],
+    ['after a lifetime', "fn f<'a>(_x: &'a str) -> &'a str { \"macos\" }", 1],
+];
+
+const allowed = [
+    ['cfg attribute', '#[cfg(target_os = "linux")]\nmod linux;'],
+    ['cfg any attribute', '#[cfg(any(target_os = "linux", target_os = "macos"))]\nmod unix;'],
+    ['inner cfg attribute', '#![cfg(target_os = "windows")]'],
+    ['cfg_attr', '#[cfg_attr(target_os = "macos", allow(dead_code))]\nfn f() {}'],
+    ['cfg_if', 'cfg_if::cfg_if! { if #[cfg(target_os = "linux")] { fn f() {} } }'],
+    ['line comment', '// reads "linux" here\nfn f() {}'],
+    ['nested block comment', '/* "windows" /* "macos" */ still comment */ fn f() {}'],
+    ['doc comment', '/// returns "linux"\nfn f() {}'],
+    ['toml test text in a raw string', 'const T: &str = r#"platforms = ["linux", "windows"]"#;'],
+    ['target triple', 'const T: &str = "x86_64-unknown-linux-gnu";'],
+    ['mac bundle folder', 'const D: &str = "MacOS"; const P: &str = "Contents/MacOS";'],
+    ['word inside a sentence', 'const S: &str = "close all windows";'],
+    ['escaped quotes', 'const S: &str = "say \\"linux\\"";'],
+    ['cpu constant', 'const A: &str = std::env::consts::ARCH;'],
+    ['exe suffix', 'fn f() -> String { format!("git{}", std::env::consts::EXE_SUFFIX) }'],
+    ['brace import without OS', 'use std::env::consts::{ARCH, EXE_SUFFIX};'],
+    ['windows subsystem attribute', '#![windows_subsystem = "windows"]'],
+    ['identifier named linux', 'mod linux; fn f() { linux::run() }'],
+];
+
+for (const [name, src, n] of refused) {
+    test(`refused: ${name}`, () => assert.equal(check(src).length, n, JSON.stringify(check(src))));
+}
+
+for (const [name, src] of allowed) {
+    test(`allowed: ${name}`, () => assert.deepEqual(check(src), []));
+}
+
+test('line numbers survive a string line continuation', () => {
+    const src = 'const A: &str = "one \\\ntwo";\nconst B: &str = "linux";';
+    assert.deepEqual(check(src).map(v => v.line), [3]);
+});
+
+test('line numbers survive a multi-line raw string', () => {
+    const src = 'const A: &str = r#"\none\n"#;\nconst B: &str = "linux";';
+    assert.deepEqual(check(src).map(v => v.line), [4]);
+});
+
+test('the owner folder may name the OS', () => {
+    const src = 'pub const ALL: [&str; 3] = ["linux", "macos", "windows"]; pub fn current() -> &\'static str { std::env::consts::OS }';
+    assert.deepEqual(osViolations('libs/platform/src/os/mod.rs', src, OWNER), []);
+});
+
+test('known gap: a name split on purpose is not caught', () => {
+    assert.equal(check('const L: &str = concat!("li", "nux");').length, 0);
+});
+
+test('blocks the #174 list on Write', () => {
+    const file = place(repo(), 'plugins/demo/src/platform.rs');
+    const r = write(file, LIST);
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /OS name typed as text: "linux"/);
+    assert.match(r.stderr, /use: qol_platform::Os/);
+    assert.match(r.stderr, /Enforcement: owner guard/);
+});
+
+test('blocks an OS name added by an Edit', () => {
+    const file = place(repo(), 'plugins/demo/src/lib.rs', 'pub fn host() -> &\'static str {\n    "unknown"\n}\n');
+    const r = run({
+        tool_name: 'Edit',
+        tool_input: { file_path: file, old_string: '"unknown"', new_string: '"windows"' },
+        cwd: path.dirname(file),
+    });
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /OS name typed as text: "windows"/);
+});
+
+test('blocks an OS name in an integration test', () => {
+    const file = place(repo(), 'plugins/demo/tests/resolver.rs');
+    const r = write(file, '#[test]\nfn windows_only() {\n    assert!(supports(&["windows"]));\n}\n');
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /OS name typed as text: "windows"/);
+});
+
+test('blocks an OS name in a #[cfg(test)] module', () => {
+    const file = place(repo(), 'plugins/demo/src/lib.rs');
+    const r = write(file, '#[cfg(test)]\nmod tests {\n    const P: &str = "linux";\n}\n');
+    assert.equal(r.exitCode, 2);
+});
+
+test('passes an edit that leaves existing uses alone', () => {
+    const file = place(repo(), 'plugins/demo/src/lib.rs', `${LIST}pub fn one() -> u8 {\n    1\n}\n`);
+    const r = run({
+        tool_name: 'Edit',
+        tool_input: { file_path: file, old_string: '    1\n', new_string: '    2\n' },
+        cwd: path.dirname(file),
+    });
+    assert.equal(r.exitCode, 0, r.stderr);
+});
+
+test('blocks one more copy of an existing use', () => {
+    const file = place(repo(), 'plugins/demo/src/lib.rs', 'const A: &str = "linux";\n');
+    const r = write(file, 'const A: &str = "linux";\nconst B: &str = "linux";\n');
+    assert.equal(r.exitCode, 2);
+});
+
+test('passes the owner folder', () => {
+    const file = place(repo(), 'libs/platform/src/os/mod.rs');
+    const r = write(file, `${LIST}pub fn current() -> &'static str { std::env::consts::OS }\n`);
+    assert.equal(r.exitCode, 0, r.stderr);
+});
+
+test('passes an exception the rulebook lists', () => {
+    const file = place(repo(), 'plugins/demo/src/registry.rs');
+    const r = write(file, 'pub fn key(base: &Path) -> PathBuf { base.join("Windows") }\n');
+    assert.equal(r.exitCode, 0, r.stderr);
+});
+
+test('the exception holds only for its file', () => {
+    const file = place(repo(), 'plugins/demo/src/other.rs');
+    const r = write(file, 'pub fn key(base: &Path) -> PathBuf { base.join("Windows") }\n');
+    assert.equal(r.exitCode, 2);
+});
+
+test('does nothing without a rulebook', () => {
+    const file = place(repo({ rulebook: false }), 'plugins/demo/src/platform.rs');
+    const r = write(file, LIST);
+    assert.equal(r.exitCode, 0, r.stderr);
+});
+
+test('does nothing with an unreadable rulebook', () => {
+    const root = repo({ rulebook: false });
+    place(root, '.qac/owners.json', '{ not json');
+    const r = write(place(root, 'plugins/demo/src/platform.rs'), LIST);
+    assert.equal(r.exitCode, 0, r.stderr);
+});
+
+test('passes vendored code', () => {
+    const file = place(repo(), 'vendor/gpui/src/platform.rs');
+    const r = write(file, LIST);
+    assert.equal(r.exitCode, 0, r.stderr);
+});
+
+test('a bypass marker passes one edit and then relocks', () => {
+    const root = repo();
+    const file = place(root, 'plugins/demo/src/platform.rs');
+    place(root, '.claude/bypass-qol-arch-code', '');
+    assert.equal(write(file, LIST).exitCode, 0);
+    assert.equal(fs.existsSync(path.join(root, '.claude', 'bypass-qol-arch-code')), false);
+    assert.equal(write(file, LIST).exitCode, 2);
+});
+
+test('lint reports every use without a base', () => {
+    const file = place(repo(), 'plugins/demo/src/platform.rs', LIST);
+    const messages = lintFile(file, LIST);
+    assert.equal(messages.length, 1);
+    assert.match(messages[0], /platform\.rs:1 OS name typed as text: "linux"/);
+});
+
+test('lint with a base reports only what the change added', () => {
+    const file = place(repo(), 'plugins/demo/src/platform.rs');
+    const after = `${LIST}const L: &str = "Linux";\n`;
+    const messages = lintFile(file, after, LIST);
+    assert.equal(messages.length, 1);
+    assert.match(messages[0], /"Linux"/);
+    assert.doesNotMatch(messages[0], /"linux"/);
+});
+
+test('an earlier filter still fires first', () => {
+    const file = place(repo(), 'plugins/demo/src/lib.rs');
+    const r = write(file, 'compile_error!("linux");\n');
+    assert.equal(r.exitCode, 2);
+});

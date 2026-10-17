@@ -825,6 +825,25 @@ Counts are compared before and after the edit, so existing uses (the launcher an
 
 Residual: the guard sees tokens, not data flow. It misses a kit opener that ranks another value above the signal without building an `ActiveMonitor` or calling `remembered_monitor`, a cross-process open that carries no monitor (the settings POST), and the tray's own focus and cursor stamping. Placement tests in `libs/gpui/tests/placement.rs` and guest runs cover those.
 
+### Enforcement: owner guard
+
+A concept with one owner is named only through that owner. The repo declares its owners in `.qac/owners.json` at its root; each entry names the owner folder, what to use instead, and the exceptions. A test in the owning crate fails when the entry disagrees with the owner's own definition, so the rule is derived from the code it protects, not from a list typed into this hook. With no `.qac/owners.json`, the guard does nothing.
+
+The `os` entry makes `qol_platform::Os` (owner `libs/platform/src/os/`) the only place Rust names or detects the operating system. Outside the owner the guard denies an edit that adds any of:
+
+- a string literal that is exactly an OS name or label from the entry (`"linux"`, `"Windows"`), including inside macros, raw strings and byte strings
+- the standard library's OS constant: `consts::OS` or `consts::FAMILY`, a brace or glob import of either, or `std::env::consts` imported under another name
+- a runtime OS test: `cfg!(.. target_os ..)`
+- the build-script target variable `CARGO_CFG_TARGET_OS`, in code or in a string
+
+Allowed: `#[cfg(target_os = ..)]` attributes and `cfg_if!` arms that pick code at compile time (the cross-platform rules own those), `windows_subsystem = "windows"`, comments, OS names inside a longer string (a target triple, a TOML test fixture in a raw string, the `Contents/MacOS` folder), `consts::ARCH` and `consts::EXE_SUFFIX`. An exception the entry lists by path and text, such as the `"windows"` JSON key for terminal windows in cli-sessions, passes.
+
+PR #174 (2026-10-17) added a fourth OS name list and a third "runs on this OS" check to qol-config. The platform decision rule caught the check in CI, and the fix moved the copy into `libs/config/src/platform/`, which that rule exempts as an architecture boundary. Main already held three OS lists, three OS enums and two checks, one list added by #172 the day before. The owner guard has no folder exemption: only the owner's folder may name the OS.
+
+Unlike most guards it includes tests, because a test that types `"linux"` instead of `Os::Linux` is where a copy hides. Counts are compared before and after the edit, so existing uses block only when they grow; `qac lint` without `--base` lists them all. Bypass one edit with `touch .claude/bypass-qol-arch-code`; `qac lint` in CI never consumes a bypass.
+
+Residual: the guard reads tokens. It misses a name built on purpose (`concat!("li", "nux")`, a char array), an OS read from outside the program (`uname`, `/etc/os-release`), and any concept that has no owner entry yet. Each new owner is closed by adding its entry and its lock test.
+
 ### Lint: `qac`
 
 The edit-time hooks only see new violations, so existing debt stays invisible until someone touches the file. `qac lint [path ...]` runs the qol-arch-code, cross-platform, cicd and logging hooks over whole tracked and untracked files (the whole repo when no path is given), counting every violation already there. It never consumes a bypass marker, and it skips `vendor/` and `third_party/`. Each hook exposes `lintFile(path, content, baseline)` through `bin/hook-lint-mode.cjs`, so a new filter in any of them is linted too.
