@@ -255,6 +255,21 @@ test('the implementation bridge envelope does not receive architect instructions
     assert.equal(result.stdout, '');
 });
 
+test('a session message knock receives neither the tier rule nor the bridge context', () => {
+    for (const prompt of [
+        '[qol session] 1 new message from sim-cli. Read it with session_inbox.',
+        '[qol session] board reply in thread t-1792227581-3f. Read it with session_board.',
+    ]) {
+        const result = run({
+            hook_event_name: 'UserPromptSubmit',
+            prompt,
+            cwd: '/media/kmrh47/WD_SN850X/Git/qol-skills',
+        });
+        assert.equal(result.status, 0);
+        assert.equal(result.stdout, '');
+    }
+});
+
 test('the architect bridge envelope receives the architect-receiver context', () => {
     const result = run({
         hook_event_name: 'UserPromptSubmit',

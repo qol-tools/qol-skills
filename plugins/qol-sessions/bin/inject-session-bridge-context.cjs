@@ -10,6 +10,7 @@ const LANE_PROBE_TIMEOUT_MS = 3000;
 
 const BRIDGE_ENVELOPE_PATTERN = /^\s*\[qol session bridge\](?:\s|$)/i;
 const ARCHITECT_ENVELOPE_PATTERN = /^\s*\[qol session bridge to architect\](?:\s|$)/i;
+const SESSION_KNOCK_PATTERN = /^\[qol session\] /;
 const BRIDGE_TOPIC_PATTERN = /\b(?:architect|implementer|delegate|delegation|handoff|hand off|relay|bridge|independent terminal|two terminals)\b/i;
 const BRIDGE_INTENT_PATTERN = /\b(?:send|tell|ask|await|wait|continue|reply|follow up)\b/i;
 const BRIDGE_TARGET_PATTERN = /\b(?:agent|implementer|terminal|session)\b/i;
@@ -70,7 +71,7 @@ async function readPayload() {
 function shouldInject(payload) {
     if (payload?.hook_event_name && payload.hook_event_name !== 'UserPromptSubmit') return false;
     const prompt = String(payload?.prompt || '');
-    if (BRIDGE_ENVELOPE_PATTERN.test(prompt)) return false;
+    if (BRIDGE_ENVELOPE_PATTERN.test(prompt) || SESSION_KNOCK_PATTERN.test(prompt)) return false;
     if (ARCHITECT_ENVELOPE_PATTERN.test(prompt)) return true;
     return BRIDGE_TOPIC_PATTERN.test(prompt)
         || BRIDGE_INTENT_PATTERN.test(prompt) && BRIDGE_TARGET_PATTERN.test(prompt);
@@ -125,7 +126,7 @@ function laneSpawnAvailable(run = spawnSync) {
 function shouldInjectTierRule(payload, laneAvailable = laneSpawnAvailable) {
     if (payload?.hook_event_name && payload.hook_event_name !== 'UserPromptSubmit') return false;
     const prompt = String(payload?.prompt || '');
-    if (BRIDGE_ENVELOPE_PATTERN.test(prompt)) return false;
+    if (BRIDGE_ENVELOPE_PATTERN.test(prompt) || SESSION_KNOCK_PATTERN.test(prompt)) return false;
     const cwd = payload?.cwd || process.env.PWD || '';
     if (!QOL_WORKSPACE_PATTERN.test(cwd)) return false;
     if (alreadyInContext(payload?.transcript_path, TIER_RULE_MARKER)) return false;
@@ -164,6 +165,7 @@ module.exports = {
     BRIDGE_TARGET_PATTERN,
     BRIDGE_TOPIC_PATTERN,
     QOL_WORKSPACE_PATTERN,
+    SESSION_KNOCK_PATTERN,
     TIER_RULE,
     shouldInject,
     shouldInjectTierRule,
