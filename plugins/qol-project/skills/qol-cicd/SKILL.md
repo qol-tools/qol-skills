@@ -27,6 +27,7 @@ Release units and tagging rules live in the `qol-tray-release-flow` skill; read 
 - Pin third-party actions to a commit SHA (the existing workflows all do).
 - Keep `RUSTFLAGS`/clippy at `-D warnings` parity with local checks; a workflow that is more lenient than the local gate hides breakage until release time.
 - Platform coverage derives from `plugin.toml` `platforms` - never hardcode a runner list for plugin builds.
+- Every publish job builds the registry tool (`qol-plugin-registry`) after merge, with `system-dependencies: "false"`. The `registry tool build` job in `ci.yml` builds it the same way and the merge gate needs it, so a dependency that pulls a system library into the tool fails the pull request instead of every release. `test_release_workflow_contract.py` holds that job and the publish jobs to one contract; change them together.
 - Run release pruning sub-daily at a non-zero minute and keep manual dispatch available; weekly cleanup allows bursty versioning to accumulate stale releases for too long.
 
 ## Shared build setup and cache contract
@@ -47,7 +48,7 @@ build nothing; they publish the candidate's files:
 | ci.yml process-windows | `ci-windows-sandbox` |
 | plugin-version.yml plugin_candidate | `plugin-release-${{ matrix.target }}` |
 | plugin-version.yml qol_tray candidates | `qol-tray-linux`, `qol-tray-macos`, `qol-tray-windows` |
-| release.yml / plugin-index.yml / plugin-registry-backfill.yml registry jobs | `plugin-registry` |
+| ci.yml registry-tool, and the registry jobs of release.yml / plugin-index.yml / plugin-registry-backfill.yml / qol-tray-host-publish.yml / release-prune.yml | `plugin-registry` |
 
 Every rust-cache use runs with `save-if: ${{ github.ref == 'refs/heads/main' }}`
 so only main-fed jobs save caches, plus `cache-on-failure: true` so a red
