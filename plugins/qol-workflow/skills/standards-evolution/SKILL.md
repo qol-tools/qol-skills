@@ -28,6 +28,7 @@ Any time you find yourself thinking, suggesting, or about to apply something tha
    | gpui patterns | `qol-langs:gpui-conventions` |
    | Branch / worktree / PR ceremony | `qol-workflow:git-trees` |
    | Commit format | `qol-workflow:commit` |
+   | Skills, CLI help, MCP tool descriptions | `qol-workflow:writing-skills-and-help` |
    | Push / pull / rebase rules | `qol-workflow:git-push` |
    | Universal coding, brevity, cross-cutting style invariants | `qol-workflow:coding-general` |
    | Rules that must fire on EVERY prompt, with no trigger | `qol-workflow:qol-monorepo-rules` (hook-injected) |
