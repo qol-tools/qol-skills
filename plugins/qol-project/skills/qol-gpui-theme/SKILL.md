@@ -121,7 +121,10 @@ focus halo to zero). The kit reads focus once per window: `SurfaceRoot` watches
 activation and calls `kit::enter_window(WindowLook::Quiet)` while a shown panel
 is not focused, and every other window root calls
 `kit::enter_window(WindowLook::Live)` first thing in `render`. A window never
-checks focus on its own. Toasts and popups never take focus, so they never go
+checks focus on its own. A panel that stands for other windows passes
+`Surface::stays_live_while(held)`: while `held` returns true, the root stays live
+after the panel loses focus. CLI Sessions holds while a listed session's terminal
+has keyboard focus. Toasts and popups never take focus, so they never go
 quiet, and a hidden panel reopens live.
 
 ## Ladders

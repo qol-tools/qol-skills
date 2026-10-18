@@ -69,6 +69,8 @@ Every harness-specific behavior - naming, title grammars, metadata extraction, t
 
 **Change the panel:** keep the overview keyboard-first. It is an interactive gpui surface, so it must use `SurfaceKind::OverlayPanel` (normal, focusable, with the shared overlay state applied inside the reveal gate); non-focusable window kinds silently leak keystrokes to whatever is underneath, and a plain `SurfaceKind::Panel` drops the always-on-top behavior.
 
+**Panel colours after focus leaves:** the panel goes quiet when it loses focus, except while a listed session's terminal holds keyboard focus. Discovery reports that as `SessionFacts::focused` (kitty: the focused OS window, its active tab, and that tab's active window; the Windows backend reports false), every reconcile tick records it with `Registry::observe_focus`, and `stays_live_while` reads `Registry::session_holds_focus`. Leaving the panel marks focus unread, which still holds, and reads it again 150 ms later, so jumping into a session never flashes grey. Leaving for another app greys the panel at the next read: 150 ms after leaving the panel, or the next reconcile tick (1 to 3 s) after leaving a session.
+
 ## Invariants
 
 - Terminal identity, discovery, screen reading, and focus come from the shared library; this plugin does not re-implement them or poll independently when the library exposes a subscription.
