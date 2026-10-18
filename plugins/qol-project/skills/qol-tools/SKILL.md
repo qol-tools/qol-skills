@@ -40,7 +40,7 @@ Plugins remain separate executables loaded by the host at runtime; they are neve
 - **Clean up after landing.** Remove the worktree and delete local/remote feature branches.
 - **Conventional commits.** `feat:`, `fix:`, `refactor:`, `docs:`, `chore:`, `test:`. One-liners. No fluff, no co-authors in the message.
 - **Atomic delivered commits.** The commit that lands on `main` is one coherent delivery.
-- **No pushing without being asked.** Commit locally, push at explicit session boundaries.
+- **No pushing `main` without being asked.** A worktree branch is pushed to open or update its pull request without asking, per `qol-workflow:qol-monorepo-rules`.
 - **Releases follow `qol-tray-release-flow`.** The host and every plugin under `plugins/*` with a `plugin.toml` are release units with `<id>-v*` tags.
 
 ## Install + dev flows
@@ -90,7 +90,7 @@ Plugins remain separate executables loaded by the host at runtime; they are neve
 - **No comments in code** unless a comment explains a non-obvious WHY (see `coding-general`). Rare.
 - **No emojis in code or commits** unless explicitly requested.
 - **Verify before reporting done.** `qol-workflow:qol-monorepo-rules` owns the build/test/fmt/clippy rule; follow it there and show real command output instead of assuming a result.
-- **No automatic pushing.** Commit locally. Push when asked.
+- **No automatic pushing to `main`.** Push `main` only when asked; a pull request branch needs no ask.
 - **Keyboard-first UI.** Every interaction must work via keyboard before mouse is considered.
 - **Deep modules over shallow.** Hide complexity behind clean APIs; max ~50 lines per function as guidance.
 - **Property-based tests preferred** for state machines and invariants. Example-based is fine for simpler logic.

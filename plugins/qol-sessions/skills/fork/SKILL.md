@@ -28,6 +28,7 @@ A fork is not a lane: it never reports back, nothing collects it with `session_b
    - `park`: `true` only when the user passed `--park`, or when the fork will mostly wait on long commands nobody watches; it lets the fork's terminal close while it is parked and reopen in a new tab when the wait ends, and closes the fork's tab once its turn ends, with its final message shown in a notification. Left out, the fork's tab stays open and a parked fork waits in it.
    Everything the user left out stays unset: the server resolves `[aliases]` and fills the rest from `fork_model`, `fork_effort` and `fork_surface` in `sessions.toml`.
 3. When this session is also editing that repo, tell the fork in the brief to create and use its own git worktree and leave this session's checkout alone.
+   Add no push, pull request or merge conditions the user did not state: a fork pushes its branch and opens a draft pull request on its own, and never merges it.
 4. Make exactly one `session_fork` call per problem, then continue this session's own work without waiting.
    Never bridge the fork and never call `session_spawn` for it: a fork is detached and nothing collects its result.
 5. Report in one line what was forked: the key, the harness and model, and the problem it owns.

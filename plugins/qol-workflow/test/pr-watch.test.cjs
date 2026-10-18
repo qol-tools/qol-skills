@@ -5,11 +5,12 @@ const assert = require('node:assert/strict');
 
 const { classify, parseReview, parseArgs, parseTarget, attachLogs, cleanLogLine, render, watch, EXIT } = require('../bin/pr-watch.cjs');
 
-function pr({ state = 'OPEN', checks = [], merge = 'BLOCKED', auto = true, armed = '2026-10-08T10:00:00Z', queued = false, events = [], committed = '2026-10-08T10:00:00Z', comments = [] } = {}) {
+function pr({ state = 'OPEN', draft = false, checks = [], merge = 'BLOCKED', auto = true, armed = '2026-10-08T10:00:00Z', queued = false, events = [], committed = '2026-10-08T10:00:00Z', comments = [] } = {}) {
     return {
         number: 7,
         url: 'https://github.com/o/r/pull/7',
         state,
+        isDraft: draft,
         isInMergeQueue: queued,
         mergeStateStatus: merge,
         autoMergeRequest: auto ? { enabledAt: armed } : null,
@@ -51,6 +52,13 @@ for (const [name, input, expected] of cases) {
         assert.equal(classify(input).outcome, expected);
     });
 }
+
+test('classify tells a green draft to stay unarmed', () => {
+    const verdict = classify(pr({ draft: true, auto: false, checks: [run('lint', 'COMPLETED', 'SUCCESS')] }));
+    assert.equal(verdict.outcome, 'idle');
+    assert.match(verdict.reasons[0], /draft; leave auto-merge off/);
+    assert.equal(classify(pr({ draft: true, auto: false, checks: [run('lint', 'IN_PROGRESS')] })).outcome, 'pending');
+});
 
 test('classify names every failed check and the conflict', () => {
     const verdict = classify(pr({ merge: 'DIRTY', checks: [run('lint', 'COMPLETED', 'FAILURE'), status('queue', 'FAILURE')] }));

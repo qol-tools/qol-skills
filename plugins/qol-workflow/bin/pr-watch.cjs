@@ -19,7 +19,7 @@ const LEFT_FOR_YOU = /(\d+) left for you/;
 const REVIEW_FAILED = /Review failed|Fixing failed|outside this pull request|Nothing was changed/;
 
 const QUERY = `query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){
-number url state isInMergeQueue mergeStateStatus autoMergeRequest{enabledAt}
+number url state isDraft isInMergeQueue mergeStateStatus autoMergeRequest{enabledAt}
 commits(last:1){nodes{commit{oid committedDate statusCheckRollup{contexts(first:100){nodes{__typename
 ... on CheckRun{name status conclusion detailsUrl}
 ... on StatusContext{context state targetUrl}}}}}}}
@@ -170,6 +170,9 @@ function classify(pr, since = null) {
     if (review?.needs_you) return { ...base, outcome: 'review', reasons: [`${review.kind}: ${review.summary.join(' ')}`], review };
 
     const settled = checks.length > 0 && checks.every((check) => check.done);
+    if (settled && pr.isDraft) {
+        return { ...base, outcome: 'idle', reasons: ['checks are green on a draft; leave auto-merge off and report it ready for the user to mark ready'] };
+    }
     if (settled && !pr.autoMergeRequest && !pr.isInMergeQueue) {
         return { ...base, outcome: 'idle', reasons: ['checks are green but auto-merge is not armed'] };
     }

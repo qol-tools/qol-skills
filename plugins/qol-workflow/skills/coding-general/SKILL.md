@@ -172,7 +172,7 @@ Both fixes above included a concrete metric (`200 cd events: 18 s → 35 ms`). W
 
 ## Do NOT
 
-- Push unless explicitly asked
+- Push `main` unless explicitly asked (a pull request branch needs no ask)
 - Skip hooks (--no-verify) or bypass signing
 - Repeat boilerplate - if two files have the same structural markup, extract a shared component
 - Create parallel systems - if an existing component does something similar, extend it

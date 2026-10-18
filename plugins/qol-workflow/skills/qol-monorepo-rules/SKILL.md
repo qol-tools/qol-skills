@@ -29,13 +29,21 @@ after `gh pr ready`. The one exception: when the user says they are testing or
 holding a pull request, run `gh pr merge --disable-auto <number>` and wait for
 their word.
 
+## Never ask whether to push or open a pull request
+
+Finished work on a worktree branch is pushed and opened as a pull request
+without asking. Where you would otherwise hold it for the user, such as a new
+feature whose design was not agreed or work a fork finished on its own, open it
+as a draft with `gh pr create --draft`: no auto-merge, and the user marks it
+ready. Skip the push only when the user said not to push.
+
 ## Every pull request is watched until it merges
 
 A pull request you open is yours until it merges. Do not report it done at
 `gh pr create`; listen for its outcome and fix what fails.
 
 <!-- inject:pr-watch:start -->
-[qol-pr-watch] When this command succeeds, park this session on the pull request watcher and end your turn with one line saying what you wait for: `<qol-cli-sessions> park -- node <qol-workflow>/bin/pr-watch.cjs <pr-url> --pretty`. The terminal stays open and the watcher's exit code and output are submitted into it when it exits, unless parking is on for this session: then the terminal closes once the turn ends and qol resumes this same conversation in a new tab with the result. Park's output says which applies. If park itself fails, report the error to the user; never run the watcher outside park. Exit 1 is a failure with the failed steps' logs: fix it on the branch, gate locally, push, and park on the watcher again. Exit 7 is review feedback from the qol-code-review bot: fix the findings it left for you, pull the branch first when the bot pushed a fix commit, then park on the watcher again. Exit 0 is merged; exit 6 means arm `gh pr merge --auto`. Never poll with sleep loops or repeated `gh pr checks`. Skip only a pull request the user is testing or holding.
+[qol-pr-watch] When this command succeeds, park this session on the pull request watcher and end your turn with one line saying what you wait for: `<qol-cli-sessions> park -- node <qol-workflow>/bin/pr-watch.cjs <pr-url> --pretty`. The terminal stays open and the watcher's exit code and output are submitted into it when it exits, unless parking is on for this session: then the terminal closes once the turn ends and qol resumes this same conversation in a new tab with the result. Park's output says which applies. If park itself fails, report the error to the user; never run the watcher outside park. Exit 1 is a failure with the failed steps' logs: fix it on the branch, gate locally, push, and park on the watcher again. Exit 7 is review feedback from the qol-code-review bot: fix the findings it left for you, pull the branch first when the bot pushed a fix commit, then park on the watcher again. Exit 0 is merged; exit 6 means arm `gh pr merge --auto`, except on a draft: leave it unarmed and report it ready for the user. Never poll with sleep loops or repeated `gh pr checks`. Skip only a pull request the user is testing or holding.
 <!-- inject:pr-watch:end -->
 
 The watcher polls GitHub inside its own process, so no turn is spent until
