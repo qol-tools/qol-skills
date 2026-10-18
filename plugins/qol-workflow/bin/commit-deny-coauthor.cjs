@@ -16,6 +16,8 @@
 
 const fs = require('node:fs');
 
+const QOL_PATH_COMPONENT = /(^|[\\/])qol-[^\\/]+([\\/]|$)/;
+
 const COMMIT_INVOCATION = /(^|[\s;&|`])git\s+([a-z-]+\s+)*commit(\s|$)/;
 const PR_INVOCATION = /(^|[\s;&|`(])gh\s+pr\s+(create|edit|comment)(\s|$)/;
 
@@ -89,6 +91,8 @@ function main() {
     } catch {
         return 0;
     }
+
+    if (!QOL_PATH_COMPONENT.test(payload.cwd || process.cwd())) return 0;
 
     const tool = payload.tool_name || payload.tool || '';
     if (tool !== 'Bash') return 0;

@@ -6,6 +6,8 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
+const QOL_PATH_COMPONENT = /(^|[\\/])qol-[^\\/]+([\\/]|$)/;
+
 const PR_START = /(^|[\s;&|`(])gh\s+pr\s+(create|ready)(\s|$)/;
 const PR_AUTO_MERGE = /(^|[\s;&|`(])gh\s+pr\s+merge\s[^;&|\n]*--auto(\s|$)/;
 const MERGE_REF = /gh\s+pr\s+merge\s(?:[^;&|\n]*?\s)?(https:\/\/\S+\/pull\/\d+|\d+)(?=\s|$)/;
@@ -115,6 +117,7 @@ function main() {
         return 0;
     }
     if ((payload.tool_name || payload.tool) !== 'Bash') return 0;
+    if (!QOL_PATH_COMPONENT.test(payload.cwd || process.cwd())) return 0;
     if (silenced()) return 0;
 
     const command = payload.tool_input?.command ?? '';

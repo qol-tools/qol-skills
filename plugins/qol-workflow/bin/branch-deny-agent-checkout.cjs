@@ -24,6 +24,8 @@
 const fs = require('node:fs');
 const { CHECKOUT_OR_SWITCH, classify } = require('./branch-deny-checkout-in-main-clone.cjs');
 
+const QOL_PATH_COMPONENT = /(^|[\\/])qol-[^\\/]+([\\/]|$)/;
+
 function readStdin() {
     try {
         return fs.readFileSync(0, 'utf8');
@@ -58,6 +60,8 @@ function main() {
     } catch {
         return 0;
     }
+
+    if (!QOL_PATH_COMPONENT.test(payload.cwd || process.cwd())) return 0;
 
     if ((payload.tool_name || payload.tool || '') !== 'Bash') return 0;
     const cmd = (payload.tool_input && payload.tool_input.command) || '';

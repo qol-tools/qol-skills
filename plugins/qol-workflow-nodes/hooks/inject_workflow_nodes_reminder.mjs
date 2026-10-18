@@ -3,6 +3,8 @@ import { mkdirSync, existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 
+const QOL_PATH_COMPONENT = /(^|[\\/])qol-[^\\/]+([\\/]|$)/;
+
 const REMINDER = [
     "[workflow-nodes - this session]",
     "When work repeats or spans fragile steps, look for an input -> output workflow node before doing manual tool chains.",
@@ -33,6 +35,7 @@ const payload = await readPayload();
 if (payload?.hook_event_name && payload.hook_event_name !== "UserPromptSubmit") {
     process.exit(0);
 }
+if (!QOL_PATH_COMPONENT.test(payload.cwd || process.cwd())) process.exit(0);
 
 const sid = payload.session_id || payload.sessionId || "";
 if (!sid) {

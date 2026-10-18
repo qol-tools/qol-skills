@@ -15,3 +15,9 @@ test('emits valid SessionStart additionalContext envelope', () => {
     assert.match(payload.hookSpecificOutput.additionalContext, /Recompile button/);
     assert.match(payload.hookSpecificOutput.additionalContext, /qol-tray-dev-recompile/);
 });
+
+test('stays silent outside a qol-* tree', () => {
+    const r = spawnSync('node', [HOOK], { input: JSON.stringify({ cwd: '/home/u/Git/Economy' }), encoding: 'utf8' });
+    assert.equal(r.status, 0);
+    assert.equal(r.stdout, '');
+});

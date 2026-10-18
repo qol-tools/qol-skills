@@ -5,6 +5,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { trigger, parkBinary } = require('./pr-watch-context.cjs');
 
+const QOL_PATH_COMPONENT = /(^|[\\/])qol-[^\\/]+([\\/]|$)/;
+
 const HOOK_NAME = 'pr-watch-park-guard';
 const WATCHER_RUN = /(^|[\s;&|`(])node\s+\S*pr-watch\.cjs(\s|$)/;
 const PARKED_RUN = /(^|[\s;&|`(])\S*qol-cli-sessions(?:\.exe)?\s+park\b[^;&|\n]*\s--\s+node\s+\S*pr-watch\.cjs(\s|$)/;
@@ -85,6 +87,7 @@ function blockStop(hit) {
 }
 
 function decide(payload, readTranscript = (path) => fs.readFileSync(path, 'utf8'), exec) {
+    if (!QOL_PATH_COMPONENT.test(payload?.cwd || process.cwd())) return null;
     const event = payload?.hook_event_name;
     if (event === 'PreToolUse') {
         if ((payload.tool_name || payload.tool) !== 'Bash') return null;

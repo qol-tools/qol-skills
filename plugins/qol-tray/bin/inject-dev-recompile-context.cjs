@@ -10,6 +10,20 @@
 
 'use strict';
 
+const fs = require('node:fs');
+
+const QOL_PATH_COMPONENT = /(^|[\\/])qol-[^\\/]+([\\/]|$)/;
+
+function sessionCwd() {
+    try {
+        return JSON.parse(fs.readFileSync(0, 'utf8')).cwd || process.cwd();
+    } catch {
+        return process.cwd();
+    }
+}
+
+if (!QOL_PATH_COMPONENT.test(sessionCwd())) process.exit(0);
+
 const CONTEXT = `qol-tray dev-restart cheat sheet (load before any qol-tray daemon analysis):
 - Recompile is triggered from the qol dev dashboard (ctrl+r, or Enter on the Tray row), which POSTs /api/dev/recompile-self. No in-app Recompile button exists.
 - One recompile = full teardown: kill_all_plugin_processes -> stop_plugin_daemons (daemon_lifecycle begin_stop/finish_stops) -> manager.plugins.clear -> daemon_tracker registry::clear_all -> kill_orphan_daemons -> exec_restart(staged qol-tray binary).

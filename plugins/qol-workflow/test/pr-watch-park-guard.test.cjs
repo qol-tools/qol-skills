@@ -51,7 +51,7 @@ function bash(command, ok = true) {
 
 function stop(lines, extra = {}, exec = () => null) {
     const transcript = lines.flat().join('\n');
-    return decide({ hook_event_name: 'Stop', transcript_path: '/t.jsonl', cwd: '/repo', ...extra }, () => transcript, exec);
+    return decide({ hook_event_name: 'Stop', transcript_path: '/t.jsonl', cwd: '/work/qol-monorepo', ...extra }, () => transcript, exec);
 }
 
 const openPr = (cmd) => (cmd === 'git' ? 'feat' : JSON.stringify({ url: URL, state: 'OPEN' }));

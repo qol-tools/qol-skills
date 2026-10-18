@@ -1,7 +1,20 @@
 #!/usr/bin/env node
 'use strict';
 
+const fs = require('node:fs');
 const { spawnSync } = require('node:child_process');
+
+const QOL_PATH_COMPONENT = /(^|[\\/])qol-[^\\/]+([\\/]|$)/;
+
+function sessionCwd() {
+    try {
+        return JSON.parse(fs.readFileSync(0, 'utf8')).cwd || process.cwd();
+    } catch {
+        return process.cwd();
+    }
+}
+
+if (!QOL_PATH_COMPONENT.test(sessionCwd())) process.exit(0);
 
 function currentQolHelp() {
     const result = spawnSync('qol', ['--help'], {

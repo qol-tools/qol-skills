@@ -87,7 +87,7 @@ test('the reader flag silences the reminder', () => {
 });
 
 function runHook(command, env = {}) {
-    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'pr-watch-home-'));
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'qol-pr-watch-home-'));
     return spawnSync('node', [HOOK], {
         input: JSON.stringify({ tool_name: 'Bash', tool_input: { command }, cwd: home }),
         encoding: 'utf8',
