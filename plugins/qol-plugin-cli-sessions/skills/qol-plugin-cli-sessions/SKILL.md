@@ -47,6 +47,8 @@ An unsubmitted draft is never on disk. No harness persists one, confirmed by wai
 
 A park labels a session only at rest: `park_status` turns a settled status into Parked, but Working, Service and Needs you show through, because a session that parks with its terminal kept can be woken by a message or the user while its watcher still waits.
 
+A parked conversation whose tab closed keeps a Parked row with no terminal behind it, so the user can find it and press Enter to reopen it: a park still waiting on its command whose runner lives, and a finished park whose runner closed the tab after its turn (`closed_at` on the record). Only the newest park of a conversation counts, and the row goes once any live session holds that conversation; the daemon then clears `closed_at`, so a reopened tab the user closes later is not parked again. Enter runs `park::open`, which reopens a finished park and resumes a waiting one in a new tab without stopping its command, so the result is still submitted when it exits; `unpark` instead stops the wait. Forks park only when asked (`session_fork` `park: true` or `qol sessions fork --park`), the switchboard's included.
+
 Keep the reducer pure and total over previous attention and evidence - it is the part worth testing exhaustively, and it is where sticky states are honored: an acknowledged session stays acknowledged at the prompt, and a `NeedsYou` session with a live pending dialog holds instead of re-alerting on every poll.
 
 ## Switchboard and knocks
