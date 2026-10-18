@@ -135,6 +135,23 @@ function repoRoot(cwd) {
     return result.status === 0 ? result.stdout.trim() : null;
 }
 
+function commonDir(cwd) {
+    const result = spawnSync('git', ['-C', cwd, 'rev-parse', '--git-common-dir'], { encoding: 'utf8' });
+    if (result.status !== 0) return null;
+    try {
+        return fs.realpathSync(path.resolve(cwd, result.stdout.trim()));
+    } catch {
+        return null;
+    }
+}
+
+function gateDir(base, dir) {
+    const target = workingDir(base, dir);
+    if (target === base) return base;
+    const own = commonDir(base);
+    return own && commonDir(target) === own ? target : base;
+}
+
 function refusal(root, title) {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qol-pr-title-'));
     const file = path.join(dir, 'subject');
@@ -198,7 +215,7 @@ function main() {
     const found = prTitle(command);
     if (!found) return 0;
     const base = (payload.tool_input && payload.tool_input.cwd) || payload.cwd || process.cwd();
-    const root = repoRoot(workingDir(base, found.dir));
+    const root = repoRoot(gateDir(base, found.dir));
     if (!root || !fs.existsSync(path.join(root, '.githooks', 'commit-msg'))) return 0;
     if (found.title === null) {
         if (found.verb === 'create') emitDeny(MISSING_TITLE, `pass --title "${TITLE_SHAPE}" (at most 72 characters, scope from the workspace members); --fill is refused.`);

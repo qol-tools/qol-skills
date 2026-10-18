@@ -118,12 +118,33 @@ test('allows a conventional title', () => {
     assert.equal(run('gh pr create --title "feat(tray): draw marks" --body x', repo({ gate: true })), null);
 });
 
-test('checks the title against the repository a cd names', () => {
+function worktreeOf(main, scopes) {
+    const git = (...args) => spawnSync('git', ['-C', main, '-c', 'user.name=t', '-c', 'user.email=t@t', ...args]);
+    git('commit', '--quiet', '--allow-empty', '-m', 'init');
+    const branch = `${main}-topic`;
+    git('worktree', 'add', '--quiet', '-b', 'topic', branch);
+    fs.mkdirSync(path.join(branch, '.githooks'));
+    fs.writeFileSync(path.join(branch, '.githooks', 'commit-msg'), GATE);
+    fs.writeFileSync(path.join(branch, 'scopes'), scopes);
+    return branch;
+}
+
+test('checks the title against a worktree of the same repository a cd names', () => {
     const main = repo({ gate: true, scopes: 'tray' });
-    const branch = repo({ gate: true, scopes: 'tray update-manager' });
+    const branch = worktreeOf(main, 'tray update-manager');
     assert.equal(run(`cd ${branch} && gh pr create --title "feat(update-manager): add it" --body x`, main), null);
     denyLines(run('gh pr create --title "feat(update-manager): add it" --body x', main));
     denyLines(run('cd /no/such/dir && gh pr create --title "feat(update-manager): add it"', main));
+});
+
+test('never runs the gate of a foreign repository a cd names', () => {
+    const main = repo({ gate: true, scopes: 'tray' });
+    const foreign = repo({ gate: false });
+    const marker = path.join(foreign, 'ran');
+    fs.mkdirSync(path.join(foreign, '.githooks'));
+    fs.writeFileSync(path.join(foreign, '.githooks', 'commit-msg'), `#!/usr/bin/env bash\ntouch "${marker}"\nexit 0\n`);
+    denyLines(run(`cd ${foreign} && gh pr create --title "feat(update-manager): add it"`, main));
+    assert.equal(fs.existsSync(marker), false);
 });
 
 test('denies gh pr create without a title and allows an edit without one', () => {

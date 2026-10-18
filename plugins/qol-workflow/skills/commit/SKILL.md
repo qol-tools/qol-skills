@@ -67,8 +67,10 @@ released.
 
 Enforced by `bin/pr-deny-unconventional-title.cjs`, which runs the repository's
 own `.githooks/commit-msg` on the `gh pr create` / `gh pr edit` title and
-refuses `gh pr create` without `--title`. It checks the repository a leading
-`cd` names, so a new plugin's scope passes from its worktree, and it ignores
+refuses `gh pr create` without `--title`. When a leading `cd` names a worktree
+of the session's own repository it runs that worktree's gate, so a new plugin's
+scope passes; any other directory's gate never runs, since the hook executes
+before permission approval. It ignores
 `gh pr create` written inside a heredoc body or a quoted string. Its deny names
 the actual length against the 72 cap, or the nearest and all allowed scopes.
 Incident: 26 PR-title denials in 10 days (over 72 characters 11, unknown scope
