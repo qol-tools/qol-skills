@@ -20,6 +20,14 @@ qol-skills is the exception: commit skill, hook, and plugin edits direct to
 
 Issues and ADRs remain opt-in. Mechanics: `qol-workflow:git-trees`.
 
+## Commit subjects and pull request titles
+
+Every commit subject and pull request title is `<type>(scope): imperative summary`,
+at most 72 characters with type and scope included, and the scope's first token
+is a workspace member or umbrella (`cli-sessions`, `sessions-engine`, `plugins`),
+never a short form like `sessions`. Always pass `gh pr create --title`; `--fill`
+is refused. Details: `qol-workflow:commit`.
+
 ## Every pull request merges itself
 
 Right after `gh pr create` in a qol-tools repository, run `gh pr merge --auto <number>`

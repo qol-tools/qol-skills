@@ -36,6 +36,12 @@ optional body explaining WHY when non-obvious
 - `type`: `feat`, `fix`, `refactor`, `chore`, `docs`, `test`, `perf`, `wip`, `style`
 - `scope` is optional; use it when a single area is touched (`fix(alt-tab): ...`)
 - Subject in imperative mood ("Add", not "Added" / "Adds")
+- Subject at most 72 characters, type and scope included; count it before you
+  run `git commit` or `gh pr create`
+- In qol-monorepo the scope's first token is a workspace member or umbrella
+  (`cli-sessions`, `sessions-engine`, `tray`, `plugins`), never a short form
+  such as `sessions`; `. .githooks/commit-msg-lib.sh && qol_derive_scopes .`
+  in the checkout prints the list
 - No trailing period in the subject
 - Wrap body at ~72 chars
 - A direct-to-main commit (explicit ask only) is one coherent logical delivery
@@ -52,6 +58,7 @@ subject: `feat` bumps minor, `fix` and `perf` bump patch, `!` or
 `BREAKING CHANGE` bumps major, and any other title releases nothing. Title every
 pull request `<type>(scope): summary` under the same rules as a commit, and use
 the highest-impact type of the commits it carries (one `feat` makes it `feat`).
+Always pass `--title`; `--fill` is refused.
 
 Incident: PR #40 was titled "Launcher and settings marks from one drawn set",
 so its two `feat` commits never counted. qol-tray and the launcher went out as
@@ -60,7 +67,12 @@ released.
 
 Enforced by `bin/pr-deny-unconventional-title.cjs`, which runs the repository's
 own `.githooks/commit-msg` on the `gh pr create` / `gh pr edit` title and
-refuses `gh pr create` without `--title`. Residual: a title built by shell
+refuses `gh pr create` without `--title`. It checks the repository a leading
+`cd` names, so a new plugin's scope passes from its worktree, and it ignores
+`gh pr create` written inside a heredoc body or a quoted string. Its deny names
+the actual length against the 72 cap, or the nearest and all allowed scopes.
+Incident: 26 PR-title denials in 10 days (over 72 characters 11, unknown scope
+7, no `--title` 7), each a retry. Residual: a title built by shell
 expansion or set in the web UI is not seen; the merge queue's "Squash subject is
 conventional" step refuses it there, and versioning also reads the `* type:`
 lines GitHub lists in a squash body.

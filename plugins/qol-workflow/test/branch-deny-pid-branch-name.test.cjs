@@ -21,9 +21,19 @@ function run(command, cwd = QOL_CWD) {
     const obj = JSON.parse(r.stdout);
     return {
         decision: obj.hookSpecificOutput && obj.hookSpecificOutput.permissionDecision,
+        reason: obj.hookSpecificOutput && obj.hookSpecificOutput.permissionDecisionReason,
         exit: r.status,
     };
 }
+
+test('deny text is a plain line then the tagged hint', () => {
+    const r = run('git checkout -b tray-32-integration');
+    assert.equal(r.exit, 0);
+    const lines = r.reason.split('\n');
+    assert.equal(lines.length, 2);
+    assert.match(lines[0], /^Branch name "tray-32-integration" looks PID-prefixed/);
+    assert.match(lines[1], /^\[branch-deny-pid-branch-name\] pick a topic name .* # intentional/);
+});
 
 test('blocks PID-prefixed branch names across every creation flag', () => {
     const cases = [

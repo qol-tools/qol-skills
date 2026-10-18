@@ -68,14 +68,9 @@ function inQolToolsTree(cwd) {
     return QOL_PATH_COMPONENT.test(cwd);
 }
 
-function emitDeny(name, command) {
-    const reason = `Branch name "${name}" looks PID-prefixed; qol worktree branches need topic-led names because \`qol dev <worktree>\` selects the dev build by branch name and a topic outlives any single issue or PR.
-
-Command: ${command.trim()}
-
-Pick a topic name instead (e.g. wasm, theming, sync-v2). See the qol-workflow:git-trees skill, section "Branch naming".
-
-Bypass (rare, genuine single-repo work): append \` # intentional\` to the command.`;
+function emitDeny(name) {
+    const reason = `Branch name "${name}" looks PID-prefixed; qol worktree branches need a topic-led name because \`qol dev <worktree>\` selects the dev build by branch name and a topic outlives any single issue or PR.
+[branch-deny-pid-branch-name] pick a topic name such as wasm, theming or sync-v2 (qol-workflow:git-trees, "Branch naming"), or append \` # intentional\` for genuine single-repo work.`;
 
     process.stdout.write(JSON.stringify({
         hookSpecificOutput: {
@@ -112,7 +107,7 @@ function main() {
     if (!name) return 0;
     if (!PID_PATTERN.test(name)) return 0;
 
-    emitDeny(name, cmd);
+    emitDeny(name);
     return 0;
 }
 
