@@ -50,7 +50,7 @@ Measured in `mint-22.3-cinnamon-6.6.7-qol-2` (the `image_revision` in `flows/env
 - Daemon-backed surfaces (alt-tab, launcher, qol-shot) and global hotkeys: a daemon holds one X connection, and an X grab on `:N` sees only `:N`. They stay on `:0`.
 - Tray-route dispatch: a lane starts the plugin binary, the CLI-inline path. For a runtime command with no daemon, such as the explorer's `open`, that matches the tray route except for the environment. For anything else, trigger on `:0` through the tray action endpoint.
 - Cinnamon itself: lanes run metacity. The panel, Cinnamon placement rules and its compositor need `:0`.
-- Monitor size: a lane is 1100x700 unless `-screen` says otherwise.
+- Monitor size: a lane is 1100x700 unless `-screen` says otherwise. The explorer's 1040x640 window lands at 60,53 under metacity, so that screen clips its bottom 53 px: give `-screen` 1200x800 (and the capture `-video_size` to match) or move the window to 0,0 with `xdotool windowmove`.
 
 ## Extending
 
