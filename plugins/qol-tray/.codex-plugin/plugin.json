@@ -1,6 +1,6 @@
 {
   "name": "qol-tray",
-  "version": "0.6.22",
+  "version": "0.6.23",
   "description": "Host-app plugin for qol-tray: a backend specialist agent plus deep skills for core architecture (qol-tray-core), Rust internals, data migrations, the Profile feature, dev recompile, release flow, and apps-testing. Includes hooks for dev-recompile context, uncited architecture claims, and reflecting agent learnings.",
   "author": {
     "name": "KMRH47"
