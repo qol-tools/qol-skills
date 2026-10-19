@@ -95,10 +95,12 @@ This policy applies to every file migration that moves existing user data; see t
 ## Sync conflicts: auto-settle what has an order, ask about the rest
 
 `libs/profile-sync/src/merge.rs` merges by setting. In `plugins.lock.json`, an
-entry both machines changed keeps the one with the higher `version`; an explicit
-user pick still wins, and the user is asked only when versions are equal or do
-not parse. A version clash is plugin update drift, never a choice to put to the
-user.
+entry both machines changed keeps the one with the higher `version` only when
+the entries differ in nothing but `version` and `platforms` and neither side is
+below the shared base version. An explicit user pick still wins. Any other edit,
+such as a `repo_url` change or a rollback, and versions that are equal or do not
+parse, still go to the user. Pure update drift is never a choice to put to the
+user; dropping the other side's real edit is worse.
 
 Every remaining clash must be resolvable from the native settings panel. While
 `conflict_count > 0`, the Profiles sync status row opens the review card
