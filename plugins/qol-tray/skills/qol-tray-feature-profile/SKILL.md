@@ -92,6 +92,21 @@ When a file migration moves `src` to `dst` and `dst` already exists, never silen
 
 This policy applies to every file migration that moves existing user data; see the migrations registered in `PreFlightRegistry::current()` for live examples. Future migrations of that shape MUST follow it. The `MigrationReport.archived` list contains only fresh src-to-dst moves; collision archives do not appear there - downstream consumers count `archived.len()` as the number of files newly placed, not the number of files touched.
 
+## Sync conflicts: auto-settle what has an order, ask about the rest
+
+`libs/profile-sync/src/merge.rs` merges by setting. In `plugins.lock.json`, an
+entry both machines changed keeps the one with the higher `version`; an explicit
+user pick still wins, and the user is asked only when versions are equal or do
+not parse. A version clash is plugin update drift, never a choice to put to the
+user.
+
+Every remaining clash must be resolvable from the native settings panel. While
+`conflict_count > 0`, the Profiles sync status row opens the review card
+(`/api/sync/conflicts`), which names each setting, shows both values, preselects
+the side edited more recently, and applies through
+`/api/sync/conflicts/resolve`. A status row that only lists backups for a
+conflict is a dead end; that shipped once and left users with no next step.
+
 ## Sync conflict backups are cross-machine recovery, not local-only
 
 Conflict backups are intentionally tracked by the synced profile repository so
