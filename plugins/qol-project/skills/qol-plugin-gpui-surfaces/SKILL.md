@@ -229,6 +229,14 @@ selects) are documented in `qol-project:qol-shared-libs`.
   last-focused window's monitor). Toasts use `snapshot_cursor` corners.
   qol-arch-code's active-monitor guard denies windows opened outside the
   kit and `ActiveMonitor`s built outside `qol_gpui::monitor`.
+- **The Surface picks each kind's native chrome; show and hide only change
+  visibility.** The `SurfaceKind` reveal path calls the chrome entry points
+  (`configure_popup_window`, `configure_overlay_window`,
+  `disable_window_shadow`, ...) while the window is still hidden. Kit windows
+  are transparent and draw `float_shadow`, so a toast's native shadow is off:
+  macOS builds the shadow of a clear window from its alpha and traces the soft
+  shadow into a stepped dark edge. qol-arch-code's owner guard (`window chrome`
+  entry) denies chrome calls outside those entry points.
 - **Panels reveal only after placement and fresh content settle.** Muffin
   places WM-managed Normal windows itself; `Surface` maps the real view behind
   a zero-opacity/input-passthrough native gate and asserts the origin. On Linux

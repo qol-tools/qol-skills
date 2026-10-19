@@ -9,7 +9,7 @@ const { spawnSync } = require('node:child_process');
 
 const HOOK = path.join(__dirname, '..', 'bin', 'check-qol-arch-code.cjs');
 const { lintFile } = require(HOOK);
-const { osViolations } = require(path.join(__dirname, '..', 'bin', 'qol-owner-guard.cjs'));
+const { osViolations, callViolations } = require(path.join(__dirname, '..', 'bin', 'qol-owner-guard.cjs'));
 
 const OWNERS = {
     os: {
@@ -18,6 +18,13 @@ const OWNERS = {
         names: ['linux', 'macos', 'windows'],
         labels: ['Linux', 'macOS', 'Windows'],
         allow: [{ path: 'plugins/demo/src/registry.rs', text: 'Windows', why: 'registry key' }],
+    },
+    'window chrome': {
+        owner: ['libs/gpui/src/popup_window/platform/', 'libs/gpui/src/platform/'],
+        use: 'a chrome entry point the Surface calls before the window shows',
+        calls: ['setHasShadow', 'setStyleMask', 'DwmSetWindowAttribute', 'override_redirect'],
+        entry_points: ['disable_window_shadow', 'square_window_corners'],
+        allow: [{ path: 'libs/gpui/src/popup_window/platform/windows.rs', text: 'cloak', why: 'cloaking hides the window' }],
     },
 };
 
@@ -249,4 +256,107 @@ test('an earlier filter still fires first', () => {
     const file = place(repo(), 'plugins/demo/src/lib.rs');
     const r = write(file, 'compile_error!("linux");\n');
     assert.equal(r.exitCode, 2);
+});
+
+const CHROME = {
+    concept: 'window chrome',
+    folders: OWNERS['window chrome'].owner,
+    use: OWNERS['window chrome'].use,
+    calls: OWNERS['window chrome'].calls,
+    entryPoints: new Set(OWNERS['window chrome'].entry_points),
+    allow: OWNERS['window chrome'].allow.map(item => `${item.path}\0${item.text}`),
+};
+const MACOS = 'libs/gpui/src/popup_window/platform/macos.rs';
+const chrome = (src, at = MACOS) => callViolations(at, src, CHROME);
+const PR_210 = 'fn show_window_by_title_with_focus(title: &str) -> bool {\n    window.setLevel(level);\n    if notice {\n        window.setHasShadow(false);\n    }\n    true\n}\n';
+const ENTRY = 'pub fn disable_window_shadow(title: &str) -> bool {\n    window.setHasShadow(false);\n    true\n}\n';
+
+const chromeRefused = [
+    ['the #210 show function', PR_210, 1],
+    ['a closure inside a show function', 'fn show(w: &W) { run(move || w.setHasShadow(false)); }', 1],
+    ['a function nested in an entry point', 'fn disable_window_shadow() { fn inner(w: &W) { w.setHasShadow(false); } }', 1],
+    ['a free function call', 'fn hide(h: HWND) { unsafe { DwmSetWindowAttribute(h, 1, p, 4); } }', 1],
+    ['a builder method', 'fn grab(c: &C) { let aux = Aux::new().override_redirect(1); }', 1],
+    ['two calls in one function', 'fn show(w: &W) { w.setHasShadow(false); w.setStyleMask(m); }', 2],
+    ['an entry point name with a suffix', 'fn disable_window_shadow_now(w: &W) { w.setHasShadow(false); }', 1],
+    ['an array return type before the body', 'fn show(w: &W) -> [u8; 2] { w.setHasShadow(false); [0, 0] }', 1],
+];
+
+const chromeAllowed = [
+    ['an entry point', ENTRY],
+    ['an entry point after a trait method without a body', 'trait T { fn show(&self); }\n' + ENTRY],
+    ['a comment', 'fn show(w: &W) { /* w.setHasShadow(false) */ }'],
+    ['a string', 'fn show() -> &\'static str { "setHasShadow(false)" }'],
+    ['the definition of a function with that name', 'fn setHasShadow(flag: bool) {}'],
+    ['a longer identifier', 'fn show(c: &C, w: u32) -> bool { window_is_override_redirect(c, w) }'],
+    ['an import', 'use windows_sys::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_CLOAK};'],
+    ['a function the rulebook allows', 'fn cloak(h: HWND) { unsafe { DwmSetWindowAttribute(h, 1, p, 4); } }'],
+];
+
+for (const [name, src, n] of chromeRefused) {
+    test(`chrome refused: ${name}`, () => assert.equal(chrome(src).length, n, JSON.stringify(chrome(src))));
+}
+
+const WINDOWS = 'libs/gpui/src/popup_window/platform/windows.rs';
+
+for (const [name, src] of chromeAllowed) {
+    test(`chrome allowed: ${name}`, () => assert.deepEqual(chrome(src, src.includes('fn cloak') ? WINDOWS : MACOS), []));
+}
+
+test('chrome names the call and the function', () => {
+    const [violation] = chrome(PR_210);
+    assert.equal(violation.line, 4);
+    assert.equal(violation.what, 'window chrome set by setHasShadow in fn show_window_by_title_with_focus');
+});
+
+test('an entry point outside the owner folders is refused', () => {
+    assert.equal(chrome(ENTRY, 'libs/gpui/src/surface/mod.rs').length, 1);
+});
+
+test('the allowed function holds only for its file', () => {
+    assert.equal(chrome('fn cloak(h: HWND) { unsafe { DwmSetWindowAttribute(h, 1, p, 4); } }').length, 1);
+});
+
+test('chrome in vendored code passes', () => {
+    assert.deepEqual(chrome(PR_210, 'vendor/gpui/src/platform/mac/window.rs'), []);
+});
+
+test('blocks the #210 shadow call on Write', () => {
+    const file = place(repo(), MACOS);
+    const r = write(file, PR_210);
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /window chrome set by setHasShadow in fn show_window_by_title_with_focus/);
+    assert.match(r.stderr, /use: a chrome entry point the Surface calls/);
+    assert.match(r.stderr, /Enforcement: owner guard/);
+});
+
+test('passes moving the shadow call into its entry point', () => {
+    const file = place(repo(), MACOS, PR_210);
+    const r = write(file, ENTRY);
+    assert.equal(r.exitCode, 0, r.stderr);
+});
+
+test('passes an edit beside an existing chrome call', () => {
+    const file = place(repo(), MACOS, PR_210);
+    const r = run({
+        tool_name: 'Edit',
+        tool_input: { file_path: file, old_string: '    true\n', new_string: '    false\n' },
+        cwd: path.dirname(file),
+    });
+    assert.equal(r.exitCode, 0, r.stderr);
+});
+
+test('lint reports existing chrome calls without a base', () => {
+    const file = place(repo(), MACOS, PR_210);
+    const messages = lintFile(file, PR_210);
+    assert.equal(messages.length, 1);
+    assert.match(messages[0], /macos\.rs:4 window chrome set by setHasShadow/);
+});
+
+test('a rulebook without an os entry still guards chrome', () => {
+    const root = repo({ rulebook: false });
+    place(root, '.qac/owners.json', JSON.stringify({ 'window chrome': OWNERS['window chrome'] }));
+    const file = place(root, MACOS);
+    assert.equal(write(file, PR_210).exitCode, 2);
+    assert.equal(write(place(root, 'plugins/demo/src/platform.rs'), LIST).exitCode, 0);
 });

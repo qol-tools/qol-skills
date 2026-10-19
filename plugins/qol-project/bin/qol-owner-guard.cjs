@@ -30,13 +30,16 @@ function relativeTo(root, filePath) {
     return path.relative(root, filePath).split(path.sep).join('/');
 }
 
-function loadOsOwner(root) {
-    let entry;
+function readRulebook(root) {
     try {
-        entry = JSON.parse(fs.readFileSync(path.join(root, OWNERS_FILE), 'utf8')).os;
+        return JSON.parse(fs.readFileSync(path.join(root, OWNERS_FILE), 'utf8'));
     } catch {
         return null;
     }
+}
+
+function osOwnerFrom(rulebook) {
+    const entry = rulebook?.os;
     if (!entry || typeof entry.owner !== 'string' || !Array.isArray(entry.names)) return null;
     return {
         owner: entry.owner,
@@ -44,6 +47,33 @@ function loadOsOwner(root) {
         text: new Set([...entry.names, ...(entry.labels || [])]),
         allow: (entry.allow || []).map(item => `${item.path}\0${item.text}`),
     };
+}
+
+function loadOsOwner(root) {
+    return osOwnerFrom(readRulebook(root));
+}
+
+function callOwnersFrom(rulebook) {
+    if (!rulebook || typeof rulebook !== 'object') return [];
+    const owned = [];
+    for (const [concept, entry] of Object.entries(rulebook)) {
+        if (!entry || !Array.isArray(entry.calls) || !Array.isArray(entry.entry_points)) continue;
+        const folders = [entry.owner].flat().filter(folder => typeof folder === 'string');
+        if (folders.length === 0) continue;
+        owned.push({
+            concept,
+            folders,
+            use: entry.use || 'the owner',
+            calls: entry.calls.filter(call => /^[A-Za-z_][A-Za-z0-9_]*$/.test(call)),
+            entryPoints: new Set(entry.entry_points),
+            allow: (entry.allow || []).map(item => `${item.path}\0${item.text}`),
+        });
+    }
+    return owned;
+}
+
+function loadCallOwners(root) {
+    return callOwnersFrom(readRulebook(root));
 }
 
 function lex(src) {
@@ -183,15 +213,74 @@ function osViolations(relative, content, owner) {
     return found.sort((a, b) => a.line - b.line);
 }
 
+function functionSpans(code) {
+    const spans = [];
+    for (const match of code.matchAll(/\bfn\s+([A-Za-z_][A-Za-z0-9_]*)/g)) {
+        let depth = 0;
+        let j = match.index + match[0].length;
+        while (j < code.length) {
+            const c = code[j];
+            if (c === '(' || c === '[') depth++;
+            else if (c === ')' || c === ']') depth--;
+            else if (depth === 0 && (c === '{' || c === ';')) break;
+            j++;
+        }
+        if (code[j] !== '{') continue;
+        const start = j;
+        let braces = 0;
+        do {
+            if (code[j] === '{') braces++;
+            else if (code[j] === '}') braces--;
+            j++;
+        } while (j < code.length && braces > 0);
+        spans.push({ name: match[1], start, end: j });
+    }
+    return spans;
+}
+
+function enclosingFunction(spans, offset) {
+    let best = null;
+    for (const span of spans) {
+        if (span.start <= offset && offset < span.end && (!best || span.start > best.start)) best = span;
+    }
+    return best ? best.name : null;
+}
+
+function callViolations(relative, content, owner) {
+    if (!relative.endsWith('.rs') || /^(?:vendor|third_party)\//.test(relative)) return [];
+    if (owner.calls.length === 0) return [];
+    const { code } = lex(content);
+    const spans = functionSpans(code);
+    const inside = owner.folders.some(folder => relative.startsWith(folder));
+    const found = [];
+    const pattern = new RegExp(`(?<!\\bfn\\s+)\\b(${owner.calls.join('|')})\\s*\\(`, 'g');
+    for (const match of code.matchAll(pattern)) {
+        const name = enclosingFunction(spans, match.index);
+        if (inside && owner.entryPoints.has(name)) continue;
+        if (name && owner.allow.includes(`${relative}\0${name}`)) continue;
+        const where = name ? `fn ${name}` : 'code outside a function';
+        found.push({ line: lineAt(code, match.index), what: `${owner.concept} set by ${match[1]} in ${where}`, use: owner.use });
+    }
+    return found;
+}
+
+function ownerViolations(relative, content, os, calls) {
+    const found = os ? osViolations(relative, content, os) : [];
+    for (const owner of calls) found.push(...callViolations(relative, content, owner));
+    return found.sort((a, b) => a.line - b.line);
+}
+
 function newViolations(relative, before, after, root) {
-    const owner = loadOsOwner(root);
-    if (!owner) return [];
+    const rulebook = readRulebook(root);
+    const os = osOwnerFrom(rulebook);
+    const calls = callOwnersFrom(rulebook);
+    if (!os && calls.length === 0) return [];
     const counts = new Map();
-    for (const violation of osViolations(relative, before || '', owner)) {
+    for (const violation of ownerViolations(relative, before || '', os, calls)) {
         counts.set(violation.what, (counts.get(violation.what) || 0) + 1);
     }
     const fresh = [];
-    for (const violation of osViolations(relative, after, owner)) {
+    for (const violation of ownerViolations(relative, after, os, calls)) {
         const left = counts.get(violation.what) || 0;
         if (left > 0) {
             counts.set(violation.what, left - 1);
@@ -209,4 +298,14 @@ function formatViolations(relative, violations) {
     return shown.join('\n');
 }
 
-module.exports = { lex, loadOsOwner, osViolations, newViolations, workspaceRoot, relativeTo, formatViolations };
+module.exports = {
+    lex,
+    loadOsOwner,
+    loadCallOwners,
+    osViolations,
+    callViolations,
+    newViolations,
+    workspaceRoot,
+    relativeTo,
+    formatViolations,
+};

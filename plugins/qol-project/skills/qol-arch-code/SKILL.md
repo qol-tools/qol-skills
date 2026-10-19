@@ -840,9 +840,13 @@ Allowed: `#[cfg(target_os = ..)]` attributes and `cfg_if!` arms that pick code a
 
 PR #174 (2026-10-17) added a fourth OS name list and a third "runs on this OS" check to qol-config. The platform decision rule caught the check in CI, and the fix moved the copy into `libs/config/src/platform/`, which that rule exempts as an architecture boundary. Main already held three OS lists, three OS enums and two checks, one list added by #172 the day before. The owner guard has no folder exemption: only the owner's folder may name the OS.
 
+An entry with `calls` and `entry_points` owns a set of calls instead of a set of names: outside the listed functions in the owner folders, the guard denies an edit that adds a call to any of them. The function is the innermost `fn` around the call, so a closure counts as the function it sits in, and an exception names a file and a function. A function definition, an import, a comment, a string and a longer identifier (`window_is_override_redirect`) are not calls.
+
+The `window chrome` entry makes the window chrome entry points in `libs/gpui/src/popup_window/platform/` and `libs/gpui/src/platform/` the only places that set a native window's shadow, style mask, collection or animation behavior, opacity, title bar, hide-on-deactivate, DWM attribute, extended style or X11 override-redirect. The Surface layer picks the chrome for each `SurfaceKind` and calls those entry points while the window is still hidden; `show_*` and `hide_*` only change visibility. Level, alpha, background color and mouse passthrough are how macOS shows and hides a window, so they stay out of the list. PR #210 (2026-10-19) put `setHasShadow(false)` inside the macOS show function for toasts while `disable_window_shadow` already existed, which left the toast's chrome invisible from the Surface code that owns it. Its lock test lives in `libs/gpui/tests/owners.rs`.
+
 Unlike most guards it includes tests, because a test that types `"linux"` instead of `Os::Linux` is where a copy hides. Counts are compared before and after the edit, so existing uses block only when they grow; `qac lint` without `--base` lists them all. Bypass one edit with `touch .claude/bypass-qol-arch-code`; `qac lint` in CI never consumes a bypass.
 
-Residual: the guard reads tokens. It misses a name built on purpose (`concat!("li", "nux")`, a char array), an OS read from outside the program (`uname`, `/etc/os-release`), and any concept that has no owner entry yet. Each new owner is closed by adding its entry and its lock test.
+Residual: the guard reads tokens. It misses a name built on purpose (`concat!("li", "nux")`, a char array), an OS read from outside the program (`uname`, `/etc/os-release`), chrome set through a call the entry does not list (an X11 property such as `_MOTIF_WM_HINTS`, `msg_send!` with a selector), and any concept that has no owner entry yet. Each new owner is closed by adding its entry and its lock test.
 
 ### Lint: `qac`
 
