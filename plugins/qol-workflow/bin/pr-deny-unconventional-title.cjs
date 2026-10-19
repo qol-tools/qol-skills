@@ -139,7 +139,7 @@ function commonDir(cwd) {
     const result = spawnSync('git', ['-C', cwd, 'rev-parse', '--git-common-dir'], { encoding: 'utf8' });
     if (result.status !== 0) return null;
     try {
-        return fs.realpathSync(path.resolve(cwd, result.stdout.trim()));
+        return fs.realpathSync.native(path.resolve(cwd, result.stdout.trim()));
     } catch {
         return null;
     }

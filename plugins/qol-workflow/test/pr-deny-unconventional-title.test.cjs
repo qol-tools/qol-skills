@@ -132,7 +132,7 @@ function worktreeOf(main, scopes) {
 test('checks the title against a worktree of the same repository a cd names', () => {
     const main = repo({ gate: true, scopes: 'tray' });
     const branch = worktreeOf(main, 'tray update-manager');
-    assert.equal(run(`cd ${branch} && gh pr create --title "feat(update-manager): add it" --body x`, main), null);
+    assert.equal(run(`cd '${branch}' && gh pr create --title "feat(update-manager): add it" --body x`, main), null);
     denyLines(run('gh pr create --title "feat(update-manager): add it" --body x', main));
     denyLines(run('cd /no/such/dir && gh pr create --title "feat(update-manager): add it"', main));
 });
@@ -143,7 +143,7 @@ test('never runs the gate of a foreign repository a cd names', () => {
     const marker = path.join(foreign, 'ran');
     fs.mkdirSync(path.join(foreign, '.githooks'));
     fs.writeFileSync(path.join(foreign, '.githooks', 'commit-msg'), `#!/usr/bin/env bash\ntouch "${marker}"\nexit 0\n`);
-    denyLines(run(`cd ${foreign} && gh pr create --title "feat(update-manager): add it"`, main));
+    denyLines(run(`cd '${foreign}' && gh pr create --title "feat(update-manager): add it"`, main));
     assert.equal(fs.existsSync(marker), false);
 });
 
