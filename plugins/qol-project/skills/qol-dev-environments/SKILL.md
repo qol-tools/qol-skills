@@ -1,6 +1,6 @@
 ---
 name: qol-dev-environments
-description: Operate, debug, and evolve the `qol dev` Sandbox panel and its disposable OS environments. Use for typed sandbox workers, artifact-backed `qol dev` guests, host-built bundle transport, verified qcow2 import, `qol env`, `qol flow`, prepared desktop images, guest control, QEMU lifecycle or recovery, resource admission, clean-session plugin testing, and parallel guest work that must stay off the user's active desktop session. Also use whenever a task reproduces, debugs, or verifies qol runtime desktop behavior (plugin windows, hotkeys, previews, popups, tray actions) which happens in a guest, not on the host session.
+description: Operate, debug, and evolve the `qol dev` Sandbox panel and its disposable OS environments. Use for typed sandbox workers, artifact-backed `qol dev` guests, host-built bundle transport, verified qcow2 import, `qol env`, `qol flow`, prepared desktop images, guest control, QEMU lifecycle or recovery, resource admission, clean-session plugin testing, and parallel guest work that must stay off the user's active desktop session, including several agents testing plugin windows at once in one guest. Also use whenever a task reproduces, debugs, or verifies qol runtime desktop behavior (plugin windows, hotkeys, previews, popups, tray actions) which happens in a guest, not on the host session.
 ---
 
 # qol-dev-environments
@@ -32,6 +32,7 @@ Treat the CLI output, environment definitions, implementation source, and run re
 | Inspect, screenshot, or stop detached guests | `qol env runs`, `qol env shot`, `qol env down` |
 | Run a command in a guest as its desktop user | `qol env exec <selector> <absolute-program> [args...]` |
 | Drive the guest pointer to reproduce a gesture | `qol env drag <selector> <x1,y1> <x2,y2>`, `qol emu key` |
+| Drive several plugin windows at once without input collisions | one nested Xephyr display per lane in one guest, see [references/parallel-displays.md](references/parallel-displays.md) |
 | Reconcile interrupted fan-outs | `qol flow runs` |
 | Debug the backend below environment orchestration | `qol emu` |
 
@@ -215,3 +216,4 @@ Do not claim runtime parity for a host that was only compile-checked. Do not cla
 - Read `references/env-registry.md` when defining or resolving environments and adapters.
 - Read `references/qemu-backend.md` when touching boot, identity, process ownership, or teardown.
 - Read `references/result-report-contract.md` when writing, reconciling, or consuming run evidence.
+- Read `references/parallel-displays.md` when several agents or scenarios must drive plugin windows at once in one guest.
