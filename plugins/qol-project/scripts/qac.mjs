@@ -3,23 +3,39 @@ import { fileURLToPath } from "node:url";
 import { HOOKS, fixBrief, lint, renderHelp } from "../src/qac.mjs";
 import { progressReporter } from "../src/progress.mjs";
 import { openReport, writeReport } from "../src/report.mjs";
+import { listSlips, recordSlip, renderSlip, renderSlips } from "../src/slips.mjs";
 
-export const EXIT = { clean: 0, findings: 1, usage: 2, notRepo: 3 };
+export const EXIT = { clean: 0, findings: 1, usage: 2, notRepo: 3, forkFailed: 4 };
+
+const VALUE_FLAGS = ["prefix", "cwd", "base", "from", "infeasible", "rules-repo"];
 
 export function parseArgs(argv) {
-  const flags = argv.filter(arg => arg.startsWith("--"));
-  const positionals = argv.filter(arg => !arg.startsWith("--"));
-  const prefix = flags.find(flag => flag.startsWith("--prefix="))?.slice("--prefix=".length) || "qac";
-  const cwd = flags.find(flag => flag.startsWith("--cwd="))?.slice("--cwd=".length) || process.cwd();
-  const base = flags.find(flag => flag.startsWith("--base="))?.slice("--base=".length) || null;
+  const values = {};
+  const flags = [];
+  const positionals = [];
+  for (let index = 0; index < argv.length; index++) {
+    const arg = argv[index];
+    if (!arg.startsWith("--")) {
+      positionals.push(arg);
+      continue;
+    }
+    const [name, inline] = arg.slice(2).split(/=(.*)/s);
+    if (!VALUE_FLAGS.includes(name)) flags.push(arg);
+    else if (inline !== undefined) values[name] = inline;
+    else values[name] = argv[++index] ?? "";
+  }
   return {
     verb: (positionals[0] ?? "help").toLowerCase(),
     paths: positionals.slice(1),
     pretty: flags.includes("--pretty"),
     open: flags.includes("--open"),
-    prefix,
-    cwd,
-    base,
+    added: flags.includes("--added"),
+    prefix: values.prefix || "qac",
+    cwd: values.cwd || process.cwd(),
+    base: values.base || null,
+    from: values.from || null,
+    infeasible: values.infeasible || null,
+    rulesRepo: values["rules-repo"] || null,
   };
 }
 
@@ -33,14 +49,30 @@ export function summaryLine(result, prefix) {
 export function run(argv, {
   out = text => process.stdout.write(`${text}\n`),
   deps = {},
+  ledger = {},
   progress = progressReporter,
   write = writeReport,
   open = openReport,
 } = {}) {
   const args = parseArgs(argv);
   if (args.verb === "help") {
-    out(args.pretty ? renderHelp(args.prefix) : JSON.stringify({ verbs: ["lint", "fix"] }));
+    out(args.pretty ? renderHelp(args.prefix) : JSON.stringify({ verbs: ["lint", "fix", "slip", "slips"] }));
     return EXIT.clean;
+  }
+  if (args.verb === "slips") {
+    const slips = listSlips(ledger);
+    out(args.pretty ? renderSlips(slips, args.prefix) : JSON.stringify({ slips }));
+    return EXIT.clean;
+  }
+  if (args.verb === "slip") {
+    const pattern = args.paths.join(" ").trim();
+    if (!/[a-z0-9]/i.test(pattern)) {
+      out(`${args.prefix} slip: name the pattern qac missed\n${renderHelp(args.prefix)}`);
+      return EXIT.usage;
+    }
+    const result = recordSlip(pattern, { ...args, cli: fileURLToPath(import.meta.url) }, ledger);
+    out(args.pretty ? renderSlip(result, args.prefix) : JSON.stringify(result));
+    return result.error ? EXIT.forkFailed : EXIT.clean;
   }
   if (args.verb !== "lint" && args.verb !== "fix") {
     out(`${args.prefix}: unknown verb "${args.verb}"\n${renderHelp(args.prefix)}`);
