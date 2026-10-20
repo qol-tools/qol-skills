@@ -185,6 +185,14 @@ extend `settings_panel/` instead. What the kit module guarantees:
     pops one card, then ascends to the rail, then dismisses the panel. Left
     never goes back; Left/Right only step a number edit or a list card's item
     slider. Plugins do not create local category cards or navigation state.
+12. Every setting has one home: one contract field on one page, or one
+    native core page. A second page that edits it is a deliberate shortcut
+    listed in `DELIBERATE_SHORTCUTS`, and a native core page lists the core
+    settings it edits in `NATIVE_PAGE_SETTINGS`. The panel hides a section
+    header whose only row repeats it, so that row reads as part of the group
+    above; rename or merge such a section unless it is the page's first
+    group. `apps/tray/src/settings_surface/platform/setting_homes.rs` fails
+    CI on either.
 
 Contract field capabilities (options on string_array, query-backed
 selects) are documented in `qol-project:qol-shared-libs`.
