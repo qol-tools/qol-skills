@@ -106,6 +106,7 @@ claude = ["claude-sonnet-5-5"]
 ```
 
 A launch whose tool/model pair the mapping does not declare is refused, an omitted harness resolves only when the model is declared for one tool, and `allowed_models` stays the independent spending allowlist.
+An entry ending in `*` in either list matches every model with that prefix (`claude = ["claude-*"]`), so a model the harness ships later launches without a config edit. An exact entry wins over a wildcard when resolving the harness, a tool-only spawn defaults to the tool's first exact entry, and a model named with `*` is refused.
 
 - Never source a tool or model name from your own harness prompt, environment, or model list: a name sitting in your context describes your context, not this host, and filling the tier choice from it is a silent default, which the refusal rule forbids. The binding above, the config, and the spawn records are the only valid sources.
 - Verify the lane's tier right after spawn from the target's model indicator. A lane that came up on the wrong tier is closed and respawned with the explicit model before any work is bridged.
