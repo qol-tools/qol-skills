@@ -31,6 +31,11 @@
     },
     {
       "event": "PreToolUse",
+      "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+      "command": "node bin/check-qol-plugin-data.cjs"
+    },
+    {
+      "event": "PreToolUse",
       "matcher": "Bash",
       "command": "node bin/check-qol-logging.cjs"
     },

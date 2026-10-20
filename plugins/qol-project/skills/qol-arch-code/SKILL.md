@@ -848,9 +848,24 @@ Unlike most guards it includes tests, because a test that types `"linux"` instea
 
 Residual: the guard reads tokens. It misses a name built on purpose (`concat!("li", "nux")`, a char array), an OS read from outside the program (`uname`, `/etc/os-release`), chrome set through a call the entry does not list (an X11 property such as `_MOTIF_WM_HINTS`, `msg_send!` with a selector), and any concept that has no owner entry yet. Each new owner is closed by adding its entry and its lock test.
 
+### Enforcement: plugin data guard
+
+A plugin ships, in its `plugin.toml`, the entries that let a user reach it. The tray builds launcher entries only from manifest data: `[[shortcuts]]` with `export_to_launcher` (the default) become launcher apps, a `[launcher]` table becomes a launcher flow, and an action with `kind = "settings"` becomes "Settings > <name>". A plugin that leaves them out still installs and runs, so nothing else notices.
+
+The explorer plugin shipped `[action.open]` with no shortcut and no flow, so its Open row in qol settings was the only way to start it.
+
+`bin/check-qol-plugin-data.cjs` enforces this at edit time on a `plugin.toml` in a qol repository. It denies an edit that adds either gap:
+
+- an `[action.open]` run action that no exported `[[shortcuts]]` entry with `action = "open"` and no `[launcher]` table reaches. `qol-launcher` (it would open itself) and `qol-alt-tab` (a hotkey picker) are exempt in the hook.
+- a `qol-config.toml` beside the manifest with no `kind = "settings"` action. The tray hosts that page itself only when `[capabilities] gpui = true`.
+
+Gaps are compared before and after the edit, so a manifest that already had one only blocks when the edit adds a new one. `qac lint` without `--base` lists them all. There is no bypass: ship the entry in the same edit, or add a plugin that must not have one to the hook's exempt set with its reason.
+
+Residual: the tray renders no plugin `[menu]` items (only its own Settings and mode toggle), so a tray menu entry is not plugin data and this guard does not ask for one. An open action under another id, or a window opened only by a runtime action, passes.
+
 ### Lint: `qac`
 
-The edit-time hooks only see new violations, so existing debt stays invisible until someone touches the file. `qac lint [path ...]` runs the qol-arch-code, cross-platform, cicd and logging hooks over whole tracked and untracked files (the whole repo when no path is given), counting every violation already there. It never consumes a bypass marker, and it skips `vendor/` and `third_party/`. Each hook exposes `lintFile(path, content, baseline)` through `bin/hook-lint-mode.cjs`, so a new filter in any of them is linted too.
+The edit-time hooks only see new violations, so existing debt stays invisible until someone touches the file. `qac lint [path ...]` runs the qol-arch-code, cross-platform, cicd, logging and plugin data hooks over whole tracked and untracked files (the whole repo when no path is given), counting every violation already there. It never consumes a bypass marker, and it skips `vendor/` and `third_party/`. Each hook exposes `lintFile(path, content, baseline)` through `bin/hook-lint-mode.cjs`, so a new filter in any of them is linted too.
 
 The rules come in two kinds, and lint treats them differently.
 Rules about the code as it stands (cfg placement, facade coverage, source layout, adapter-exclusive helpers, allow attributes) hold or fail on a file alone, so lint checks them on every file.
