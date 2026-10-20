@@ -702,7 +702,7 @@ All three should be replaced with the trait+impls pattern above.
 
 ## Enforcement: PreToolUse hook
 
-This skill ships with a Claude Code PreToolUse hook (`bin/check-qol-arch-code.cjs`) that blocks Edit/Write/MultiEdit/NotebookEdit operations introducing the violations listed above. Cross-platform checks are active on `*.rs` files under a `qol-*` repo path; plugin-layout checks activate when the nearest crate root contains `plugin.toml`. Specifically blocks:
+This skill ships with a Claude Code PreToolUse hook (`bin/check-qol-arch-code.cjs`) that blocks Edit/Write/MultiEdit/NotebookEdit operations introducing the violations listed above. Cross-platform checks are active on `*.rs` files in a qol-tools repository, recognized by a `qol` or `qol-*` folder in the path or by a git remote under `github.com/qol-tools/`, whatever the checkout or worktree folder is called; plugin-layout checks activate when the nearest crate root contains `plugin.toml`. Specifically blocks:
 
 - New Rust implementation modules directly under a plugin's `src/` root. Only `main.rs`, `lib.rs`, and optional `cli.rs` may be introduced there.
 - New `name.rs` + `name/` module hybrids in any Rust crate. Modules with children use `name/mod.rs`.

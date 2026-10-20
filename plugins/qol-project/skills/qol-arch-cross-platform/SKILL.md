@@ -109,6 +109,38 @@ registers a hook with `qol_process::on_stop_request` (or waits on
 `qol_process::CancellationToken`). The hook blocks a new host-state call in a
 plugin crate that has none of these.
 
+### 9. A platform function does real work on macOS and Linux, or on neither
+
+Every function a `platform/mod.rs` re-exports must exist in every adapter, so
+the OS that lacks the feature gets a stub written to satisfy the compiler. A
+stub that returns a neutral value (`false`, `None`, `0`, an empty collection,
+`""`) or claims success (`true`, `Ok(())`) gives the shared caller no effect
+and no error: on that OS the feature is silently absent. `set_input_region_by_title`
+returned `false` on macOS while Linux shaped the launcher's input region, so
+the empty area under the panel swallowed clicks and the launcher never
+dismissed. Since June 2026, ten fix commits replaced such a stub after it
+shipped, all on macOS or Linux, most in `libs/gpui/src/popup_window`.
+
+A stub is right when that OS has no such concept (override-redirect, a dock
+window type, a journal unit, hidraw on macOS). Otherwise implement it, or
+return a typed `Err` the caller can see (rule 4), so the gap is visible.
+
+When an edit writes a silent stub into a macOS or Linux adapter while the
+other of the two implements the same function, or writes the implementation
+while the other keeps a stub, the hook adds a note to the edit naming the stub,
+its line and the shared callers. The note never blocks the edit and `qac lint`
+never reports it, because existing stubs are mostly correct and only the
+author of the stub knows which kind it is. What it skips:
+
+- unit functions (`{}`), `Err`/`bail!` stubs and explicit `Unsupported`-style
+  variants, which either cannot report or already report the gap;
+- per-OS values (a non-empty string, a non-zero number, a chosen enum variant)
+  and `fn new() -> Self { Self::default() }`;
+- `fallback` and `windows` adapters, and macOS/Linux stubs whose only live
+  sibling is Windows: Windows gaps are port work tracked by its own features;
+- a stub already present before the edit, or moved unchanged from another
+  macOS or Linux adapter file of the same crate.
+
 ## Refactor recipe: relocating a leaky shared symbol
 
 When you discover a symbol in a shared module is causing dead_code on another platform (typical CI signal: `unused: KEY_LEFTCTRL` on macOS), do this:

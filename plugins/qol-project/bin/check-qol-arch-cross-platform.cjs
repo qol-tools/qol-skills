@@ -37,7 +37,6 @@ const path = require('node:path');
 
 const INSPECTED_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 
-const QOL_TOOLS_PATH_RE = /[\\/]qol-[^\\/]+[\\/]/;
 const PLATFORM_PATH_RE = /[\\/]platform[\\/]/;
 const TESTS_PATH_RE = /[\\/]tests[\\/]/;
 const EXAMPLES_PATH_RE = /[\\/]examples[\\/]/;
@@ -81,6 +80,8 @@ const USE_STATEMENT = /^\s*(?:pub(?:\([^)]*\))?\s+)?use\s+/;
 const ATTRIBUTE_LINE = /^\s*#\[/;
 
 const lintMode = require('./hook-lint-mode.cjs');
+const { inQolRepo } = require('./qol-repo.cjs');
+const oneOsStubs = require('./one-os-stubs.cjs');
 
 function readStdin() {
     try {
@@ -424,6 +425,22 @@ Bypass for this edit only:
 `);
 }
 
+function noteOneOsStubs(filePath, newContent) {
+    if (lintMode.active()) return;
+    try {
+        const notes = oneOsStubs.findOneOsStubs(filePath, readExistingFile(filePath) || '', newContent);
+        if (notes.length === 0) return;
+        process.stdout.write(JSON.stringify({
+            hookSpecificOutput: {
+                hookEventName: 'PreToolUse',
+                additionalContext: oneOsStubs.describe(notes),
+            },
+        }) + '\n');
+    } catch {
+        return;
+    }
+}
+
 function isExempt(filePath) {
     const basename = crossPlatformBasename(filePath);
     if (PLATFORM_PATH_RE.test(filePath)) return true;
@@ -569,7 +586,7 @@ function evaluate(payload) {
     const input = payload.tool_input || {};
     const filePath = input.file_path || input.notebook_path || '';
     if (!filePath || !filePath.endsWith('.rs')) return 0;
-    if (!QOL_TOOLS_PATH_RE.test(filePath)) return 0;
+    if (!inQolRepo(filePath)) return 0;
     const cwd = payload.cwd || process.cwd();
     const marker = path.join(cwd, '.claude', 'bypass-qol-arch-cross-platform');
     const newContent = extractNewContent(tool, { ...input, file_path: filePath });
@@ -588,6 +605,8 @@ function evaluate(payload) {
         blockWindowsViolations(filePath, windowsViolations);
         return 2;
     }
+
+    noteOneOsStubs(filePath, newContent);
 
     if (isExempt(filePath)) return 0;
 

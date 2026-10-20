@@ -7,7 +7,6 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const INSPECTED_TOOLS = new Set(['Edit', 'Write', 'MultiEdit']);
-const QOL_PATH_RE = /[\\/]qol-[^\\/]+[\\/]/;
 
 const TEST_PATH_RES = [
     /[\\/](tests|examples|benches)[\\/]/,
@@ -39,6 +38,7 @@ const SIGNALS = [
 ];
 
 const lintMode = require('./hook-lint-mode.cjs');
+const { inQolRepo } = require('./qol-repo.cjs');
 
 function readStdin() {
     try {
@@ -125,7 +125,7 @@ function main() {
 }
 
 function inspectedSignals(filePath) {
-    if (!filePath.endsWith('.rs') || !QOL_PATH_RE.test(filePath)) return [];
+    if (!filePath.endsWith('.rs') || !inQolRepo(filePath)) return [];
     if (TEST_PATH_RES.some(re => re.test(filePath))) return [];
     const commandOutputAllowed = COMMAND_OUTPUT_PATH_RES.some(re => re.test(filePath));
     return SIGNALS.filter(signal => !(commandOutputAllowed && signal.commandOutput));
@@ -192,7 +192,7 @@ function snapshotPath(payload) {
 
 function repoRoot(payload) {
     const cwd = payload.cwd || process.cwd();
-    if (!QOL_PATH_RE.test(cwd + path.sep)) return null;
+    if (!inQolRepo(cwd)) return null;
     const root = git(cwd, ['rev-parse', '--show-toplevel']);
     return root === null ? null : root.trim();
 }

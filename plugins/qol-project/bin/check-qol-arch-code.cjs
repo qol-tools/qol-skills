@@ -50,10 +50,10 @@ const path = require('node:path');
 const design = require('./qol-design-guard.cjs');
 const lintMode = require('./hook-lint-mode.cjs');
 const owners = require('./qol-owner-guard.cjs');
+const { inQolRepo } = require('./qol-repo.cjs');
 
 const INSPECTED_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 const OS_BASENAMES = new Set(['linux.rs', 'macos.rs', 'windows.rs']);
-const QOL_TOOLS_PATH_RE = /[\\/]qol-[^\\/]+[\\/]/;
 const TESTS_PATH_RE = /[\\/]tests[\\/]/;
 const EXAMPLES_PATH_RE = /[\\/]examples[\\/]/;
 const PLUGIN_ROOT_RUST_FILES = new Set(['main.rs', 'lib.rs', 'cli.rs']);
@@ -1510,7 +1510,7 @@ function evaluate(payload) {
     const cwd = payload.cwd || process.cwd();
     const filePath = path.isAbsolute(inputPath) ? inputPath : path.resolve(cwd, inputPath);
 
-    if (!QOL_TOOLS_PATH_RE.test(filePath)) return 0;
+    if (!inQolRepo(filePath)) return 0;
 
     const basename = crossPlatformBasename(filePath);
 

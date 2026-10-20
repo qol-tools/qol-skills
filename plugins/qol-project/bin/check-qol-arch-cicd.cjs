@@ -39,7 +39,6 @@ const path = require('node:path');
 
 const INSPECTED_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 
-const QOL_TOOLS_PATH_RE = /[\\/]qol-[^\\/]+[\\/]/;
 const WORKFLOW_PATH_RE = /[\\/]\.github[\\/]workflows[\\/][^\\/]+\.ya?ml$/;
 const CARGO_TOML_BASENAME = 'Cargo.toml';
 
@@ -55,6 +54,7 @@ const PLATFORM_CRATES = new Set([
 ]);
 
 const lintMode = require('./hook-lint-mode.cjs');
+const { inQolRepo } = require('./qol-repo.cjs');
 
 function readStdin() {
     try {
@@ -386,7 +386,7 @@ function evaluate(payload) {
     const input = payload.tool_input || {};
     const filePath = input.file_path || input.notebook_path || '';
     if (!filePath) return 0;
-    if (!QOL_TOOLS_PATH_RE.test(filePath)) return 0;
+    if (!inQolRepo(filePath)) return 0;
 
     const isWorkflow = WORKFLOW_PATH_RE.test(filePath);
     const isCargo = crossPlatformBasename(filePath) === CARGO_TOML_BASENAME;
