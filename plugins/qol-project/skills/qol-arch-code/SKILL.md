@@ -755,7 +755,7 @@ Native gpui surfaces (`libs/gpui/src`, `apps/tray/src`, `plugins/*/src`):
 - Every non-ASCII character a window draws is in the shipped fonts (the hook reads their cmap tables); anything else is `qol_gpui::icon::icon`.
 - Colour comes from the theme (`kit.grounds.*`, `kit.washes.*`, a kit recipe, a semantic hue); no `rgb(0x…)`, `rgba(…)` or `hsla(…)` literal outside `kit.rs`. `rgba(0)` is transparent and allowed.
 - Heights of 28 px or more, radii and (in settings scope) spacing sit on the ladders read from `libs/theme/src/lib.rs`; settings scope also bans rem helpers such as `.gap_2()` and local spacing constants.
-- Depth comes from the theme: no hand alpha, `BoxShadow`, line width or literal opacity. Chips are `kit.chip`, windows are `kit.window()` and square, every scrolling list ends in `kit.scroll_cue`, a running phrase never ends in an ellipsis, and no surface draws a coloured side line.
+- Depth comes from the theme: no hand alpha, `BoxShadow`, line width or literal opacity. Chips are `kit.chip`, windows are `kit.window()` and square, every scrolling list ends in `kit.scroll_cue` and tracks a `SelectionScroll` handle, a full-height column of rows scrolls, a running phrase never ends in an ellipsis, and no surface draws a coloured side line.
 - Settings scope composes recipes: no leaf `.bg`, `.text_color`, `.border`, `.rounded` outside the recipe owners, no raw `kit.palette.<field>` beyond the semantic hues, one focus owner, spinners only through the components.
 
 The settings page shape, derived from the core tool pages (Hotkeys, Shortcuts and
@@ -848,9 +848,26 @@ Unlike most guards it includes tests, because a test that types `"linux"` instea
 
 Residual: the guard reads tokens. It misses a name built on purpose (`concat!("li", "nux")`, a char array), an OS read from outside the program (`uname`, `/etc/os-release`), chrome set through a call the entry does not list (an X11 property such as `_MOTIF_WM_HINTS`, `msg_send!` with a selector), and any concept that has no owner entry yet. Each new owner is closed by adding its entry and its lock test.
 
+### Enforcement: plugin data guard
+
+A plugin ships, in its `plugin.toml`, the entries that let a user reach it. The tray builds launcher entries only from manifest data: `[[shortcuts]]` with `export_to_launcher` (the default) become launcher apps, a `[launcher]` table becomes a launcher flow, and an action with `kind = "settings"` becomes "Settings > <name>". A plugin that leaves them out still installs and runs, so nothing else notices.
+
+The explorer plugin shipped `[action.open]` with no shortcut and no flow, so its Open row in qol settings was the only way to start it.
+
+`bin/check-qol-plugin-data.cjs` enforces this at edit time on a `plugin.toml` in a qol repository. It denies an edit that adds either gap:
+
+- an `[action.open]` run action that no exported `[[shortcuts]]` entry with `action = "open"` and no `[launcher]` table reaches. `qol-launcher` (it would open itself) and `qol-alt-tab` (a hotkey picker) are exempt in the hook.
+- a `qol-config.toml` beside the manifest with no `kind = "settings"` action. The tray hosts that page itself only when `[capabilities] gpui = true`.
+
+A plugin with nothing to set (session, removeapp, explorer) ships no `qol-config.toml` and no settings action, and shows as a row on the core Plugins page instead of a settings page. The guard accepts that; never add a placeholder `qol-config.toml` to satisfy it.
+
+Gaps are compared before and after the edit, so a manifest that already had one only blocks when the edit adds a new one. `qac lint` without `--base` lists them all. There is no bypass: ship the entry in the same edit, or add a plugin that must not have one to the hook's exempt set with its reason.
+
+Residual: the tray renders no plugin `[menu]` items (only its own Settings and mode toggle), so a tray menu entry is not plugin data and this guard does not ask for one. An open action under another id, or a window opened only by a runtime action, passes.
+
 ### Lint: `qac`
 
-The edit-time hooks only see new violations, so existing debt stays invisible until someone touches the file. `qac lint [path ...]` runs the qol-arch-code, cross-platform, cicd, logging and plugin-contract hooks over whole tracked and untracked files (the whole repo when no path is given), counting every violation already there. It never consumes a bypass marker, and it skips `vendor/` and `third_party/`. Each hook exposes `lintFile(path, content, baseline)` through `bin/hook-lint-mode.cjs`, so a new filter in any of them is linted too.
+The edit-time hooks only see new violations, so existing debt stays invisible until someone touches the file. `qac lint [path ...]` runs the qol-arch-code, cross-platform, cicd, logging, plugin data and plugin-contract hooks over whole tracked and untracked files (the whole repo when no path is given), counting every violation already there. It never consumes a bypass marker, and it skips `vendor/` and `third_party/`. Each hook exposes `lintFile(path, content, baseline)` through `bin/hook-lint-mode.cjs`, so a new filter in any of them is linted too.
 
 The rules come in two kinds, and lint treats them differently.
 Rules about the code as it stands (cfg placement, facade coverage, source layout, adapter-exclusive helpers, allow attributes) hold or fail on a file alone, so lint checks them on every file.

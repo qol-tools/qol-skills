@@ -84,6 +84,11 @@
     {
       "event": "PreToolUse",
       "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+      "command": "node plugins/qol-project/bin/check-qol-plugin-data.cjs"
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|Write|MultiEdit|NotebookEdit",
       "command": "node plugins/qol-project/bin/check-qol-plugin-contract.cjs"
     },
     {

@@ -212,7 +212,7 @@ test('tools/list falls back to the built-in catalog when the port is closed', as
     const reply = await client.next();
     assert.deepStrictEqual(
       reply.result.tools.map((tool) => tool.name),
-      ['qol-memory__ask', 'qol-memory__status', 'qol-memory__capture'],
+      ['qol-memory__ask', 'qol-memory__status', 'qol-memory__capture', 'qol-memory__supersede', 'qol-memory__forget'],
     );
     await until(() => /serving the built-in tool list/.test(client.stderrText()));
   } finally {
@@ -231,7 +231,7 @@ test('tools/list falls back to the built-in catalog when the daemon answers HTTP
     const reply = await client.next();
     assert.deepStrictEqual(
       reply.result.tools.map((tool) => tool.name),
-      ['qol-memory__ask', 'qol-memory__status', 'qol-memory__capture'],
+      ['qol-memory__ask', 'qol-memory__status', 'qol-memory__capture', 'qol-memory__supersede', 'qol-memory__forget'],
     );
     await until(() => /serving the built-in tool list/.test(client.stderrText()));
   } finally {

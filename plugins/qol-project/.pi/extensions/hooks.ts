@@ -9,6 +9,7 @@ const PRE_TOOL_USE_HOOKS = [
     { matcher: "Edit|Write|MultiEdit|NotebookEdit", script: "bin/check-qol-arch-cross-platform.cjs" },
     { matcher: "Edit|Write|MultiEdit|NotebookEdit", script: "bin/check-qol-arch-cicd.cjs" },
     { matcher: "Edit|Write|MultiEdit|NotebookEdit", script: "bin/check-qol-logging.cjs" },
+    { matcher: "Edit|Write|MultiEdit|NotebookEdit", script: "bin/check-qol-plugin-data.cjs" },
     { matcher: "Edit|Write|MultiEdit|NotebookEdit", script: "bin/check-qol-plugin-contract.cjs" },
     { matcher: "Bash", script: "bin/check-qol-logging.cjs" },
 ];
