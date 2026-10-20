@@ -91,11 +91,12 @@ states the decision, then rerun the whole review run with `gh run rerun <run-id>
 drops findings a decision of the author or the owner settles, and lists them
 under Settled. The new review run reruns the tests and CodeQL runs that stopped
 on the old verdict, so they wait for its verdict. When the finished review of
-the head commit still blocks, the owner can add the `review-override` label: it
-records the override in a pull request comment and in the claude review check,
-passes that check for that commit only, and reruns the checks that stopped on
-the old verdict; a label added while the review runs is refused, and a new push
-is reviewed again. Add that label only when the user asks for an override.
+the head commit still blocks, the owner can comment `/review-override <sha>`
+naming that commit: it records the override in a pull request comment and in the
+claude review check, passes that check for that commit only, and reruns the
+checks that stopped on the old verdict. An override that names another commit or
+comes while the review runs is refused, and a new push is reviewed again. Post
+it only when the user asks for an override.
 
 Pushing fixes to the branch of a pull request the user asked for is part of
 that request. Re-arm `gh pr merge --auto` when the merge queue dropped the pull
