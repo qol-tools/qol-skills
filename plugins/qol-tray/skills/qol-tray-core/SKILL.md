@@ -58,17 +58,32 @@ platforms = ["linux"]            # optional - omit for all platforms
 
 [runtime]
 command = "plugin-binary"
-actions = { run = ["run"], settings = ["settings"] }   # optional map
+
+[action.run]
+label = "Run"
+args = ["run"]
+
+[action.settings]
+label = "Settings"
+kind = "settings"
+
+[action.toggle]
+label = "Enable"
+kind = "toggle-config"
+config_key = "general.enabled"
+
+[capabilities]
+gpui = true
+doctor = true
+
+[[shortcuts]]
+id = "calendar"
+name = "Calendar"
+action = "run"
 
 [menu]
 label = "Menu Label"
-items = [
-    { type = "action", id = "run", label = "Run", action = "run" },
-    { type = "checkbox", id = "toggle", label = "Enable", checked = true,
-      action = "toggle-config", config_key = "enabled" },
-    { type = "separator" },
-    { type = "submenu", id = "sub", label = "More", items = [...] },
-]
+items = []
 
 [daemon]                          # optional
 enabled = true
@@ -83,7 +98,12 @@ pattern = "plugin-binary-{os}-{arch}"
 
 Action types: `run` (daemon socket or runtime binary), `toggle-config` (flip a
 boolean in `config.json` at `config_key`), `settings` (hosted contract panel
-when eligible, otherwise the mapped daemon/runtime action).
+when eligible, otherwise the mapped daemon/runtime action). With an enabled
+daemon socket the tray sends the action id; it runs `runtime.command` with
+`args` (default `[id]`) only when there is no socket or the runtime binary is
+not the daemon's. A shortcut runs `action`, default `open`. `[menu] items` is
+read only when the manifest declares no `[action.*]`, and a checkbox item is
+never shown.
 
 ## Plugin contracts (two-file pattern)
 
@@ -168,6 +188,54 @@ missing. The host lifecycle, one-window rule, and fallback contract live in
 - In dev mode qol-tray runs `cargo build` directly; a plugin needs a `Cargo.toml`, not a Makefile.
 - Plugin reload (`/api/dev/reload`) is single-flight via an `AtomicBool` guard; concurrent requests get `409`. The build runs in `spawn_blocking` so it never blocks axum workers.
 - Every plugin must include a contract-validation test that parses `plugin.toml` and calls `manifest.validate()`, with `qol-tray` + `toml` in `[dev-dependencies]`.
+
+## Contracts are honoured to the letter
+
+Every key in `plugin.toml`, `qol-config.toml` and `qol-runtime.toml` must change
+what the tray or the plugin does. A key serde drops, a field nothing reads or an
+action nothing handles lies to whoever reads the file: a setting that does
+nothing, a shortcut that runs nothing, a menu entry that never appears.
+
+The `qol-plugin-contract` hook (qol-project) denies an edit that adds such a key
+or removes the code that honoured one, and `qac lint` checks every contract
+file in CI. It reads the contract structs (`PluginManifest`, `ConfigSpecV1`,
+`RuntimeSpec`) and their serde attributes from the Rust source, so a new field
+or rename changes the rule without touching the hook. It checks:
+
+- **Shape**: each key is a field after renames, aliases and `flatten`, each value
+  has the field's type, required keys exist and enum names are valid. Under
+  `deny_unknown_fields` an unknown key makes the tray refuse the whole file.
+- **Reads**: code in `apps/` or `libs/` outside tests reads every field a key
+  sets. A key a flattened map swallows passes only when code looks it up by
+  name.
+- **Dispatch**: each run or settings action reaches the plugin the way the
+  tray sends it (above), and the plugin's source or path dependencies mention
+  that token, as one literal or two joined. A settings action the native host
+  serves (`capabilities.gpui` plus a `qol-config.toml`) needs no token.
+- **Targets**: shortcuts name a run or settings action and have unique ids,
+  `toggle-config` names a stored field, sections list declared actions, and
+  `[config] scope` keys are top-level keys of stored fields.
+- **Binaries**: the plugin's `Cargo.toml` builds `runtime.command`,
+  `daemon.command` and every `dependencies.binaries` name.
+- **Icon**: `plugin.icon` is a `qol_theme` mark name.
+- **Doctor**: `capabilities.doctor = true` exactly when the plugin registers
+  doctor checks.
+- **Menu**: no `[menu] items` beside `[action.*]`, and no checkbox items.
+- **Settings**: every stored `qol-config.toml` field binds to a field of a
+  plugin `Deserialize` struct that code reads, and the plugin mentions every
+  `qol-runtime.toml` action and query.
+
+Edits are judged on what they add, so existing debt never blocks unrelated
+work; there is no bypass. Fix the code or delete the key.
+
+Incident (2026-10-20): lights declared `duration_seconds` on a runtime action
+the spec has no field for, its stream `throttle_ms` was never read by the
+settings host, shot kept a menu checkbox the tray never shows, and the template
+shipped settings no code read.
+
+Residual: reads and dispatch match by name. A field read only through a
+computed key, a token built from three or more pieces, and a handler that
+exists but misbehaves all pass.
 
 ## Hotkeys
 
