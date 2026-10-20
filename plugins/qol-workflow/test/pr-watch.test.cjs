@@ -64,8 +64,16 @@ for (const [name, input, expected] of cases) {
 test('classify tells a green draft to stay unarmed', () => {
     const verdict = classify(pr({ draft: true, auto: false, checks: [run('lint', 'COMPLETED', 'SUCCESS')] }));
     assert.equal(verdict.outcome, 'idle');
-    assert.match(verdict.reasons[0], /draft; leave auto-merge off/);
+    assert.match(verdict.reasons[0], /draft: design work waiting for the user's approval; leave auto-merge off, report it to your parent, then park again with --until-ready/);
     assert.equal(classify(pr({ draft: true, auto: false, checks: [run('lint', 'IN_PROGRESS')] })).outcome, 'pending');
+});
+
+test('classify keeps a reported draft pending until it is marked ready, then asks to arm it', () => {
+    const green = [run('lint', 'COMPLETED', 'SUCCESS')];
+    assert.equal(classify(pr({ draft: true, auto: false, checks: green }), null, true).outcome, 'pending');
+    const ready = classify(pr({ auto: false, checks: green }), null, true);
+    assert.equal(ready.outcome, 'idle');
+    assert.match(ready.reasons[0], /ready pull request but auto-merge is not armed; arm it with gh pr merge --auto/);
 });
 
 test('classify names every failed check and the conflict', () => {
@@ -83,7 +91,8 @@ test('parseTarget reads URLs and numbers', () => {
 });
 
 test('parseArgs takes one target and rejects the rest', () => {
-    assert.deepEqual(parseArgs(['7', '--pretty']), { target: '7', pretty: true, interval: 30, timeout: 120 });
+    assert.deepEqual(parseArgs(['7', '--pretty']), { target: '7', pretty: true, interval: 30, timeout: 120, untilReady: false });
+    assert.equal(parseArgs(['7', '--until-ready']).untilReady, true);
     assert.match(parseArgs(['7', '8']).error, /unexpected/);
     assert.match(parseArgs(['--interval', '0']).error, /positive/);
     assert.deepEqual(parseArgs(['--help']), { help: true });

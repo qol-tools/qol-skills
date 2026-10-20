@@ -28,8 +28,10 @@ timelineItems(last:1,itemTypes:[ADDED_TO_MERGE_QUEUE_EVENT,REMOVED_FROM_MERGE_QU
 ... on RemovedFromMergeQueueEvent{reason createdAt}}}
 comments(last:20){nodes{author{__typename login} body createdAt url}}}}}`;
 
-const HELP = `usage: pr-watch [<pr-url-or-number>] [--pretty] [--interval <s>] [--timeout <min>]
+const HELP = `usage: pr-watch [<pr-url-or-number>] [--pretty] [--interval <s>] [--timeout <min>] [--until-ready]
 Blocks until the pull request merges or fails, then exits once.
+A draft with green checks exits 6 as design work waiting for the user; --until-ready keeps
+watching a draft until the user marks it ready, for a re-park after that report.
 Checks from an older run of a workflow are ignored once a newer run of it reports, and a
 failure seen in the first 120 s ends the watch only if it still holds then, so checks a
 rerun is about to replace do not end it.
@@ -44,10 +46,11 @@ function gh(args) {
 }
 
 function parseArgs(argv) {
-    const opts = { target: null, pretty: false, interval: 30, timeout: 120 };
+    const opts = { target: null, pretty: false, interval: 30, timeout: 120, untilReady: false };
     for (let i = 0; i < argv.length; i += 1) {
         const arg = argv[i];
         if (arg === '--pretty') opts.pretty = true;
+        else if (arg === '--until-ready') opts.untilReady = true;
         else if (arg === '--interval') opts.interval = Number(argv[++i]);
         else if (arg === '--timeout') opts.timeout = Number(argv[++i]);
         else if (arg === '-h' || arg === '--help') return { help: true };
@@ -164,7 +167,7 @@ function latestReview(pr, since) {
     return null;
 }
 
-function classify(pr, since = null) {
+function classify(pr, since = null, untilReady = false) {
     const commit = pr.commits?.nodes?.[0]?.commit ?? {};
     const base = { head: commit.oid ?? null, reasons: [], failures: [] };
     if (pr.state === 'MERGED') return { ...base, outcome: 'merged' };
@@ -182,11 +185,11 @@ function classify(pr, since = null) {
     if (review?.needs_you) return { ...base, outcome: 'review', reasons: [`${review.kind}: ${review.summary.join(' ')}`], review };
 
     const settled = checks.length > 0 && checks.every((check) => check.done);
-    if (settled && pr.isDraft) {
-        return { ...base, outcome: 'idle', reasons: ['checks are green on a draft; leave auto-merge off and report it ready for the user to mark ready'] };
+    if (settled && pr.isDraft && !untilReady) {
+        return { ...base, outcome: 'idle', reasons: ['checks are green on a draft: design work waiting for the user\'s approval; leave auto-merge off, report it to your parent, then park again with --until-ready'] };
     }
-    if (settled && !pr.autoMergeRequest && !pr.isInMergeQueue) {
-        return { ...base, outcome: 'idle', reasons: ['checks are green but auto-merge is not armed'] };
+    if (settled && !pr.isDraft && !pr.autoMergeRequest && !pr.isInMergeQueue) {
+        return { ...base, outcome: 'idle', reasons: ['checks are green on a ready pull request but auto-merge is not armed; arm it with gh pr merge --auto'] };
     }
     return { ...base, outcome: 'pending' };
 }
@@ -261,7 +264,7 @@ function watch(opts, { run = gh, sleep = wait, now = Date.now } = {}) {
             }
         } else {
             errors = 0;
-            const verdict = classify(snapshot.pr, since);
+            const verdict = classify(snapshot.pr, since, opts.untilReady);
             const settling = verdict.outcome === 'failed' && elapsed < SETTLE_SECONDS;
             if (verdict.outcome !== 'pending' && !settling) {
                 const failures = attachLogs(verdict.failures, run);

@@ -32,18 +32,34 @@ is refused. Details: `qol-workflow:commit`.
 
 Right after `gh pr create` in a qol-tools repository, run `gh pr merge --auto <number>`
 so the merge queue lands the pull request once its checks pass. The CI and the
-merge queue are the gate; do not wait for a merge go-ahead. A draft gets it right
-after `gh pr ready`. The one exception: when the user says they are testing or
+merge queue are the gate; do not wait for a merge go-ahead. A draft gets it once
+the user marks it ready. The one exception: when the user says they are testing or
 holding a pull request, run `gh pr merge --disable-auto <number>` and wait for
 their word.
 
 ## Never ask whether to push or open a pull request
 
-Finished work on a worktree branch is pushed and opened as a pull request
-without asking. Where you would otherwise hold it for the user, such as a new
-feature whose design was not agreed or work a fork finished on its own, open it
-as a draft with `gh pr create --draft`: no auto-merge, and the user marks it
-ready. Skip the push only when the user said not to push.
+When your work leaves commits on a branch, push the branch and open a pull
+request without asking, then arm auto-merge with `gh pr merge --auto`, unless the
+change involves design (UI, or architecture such as a new command, a file format
+or a large refactor): open that as a draft with `gh pr create --draft` and report
+that it waits for the user's approval. Put `Session: <key>` as the last line of
+the pull request body, where `<key>` is your spawn key in `sessions_list`. Never
+force-push, and never mark a draft ready yourself. Skip the push only when the
+user said not to push.
+
+## Forks and lanes report to their parent
+
+A session with a parent (a fork or a lane) talks to the user through that parent:
+
+- When your pull request has merged, or nothing is left that anyone must do, send
+  one line to your parent with `session_send` kind `report` and `done: true`, then
+  end your turn; your tab closes when that turn ends.
+- When only the user can decide something, send it to your parent with
+  `session_send` kind `ask` instead of asking in your own terminal; the answer
+  comes back as a message. `AskUserQuestion` is refused in a lane.
+- When a check fails and you cannot fix it, report the pull request and what
+  broke to your parent.
 
 ## Every pull request is watched until it merges
 
@@ -51,7 +67,7 @@ A pull request you open is yours until it merges. Do not report it done at
 `gh pr create`; listen for its outcome and fix what fails.
 
 <!-- inject:pr-watch:start -->
-[qol-pr-watch] When this command succeeds, park this session on the pull request watcher and end your turn with one line saying what you wait for: `<qol-cli-sessions> park -- node <qol-workflow>/bin/pr-watch.cjs <pr-url> --pretty`. The terminal stays open and the watcher's exit code and output are submitted into it when it exits, unless parking is on for this session: then the terminal closes once the turn ends and qol resumes this same conversation in a new tab with the result. Park's output says which applies. If park itself fails, report the error to the user; never run the watcher outside park. Exit 1 is a failure with the failed steps' logs: fix it on the branch, gate locally, push, and park on the watcher again. Exit 7 is review feedback from the qol-code-review bot: fix the findings it left for you, pull the branch first when the bot pushed a fix commit, then park on the watcher again; a finding against a decision the user made on purpose is answered in a pull request comment instead, then the review is rerun. Exit 0 is merged; exit 6 means arm `gh pr merge --auto`, except on a draft: leave it unarmed and report it ready for the user. Never poll with sleep loops or repeated `gh pr checks`. Skip only a pull request the user is testing or holding.
+[qol-pr-watch] When this command succeeds, park this session on the pull request watcher and end your turn with one line saying what you wait for: `<qol-cli-sessions> park -- node <qol-workflow>/bin/pr-watch.cjs <pr-url> --pretty`. The terminal stays open and the watcher's exit code and output are submitted into it when it exits, unless parking is on for this session: then the terminal closes once the turn ends and qol resumes this same conversation in a new tab with the result. Park's output says which applies. If park itself fails, report the error to the user; never run the watcher outside park. Exit 1 is a failure with the failed steps' logs: fix it on the branch, gate locally, push, and park on the watcher again. Exit 7 is review feedback from the qol-code-review bot: fix the findings it left for you, pull the branch first when the bot pushed a fix commit, then park on the watcher again; a finding against a decision the user made on purpose is answered in a pull request comment instead, then the review is rerun. Exit 0 is merged: a fork or lane then sends its parent one line with session_send kind report and done true. Exit 6 on a ready pull request means arm `gh pr merge --auto` and park again; on a draft it is design work waiting for the user's approval: leave it unarmed, report it to your parent (or the user, without one), and park again with `--until-ready` added so the watcher waits for the user to mark it ready. Never poll with sleep loops or repeated `gh pr checks`. Skip only a pull request the user is testing or holding.
 <!-- inject:pr-watch:end -->
 
 The watcher polls GitHub inside its own process, so no turn is spent until
@@ -77,10 +93,12 @@ stays silent in both cases. Residual: a harness whose
 transcript it cannot read (anything but Claude Code's JSONL) is not held at Stop. It exits once: 0 merged, 1 failed (a failed check or
 status on the head commit, a merge conflict, a merge queue removal, or the pull
 request closed), 3 no pull request, 4 `gh` kept failing, 5 still pending after
-two hours, 6 checks green but auto-merge not armed, 7 a qol-code-review or
+two hours, 6 checks green on a draft (design work waiting for the user) or on a
+ready pull request with auto-merge not armed, 7 a qol-code-review or
 queue-fix comment posted after the watcher started that needs you: findings
 "left for you", a fix commit the bot pushed to the branch, or a failed review
-or fix. Only a pass verdict or an owner override lets the pull request into the
+or fix. With `--until-ready` a green draft keeps it watching until the user marks
+it ready. Only a pass verdict or an owner override lets the pull request into the
 merge queue, so every open finding of a conditional or block review is left for you. A pass
 keeps it watching; the latest comment supersedes earlier ones. A push to the branch
 while it runs is followed, because it always reads the latest head commit. Checks

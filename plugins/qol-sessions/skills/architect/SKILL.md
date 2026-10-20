@@ -58,7 +58,7 @@ it remains authorized, preserving any later user redirect.
 5. End the turn after delivery and resume only on the wake.
 6. Collect each lane, read every changed file against the spec personally, run the gate once for the whole round covering build, test, lint, format, and the repository's own checks, and dispatch correction rounds until the criteria hold.
    Run repository-owned deterministic formatters in-session per the verification policy instead of spending a lane turn to reproduce their output; when no deterministic command covers a defect, the fallback stays manual in the owning lane's correction round.
-7. Accept with the loop close, run the retrospective, and commit per git-trees, then push the branch and open its pull request per qol-monorepo-rules without asking, as a draft when the design was not agreed; never push `main` unless asked.
+7. Accept with the loop close, run the retrospective, and commit per git-trees, then push the branch and open its pull request per qol-monorepo-rules without asking: auto-merge armed, or a draft that waits for the user's approval when the change involves design (UI, or architecture such as a new command, a file format or a large refactor), with `Session: <key>` as the body's last line; never push `main` unless asked.
 
 ## Lane brief
 

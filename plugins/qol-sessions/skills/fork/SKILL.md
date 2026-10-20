@@ -1,7 +1,7 @@
 ---
 name: fork
-description: Cut one problem loose into a detached architect terminal. Use when the user invokes /fork <problem> [--harness H] [--model M] [--effort E] [--surface S] [--park]; writes the brief, picks the launch facts, makes one session_fork call, reports one line, and continues.
-argument-hint: "<problem> [--harness H] [--model M] [--effort E] [--surface S] [--park]"
+description: Cut one problem loose into a detached architect terminal. Use when the user invokes /fork <problem> [--harness H] [--model M] [--effort E] [--surface S] [--park] [--remote-control]; writes the brief, picks the launch facts, makes one session_fork call, reports one line, and continues.
+argument-hint: "<problem> [--harness H] [--model M] [--effort E] [--surface S] [--park] [--remote-control]"
 disable-model-invocation: true
 ---
 
@@ -13,7 +13,8 @@ The session turns one problem into one detached fork and keeps its own thread.
 The fork reads the brief file the launch points it at, plus a copy of this chat, which `session_fork` writes beside the brief by default.
 The brief is authoritative; pass `copy_chat: false` when the chat would mislead or is irrelevant.
 This skill writes that brief, chooses the launch facts, makes exactly one `session_fork` call, reports one line, and returns this session to its own work.
-A fork is not a lane: it never reports back, nothing collects it with `session_bridge`, and it owns its problem end to end.
+A fork is not a lane: nothing collects it with `session_bridge`, and it owns its problem end to end.
+It reaches this session only through `session_send`: kind `ask` when only the user can decide something, and kind `report` with `done: true` once its pull request has merged or nothing is left that anyone must do, after which its tab closes when its turn ends.
 
 ## Procedure
 
@@ -26,9 +27,10 @@ A fork is not a lane: it never reports back, nothing collects it with `session_b
    - `title`: a short human-readable tab name, or omit it to default to the key.
    - `tool`, `model`, `effort`, `surface`: only the values the user gave as trailing `--harness`, `--model`, `--effort` or `--surface` flags in `$ARGUMENTS`, verbatim (`--harness` fills `tool`); leave the flags out of the brief.
    - `park`: `true` only when the user passed `--park`, never on your own judgment; it lets the fork's terminal close while it is parked and reopen in a new tab when the wait ends, and closes the fork's tab once its turn ends, with its final message shown in a notification. Left out, the fork's tab stays open and a parked fork waits in it.
+   - `remote_control`: `true` only when the user passed `--remote-control`; it starts the fork with Remote Control so the user can drive it from another device, and `sessions_list` shows its `remote_control_url`; a `done` report still closes its tab. Left out, `fork_remote_control` in `sessions.toml` decides.
    Everything the user left out stays unset: the server resolves `[aliases]` and fills the rest from `fork_model`, `fork_effort` and `fork_surface` in `sessions.toml`.
 3. When this session is also editing that repo, tell the fork in the brief to create and use its own git worktree and leave this session's checkout alone.
-   Add no push, pull request or merge conditions the user did not state: a fork pushes its branch and opens a draft pull request on its own, and never merges it.
+   Add no push, pull request or merge conditions the user did not state: the fork's launch prompt carries the delivery policy (qol-workflow:qol-monorepo-rules, "Never ask whether to push or open a pull request" and "Forks and lanes report to their parent"), so it opens its pull request with auto-merge armed, or a draft that waits for the user's approval when the change involves design, ends the body with `Session: <key>`, and never force-pushes or marks a draft ready.
 4. Make exactly one `session_fork` call per problem, then continue this session's own work without waiting.
    Never bridge the fork and never call `session_spawn` for it: a fork is detached and nothing collects its result.
 5. Report in one line what was forked: the key, the harness and model, and the problem it owns.
