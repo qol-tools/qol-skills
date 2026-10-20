@@ -1,6 +1,6 @@
 ---
 name: qol-memory
-description: Use when a session needs a settled fact from earlier work in this workspace, when the user references a past decision, fix, or path the agent does not remember, or when a settled outcome should be captured for later sessions.
+description: Use when a session needs a settled fact from earlier work in this workspace, when the user references a past decision, fix, or path the agent does not remember, when a settled outcome should be captured for later sessions, or when a stored fact is out of date and should be superseded or forgotten.
 ---
 
 # qol-memory
@@ -14,6 +14,14 @@ Call `qol-memory__ask` before re-deriving a fact about paths, decisions, commits
 ## Capture settled outcomes
 
 Call `qol-memory__capture` when a session settles something a later session needs. The tool expects one self-contained sentence that carries the identifiers a later reader needs (paths, commit subjects, decision names), plus the absolute project directory as `cwd`.
+
+## Correct stale facts
+
+qol-memory never guesses which fact is stale, so the latest statement wins only when an agent names the old fact.
+When an answer from `qol-memory__ask`, or a related fact in the `qol-memory__capture` reply, is no longer true, call `qol-memory__supersede` with its key and the corrected fact instead of capturing a second fact beside it.
+Call `qol-memory__forget` with a reason for a fact that is wrong and has nothing to replace it.
+Supersede only a fact you know changed: a fact that answers a different question is not stale.
+An answer with reason code `superseded_answer` is a replaced fact that still matched where its replacement did not, so report it as what used to be true and check `superseded_by` for the current fact.
 
 ## Refill commands
 
