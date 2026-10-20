@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { join } from "node:path";
 
-import { cliSessionsBinary, commandFor, parsePrompt, renderDiagnostic, summarize, summarizePark } from "../hooks/qols-intercept.mjs";
+import { cliSessionsBinary, commandFor, parsePrompt, renderDiagnostic, status, summarize, summarizePark } from "../hooks/qols-intercept.mjs";
 
 test("only prompts starting with qols are intercepted", () => {
   for (const prompt of ["fork this", "qolsfork x", "please qols fork x", "", undefined]) {
@@ -191,4 +191,35 @@ test("the new and switchboard summaries name the session and the resolved launch
   assert.equal(summarize("switchboard", launched), "qols switchboard: v1:kitty:k1 (claude claude-opus-5-5 low tab)");
   assert.equal(summarize("switchboard", { opened: "focused", session: "v1:kitty:k1" }), "qols switchboard: focused v1:kitty:k1");
   assert.equal(summarize("switchboard", { opened: "started_kitty", program: "kitty" }), "qols switchboard: started kitty for it");
+});
+
+test("qols status takes nothing else", () => {
+  assert.deepEqual(parsePrompt("qols status"), { verb: "status" });
+  assert.deepEqual(parsePrompt("QOLS Status"), { verb: "status" });
+  for (const prompt of ["qols status now", "qols status --model opus"]) {
+    const { verb, diagnostic } = parsePrompt(prompt);
+    assert.equal(verb, "help", prompt);
+    assert.match(diagnostic.title, /^`qols status` does not take/, prompt);
+    assert.match(renderDiagnostic(diagnostic), /usage: qols status$/, prompt);
+  }
+});
+
+test("qols status answers with the qol sessions status output and drops the prompt", () => {
+  let argv;
+  const lines = "sb-engine  working  rc  #212  pushed the fix\n";
+  assert.deepEqual(status((args) => ((argv = args), lines)), { reason: lines.trimEnd(), sent: true });
+  assert.deepEqual(argv, ["sessions", "status"]);
+  assert.deepEqual(status(() => ""), { reason: "qols status: no lanes", sent: true });
+});
+
+test("qols status names an outdated qol in one line and passes other failures through", () => {
+  const failing = (stderr) => () => {
+    throw Object.assign(new Error("Command failed"), { stderr });
+  };
+  const stale = status(failing("unknown qol sessions subcommand `status`\n\nqol sessions\n...usage..."));
+  assert.equal(stale.reason, "qols status: this qol has no `qol sessions status`; update qol");
+  assert.equal(stale.sent, undefined);
+  assert.deepEqual(status(failing("sessions data directory is unavailable\n")), {
+    reason: "qols status: sessions data directory is unavailable",
+  });
 });

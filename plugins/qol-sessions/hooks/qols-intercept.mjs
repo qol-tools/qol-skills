@@ -20,6 +20,7 @@ const USAGE = [
   "qols new [prompt] [--harness H] [--model M] [--effort E] [--surface S] [--park]",
   "qols switchboard [--model M] [--effort E] [--surface S]",
   "qols park",
+  "qols status",
   "fork: detached architect that owns the problem; bridge: lane that reports back here;",
   "test: a fork whose prompt is typed but not submitted, so the launch costs no tokens",
   "new: a fork without the chat copy; with no prompt, a blank session you type into",
@@ -27,10 +28,13 @@ const USAGE = [
   "--park lets a fork close its terminal while it waits on a long command and reopen when it ends;",
   "a fork given a problem or prompt also closes once its turn ends",
   "park: toggle parking for this terminal; on, a park closes it and reopens the conversation later",
+  "status: one line per lane with its attention, remote control, pull requests and last message",
   "values may be [aliases] from sessions.toml; left out, sessions.toml defaults apply",
 ].join("\n");
 
-const VERBS = ["fork", "bridge", "test", "new", "switchboard", "park"];
+const VERBS = ["fork", "bridge", "test", "new", "switchboard", "park", "status"];
+
+const STALE_QOL = "qols status: this qol has no `qol sessions status`; update qol";
 
 function usageFor(verb) {
   return USAGE.split("\n").find((line) => line === `qols ${verb}` || line.startsWith(`qols ${verb} `));
@@ -62,7 +66,8 @@ export function parsePrompt(prompt) {
       },
     };
   }
-  if (verb === "park") return parsePark(source, tokens);
+  if (verb === "park") return parseBare(source, tokens, verb, "qols park only toggles");
+  if (verb === "status") return parseBare(source, tokens, verb, "qols status takes nothing");
   const flags = [];
   while (tokens.length >= 1) {
     const last = tokens.at(-1).text;
@@ -148,18 +153,18 @@ function refuse(source, token, verb, label) {
   };
 }
 
-function parsePark(source, tokens) {
-  if (tokens.length === 0) return { verb: "park" };
+function parseBare(source, tokens, verb, label) {
+  if (tokens.length === 0) return { verb };
   const [wrong] = tokens;
   return {
     verb: "help",
     diagnostic: {
-      title: `\`qols park\` does not take \`${wrong.text}\``,
+      title: `\`qols ${verb}\` does not take \`${wrong.text}\``,
       source,
       start: wrong.start,
       end: wrong.end,
-      label: "qols park only toggles",
-      notes: [`usage: ${usageFor("park")}`],
+      label,
+      notes: [`usage: ${usageFor(verb)}`],
     },
   };
 }
@@ -201,6 +206,7 @@ function reply(parsed, cwd) {
   if (parsed === null) return null;
   if (parsed.verb === "help") return { reason: parsed.diagnostic ? renderDiagnostic(parsed.diagnostic) : USAGE };
   if (parsed.verb === "park") return park();
+  if (parsed.verb === "status") return status();
   try {
     const output = execFileSync("qol", commandFor(parsed, cwd), {
       encoding: "utf8",
@@ -213,6 +219,16 @@ function reply(parsed, cwd) {
     return { reason: summarize(parsed.verb, outcome), sent: true };
   } catch (error) {
     return { reason: `qols ${parsed.verb}: ${`${error.stderr ?? ""}`.trim() || error.message}` };
+  }
+}
+
+export function status(run = (argv) => execFileSync("qol", argv, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] })) {
+  try {
+    return { reason: `${run(["sessions", "status"])}`.trimEnd() || "qols status: no lanes", sent: true };
+  } catch (error) {
+    const stderr = `${error.stderr ?? ""}`.trim();
+    if (stderr.startsWith("unknown qol sessions subcommand `status`")) return { reason: STALE_QOL };
+    return { reason: `qols status: ${stderr || error.message}` };
   }
 }
 
