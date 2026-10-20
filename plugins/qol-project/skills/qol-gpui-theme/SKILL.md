@@ -171,6 +171,14 @@ quiet, and a hidden panel reopens live.
   and `MOTION_LOOP` 1200 ms for everything that repeats. Timing:
   `STAY_BRIEF` 4 s, `STAY_LONG` 8 s, `STAY_UNTIL_CLOSED`, `WAIT_BEFORE_BUSY`
   300 ms, `SETTLE_INPUT` 140 ms.
+- **Animations setting** (core > General > Animations: Follow system, Always on,
+  Off; `animations` in `theme.json`) governs every motion, Busy included.
+  `qol_gpui::motion::moving()` resolves it, asking the per-OS
+  `platform::reduce_motion` only for Follow system. Ease through
+  `qol_gpui::motion::animation`, `progress` or `ease`, never `Motion.curve`
+  directly; held still, a transition lands on its end and a loop rests at phase 0.
+  Time and input readouts (drain bars, hold fills, stick views) are values and
+  keep moving.
 
 A class or constant named for a size must set that size. Two of them once did not,
 and both were shipped bugs.
