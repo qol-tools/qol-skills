@@ -1,6 +1,6 @@
 ---
 name: qol-plugin-bluetooth
-description: Use when working on the qol-tray Bluetooth plugin. Covers BlueZ adapter and device operations, discovery, the reconnect retry policy, audio-device readiness, live settings queries, daemon lifecycle, and doctor checks. Triggers on "plugin-bluetooth", "bluetooth", BlueZ, bluer, adapter power, pairing, trusting, reconnecting headphones, or Bluetooth discovery.
+description: Use when working on the qol-tray Bluetooth plugin. Covers BlueZ, IOBluetooth and CoreBluetooth adapter and device operations, discovery including Bluetooth LE devices on macOS, the reconnect retry policy, audio-device readiness, live settings queries, daemon lifecycle, and doctor checks. Triggers on "plugin-bluetooth", "bluetooth", BlueZ, bluer, IOBluetooth, CoreBluetooth, Bluetooth LE, adapter power, pairing, trusting, reconnecting headphones, a device missing from search, or Bluetooth discovery.
 ---
 
 # qol-plugin-bluetooth
@@ -28,7 +28,7 @@ Change an action name in the manifest, runtime contract, config contract, and di
 | `src/handoff/` | Device hold release and resume between peers. |
 | `src/audio_claim/` | Target-selected audio output reclaim for a connected device. |
 | `src/hostfix/` | Host fix findings such as a wedged service or a competing Bluetooth manager. |
-| `src/platform/` | Target-selected backend: BlueZ through the `bluer` D-Bus bindings on Linux, IOBluetooth on macOS, the Windows Bluetooth APIs on Windows. |
+| `src/platform/` | Target-selected backend: BlueZ through the `bluer` D-Bus bindings on Linux, IOBluetooth plus a CoreBluetooth scan on macOS, the Windows Bluetooth APIs on Windows. Pure parsing that one backend owns sits in a sibling module compiled for that target and for tests, so it is tested on every host (`low_energy.rs` for Windows, `nearby.rs` for macOS). |
 | `src/settings/` | Asks qol-tray to open its host-rendered settings panel. |
 | `src/config/` | Typed config loading. |
 
@@ -39,6 +39,16 @@ Keep cfg selection in `platform/mod.rs`. Domain code in `src/bluetooth/` must st
 Each target backend owns every native Bluetooth interaction; on Linux that is BlueZ. Prefer the typed D-Bus bindings already in use over shelling out to a CLI: shelling out loses typed errors and turns adapter state into screen-scraping. When an operation needs a helper binary, inspect its metadata for doctor rather than executing it during a read-only check.
 
 Device readiness is a domain question, not a backend one. Audio classification and connection-readiness predicates live in `src/bluetooth/` so both the reconnect path and the settings payload agree on what "ready" means.
+
+## macOS discovery traps
+
+- `IOBluetoothDeviceInquiry` finds classic (BR/EDR) devices only. Bluetooth LE peripherals such as Logitech mice and keyboards, watches and LE headsets come only from the CoreBluetooth scan that the search runs next to it. Dropping either one silently loses a whole class of devices.
+- CoreBluetooth delivers its callbacks on the main queue, so the scan makes progress only while the main thread runs the run loop. The CLI and the daemon both search on the main thread. A search started on any other thread lists classic devices only and logs why.
+- macOS never exposes an LE device's address. A scanned peripheral has only an identifier that is specific to this Mac, and the public API cannot pair it. Its row carries `pairing: system_settings` and offers no actions, and every device command refuses the identifier at the address boundary. Do not reach for private IOBluetooth or CoreBluetooth selectors to fill that gap.
+- One device can arrive twice with no shared key: as an IOBluetooth address, because bonded LE devices sit in `pairedDevices()`, and as a CoreBluetooth identifier. Only the name joins the two, so a settings-paired row named like an address row is dropped.
+- `isPaired()` can read false for a bonded LE device in `pairedDevices()`, so treat membership in that list as paired. The settings list shows only paired, trusted or discovered devices, so a false paired flag hides the device.
+- `RSSI()` is an offset from the golden range, where 0 means in range, not dBm; `rawRSSI()` is the measured value. Both read 0 for an LE device that IOBluetooth does not track and +127 when the signal cannot be read. Report both as unknown.
+- CoreBluetooth needs the Bluetooth privacy permission of the app responsible for the process: the terminal for the CLI, qol-tray for the daemon. Without it, LE devices are left out with a warning naming System Settings > Privacy & Security > Bluetooth.
 
 ## Common changes
 
@@ -63,3 +73,5 @@ Device readiness is a domain question, not a backend one. Audio classification a
 ## Verification
 
 Run format, build, Clippy with warnings denied, and tests, plus `cargo run -q -p qol -- check`. Domain and retry logic must be covered without hardware. Claims about adapter, pairing, or reconnect behavior need evidence from a real adapter on a declared target, including that discovery stopped afterwards.
+
+To check the settings list without touching the user's running daemon, start the built binary with no arguments and two variables set. Point `QOL_TRAY_DAEMON_SOCKET` at a short path: macOS caps socket paths at 104 bytes, and a long scratch path fails with "listener failed to start". Set `QOL_TRAY_PLUGIN_ID` to an id of your own, so the daemon loads the default config with no managed devices to reconnect. Send it newline-delimited `{"action", "input"}` JSON (`start_search`, `search_status`, `devices`), and stop it with the `kill` action.
