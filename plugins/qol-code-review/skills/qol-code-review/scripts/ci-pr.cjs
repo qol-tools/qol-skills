@@ -417,10 +417,11 @@ function quoted(text) {
 
 function roleOf(entry, people) {
     const login = entry.user?.login;
-    const roles = [login === people.author && 'author', login === people.owner && 'repository owner'].filter(Boolean);
+    const inside = MAINTAINERS.has(entry.author_association);
+    const roles = [login === people.author && (inside ? 'author' : 'author, outside the repository'), login === people.owner && 'repository owner'].filter(Boolean);
     if (roles.length) return roles.join(', ');
     if (login === REVIEW_BOT) return 'review bot';
-    return MAINTAINERS.has(entry.author_association) ? 'maintainer' : null;
+    return inside ? 'maintainer' : null;
 }
 
 function linkedNumbers(texts, repo, self) {
@@ -440,6 +441,8 @@ function conversationMarkdown({ pull, comments, reviews, reviewComments, linked,
     ].sort((a, b) => String(a.at).localeCompare(String(b.at)));
     const kept = entries.map((entry) => ({ entry, role: roleOf(entry, people) })).filter(({ role }) => role);
     const left = entries.length - kept.length;
+    const linkedKept = linked.map((issue) => ({ issue, role: roleOf(issue, people) })).filter(({ role }) => role);
+    const linkedLeft = linked.length - linkedKept.length;
     const when = (at) => `${String(at || '').replace('T', ' ').slice(0, 16)} UTC`;
     return [
         `# Pull request #${pull.number}: ${pull.title || ''}`,
@@ -454,7 +457,9 @@ function conversationMarkdown({ pull, comments, reviews, reviewComments, linked,
         '',
         ...(kept.length ? kept.flatMap(({ entry, role }) => [`### @${entry.user?.login} · ${role} · ${when(entry.at)} · ${entry.kind}`, '', entry.html_url || '', '', quoted(entry.body), '']) : ['No comments.', '']),
         ...(left ? [`${left} comment${left === 1 ? '' : 's'} from people outside the repository left out.`, ''] : []),
-        ...(linked.length ? ['## Linked issues and pull requests', '', ...linked.flatMap((issue) => [`### #${issue.number} · ${issue.title || ''} · ${issue.state || ''}`, '', issue.html_url || '', '', quoted(issue.body), ''])] : []),
+        ...(linked.length ? ['## Linked issues and pull requests', ''] : []),
+        ...linkedKept.flatMap(({ issue, role }) => [`### #${issue.number} · ${issue.title || ''} · ${issue.state || ''} · @${issue.user?.login} · ${role}`, '', issue.html_url || '', '', quoted(issue.body), '']),
+        ...(linkedLeft ? [`${linkedLeft} linked issue${linkedLeft === 1 ? '' : 's'} opened by people outside the repository left out.`, ''] : []),
     ].join('\n');
 }
 
