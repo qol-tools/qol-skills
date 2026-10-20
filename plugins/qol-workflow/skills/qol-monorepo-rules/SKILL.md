@@ -69,7 +69,11 @@ session transcript and blocks ending the turn while the latest successful
 `gh pr create`, `gh pr ready`, `gh pr merge --auto`, or push to a branch with an
 open pull request has no successful park after it; `gh pr merge --disable-auto`
 (the testing or holding exception) releases it. It blocks once per stop, so a
-park that keeps failing cannot trap the session. Residual: a harness whose
+park that keeps failing cannot trap the session. It never blocks the
+switchboard (the kitty window tagged `qol_session_key=switchboard`), which park
+refuses, and it skips a pull request a waiting park in `qol-cli-sessions parked`
+already watches, since that watcher follows every push; the PreToolUse reminder
+stays silent in both cases. Residual: a harness whose
 transcript it cannot read (anything but Claude Code's JSONL) is not held at Stop. It exits once: 0 merged, 1 failed (a failed check or
 status on the head commit, a merge conflict, a merge queue removal, or the pull
 request closed), 3 no pull request, 4 `gh` kept failing, 5 still pending after

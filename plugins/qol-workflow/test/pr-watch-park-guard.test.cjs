@@ -49,9 +49,9 @@ function bash(command, ok = true) {
     ];
 }
 
-function stop(lines, extra = {}, exec = () => null) {
+function stop(lines, extra = {}, exec = () => null, env = {}) {
     const transcript = lines.flat().join('\n');
-    return decide({ hook_event_name: 'Stop', transcript_path: '/t.jsonl', cwd: '/work/qol-monorepo', ...extra }, () => transcript, exec);
+    return decide({ hook_event_name: 'Stop', transcript_path: '/t.jsonl', cwd: '/work/qol-monorepo', ...extra }, () => transcript, exec, env);
 }
 
 const openPr = (cmd) => (cmd === 'git' ? 'feat' : JSON.stringify({ url: URL, state: 'OPEN' }));
@@ -79,6 +79,40 @@ for (const [name, lines, exec, allowed] of stopCases) {
         }
     });
 }
+
+const OTHER = 'https://github.com/o/r/pull/8';
+const view = (url) => JSON.stringify({ url, state: 'OPEN' });
+const parked = (url) => `park-1\twaiting\tclaude\t/repo\tnode /p/bin/pr-watch.cjs ${url} --pretty\t-`;
+function fleet({ watching = [], branch = null, pulls = {} } = {}) {
+    return (cmd, args) => {
+        if (cmd === 'git') return branch;
+        if (cmd === 'gh') return pulls[args[2]] ?? (branch ? view(URL) : null);
+        if (cmd === 'kitten') return null;
+        return watching.map(parked).join('\n');
+    };
+}
+
+const ownershipCases = [
+    ['arming a pull request its owner is watching', [bash('gh pr merge 7 --auto')], fleet({ watching: [URL], pulls: { 7: view(URL) } }), true],
+    ['readying a pull request its owner is watching', [bash('gh pr ready 7 -R o/r')], fleet({ watching: [URL], pulls: { 7: view(URL) } }), true],
+    ['arming a pull request nobody watches', [bash('gh pr merge 7 --auto')], fleet({ watching: [OTHER], pulls: { 7: view(URL) } }), false],
+    ['an own unwatched push before arming a watched one', [bash('git push'), bash('gh pr merge 8 --auto')], fleet({ watching: [OTHER], branch: 'feat', pulls: { 8: view(OTHER) } }), false],
+];
+
+for (const [name, lines, exec, allowed] of ownershipCases) {
+    test(`Stop: ${name}`, () => {
+        const out = stop(lines, {}, exec);
+        if (allowed) assert.equal(out, null);
+        else assert.equal(out.decision, 'block');
+    });
+}
+
+test('Stop never blocks the switchboard, which park refuses', () => {
+    const lines = [bash('for n in 230 231; do gh pr ready $n -R o/r; gh pr merge $n -R o/r --auto; done')];
+    const exec = (cmd) => (cmd === 'kitten' ? JSON.stringify([{ tabs: [{ windows: [{ id: 9, user_vars: { qol_session_key: 'switchboard' } }] }] }]) : null);
+    assert.equal(stop(lines, { cwd: '/h/.local/share/qol-tray/sessions/switchboard' }, exec, { KITTY_WINDOW_ID: '9' }), null);
+    assert.equal(stop(lines, { cwd: '/h/.local/share/qol-tray/sessions/switchboard' }, exec, { KITTY_WINDOW_ID: '10' }).decision, 'block');
+});
 
 test('Stop never blocks twice in a row or without a transcript', () => {
     assert.equal(stop([bash('gh pr create --title "a: b"')], { stop_hook_active: true }), null);

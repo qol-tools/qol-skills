@@ -9,7 +9,7 @@ const { spawnSync } = require('node:child_process');
 
 const HOOK = path.join(__dirname, '..', 'bin', 'pr-watch-context.cjs');
 const PLUGIN_ROOT = path.resolve(__dirname, '..');
-const { trigger, render, reminderText, silenced, pushDir, parkBinary } = require('../bin/pr-watch-context.cjs');
+const { trigger, render, reminderText, silenced, pushDir, parkBinary, isSwitchboard, watchedPullRequests } = require('../bin/pr-watch-context.cjs');
 
 const URL = 'https://github.com/o/r/pull/7';
 
@@ -25,6 +25,7 @@ const triggers = [
     ['gh pr create', 'gh pr create --title "feat(x): y" --body z', fakeExec(null), { url: null }],
     ['gh pr ready', 'gh pr ready 7', fakeExec(null), { url: null }],
     ['gh pr merge --auto', 'gh pr merge --auto 7', fakeExec(null), { url: null }],
+    ['ready on an open pull request', 'gh pr ready 7', fakeExec(null, { url: URL, state: 'OPEN' }), { url: URL }],
     ['gh pr merge 7 --squash --auto', 'gh pr merge 7 --squash --auto', fakeExec(null), { url: null }],
     ['merge --auto on an open pull request', 'gh pr merge 7 --auto', fakeExec(null, { url: URL, state: 'OPEN' }), { url: URL }],
     ['merge --auto on a merged pull request', 'gh pr merge 7 --auto', fakeExec(null, { url: URL, state: 'MERGED' }), null],
@@ -49,6 +50,45 @@ for (const [name, command, exec, expected] of triggers) {
         assert.deepEqual(trigger(command, '/repo', exec), expected);
     });
 }
+
+test('a -R or --repo flag reaches gh pr view', () => {
+    const seen = [];
+    const exec = (cmd, args) => { seen.push(args); return JSON.stringify({ url: URL, state: 'OPEN' }); };
+    assert.deepEqual(trigger('gh pr ready 6 -R o/r', '/x', exec), { url: URL });
+    assert.deepEqual(trigger('gh pr merge 6 --repo=o/r --auto --squash', '/x', exec), { url: URL });
+    assert.deepEqual(seen, [
+        ['pr', 'view', '6', '--repo', 'o/r', '--json', 'url,state'],
+        ['pr', 'view', '6', '--repo', 'o/r', '--json', 'url,state'],
+    ]);
+});
+
+function kittyLs(id, vars) {
+    return JSON.stringify([{ tabs: [{ windows: [{ id, user_vars: vars }] }] }]);
+}
+
+const switchboardCases = [
+    ['the switchboard window', { KITTY_WINDOW_ID: '9' }, kittyLs(9, { qol_session_key: 'switchboard' }), true],
+    ['a fork window', { KITTY_WINDOW_ID: '9' }, kittyLs(9, { qol_session_key: 'fix-bug' }), false],
+    ['an untagged window', { KITTY_WINDOW_ID: '9' }, kittyLs(9, {}), false],
+    ['outside kitty', {}, kittyLs(9, { qol_session_key: 'switchboard' }), false],
+    ['kitty remote control failing', { KITTY_WINDOW_ID: '9' }, null, false],
+];
+
+for (const [name, env, out, expected] of switchboardCases) {
+    test(`isSwitchboard: ${name}`, () => {
+        assert.equal(isSwitchboard(env, (cmd) => (cmd === 'kitten' ? out : null)), expected);
+    });
+}
+
+test('watchedPullRequests lists the pull requests of waiting parks only', () => {
+    const rows = [
+        `park-2\twaiting\tclaude\t/repo\tnode /p/bin/pr-watch.cjs ${URL} --pretty\t-`,
+        'park-1\tdelivered\tclaude\t/repo\tnode /p/bin/pr-watch.cjs https://github.com/o/r/pull/8 --pretty\tv1:kitty:x',
+        'park-0\twaiting\tclaude\t/repo\t\t-',
+    ].join('\n');
+    assert.deepEqual([...watchedPullRequests(() => rows)], [URL]);
+    assert.deepEqual([...watchedPullRequests(() => null)], []);
+});
 
 test('pushDir follows git -C and a leading cd', () => {
     assert.equal(pushDir('git -C /wt push', '/repo'), path.resolve('/wt'));
@@ -91,7 +131,7 @@ function runHook(command, env = {}) {
     return spawnSync('node', [HOOK], {
         input: JSON.stringify({ tool_name: 'Bash', tool_input: { command }, cwd: home }),
         encoding: 'utf8',
-        env: { ...process.env, HOME: home, CLAUDE_CONFIG_DIR: '', CLAUDE_PLUGIN_ROOT: PLUGIN_ROOT, ...env },
+        env: { ...process.env, HOME: home, CLAUDE_CONFIG_DIR: '', CLAUDE_PLUGIN_ROOT: PLUGIN_ROOT, KITTY_WINDOW_ID: '', ...env },
     });
 }
 

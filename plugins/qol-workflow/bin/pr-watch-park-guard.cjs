@@ -3,7 +3,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { trigger, parkBinary } = require('./pr-watch-context.cjs');
+const { trigger, parkBinary, isSwitchboard, watchedPullRequests } = require('./pr-watch-context.cjs');
 
 const QOL_PATH_COMPONENT = /(^|[\\/])qol-[^\\/]+([\\/]|$)/;
 
@@ -67,12 +67,15 @@ function bashCalls(transcript) {
 }
 
 function unparkedPullRequest(calls, cwd, exec) {
+    let watched;
     for (let index = calls.length - 1; index >= 0; index -= 1) {
         const call = calls[index];
         if (!call.ok) continue;
         if (PARKED_RUN.test(call.command) || HOLD.test(call.command)) return null;
         const hit = trigger(call.command, call.cwd || cwd, exec);
-        if (hit) return hit;
+        if (!hit) continue;
+        watched ??= watchedPullRequests(exec);
+        if (!hit.url || !watched.has(hit.url)) return hit;
     }
     return null;
 }
@@ -86,7 +89,7 @@ function blockStop(hit) {
     };
 }
 
-function decide(payload, readTranscript = (path) => fs.readFileSync(path, 'utf8'), exec) {
+function decide(payload, readTranscript = (path) => fs.readFileSync(path, 'utf8'), exec, env = process.env) {
     if (!QOL_PATH_COMPONENT.test(payload?.cwd || process.cwd())) return null;
     const event = payload?.hook_event_name;
     if (event === 'PreToolUse') {
@@ -102,7 +105,7 @@ function decide(payload, readTranscript = (path) => fs.readFileSync(path, 'utf8'
             return null;
         }
         const hit = unparkedPullRequest(bashCalls(transcript), payload.cwd || process.cwd(), exec);
-        return hit ? blockStop(hit) : null;
+        return hit && !isSwitchboard(env, exec) ? blockStop(hit) : null;
     }
     return null;
 }
