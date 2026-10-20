@@ -50,6 +50,7 @@ const cases = [
     ['removed from queue after head', pr({ auto: false, events: [{ __typename: 'RemovedFromMergeQueueEvent', reason: 'failed checks', createdAt: '2026-10-08T11:00:00Z' }] }), 'failed'],
     ['removal older than head', pr({ events: [{ __typename: 'RemovedFromMergeQueueEvent', reason: 'x', createdAt: '2026-10-08T09:00:00Z' }] }), 'pending'],
     ['removal superseded by a later auto-merge arm', pr({ armed: '2026-10-08T12:00:00Z', events: [{ __typename: 'RemovedFromMergeQueueEvent', reason: 'manual', createdAt: '2026-10-08T11:00:00Z' }] }), 'pending'],
+    ['removal because the queue merged it, before the state flips', pr({ auto: false, events: [{ __typename: 'RemovedFromMergeQueueEvent', reason: 'merged', createdAt: '2026-10-08T11:00:00Z' }] }), 'pending'],
     ['removal after the auto-merge arm', pr({ events: [{ __typename: 'RemovedFromMergeQueueEvent', reason: 'failed checks', createdAt: '2026-10-08T11:00:00Z' }] }), 'failed'],
     ['re-added after removal', pr({ queued: true, events: [{ __typename: 'AddedToMergeQueueEvent' }] }), 'pending'],
 ];
