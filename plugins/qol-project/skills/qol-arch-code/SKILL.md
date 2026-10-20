@@ -859,6 +859,8 @@ The explorer plugin shipped `[action.open]` with no shortcut and no flow, so its
 - an `[action.open]` run action that no exported `[[shortcuts]]` entry with `action = "open"` and no `[launcher]` table reaches. `qol-launcher` (it would open itself) and `qol-alt-tab` (a hotkey picker) are exempt in the hook.
 - a `qol-config.toml` beside the manifest with no `kind = "settings"` action. The tray hosts that page itself only when `[capabilities] gpui = true`.
 
+A plugin with nothing to set (session, removeapp, explorer) ships no `qol-config.toml` and no settings action, and shows as a row on the core Plugins page instead of a settings page. The guard accepts that; never add a placeholder `qol-config.toml` to satisfy it.
+
 Gaps are compared before and after the edit, so a manifest that already had one only blocks when the edit adds a new one. `qac lint` without `--base` lists them all. There is no bypass: ship the entry in the same edit, or add a plugin that must not have one to the hook's exempt set with its reason.
 
 Residual: the tray renders no plugin `[menu]` items (only its own Settings and mode toggle), so a tray menu entry is not plugin data and this guard does not ask for one. An open action under another id, or a window opened only by a runtime action, passes.
