@@ -10,6 +10,7 @@ const AGGREGATE_JOB = /gate/i;
 const LOG_LINES = 40;
 const LOG_JOBS = 3;
 const GH_RETRIES = 5;
+const SETTLE_SECONDS = 120;
 const ANSI = /\x1b\[[0-9;]*m/g;
 const LOG_NOISE = /^##\[(end)?group\]/;
 const REVIEW_MARKERS = { '<!-- qol-code-review -->': 'review', '<!-- qol-queue-fix -->': 'queue fix' };
@@ -21,7 +22,7 @@ const REVIEW_FAILED = /Review failed|Fixing failed|outside this pull request|Not
 const QUERY = `query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){
 number url state isDraft isInMergeQueue mergeStateStatus autoMergeRequest{enabledAt}
 commits(last:1){nodes{commit{oid committedDate statusCheckRollup{contexts(first:100){nodes{__typename
-... on CheckRun{name status conclusion detailsUrl}
+... on CheckRun{name status conclusion detailsUrl checkSuite{workflowRun{databaseId workflow{databaseId}}}}
 ... on StatusContext{context state targetUrl}}}}}}}
 timelineItems(last:1,itemTypes:[ADDED_TO_MERGE_QUEUE_EVENT,REMOVED_FROM_MERGE_QUEUE_EVENT]){nodes{__typename
 ... on RemovedFromMergeQueueEvent{reason createdAt}}}
@@ -29,6 +30,9 @@ comments(last:20){nodes{author{__typename login} body createdAt url}}}}}`;
 
 const HELP = `usage: pr-watch [<pr-url-or-number>] [--pretty] [--interval <s>] [--timeout <min>]
 Blocks until the pull request merges or fails, then exits once.
+Checks from an older run of a workflow are ignored once a newer run of it reports, and a
+failure seen in the first 120 s ends the watch only if it still holds then, so checks a
+rerun is about to replace do not end it.
 Exit: 0 merged, 1 failed, 2 usage, 3 no pull request, 4 gh error, 5 timeout, 6 idle, 7 review needs you.`;
 
 function gh(args) {
@@ -89,9 +93,15 @@ function fetchSnapshot(target, run) {
 
 function checksOf(commit) {
     const nodes = commit?.statusCheckRollup?.contexts?.nodes ?? [];
+    const runOf = (node) => node.checkSuite?.workflowRun;
+    const newest = new Map();
+    for (const run of nodes.map(runOf).filter((run) => run?.workflow)) {
+        newest.set(run.workflow.databaseId, Math.max(newest.get(run.workflow.databaseId) ?? 0, run.databaseId));
+    }
+    const replaced = (node) => Boolean(runOf(node)?.workflow) && runOf(node).databaseId < newest.get(runOf(node).workflow.databaseId);
     const superseded = (node) => node.__typename === 'CheckRun' && node.conclusion === 'CANCELLED'
         && nodes.some((other) => other.__typename === 'CheckRun' && other.name === node.name && other.conclusion !== 'CANCELLED');
-    return nodes.filter((node) => !superseded(node)).map((node) => (node.__typename === 'CheckRun'
+    return nodes.filter((node) => !replaced(node) && !superseded(node)).map((node) => (node.__typename === 'CheckRun'
         ? {
             name: node.name,
             url: node.detailsUrl,
@@ -131,7 +141,7 @@ function parseReview(body, url) {
         if (lane) severity = lane[1].toLowerCase();
         const item = /^<details><summary>(.*?)(?: <code>(fixed|skipped)<\/code>)?<\/summary>/.exec(line);
         if (item && severity && item[1] !== 'Full review') {
-            findings.push({ severity, title: unescapeHtml(item[1]), status: item[2] || 'open' });
+            findings.push({ severity, title: unescapeHtml(item[1]), status: item[2] || (severity === 'settled' ? 'settled' : 'open') });
         }
     }
     const left = Number(LEFT_FOR_YOU.exec(body)?.[1] ?? 0);
@@ -252,7 +262,8 @@ function watch(opts, { run = gh, sleep = wait, now = Date.now } = {}) {
         } else {
             errors = 0;
             const verdict = classify(snapshot.pr, since);
-            if (verdict.outcome !== 'pending') {
+            const settling = verdict.outcome === 'failed' && elapsed < SETTLE_SECONDS;
+            if (verdict.outcome !== 'pending' && !settling) {
                 const failures = attachLogs(verdict.failures, run);
                 return {
                     code: EXIT[verdict.outcome],
@@ -288,7 +299,7 @@ function main(argv) {
     return code;
 }
 
-module.exports = { classify, parseReview, parseArgs, parseTarget, resolveTarget, attachLogs, cleanLogLine, render, watch, EXIT };
+module.exports = { classify, parseReview, parseArgs, parseTarget, resolveTarget, attachLogs, cleanLogLine, render, watch, EXIT, SETTLE_SECONDS };
 
 if (require.main === module) {
     process.exit(main(process.argv.slice(2)));

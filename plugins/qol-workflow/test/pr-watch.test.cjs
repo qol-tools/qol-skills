@@ -23,6 +23,7 @@ function pr({ state = 'OPEN', draft = false, checks = [], merge = 'BLOCKED', aut
 const run = (name, status, conclusion = null, id = 1) => ({
     __typename: 'CheckRun', name, status, conclusion, detailsUrl: `https://github.com/o/r/actions/runs/9/job/${id}`,
 });
+const inRun = (check, workflow, runId) => ({ ...check, checkSuite: { workflowRun: { databaseId: runId, workflow: { databaseId: workflow } } } });
 const status = (context, state) => ({ __typename: 'StatusContext', context, state, targetUrl: 'https://x' });
 
 const cases = [
@@ -35,6 +36,9 @@ const cases = [
     ['cancelled run superseded by a running rerun', pr({ checks: [run('review', 'COMPLETED', 'CANCELLED', 1), run('review', 'IN_PROGRESS', null, 2)] }), 'pending'],
     ['cancelled run superseded by a green rerun', pr({ auto: false, checks: [run('review', 'COMPLETED', 'CANCELLED', 1), run('review', 'COMPLETED', 'SUCCESS', 2)] }), 'idle'],
     ['cancelled run beside a failed rerun', pr({ checks: [run('review', 'COMPLETED', 'CANCELLED', 1), run('review', 'COMPLETED', 'FAILURE', 2)] }), 'failed'],
+    ['failed checks of a run a newer run of the workflow replaced', pr({ checks: [inRun(run('Publish the review', 'COMPLETED', 'FAILURE', 1), 50, 100), inRun(run('claude review', 'COMPLETED', 'FAILURE', 2), 50, 100), inRun(run('Review with qol-code-review', 'IN_PROGRESS', null, 3), 50, 101)] }), 'pending'],
+    ['a newer run of another workflow replaces nothing', pr({ checks: [inRun(run('Wait for the review', 'COMPLETED', 'FAILURE', 1), 60, 100), inRun(run('Wait for the review', 'IN_PROGRESS', null, 2), 70, 101)] }), 'failed'],
+    ['a failure in the newest run still counts', pr({ checks: [inRun(run('claude review', 'COMPLETED', 'SUCCESS', 1), 50, 100), inRun(run('claude review', 'COMPLETED', 'FAILURE', 2), 50, 101)] }), 'failed'],
     ['skipped is fine', pr({ checks: [run('lint', 'COMPLETED', 'SKIPPED'), run('test', 'IN_PROGRESS')] }), 'pending'],
     ['failed status context', pr({ checks: [status('queue', 'FAILURE')] }), 'failed'],
     ['errored status context', pr({ checks: [status('queue', 'ERROR')] }), 'failed'],
@@ -131,9 +135,21 @@ test('watch waits through pending polls and a transient error, then reports the 
         { run: fakeGh([pr({ checks: [run('lint', 'IN_PROGRESS', null, 5)] }), null, pr({ checks: [run('lint', 'COMPLETED', 'FAILURE', 5)] })]), now, sleep },
     );
     assert.equal(result.code, EXIT.failed);
-    assert.equal(result.report.elapsed_s, 60);
+    assert.equal(result.report.elapsed_s, 120);
     assert.equal(result.report.failures[0].log, 'error: it broke');
-    assert.match(render(result.report), /PR #7 failed at abcdef123 after 60s[\s\S]*error: it broke/);
+    assert.match(render(result.report), /PR #7 failed at abcdef123 after 120s[\s\S]*error: it broke/);
+});
+
+test('watch lets a failure a rerun replaces settle instead of ending at once', () => {
+    const { now, sleep } = clock();
+    const stale = pr({ checks: [run('Wait for the review', 'COMPLETED', 'FAILURE', 5)] });
+    const rerun = pr({ checks: [run('Wait for the review', 'IN_PROGRESS', null, 6)] });
+    const result = watch(
+        { target: 'https://github.com/o/r/pull/7', interval: 30, timeout: 120 },
+        { run: fakeGh([stale, stale, rerun, pr({ state: 'MERGED' })]), now, sleep },
+    );
+    assert.equal(result.code, EXIT.merged);
+    assert.equal(result.report.elapsed_s, 90);
 });
 
 test('watch exits 0 on merge', () => {
@@ -243,6 +259,12 @@ test('parseReview reads the summary and every finding with its lane and status',
 
 const bot = (body, createdAt = '2026-10-08T12:00:00Z') => ({ author: { __typename: 'Bot', login: 'github-actions' }, body, createdAt, url: 'https://c' });
 const SINCE = '2026-10-08T11:00:00Z';
+
+test('parseReview marks the findings a decision settled', () => {
+    const review = parseReview(`${REVIEW_PASS.trimEnd()}\n\n#### Settled · 1\n\n<details><summary>Rail rows squeeze</summary>\n\nbody\n\n</details>\n`, 'https://c');
+    assert.deepEqual(review.findings, [{ severity: 'settled', title: 'Rail rows squeeze', status: 'settled' }]);
+    assert.equal(review.needs_you, false);
+});
 
 test('classify wakes on a new review that needs the agent', () => {
     const verdict = classify(pr({ checks: [run('lint', 'IN_PROGRESS')], comments: [bot(REVIEW_LEFT)] }), SINCE);

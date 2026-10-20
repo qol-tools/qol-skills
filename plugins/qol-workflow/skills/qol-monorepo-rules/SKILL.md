@@ -51,7 +51,7 @@ A pull request you open is yours until it merges. Do not report it done at
 `gh pr create`; listen for its outcome and fix what fails.
 
 <!-- inject:pr-watch:start -->
-[qol-pr-watch] When this command succeeds, park this session on the pull request watcher and end your turn with one line saying what you wait for: `<qol-cli-sessions> park -- node <qol-workflow>/bin/pr-watch.cjs <pr-url> --pretty`. The terminal stays open and the watcher's exit code and output are submitted into it when it exits, unless parking is on for this session: then the terminal closes once the turn ends and qol resumes this same conversation in a new tab with the result. Park's output says which applies. If park itself fails, report the error to the user; never run the watcher outside park. Exit 1 is a failure with the failed steps' logs: fix it on the branch, gate locally, push, and park on the watcher again. Exit 7 is review feedback from the qol-code-review bot: fix the findings it left for you, pull the branch first when the bot pushed a fix commit, then park on the watcher again. Exit 0 is merged; exit 6 means arm `gh pr merge --auto`, except on a draft: leave it unarmed and report it ready for the user. Never poll with sleep loops or repeated `gh pr checks`. Skip only a pull request the user is testing or holding.
+[qol-pr-watch] When this command succeeds, park this session on the pull request watcher and end your turn with one line saying what you wait for: `<qol-cli-sessions> park -- node <qol-workflow>/bin/pr-watch.cjs <pr-url> --pretty`. The terminal stays open and the watcher's exit code and output are submitted into it when it exits, unless parking is on for this session: then the terminal closes once the turn ends and qol resumes this same conversation in a new tab with the result. Park's output says which applies. If park itself fails, report the error to the user; never run the watcher outside park. Exit 1 is a failure with the failed steps' logs: fix it on the branch, gate locally, push, and park on the watcher again. Exit 7 is review feedback from the qol-code-review bot: fix the findings it left for you, pull the branch first when the bot pushed a fix commit, then park on the watcher again; a finding against a decision the user made on purpose is answered in a pull request comment instead, then the review is rerun. Exit 0 is merged; exit 6 means arm `gh pr merge --auto`, except on a draft: leave it unarmed and report it ready for the user. Never poll with sleep loops or repeated `gh pr checks`. Skip only a pull request the user is testing or holding.
 <!-- inject:pr-watch:end -->
 
 The watcher polls GitHub inside its own process, so no turn is spent until
@@ -76,10 +76,25 @@ request closed), 3 no pull request, 4 `gh` kept failing, 5 still pending after
 two hours, 6 checks green but auto-merge not armed, 7 a qol-code-review or
 queue-fix comment posted after the watcher started that needs you: findings
 "left for you", a fix commit the bot pushed to the branch, or a failed review
-or fix. Only a pass verdict lets the pull request into the merge queue, so
-every open finding of a conditional or block review is left for you. A pass
+or fix. Only a pass verdict or an owner override lets the pull request into the
+merge queue, so every open finding of a conditional or block review is left for you. A pass
 keeps it watching; the latest comment supersedes earlier ones. A push to the branch
-while it runs is followed, because it always reads the latest head commit.
+while it runs is followed, because it always reads the latest head commit. Checks
+of an older run of a workflow are ignored once a newer run of it reports, and a
+failure seen in the first two minutes ends the watch only if it still holds then,
+because a rerun takes that long to replace the checks it supersedes.
+
+A finding that argues with a decision the user made on purpose, such as a look,
+a layout or a scope cut, is not fixed. Answer it in a pull request comment that
+states the decision, then rerun the whole review run with `gh run rerun <run-id>`
+(not `--failed`): the reviewer reads the description and the comments live,
+drops findings a decision of the author or the owner settles, and lists them
+under Settled. The new review run reruns the tests and CodeQL runs that stopped
+on the old verdict, so they wait for its verdict. When the review still blocks,
+the owner can add the `review-override` label: it records the override in a pull
+request comment and in the claude review check, passes that check for the head
+commit only, and reruns the checks that stopped on the old verdict; a new push
+is reviewed again. Add that label only when the user asks for an override.
 
 Pushing fixes to the branch of a pull request the user asked for is part of
 that request. Re-arm `gh pr merge --auto` when the merge queue dropped the pull
