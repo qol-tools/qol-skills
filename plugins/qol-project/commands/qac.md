@@ -1,5 +1,5 @@
 ---
-description: Run the qol-arch-code, cross-platform, cicd and logging hooks over whole files in the current repo
+description: Run the qol-arch-code, cross-platform, cicd, logging and plugin-contract hooks over whole files in the current repo
 ---
 
 !`node "${CLAUDE_PLUGIN_ROOT}/scripts/qac.mjs" lint --pretty --open $ARGUMENTS`
