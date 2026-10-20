@@ -1,7 +1,7 @@
 {
   "name": "qol-plugin-bluetooth",
   "description": "Skills for the qol-bluetooth plugin: adapter and device control, discovery, and reliable reconnection on Linux (BlueZ), macOS and Windows.",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "author": {
     "name": "KMRH47"
   },
