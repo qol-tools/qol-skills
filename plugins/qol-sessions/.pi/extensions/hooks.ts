@@ -6,6 +6,7 @@ const PLUGIN_DIR = path.resolve(__dirname, "../..");
 
 const PRE_TOOL_USE_HOOKS = [
     { matcher: "Bash|mcp__.*session_bridge", script: "bin/deny-watched-round-wait.cjs" },
+    { matcher: "AskUserQuestion", script: "bin/deny-lane-ask-user.cjs" },
 ];
 
 const USER_PROMPT_SUBMIT_HOOKS = [

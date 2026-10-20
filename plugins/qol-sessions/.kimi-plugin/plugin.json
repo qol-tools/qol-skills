@@ -25,6 +25,11 @@
       "event": "PreToolUse",
       "matcher": "Bash|mcp__.*session_bridge",
       "command": "node bin/deny-watched-round-wait.cjs"
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "AskUserQuestion",
+      "command": "node bin/deny-lane-ask-user.cjs"
     }
   ]
 }
