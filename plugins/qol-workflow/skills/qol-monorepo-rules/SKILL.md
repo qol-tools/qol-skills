@@ -93,14 +93,14 @@ a layout or a scope cut, is not fixed. Answer it in a pull request comment that
 states the decision, then rerun the whole review run with `gh run rerun <run-id>`
 (not `--failed`): the reviewer reads the description and the comments live,
 drops findings a decision of the author or the owner settles, and lists them
-under Settled. The new review run reruns the tests and CodeQL runs that stopped
-on the old verdict, so they wait for its verdict. When the finished review of
-the head commit still blocks, the owner can comment `/review-override <sha>`
-naming that commit: it records the override in a pull request comment and in the
-claude review check, passes that check for that commit only, and reruns the
-checks that stopped on the old verdict. An override that names another commit or
-comes while the review runs is refused, and a new push is reviewed again. Post
-it only when the user asks for an override.
+under Settled. The tests and CodeQL runs never wait for the verdict: they run
+beside the review, and the merge queue admits the pull request only once both
+required checks pass. When the finished review of the head commit still
+blocks, the owner can comment `/review-override <sha>` naming that commit: it
+records the override in a pull request comment and in the claude review check
+and passes that check for that commit only. An override that names another
+commit or comes while the review runs is refused, and a new push is reviewed
+again. Post it only when the user asks for an override.
 
 Pushing fixes to the branch of a pull request the user asked for is part of
 that request. Re-arm `gh pr merge --auto` when the merge queue dropped the pull
