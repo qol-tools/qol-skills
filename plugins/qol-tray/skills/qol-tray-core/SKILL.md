@@ -225,8 +225,11 @@ or rename changes the rule without touching the hook. It checks:
   plugin `Deserialize` struct that code reads, and the plugin mentions every
   `qol-runtime.toml` action and query.
 
-Edits are judged on what they add, so existing debt never blocks unrelated
-work; there is no bypass. Fix the code or delete the key.
+Edits, and `qac lint --base` in CI, are judged on what they add, so existing
+debt never blocks unrelated work. A finding keeps its identity (file, rule and
+the key or id it names) while its wording changes, and a second copy of one
+counts as added. `qac lint` without a base reports every finding in each
+contract file. There is no bypass. Fix the code or delete the key.
 
 Incident (2026-10-20): lights declared `duration_seconds` on a runtime action
 the spec has no field for, its stream `throttle_ms` was never read by the

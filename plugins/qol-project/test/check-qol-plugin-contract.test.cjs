@@ -641,6 +641,40 @@ process.stdout.write(JSON.stringify(lint.lintFile(file, require('fs').readFileSy
     assert.match(messages[0], /^Icon names no mark in plugin\.toml: \[plugin\] icon = "cog" is not a qol_theme mark name.* \(line 4\)\.\n\[qol-plugin-contract\]/);
 });
 
+test('existing debt whose wording changes is not re-reported as added', () => {
+    const item = '{ type = "action", id = "run", label = "Run" }';
+    const debt = MANIFEST.replace('items = []', `items = [${item}]`);
+    const repo = fixture({ 'plugins/demo/plugin.toml': debt }, { commit: true });
+    allowed(edit(repo, 'plugins/demo/plugin.toml', `items = [${item}]`, `items = [${item}, ${item}]`));
+});
+
+test('a second copy of an existing finding is still reported as added', () => {
+    const once = '[[shortcuts]]\nid = "go"\nname = "Go"\naction = "run"\n\n[[shortcuts]]\nid = "go"\nname = "Again"\naction = "run"\n';
+    const repo = fixture({ 'plugins/demo/plugin.toml': `${MANIFEST}\n${once}` }, { commit: true });
+    const reason = denial(write(repo, 'plugins/demo/plugin.toml', `${MANIFEST}\n${once}\n[[shortcuts]]\nid = "go"\nname = "Third"\naction = "run"\n`));
+    assert.match(reason, /leaves a plugin contract declaration the code does not honour/);
+    assert.match(reason, /id "go" appears more than once/);
+});
+
+test('lint mode against a base reports only findings the contract file added', () => {
+    const broken = MANIFEST.replace('icon = "gear"', 'icon = "cog"');
+    const repo = fixture({ 'plugins/demo/plugin.toml': broken });
+    const env = { ...process.env, TMPDIR: repo.temp, TEMP: repo.temp, TMP: repo.temp };
+    const runner = `const lint = require(${JSON.stringify(HOOK)});
+const [file, baseline] = process.argv.slice(1);
+process.stdout.write(JSON.stringify(lint.lintFile(file, require('fs').readFileSync(file, 'utf8'), baseline)));`;
+    const lintAgainst = baseline => {
+        const result = spawnSync(process.execPath, ['-e', runner, repo.file('plugins/demo/plugin.toml'), baseline], { encoding: 'utf8', env });
+        assert.equal(result.status, 0, result.stderr);
+        return JSON.parse(result.stdout);
+    };
+    assert.deepEqual(lintAgainst(broken), []);
+    assert.deepEqual(lintAgainst(broken.replace('[menu]', '[menu]\nunused = 1')), []);
+    const added = lintAgainst(MANIFEST);
+    assert.equal(added.length, 1);
+    assert.match(added[0], /^Icon names no mark in plugin\.toml: \[plugin\] icon = "cog"/);
+});
+
 test('mentions accepts a literal or two literals joined directly or by a separator', () => {
     const { mentions } = require(HOOK);
     const strings = new Set(['run', 'set_', 'pointer_speed', 'touchpad', 'on']);

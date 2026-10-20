@@ -398,28 +398,32 @@ function mentions(strings, token) {
     return false;
 }
 
-function finding(file, line, rule, detail) {
-    return { file, line: line || 1, rule, detail };
+function finding(file, line, rule, subject, detail) {
+    return { file, line: line || 1, rule, subject, detail };
+}
+
+function stableSubject(tomlPath) {
+    return tomlPath.replace(/\[\d+\]/g, '[]');
 }
 
 function schemaFindings(repo, doc, typeName) {
     const result = rust.checkDocument(contractSchema(repo), typeName, doc.value);
     if (!result) {
-        return [finding(doc.file, 1, 'schema', `no Deserialize struct named ${typeName} exists under ${SCHEMA_DIRS.join(', ')}, so nothing checks this file`)];
+        return [finding(doc.file, 1, 'schema', typeName, `no Deserialize struct named ${typeName} exists under ${SCHEMA_DIRS.join(', ')}, so nothing checks this file`)];
     }
     const out = [];
     const fatal = 'so the tray refuses the whole file';
     const at = problem => (problem.table ? toml.keyLine(doc.lines, problem.table, problem.key) : 1);
     for (const problem of result.problems) {
         if (problem.kind === 'unknown') {
-            out.push(finding(doc.file, at(problem), 'unknown', `${problem.path} is not a field of ${problem.owner.name}, ${problem.strict ? fatal : 'so serde drops it and it does nothing'}`));
+            out.push(finding(doc.file, at(problem), 'unknown', stableSubject(problem.path), `${problem.path} is not a field of ${problem.owner.name}, ${problem.strict ? fatal : 'so serde drops it and it does nothing'}`));
         } else if (problem.kind === 'type') {
-            out.push(finding(doc.file, at(problem), 'type', `${problem.path || 'the file'} must be ${problem.expected}, not ${problem.actual}, ${fatal}`));
+            out.push(finding(doc.file, at(problem), 'type', stableSubject(problem.path || ''), `${problem.path || 'the file'} must be ${problem.expected}, not ${problem.actual}, ${fatal}`));
         } else if (problem.kind === 'missing') {
             const where = problem.path ? `${problem.path}.${problem.missing}` : problem.missing;
-            out.push(finding(doc.file, at(problem), 'missing', `${where} is required by ${problem.owner.name}, ${fatal}`));
+            out.push(finding(doc.file, at(problem), 'missing', stableSubject(where), `${where} is required by ${problem.owner.name}, ${fatal}`));
         } else if (problem.kind === 'variant') {
-            out.push(finding(doc.file, at(problem), 'variant', `${problem.path} = ${JSON.stringify(problem.actual)} is not one of ${problem.allowed.join(', ')}, ${fatal}`));
+            out.push(finding(doc.file, at(problem), 'variant', stableSubject(problem.path), `${problem.path} = ${JSON.stringify(problem.actual)} is not one of ${problem.allowed.join(', ')}, ${fatal}`));
         }
     }
     const { fields, strings } = readers(repo);
@@ -427,10 +431,10 @@ function schemaFindings(repo, doc, typeName) {
         const line = toml.keyLine(doc.lines, use.table, use.key);
         if (use.swallowed) {
             if (!(fields.has(use.field.rust) && strings.has(use.key))) {
-                out.push(finding(doc.file, line, 'unknown', `${use.path} is not a field of ${use.owner.name}; it lands in ${use.owner.name}.${use.field.rust}, and no code looks up "${use.key}" there`));
+                out.push(finding(doc.file, line, 'unknown', stableSubject(use.path), `${use.path} is not a field of ${use.owner.name}; it lands in ${use.owner.name}.${use.field.rust}, and no code looks up "${use.key}" there`));
             }
         } else if (!fields.has(use.field.rust)) {
-            out.push(finding(doc.file, line, 'unread', `${use.path} sets ${use.owner.name}.${use.field.rust}, which no code outside tests reads`));
+            out.push(finding(doc.file, line, 'unread', stableSubject(use.path), `${use.path} sets ${use.owner.name}.${use.field.rust}, which no code outside tests reads`));
         }
     }
     return out;
@@ -507,16 +511,16 @@ function manifestFindings(repo, dir, docs) {
         if (!isTable(action)) continue;
         const kind = action.kind ?? 'run';
         if (kind === 'toggle-config' && !stored.has(action.config_key)) {
-            out.push(finding(doc.file, actionLine(id), 'toggle', `[action.${id}] toggles config_key ${JSON.stringify(action.config_key ?? null)}, which no stored qol-config.toml field declares`));
+            out.push(finding(doc.file, actionLine(id), 'toggle', id, `[action.${id}] toggles config_key ${JSON.stringify(action.config_key ?? null)}, which no stored qol-config.toml field declares`));
         }
         if (!EXECUTABLE_KINDS.has(kind) || (kind === 'settings' && hasConfig && capabilities.gpui === true)) continue;
         const routes = routesFor(id, action, manifest, socket);
         if (routes.length === 0) {
-            out.push(finding(doc.file, actionLine(id), 'target', `[action.${id}] has no enabled [daemon] socket and no [runtime] command, so the tray cannot run it`));
+            out.push(finding(doc.file, actionLine(id), 'target', id, `[action.${id}] has no enabled [daemon] socket and no [runtime] command, so the tray cannot run it`));
         } else if (!routes.some(route => route.token === undefined || mentions(facts.strings, route.token))) {
             const how = routes.map(route => `as "${route.token}" through ${route.via}`).join(' or ');
             const tokens = [...new Set(routes.map(route => `"${route.token}"`))].join(' or ');
-            out.push(finding(doc.file, actionLine(id), 'dispatch', `[action.${id}] reaches the plugin ${how}, but neither ${dir}/src nor its path dependencies mention ${tokens} outside tests`));
+            out.push(finding(doc.file, actionLine(id), 'dispatch', id, `[action.${id}] reaches the plugin ${how}, but neither ${dir}/src nor its path dependencies mention ${tokens} outside tests`));
         }
     }
 
@@ -527,47 +531,47 @@ function manifestFindings(repo, dir, docs) {
         const line = toml.tableLine(lines, shortcut);
         const target = typeof shortcut.action === 'string' ? shortcut.action : 'open';
         if (!executable.has(target)) {
-            out.push(finding(doc.file, line, 'shortcut', `[[shortcuts]] ${shortcut.id} runs action "${target}", which plugin.toml does not declare as run or settings`));
+            out.push(finding(doc.file, line, 'shortcut', String(shortcut.id), `[[shortcuts]] ${shortcut.id} runs action "${target}", which plugin.toml does not declare as run or settings`));
         }
-        if (seen.has(shortcut.id)) out.push(finding(doc.file, line, 'duplicate', `[[shortcuts]] id "${shortcut.id}" appears more than once`));
+        if (seen.has(shortcut.id)) out.push(finding(doc.file, line, 'duplicate', String(shortcut.id), `[[shortcuts]] id "${shortcut.id}" appears more than once`));
         seen.add(shortcut.id);
     }
 
     const builds = facts.bins.size ? [...facts.bins].sort().join(', ') : 'no binary';
     if (typeof runtime?.command === 'string' && !facts.bins.has(runtime.command)) {
-        out.push(finding(doc.file, toml.keyLine(lines, runtime, 'command'), 'binary', `[runtime] command = "${runtime.command}", but ${dir}/Cargo.toml builds ${builds}`));
+        out.push(finding(doc.file, toml.keyLine(lines, runtime, 'command'), 'binary', 'runtime', `[runtime] command = "${runtime.command}", but ${dir}/Cargo.toml builds ${builds}`));
     }
     if (daemon && typeof daemon.command === 'string' && !facts.bins.has(daemon.command)) {
-        out.push(finding(doc.file, toml.keyLine(lines, daemon, 'command'), 'binary', `[daemon] command = "${daemon.command}", but ${dir}/Cargo.toml builds ${builds}`));
+        out.push(finding(doc.file, toml.keyLine(lines, daemon, 'command'), 'binary', 'daemon', `[daemon] command = "${daemon.command}", but ${dir}/Cargo.toml builds ${builds}`));
     }
     const dependencies = isTable(manifest.dependencies) && Array.isArray(manifest.dependencies.binaries) ? manifest.dependencies.binaries : [];
     for (const dependency of dependencies) {
         if (isTable(dependency) && typeof dependency.name === 'string' && !facts.bins.has(dependency.name)) {
-            out.push(finding(doc.file, toml.tableLine(lines, dependency), 'binary', `[[dependencies.binaries]] name = "${dependency.name}", but ${dir}/Cargo.toml builds ${builds}`));
+            out.push(finding(doc.file, toml.tableLine(lines, dependency), 'binary', `dependency:${dependency.name}`, `[[dependencies.binaries]] name = "${dependency.name}", but ${dir}/Cargo.toml builds ${builds}`));
         }
     }
 
     const marks = markNames(repo);
     const info = isTable(manifest.plugin) ? manifest.plugin : {};
     if (marks && typeof info.icon === 'string' && !marks.has(info.icon)) {
-        out.push(finding(doc.file, toml.keyLine(lines, info, 'icon'), 'icon', `[plugin] icon = "${info.icon}" is not a qol_theme mark name, so the launcher and the settings rail fall back to the QoL mark`));
+        out.push(finding(doc.file, toml.keyLine(lines, info, 'icon'), 'icon', 'icon', `[plugin] icon = "${info.icon}" is not a qol_theme mark name, so the launcher and the settings rail fall back to the QoL mark`));
     }
 
     const doctorLine = toml.keyLine(lines, capabilities, 'doctor') || toml.keyLine(lines, manifest, 'capabilities');
     if (capabilities.doctor === true && !facts.doctorWired && !facts.ownStrings.has('doctor')) {
-        out.push(finding(doc.file, doctorLine, 'doctor', `[capabilities] doctor = true, but ${dir}/src registers no doctor checks, so the tray's doctor gets nothing from it`));
+        out.push(finding(doc.file, doctorLine, 'doctor', 'declared', `[capabilities] doctor = true, but ${dir}/src registers no doctor checks, so the tray's doctor gets nothing from it`));
     }
     if (capabilities.doctor !== true && facts.doctorWired) {
-        out.push(finding(doc.file, doctorLine, 'doctor', `${dir}/src registers doctor checks, but [capabilities] doctor is not true, so the tray never runs them`));
+        out.push(finding(doc.file, doctorLine, 'doctor', 'undeclared', `${dir}/src registers doctor checks, but [capabilities] doctor is not true, so the tray never runs them`));
     }
 
     const items = isTable(manifest.menu) && Array.isArray(manifest.menu.items) ? manifest.menu.items : [];
     const itemsLine = items.length ? toml.keyLine(lines, manifest.menu, 'items') : 0;
     if (Object.keys(actions).length && items.length) {
-        out.push(finding(doc.file, itemsLine, 'menu', `[menu] items holds ${items.length} ${items.length === 1 ? 'entry' : 'entries'}, but plugin.toml declares [action.*], so the tray reads only the actions and never shows these`));
+        out.push(finding(doc.file, itemsLine, 'menu', 'items', `[menu] items holds ${items.length} ${items.length === 1 ? 'entry' : 'entries'}, but plugin.toml declares [action.*], so the tray reads only the actions and never shows these`));
     } else {
         for (const id of checkboxIds(items)) {
-            out.push(finding(doc.file, itemsLine, 'menu', `[menu] checkbox "${id}" is never shown, because the tray turns only action and submenu entries into actions`));
+            out.push(finding(doc.file, itemsLine, 'menu', `checkbox:${id}`, `[menu] checkbox "${id}" is never shown, because the tray turns only action and submenu entries into actions`));
         }
     }
 
@@ -576,7 +580,7 @@ function manifestFindings(repo, dir, docs) {
     const roots = new Set([...stored].map(key => key.split('.')[0]));
     for (const name of Object.keys(scopes)) {
         if (!roots.has(name)) {
-            out.push(finding(doc.file, toml.keyLine(lines, scopes, name), 'scope', `[config] scope.${name} names no top-level key of a stored qol-config.toml field, so the scope applies to nothing`));
+            out.push(finding(doc.file, toml.keyLine(lines, scopes, name), 'scope', name, `[config] scope.${name} names no top-level key of a stored qol-config.toml field, so the scope applies to nothing`));
         }
     }
     return out;
@@ -648,7 +652,7 @@ function configFindings(repo, dir, docs) {
         if (!executable || !isTable(section) || !Array.isArray(section.actions)) continue;
         for (const action of section.actions) {
             if (!executable.has(action)) {
-                out.push(finding(doc.file, toml.keyLine(doc.lines, section, 'actions'), 'sectionAction', `[section.${id}] actions lists "${action}", which plugin.toml does not declare as run or settings`));
+                out.push(finding(doc.file, toml.keyLine(doc.lines, section, 'actions'), 'sectionAction', `${id}:${action}`, `[section.${id}] actions lists "${action}", which plugin.toml does not declare as run or settings`));
             }
         }
     }
@@ -657,7 +661,7 @@ function configFindings(repo, dir, docs) {
         const key = typeof field.config_key === 'string' ? field.config_key : id;
         const gap = bindingGap(facts, key);
         if (gap) {
-            out.push(finding(doc.file, toml.keyLine(doc.lines, fields, id), 'binding', `[field.${id}] stores "${key}", which ${gap} in ${dir}/src or its path dependencies`));
+            out.push(finding(doc.file, toml.keyLine(doc.lines, fields, id), 'binding', id, `[field.${id}] stores "${key}", which ${gap} in ${dir}/src or its path dependencies`));
         }
     }
     return out;
@@ -671,7 +675,7 @@ function runtimeFindings(repo, dir, doc) {
         const entries = isTable(doc.value[table]) ? doc.value[table] : {};
         for (const id of Object.keys(entries)) {
             if (!mentions(facts.strings, id)) {
-                out.push(finding(doc.file, toml.keyLine(doc.lines, entries, id), 'unhandled', `[${table}.${id}] is declared, but neither ${dir}/src nor its path dependencies mention "${id}" outside tests, so nothing answers it`));
+                out.push(finding(doc.file, toml.keyLine(doc.lines, entries, id), 'unhandled', `${table}.${id}`, `[${table}.${id}] is declared, but neither ${dir}/src nor its path dependencies mention "${id}" outside tests, so nothing answers it`));
             }
         }
     }
@@ -688,7 +692,7 @@ function computeFindings(repo, dir) {
         try {
             docs[name] = { file, ...toml.parse(text) };
         } catch (error) {
-            findings.push(finding(file, error.line, 'parse', error.message.replace(/ \(line \d+\)$/, '')));
+            findings.push(finding(file, error.line, 'parse', 'parse', error.message.replace(/ \(line \d+\)$/, '')));
         }
     }
     for (const [name, doc] of Object.entries(docs)) findings.push(...schemaFindings(repo, doc, CONTRACT_TYPES[name]));
@@ -742,8 +746,19 @@ function findingsFor(root, target, overrides) {
     return (target.dirs ?? pluginDirs(repo)).flatMap(dir => pluginFindings(repo, dir));
 }
 
-function sameFinding(left, right) {
-    return left.file === right.file && left.rule === right.rule && left.detail === right.detail;
+function identity(entry) {
+    return `${entry.file}\0${entry.rule}\0${entry.subject}`;
+}
+
+function addedFindings(before, now) {
+    const remaining = new Map();
+    for (const entry of before) remaining.set(identity(entry), (remaining.get(identity(entry)) ?? 0) + 1);
+    return now.filter(entry => {
+        const left = remaining.get(identity(entry)) ?? 0;
+        if (left === 0) return true;
+        remaining.set(identity(entry), left - 1);
+        return false;
+    });
 }
 
 function message(entry, linted = entry.file) {
@@ -805,7 +820,7 @@ function prospectiveContent(tool, input, existing) {
 }
 
 function judge(root, target, absolute, existing, after) {
-    if (lintMode.active() && target.kind === 'contract') {
+    if (lintMode.active() && existing === null && target.kind === 'contract') {
         for (const entry of findingsFor(root, target, new Map([[absolute, after]])).filter(item => item.file === target.rel)) {
             lintMode.report(process.stderr, message(entry));
         }
@@ -814,7 +829,7 @@ function judge(root, target, absolute, existing, after) {
     if (lintMode.active() && (existing === null || existing === after)) return;
     const now = findingsFor(root, target, new Map([[absolute, after]]));
     const before = findingsFor(root, target, lintMode.active() ? new Map([[absolute, existing]]) : new Map());
-    const added = now.filter(entry => !before.some(previous => sameFinding(previous, entry)));
+    const added = addedFindings(before, now);
     if (added.length === 0) return;
     if (lintMode.active()) {
         for (const entry of added) lintMode.report(process.stderr, message(entry, target.rel));
