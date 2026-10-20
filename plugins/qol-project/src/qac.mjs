@@ -12,6 +12,7 @@ export const HOOKS = [
   ["qol-arch-cicd", require("../bin/check-qol-arch-cicd.cjs")],
   ["qol-logging", require("../bin/check-qol-logging.cjs")],
   ["qol-plugin-data", require("../bin/check-qol-plugin-data.cjs")],
+  ["qol-plugin-contract", require("../bin/check-qol-plugin-contract.cjs")],
 ];
 
 export function repoRoot(cwd, exec = execFileSync) {
@@ -121,7 +122,7 @@ export function lint(cwd, paths = [], deps = {}) {
 
 export function renderHelp(prefix = "qac") {
   return [
-    `${prefix} lint [path ...]  run the qol-arch-code, cross-platform, cicd, logging and plugin data hooks over whole files (default: the whole repo)`,
+    `${prefix} lint [path ...]  run the qol-arch-code, cross-platform, cicd, logging, plugin data and plugin-contract hooks over whole files (default: the whole repo)`,
     `  --base=<rev>           judge rules about added code against <rev>, as the edit-time hooks judge an edit`,
     `${prefix} fix [path ...]   hand the findings to this session to fix, then re-lint (default: the ${FIX_FILE_LIMIT} files with most findings)`,
   ].join("\n");

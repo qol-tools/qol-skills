@@ -24,7 +24,8 @@ Use `rg` over the copied directory to prove that template identity is gone and t
 
 - `plugin.toml` owns plugin identity, runtime commands/actions, daemon metadata, capabilities, platform availability, menu, and release artifacts.
 - `Cargo.toml` owns crate identity and dependencies. Versions shared with the plugin manifest must remain synchronized through repository automation.
-- `qol-config.toml` exists only when editable settings exist.
+- `qol-config.toml` exists only when editable settings exist, and plugin code reads every setting it stores. The template's run command reads its `enabled` and `display_name` settings as the working example; a copy that drops a read must drop the setting too.
+- Every contract key must do something. The `qol-plugin-contract` hook denies a key the code does not honour (`qol-tray:qol-tray-core`, "Contracts are honoured to the letter").
 - `qol-runtime.toml` exists only when config references named actions, queries, or streams, or another consumer needs the runnable contract.
 - Public action IDs are compatibility boundaries; menu/config references must resolve to declared actions.
 - Commands are binary basenames, never absolute paths, shell scripts, or traversal.
