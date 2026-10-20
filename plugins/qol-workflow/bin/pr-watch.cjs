@@ -89,7 +89,9 @@ function fetchSnapshot(target, run) {
 
 function checksOf(commit) {
     const nodes = commit?.statusCheckRollup?.contexts?.nodes ?? [];
-    return nodes.map((node) => (node.__typename === 'CheckRun'
+    const superseded = (node) => node.__typename === 'CheckRun' && node.conclusion === 'CANCELLED'
+        && nodes.some((other) => other.__typename === 'CheckRun' && other.name === node.name && other.conclusion !== 'CANCELLED');
+    return nodes.filter((node) => !superseded(node)).map((node) => (node.__typename === 'CheckRun'
         ? {
             name: node.name,
             url: node.detailsUrl,
