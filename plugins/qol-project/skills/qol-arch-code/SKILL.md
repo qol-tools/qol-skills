@@ -878,11 +878,21 @@ CI runs `qac lint --base=<merge base>` over the whole repo, so rules about the c
 A rule goes in one kind or the other, never both: a new rule reads `readBaseline` only when it is about added code.
 `#[cfg(target_os)]` on a `use` outside `platform/` is owned by qol-arch-cross-platform; qol-arch-code leaves those lines to it so one line is never two findings.
 
-Type `qac lint` as a bare prompt (the `hooks/qac-intercept.mjs` typed-verb hook answers with no model turn), run `/qac [path ...]`, or call `node scripts/qac.mjs lint --pretty`. Without `--pretty` it prints JSON; exit 0 is clean, 1 has findings, 2 is a bad verb, 3 is outside a git repository.
+Type `qac lint` as a bare prompt (the `hooks/qac-intercept.mjs` typed-verb hook answers with no model turn), run `/qac [path ...]`, or call `node scripts/qac.mjs lint --pretty`. Without `--pretty` it prints JSON; exit 0 is clean, 1 has findings, 2 is a bad verb, 3 is outside a git repository, 4 is a slip whose lane could not be forked.
 
 While it runs, it writes `$XDG_RUNTIME_DIR/agent-progress/qac.json` (the spool softwords uses), so the claude-statusline bar shows files done out of total and then the finding count for ten seconds. Every run writes a self-contained HTML report to `$XDG_RUNTIME_DIR/qac/<repo>.html`: a filterable list of flagged files beside a code view that highlights each violating line with its note inline, located from the hook's `line N` references or its exported `LOCATORS` patterns (`src/locate.mjs`). `--open` (on for the prompt hook and `/qac`) opens it in the default web browser rather than the `text/html` handler, so the console only gets one summary line.
 
 `qac fix [path ...]` is the fix path. Most findings need a design move (a facade, a moved symbol, a contract field), so no rewrite runs blind: the typed-verb hook lints the paths (by default a batch of the files with the most findings, `FIX_FILE_LIMIT` in `src/qac.mjs`) and passes the findings, their line numbers and each hook's guidance, bypass hints removed, to the current session as context, with the rule to fix in place, never bypass or silence, and re-run `qac lint` on those files. When nothing is found it answers with no model turn. Each file in the report has a Copy fix command button.
+
+### Slip ledger: `qac slip`
+
+A qol pattern violation that qac did not catch is a missing rule, not a one-off.
+When one turns up in a pull request review, a merge-gate failure, or from the user or an agent, record it with `qac slip <pattern> --from <url>`.
+The ledger is `$XDG_DATA_HOME/qac-ledger/slips.jsonl` (default `~/.local/share/qac-ledger/`, beside the mistake ledger's data; `QAC_LEDGER_DATA` moves it), one entry per pattern keyed by its wording, append only like the mistake ledger.
+A pattern's first sight forks a claude lane with `qol sessions fork` (the `opus` alias, effort high) in the qol-skills clone, briefed to add the rule with fixtures and tests in this plugin, and the entry records the lane key.
+Later sightings only count, so one pattern never gets two lanes; a fork that failed is retried on the next sighting.
+The lane ends with `qac slip <pattern> --added`, or with `--infeasible <reason>` when no deterministic rule can see the pattern, and an infeasible pattern is never forked for again.
+`qac slips` lists every pattern with its status. Help and exit codes: `qac help`.
 
 ## Sibling skills
 

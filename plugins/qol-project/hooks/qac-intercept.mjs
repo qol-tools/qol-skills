@@ -4,14 +4,14 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const CLI = fileURLToPath(new URL("../scripts/qac.mjs", import.meta.url));
-const VERBS = ["lint", "fix", "help"];
+const VERBS = ["lint", "fix", "slip", "slips", "help"];
 const FINDINGS = 1;
 
 export function parsePrompt(prompt, cwd) {
   const match = /^qac(?:\s+(.*))?$/i.exec((prompt ?? "").trim());
   if (match === null) return null;
   const rest = (match[1] ?? "").trim();
-  const tokens = rest === "" ? [] : rest.split(/\s+/);
+  const tokens = (rest.match(/"[^"]*"|\S+/g) ?? []).map(token => token.replace(/^"(.*)"$/s, "$1"));
   const verb = tokens[0]?.toLowerCase();
   const args = tokens.length === 0
     ? ["help"]

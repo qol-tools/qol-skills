@@ -125,6 +125,11 @@ export function renderHelp(prefix = "qac") {
     `${prefix} lint [path ...]  run the qol-arch-code, cross-platform, cicd, logging, plugin data and plugin-contract hooks over whole files (default: the whole repo)`,
     `  --base=<rev>           judge rules about added code against <rev>, as the edit-time hooks judge an edit`,
     `${prefix} fix [path ...]   hand the findings to this session to fix, then re-lint (default: the ${FIX_FILE_LIMIT} files with most findings)`,
+    `${prefix} slip <pattern>   record a pattern qac missed; its first sight forks a claude (opus, high) lane to add the rule`,
+    `  --from=<url>           where it was found, such as the pull request`,
+    `  --added                mark the rule added; --infeasible=<reason> marks it infeasible, and no lane is forked for it again`,
+    `  --rules-repo=<path>    the qol-skills clone the lane works in (default: this repo's main checkout or its qol-skills sibling)`,
+    `${prefix} slips            list recorded patterns and their status`,
   ].join("\n");
 }
 
