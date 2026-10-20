@@ -552,10 +552,12 @@ test('menu items are denied when actions exist, and checkboxes always', () => {
     assert.match(denial(write(repo, 'plugins/demo/plugin.toml', legacy)), /\[menu\] checkbox "audio" is never shown/);
 });
 
-test('a config scope must name the top-level key of a stored field', () => {
+test('a config scope must name a stored key or a parent path of one', () => {
     const repo = fixture();
     allowed(write(repo, 'plugins/demo/plugin.toml', `${MANIFEST}\n[config.scope]\ngeneral = "device"\n`));
-    assert.match(denial(write(repo, 'plugins/demo/plugin.toml', `${MANIFEST}\n[config.scope]\nstate = "device"\n`)), /\[config\] scope\.state names no top-level key of a stored qol-config\.toml field/);
+    allowed(write(repo, 'plugins/demo/plugin.toml', `${MANIFEST}\n[config.scope]\n"general.enabled" = "device"\n`));
+    assert.match(denial(write(repo, 'plugins/demo/plugin.toml', `${MANIFEST}\n[config.scope]\nstate = "device"\n`)), /\[config\] scope\.state names no stored qol-config\.toml key or parent of one/);
+    assert.match(denial(write(repo, 'plugins/demo/plugin.toml', `${MANIFEST}\n[config.scope]\n"general.missing" = "device"\n`)), /\[config\] scope\.general\.missing names no stored qol-config\.toml key/);
 });
 
 test('a toggle-config action must name a stored field', () => {

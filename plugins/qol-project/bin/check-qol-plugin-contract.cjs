@@ -52,7 +52,7 @@ const RULES = {
     menu: ['Menu items are ignored', 'delete the entry, or declare it as an [action.*] table the tray runs'],
     sectionAction: ['Section lists an undeclared action', 'list run or settings [action.*] ids from plugin.toml'],
     toggle: ['Toggle action names no stored setting', 'point config_key at a stored qol-config.toml field'],
-    scope: ['Config scope names no stored setting', 'scope the first segment of a stored qol-config.toml key'],
+    scope: ['Config scope names no stored setting', 'scope a stored qol-config.toml key or one of its parent paths'],
     binding: ['Setting is never read by the plugin', "read the key through a field of the plugin's Deserialize config struct before declaring it, or delete the setting"],
     unhandled: ['Runtime entry is never handled', "handle the id in the plugin's dispatch before declaring it, or delete it from qol-runtime.toml"],
 };
@@ -577,10 +577,9 @@ function manifestFindings(repo, dir, docs) {
 
     const declarations = isTable(manifest.config) ? manifest.config : {};
     const scopes = isTable(declarations.scope) ? declarations.scope : {};
-    const roots = new Set([...stored].map(key => key.split('.')[0]));
     for (const name of Object.keys(scopes)) {
-        if (!roots.has(name)) {
-            out.push(finding(doc.file, toml.keyLine(lines, scopes, name), 'scope', name, `[config] scope.${name} names no top-level key of a stored qol-config.toml field, so the scope applies to nothing`));
+        if (![...stored].some(key => key === name || key.startsWith(`${name}.`))) {
+            out.push(finding(doc.file, toml.keyLine(lines, scopes, name), 'scope', name, `[config] scope.${name} names no stored qol-config.toml key or parent of one, so the scope applies to nothing`));
         }
     }
     return out;
