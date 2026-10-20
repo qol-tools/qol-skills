@@ -121,6 +121,7 @@ function prepareContext(options) {
     const detector = spawnSync('node', [path.join(__dirname, 'shallow-wrappers.cjs'), '--root', '.', '--diff', path.join(CONTEXT, 'pr.diff'), '--json', path.join(CONTEXT, 'shallow-wrappers.json')], { encoding: 'utf8' });
     if (detector.status !== 0) throw new Error(`shallow-wrappers failed: ${detector.stderr}`);
     fs.writeFileSync(path.join(CONTEXT, 'shallow-wrappers.txt'), detector.stdout);
+    if (options.conversation) fs.copyFileSync(options.conversation, path.join(CONTEXT, 'conversation.md'));
     options.followUp = writeFollowUp(options);
 }
 
@@ -146,7 +147,16 @@ function sinceLines(options) {
     return [
         `- Changes since the last review of \`${options.since.slice(0, 7)}\`: ${CONTEXT}/since-last-review.diff`,
         `- The last review comment: ${CONTEXT}/last-review.md`,
-        '- This is a follow-up review. Report a new finding only on code those changes add or alter, or on code they break. Carry every finding of the last review that the changes do not fix into this review with its id, severity, file, line and title unchanged, and drop the ones they fix. A finding the last review marked fixed stays dropped. The verdict counts the carried findings, so it is pass only when no blocker, high or medium finding is left.',
+        '- This is a follow-up review. Report a new finding only on code those changes add or alter, or on code they break. Carry every finding of the last review that the changes do not fix and the conversation does not settle into this review with its id, severity, file, line and title unchanged, and drop the ones they fix or it settles. A finding the last review marked fixed stays dropped. The verdict counts the carried findings, so it is pass only when no blocker, high or medium finding is left.',
+    ];
+}
+
+function descriptionLines(options) {
+    if (options.conversation) return [`- Title, description, comments, reviews and linked issues, read from GitHub when this run started: ${CONTEXT}/conversation.md`];
+    return [
+        `- Title: ${options.title || ''}`,
+        '- Description:',
+        String(options.body || '').slice(0, 20000).split('\n').map((line) => `  > ${line}`).join('\n'),
     ];
 }
 
@@ -159,9 +169,7 @@ function reviewPrompt(options) {
         `- Shallow-wrapper detector output, already run on that diff: ${CONTEXT}/shallow-wrappers.txt and ${CONTEXT}/shallow-wrappers.json`,
         `- Review checklists: ${CONTEXT}/references/review-checklists.md`,
         ...sinceLines(options),
-        `- Title: ${options.title || ''}`,
-        '- Description:',
-        String(options.body || '').slice(0, 20000).split('\n').map((line) => `  > ${line}`).join('\n'),
+        ...descriptionLines(options),
         '',
         fs.readFileSync(path.join(CI, 'review-prompt.md'), 'utf8'),
     ].join('\n');
@@ -392,6 +400,87 @@ function previous(options) {
     console.log(reviewedHead(last.body));
 }
 
+const MAINTAINERS = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
+const REVIEW_BOT = 'github-actions[bot]';
+const ENTRY_LIMIT = 6000;
+const LINKED_LIMIT = 5;
+
+function jsonLines(text) {
+    return String(text || '').split('\n').filter((line) => line.trim()).map((line) => JSON.parse(line));
+}
+
+function quoted(text) {
+    const body = String(text || '').trim();
+    const cut = body.length > ENTRY_LIMIT ? `${body.slice(0, ENTRY_LIMIT)}\n(cut at ${ENTRY_LIMIT} characters)` : body;
+    return cut ? cut.split('\n').map((line) => `> ${line}`).join('\n') : '> (empty)';
+}
+
+function roleOf(entry, people) {
+    const login = entry.user?.login;
+    const roles = [login === people.author && 'author', login === people.owner && 'repository owner'].filter(Boolean);
+    if (roles.length) return roles.join(', ');
+    if (login === REVIEW_BOT) return 'review bot';
+    return MAINTAINERS.has(entry.author_association) ? 'maintainer' : null;
+}
+
+function linkedNumbers(texts, repo, self) {
+    const found = texts.flatMap((text) => [
+        ...[...String(text || '').matchAll(/(?:^|[\s(])#(\d+)\b/g)].map((match) => Number(match[1])),
+        ...[...String(text || '').matchAll(new RegExp(`github\\.com/${repo.replace(/[.]/g, '\\.')}/(?:issues|pull)/(\\d+)`, 'g'))].map((match) => Number(match[1])),
+    ]);
+    return [...new Set(found)].filter((number) => number !== Number(self)).slice(0, LINKED_LIMIT);
+}
+
+function conversationMarkdown({ pull, comments, reviews, reviewComments, linked, owner }) {
+    const people = { author: pull.user?.login, owner };
+    const entries = [
+        ...comments.map((c) => ({ ...c, kind: 'comment', at: c.created_at })),
+        ...reviews.filter((r) => String(r.body || '').trim()).map((r) => ({ ...r, kind: `review, ${String(r.state || '').toLowerCase().replace(/_/g, ' ')}`, at: r.submitted_at, html_url: r.html_url })),
+        ...reviewComments.map((c) => ({ ...c, kind: `comment on ${c.path}${c.line ? `:${c.line}` : ''}`, at: c.created_at })),
+    ].sort((a, b) => String(a.at).localeCompare(String(b.at)));
+    const kept = entries.map((entry) => ({ entry, role: roleOf(entry, people) })).filter(({ role }) => role);
+    const left = entries.length - kept.length;
+    const when = (at) => `${String(at || '').replace('T', ' ').slice(0, 16)} UTC`;
+    return [
+        `# Pull request #${pull.number}: ${pull.title || ''}`,
+        '',
+        `Opened by @${people.author} (${roleOf(pull, people)}). Read from GitHub when this review run started.`,
+        '',
+        '## Description',
+        '',
+        quoted(pull.body),
+        '',
+        '## Conversation',
+        '',
+        ...(kept.length ? kept.flatMap(({ entry, role }) => [`### @${entry.user?.login} · ${role} · ${when(entry.at)} · ${entry.kind}`, '', entry.html_url || '', '', quoted(entry.body), '']) : ['No comments.', '']),
+        ...(left ? [`${left} comment${left === 1 ? '' : 's'} from people outside the repository left out.`, ''] : []),
+        ...(linked.length ? ['## Linked issues and pull requests', '', ...linked.flatMap((issue) => [`### #${issue.number} · ${issue.title || ''} · ${issue.state || ''}`, '', issue.html_url || '', '', quoted(issue.body), ''])] : []),
+    ].join('\n');
+}
+
+function conversation(options) {
+    need(options, 'repo', 'pr', 'out');
+    const api = (route) => JSON.parse(gh([`repos/${options.repo}/${route}`]));
+    const list = (route) => jsonLines(gh(['--paginate', `repos/${options.repo}/${route}`, '--jq', '.[]']));
+    const pull = api(`pulls/${options.pr}`);
+    const comments = list(`issues/${options.pr}/comments`);
+    const reviews = list(`pulls/${options.pr}/reviews`);
+    const reviewComments = list(`pulls/${options.pr}/comments`);
+    const decisive = [pull, ...comments, ...reviews, ...reviewComments].filter((entry) => [pull.user?.login, options.owner].includes(entry.user?.login));
+    const linked = linkedNumbers(decisive.map((entry) => entry.body), options.repo, options.pr).flatMap((number) => {
+        try {
+            return [api(`issues/${number}`)];
+        } catch (error) {
+            console.log(`#${number} left out: ${error.message.split('\n')[0]}`);
+            return [];
+        }
+    });
+    fs.mkdirSync(options.out, { recursive: true });
+    const file = path.join(options.out, 'conversation.md');
+    fs.writeFileSync(file, conversationMarkdown({ pull, comments, reviews, reviewComments, linked, owner: options.owner }));
+    console.log(file);
+}
+
 function reviewJson(markdown) {
     const blocks = [...markdown.matchAll(/^```json[ \t]*\n([\s\S]*?)^```[ \t]*$/gm)];
     if (!blocks.length) return null;
@@ -474,13 +563,14 @@ function renderComment({ markdown, headSha, runUrl, repoUrl, since, fixSha, fixO
     }
     const seen = new Set();
     const findings = [...(data.must_fix || []), ...(data.deferred_followups || [])].filter((f) => f && f.id && !seen.has(f.id) && seen.add(f.id));
+    const settled = (Array.isArray(data.settled) ? data.settled : []).filter((s) => s && s.id && !seen.has(s.id) && seen.add(s.id));
     const statuses = fixSha ? fixStatuses(fixReply) : new Map();
     const statusOf = (f) => statuses.get(f.id) || {};
     const fixed = findings.filter((f) => statusOf(f).status === 'fixed');
     const left = data.verdict === 'pass' ? [] : findings.filter((f) => statusOf(f).status !== 'fixed' && LANES.some(([key]) => key === f.severity));
     const { byId, other } = assignHunks(withDiffs ? patchHunks(patch) : [], fixSha ? fixed : []);
     const commit = fixSha ? `[\`${short(fixSha)}\`](${repoUrl}/commit/${fixSha})` : '';
-    const counts = LANES.filter(([key]) => data.counts?.[key] > 0).map(([key]) => `${data.counts[key]} ${key}`).join(' · ') || 'no findings';
+    const counts = [LANES.filter(([key]) => data.counts?.[key] > 0).map(([key]) => `${data.counts[key]} ${key}`).join(' · ') || 'no findings', settled.length ? `${settled.length} settled` : ''].filter(Boolean).join(' · ');
     const outcome = fixSha
         ? `${fixed.length} fixed in ${commit}, ${left.length} left for you.`
         : fixRefused
@@ -500,6 +590,11 @@ function renderComment({ markdown, headSha, runUrl, repoUrl, since, fixSha, fixO
         const title = String(f.title || f.required_action || f.id).replace(/\s+/g, ' ').replace(/</g, '&lt;');
         return [`<details><summary>${title}${['fixed', 'skipped'].includes(status) ? ` <code>${status}</code>` : ''}</summary>\n\n${body}\n\n</details>`, diffBlock(byId.get(f.id) || []) || snippet(f)];
     };
+    const settledItem = (s) => {
+        const title = String(s.title || s.id).replace(/\s+/g, ' ').replace(/</g, '&lt;');
+        const source = /^https:\/\/github\.com\/\S+$/.test(String(s.url || '')) ? ` · [decision](${s.url})` : '';
+        return `<details><summary>${title}</summary>\n\n\`${s.id}\`${source}\n\n**Decision:** ${String(s.decision || '').replace(/\s+/g, ' ')}\n\n</details>`;
+    };
     const [kind, verdict] = VERDICTS[data.verdict] || ['NOTE', data.verdict];
     const scope = isSha(since) ? ` · changes since \`${short(since)}\`` : '';
     const parts = [CONFIG.commentMarker, `<!-- reviewed ${headSha} -->`, alert(kind, [`**${verdict}** · ${counts}${scope}`, outcome])];
@@ -507,6 +602,7 @@ function renderComment({ markdown, headSha, runUrl, repoUrl, since, fixSha, fixO
         const lane = findings.filter((f) => f.severity === key);
         if (lane.length) parts.push(`#### ${label} · ${lane.length}`, ...lane.flatMap(item));
     }
+    if (settled.length) parts.push(`#### Settled · ${settled.length}`, ...settled.map(settledItem));
     if (other.length) parts.push('#### Other changes in the fix', diffBlock(other));
     parts.push(`<details><summary>Full review</summary>\n\n${withoutJson(markdown)}\n\n</details>`);
     parts.push(`<sub>qol-code-review · ${CONFIG.model} · head \`${short(headSha)}\` · [run](${runUrl})</sub>`);
@@ -586,6 +682,7 @@ async function run(argv) {
         'queue-fix': queueFix,
         'check-patch': checkPatch,
         previous,
+        conversation,
         comment,
     };
     if (!commands[options.command]) throw new Error(`usage: ci-pr.cjs ${Object.keys(commands).join('|')} [--flag value ...]`);
@@ -599,4 +696,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { reviewReply, appliedFiles, refuseOutside, deniedReads, deniedWrites, parseArgs, lastVerdict, reviewJson, withoutJson, fixStatuses, patchHunks, renderComment, renderQueueComment, jobErrors, logTail, narrate, claude, CONFIG };
+module.exports = { reviewReply, appliedFiles, refuseOutside, deniedReads, deniedWrites, parseArgs, lastVerdict, reviewJson, withoutJson, fixStatuses, patchHunks, renderComment, renderQueueComment, jobErrors, logTail, narrate, claude, conversationMarkdown, linkedNumbers, reviewPrompt, CONFIG };
