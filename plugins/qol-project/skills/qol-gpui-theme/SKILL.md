@@ -444,8 +444,11 @@ without the user asking for it by name.
    `max(0.08, 0.5 x 0.62^(d-1-i))`, the steep fade, and every sliver keeps a
    28 px grey mark at `0.9` of its edge alpha, centred on the row that opened
    the next card.
-7. **The page card slides over the rail.** Opening a source slides the card
-   left by `RAIL_CARD_OVERLAP` (98) while the rail dims under `kit::rail_scrim`.
+7. **The page card slides over the rail.** Opening a source from the keyboard
+   slides the card left by `RAIL_CARD_OVERLAP` (98) while the rail dims under
+   `kit::rail_scrim`. A mouse click on a rail item, or on the card while the rail
+   holds keys, keeps the rail in view: no slide, no dim, no scrim, until the rail
+   takes keys again.
    At depth `d` the rail opacity is `deck::rail_opacity(d)`,
    `max(0.12, 0.5 x 0.65^(d-1))`: 0.5 is the depth 1 value and every deeper
    card takes about a third off it.
