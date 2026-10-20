@@ -65,6 +65,8 @@ const WEB_VIEWS = 'apps/tray/ui/views/';
 const WEB_DEV = 'apps/tray/ui/views/dev/';
 const WEB_TOKEN_OWNERS = ['apps/tray/ui/styles/theme-tokens.css', 'apps/tray/ui/styles/generated-theme-tokens.css'];
 const SCANNED_EXTENSIONS = new Set(['.rs', '.js', '.mjs', '.css']);
+const LIST_CHILDREN = /^\.children\(([a-z_][a-z0-9_]*|[^()]*\.(iter|into_iter)\(\).*)\)?[,;)]*$/;
+const SCROLLED_CHAIN = /\.overflow_y_scroll\(\)|\.overflow_scroll\(\)|\.visible_range\(|_scroll\.handle\(\)\.offset\(\)/;
 
 const themeCache = new Map();
 const fontCache = new Map();
@@ -459,6 +461,30 @@ function partRules(relative, content, body, add) {
     if (scrolls > cues) {
         add('scroll-cue', 0, `scrolls ${scrolls} lists but draws ${cues} scroll cues`, 'kit.scroll_cue(ScrollSource, ground) at the end of every scrolling list');
     }
+    const scrollers = (body.match(/\.overflow_y_scroll\(\)|\.overflow_scroll\(\)/g) || []).length;
+    const tracked = (body.match(/\.track_scroll\(/g) || []).length;
+    if (scrollers > tracked) {
+        add('scroller', 0, `scrolls ${scrollers} containers but tracks ${tracked} scroll handles`, '.track_scroll(SelectionScroll::handle()) on every .overflow_y_scroll(), kept on the chosen row with SelectionScroll::follow');
+    }
+    unscrolledColumns(body, add);
+}
+
+function unscrolledColumns(body, add) {
+    const lines = body.split('\n').map(line => line.trim());
+    lines.forEach((line, at) => {
+        if (!LIST_CHILDREN.test(line)) return;
+        let start = at;
+        for (let i = at; i >= Math.max(0, at - 40); i--) {
+            if (lines[i].includes('div()')) {
+                start = i;
+                break;
+            }
+        }
+        const chain = lines.slice(start, at + 1).join('');
+        if (!chain.includes('.flex_col()') || !/\.(h_full|size_full)\(\)/.test(chain)) return;
+        if (SCROLLED_CHAIN.test(chain)) return;
+        add('scroller', at + 1, 'lays a list of rows into a full-height column that cannot scroll', 'a scroller: .track_scroll(SelectionScroll::handle()).overflow_y_scroll() with kit.scroll_cue beside it, so rows past the window scroll instead of squeezing or running under the hint bar');
+    });
 }
 
 function settingsPageRules(relative, body, add) {

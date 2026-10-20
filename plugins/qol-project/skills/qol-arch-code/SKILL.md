@@ -755,7 +755,7 @@ Native gpui surfaces (`libs/gpui/src`, `apps/tray/src`, `plugins/*/src`):
 - Every non-ASCII character a window draws is in the shipped fonts (the hook reads their cmap tables); anything else is `qol_gpui::icon::icon`.
 - Colour comes from the theme (`kit.grounds.*`, `kit.washes.*`, a kit recipe, a semantic hue); no `rgb(0x…)`, `rgba(…)` or `hsla(…)` literal outside `kit.rs`. `rgba(0)` is transparent and allowed.
 - Heights of 28 px or more, radii and (in settings scope) spacing sit on the ladders read from `libs/theme/src/lib.rs`; settings scope also bans rem helpers such as `.gap_2()` and local spacing constants.
-- Depth comes from the theme: no hand alpha, `BoxShadow`, line width or literal opacity. Chips are `kit.chip`, windows are `kit.window()` and square, every scrolling list ends in `kit.scroll_cue`, a running phrase never ends in an ellipsis, and no surface draws a coloured side line.
+- Depth comes from the theme: no hand alpha, `BoxShadow`, line width or literal opacity. Chips are `kit.chip`, windows are `kit.window()` and square, every scrolling list ends in `kit.scroll_cue` and tracks a `SelectionScroll` handle, a full-height column of rows scrolls, a running phrase never ends in an ellipsis, and no surface draws a coloured side line.
 - Settings scope composes recipes: no leaf `.bg`, `.text_color`, `.border`, `.rounded` outside the recipe owners, no raw `kit.palette.<field>` beyond the semantic hues, one focus owner, spinners only through the components.
 
 The settings page shape, derived from the core tool pages (Hotkeys, Shortcuts and

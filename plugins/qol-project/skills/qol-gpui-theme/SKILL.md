@@ -274,7 +274,7 @@ which one and fill in the words; they never style one by hand.
 | Focus | `kit.focus_ring(ground)` | see Focused above |
 | Busy | `qol_gpui::Busy` | eight drawn dots turning in `MOTION_LOOP`, shown only after `WAIT_BEFORE_BUSY` |
 | Live | `kit.live_dot(id, tone, halo, live)` | the 7 px status dot pulsing in `MOTION_LOOP` |
-| Scroll cue | `kit.scroll_cue(ScrollSource, ground)` | fade, chevron and bar at every edge with more; windowed lists keep one row between the chosen row and a faded edge |
+| Scroll cue | `kit.scroll_cue(ScrollSource, ground)` | fade, chevron and bar at every edge with more; windowed lists keep one row between the chosen row and a faded edge. Every `.overflow_y_scroll()` tracks a `SelectionScroll` handle and follows the chosen row with `SelectionScroll::follow`, and a full-height column of rows is a scroller: rows past the window scroll, never squeeze or run under the hint bar |
 | Icon | `qol_gpui::icon::icon(Icon, size, ink)` | drawn SVG for every symbol the shipped fonts lack: enter, tab, backspace, arrows, the mac modifiers, close, tick, more, prompt and the rest |
 | Action circle | `Kit::action_circle(size, state)` inside `Kit::action_row` | `ACTION_CIRCLE_SIZE` 46, `HEIGHT_CONTROL` 36 or `HEIGHT_INLINE` 28, gap `ACTION_CIRCLE_GAP` 14; Resting, Primary, Armed, Disabled |
 

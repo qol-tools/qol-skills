@@ -141,6 +141,56 @@ for (const [label, line, use] of [
     });
 }
 
+test('blocks a scroller without a tracked scroll handle', () => {
+    const root = workspace();
+    const r = write(root, SURFACE, `use gpui::*;
+fn draw(kit: Kit, rows: Vec<AnyElement>) -> Stateful<Div> {
+    div()
+        .id("list")
+        .overflow_y_scroll()
+        .children(rows)
+        .child(kit.scroll_cue(ScrollSource::Window { first: 0, shown: 3, total: 3 }, kit.grounds.pane))
+}
+`);
+    assert.strictEqual(r.exitCode, 2, r.stderr);
+    assert.match(r.stderr, /tracks 0 scroll handles/);
+    assert.ok(r.stderr.includes('SelectionScroll'), r.stderr);
+});
+
+test('blocks a full-height column of rows that cannot scroll', () => {
+    const root = workspace();
+    const r = write(root, SURFACE, `use gpui::*;
+fn draw(rail: Vec<AnyElement>) -> Div {
+    div()
+        .flex()
+        .flex_col()
+        .h_full()
+        .children(rail)
+}
+`);
+    assert.strictEqual(r.exitCode, 2, r.stderr);
+    assert.match(r.stderr, /full-height column that cannot scroll/);
+});
+
+test('passes a full-height column of rows on the kit scroller', () => {
+    const root = workspace();
+    const r = write(root, SURFACE, `use gpui::*;
+fn draw(kit: Kit, scroll: &SelectionScroll, rail: Vec<AnyElement>) -> Stateful<Div> {
+    let children = rail.len();
+    div()
+        .id("rail")
+        .flex()
+        .flex_col()
+        .h_full()
+        .track_scroll(scroll.handle())
+        .overflow_y_scroll()
+        .children(rail)
+        .child(kit.scroll_cue(ScrollSource::Handle { handle: scroll.handle().clone(), children }, kit.grounds.rail))
+}
+`);
+    assert.strictEqual(r.exitCode, 0, r.stderr);
+});
+
 test('passes a gpui surface built from theme tokens and kit parts', () => {
     const root = workspace();
     const r = write(root, SURFACE, `use gpui::*;
