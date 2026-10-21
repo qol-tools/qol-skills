@@ -63,6 +63,7 @@ three states: light, dark, and unfocused (a token swap over either theme).
 | `--onsolid` | `#fbf9f4` | `#16171a` | text on that fill |
 | `--pos` | `#2c8159` | `#4aa87a` | running, healthy |
 | `--neg` | `#b5504a` | `#d98479` | failed, invalid |
+| `--neg-ink` | `#b5432f` | `#ff6b6b` | failure text |
 | `--wrn` | `#b35c09` | `#e8964a` | needs attention |
 | `--wrn-ink` | `#9e5510` | `#eb9d55` | warning text |
 | `--hair` | `rgba(60,48,26,.12)` | `rgba(255,250,240,.09)` | default hairline |
@@ -159,7 +160,7 @@ quiet, and a hidden panel reopens live.
   | Label | ui | 11.5 | 600 | 1.2 | uppercase section label (`text::cased`) |
 - **Radius** `--r1 4`, `--r2 6`, `--r3 9`, `--r4 11`. The surface itself is 0.
 - **Depth** `qol_theme::depth`. See-through strengths are `Alpha` Trace 5, Wash 9,
-  Halo 16, Edge 24, Veil 40, Strong 70 percent, applied with `translucent(rgb,
+  Tint 14, Halo 16, Edge 24, Veil 40, Strong 70 percent, applied with `translucent(rgb,
   alpha)`; a gradient end uses `clear(rgb)` or `solid(rgb)`. Two shadows,
   `SHADOW_FLOAT` (1/2 at Trace, 8/20 at Wash) for anything above the window and
   `SHADOW_RAISED` (1/2 and 6/16 at Wash) for a control, through
@@ -261,7 +262,7 @@ itself correctly on the pane and on the band. The code home is `Grounds` in
 `libs/theme/src/lib.rs`, carried on the `Kit` as `kit.grounds`; every ground also
 carries `halo` for the focus ring. The per-window palettes are gone: every
 window reads grounds, `kit.washes`, and the semantic hues (`success`, `info`,
-`warning`, `warning_ink`, `danger`, `accent_ink`). Only Alt Tab's
+`warning`, `warning_ink`, `danger`, `danger_ink`, `accent_ink`). Only Alt Tab's
 `PickerSurfacePalette` stays, because it carries the user's own card colour and
 opacity, plus the two export palettes for the Cinnamon extension and the web.
 
@@ -282,7 +283,7 @@ which one and fill in the words; they never style one by hand.
 | Focus | `kit.focus_ring(ground)` | see Focused above |
 | Busy | `qol_gpui::Busy` | eight drawn dots turning in `MOTION_LOOP`, shown only after `WAIT_BEFORE_BUSY` |
 | Live | `kit.live_dot(id, tone, halo, live)` | the 7 px status dot pulsing in `MOTION_LOOP` |
-| Scroll cue | `kit.scroll_cue(ScrollSource, ground)` | fade, chevron and bar at every edge with more; windowed lists keep one row between the chosen row and a faded edge. Every `.overflow_y_scroll()` tracks a `SelectionScroll` handle and follows the chosen row with `SelectionScroll::follow`, and a full-height column of rows is a scroller: rows past the window scroll, never squeeze or run under the hint bar |
+| Scroll cue | `kit.scroll_cue(ScrollSource, ground)` | fade, chevron and bar at every edge with more; windowed lists keep one row between the chosen row and a faded edge. Every `.overflow_y_scroll()` tracks a `SelectionScroll` handle and follows the chosen row with `SelectionScroll::follow`, and a full-height column of rows is a scroller: rows past the window scroll, never squeeze or run under the hint bar. A `ScrollGrip` laid over the cue makes the bar seekable: a press on the track centres the thumb there and a press on the thumb drags it from where it was held; `seek_handle` seeks a `ScrollHandle` |
 | Icon | `qol_gpui::icon::icon(Icon, size, ink)` | drawn SVG for every symbol the shipped fonts lack: enter, tab, backspace, arrows, the mac modifiers, close, tick, more, prompt and the rest |
 | Action circle | `Kit::action_circle(size, state)` inside `Kit::action_row` | `ACTION_CIRCLE_SIZE` 46, `HEIGHT_CONTROL` 36 or `HEIGHT_INLINE` 28, gap `ACTION_CIRCLE_GAP` 14; Resting, Primary, Armed, Disabled |
 
@@ -357,7 +358,7 @@ Rules for settings scope:
   `font_family`, `bg`, `border`, `border_color`, `rounded`, `shadow` on their own.
 - **R4** Colour in settings scope comes from the grounds (`kit.grounds.*`),
   `kit.washes.*`, a Kit recipe or a semantic hue (`kit.palette.success`, `info`,
-  `warning`, `warning_ink`, `danger`, `accent_ink`). Any other
+  `warning`, `warning_ink`, `danger`, `danger_ink`, `accent_ink`). Any other
   `kit.palette.<field>` stays inside `kit.rs` and `components/`.
 - **R5** Core tools and plugin panels render through the same components. A
   component that exists for only one of them is a defect.
