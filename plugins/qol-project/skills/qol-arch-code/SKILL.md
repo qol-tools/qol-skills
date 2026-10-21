@@ -857,11 +857,11 @@ The explorer plugin shipped `[action.open]` with no shortcut and no flow, so its
 `bin/check-qol-plugin-data.cjs` enforces this at edit time on a `plugin.toml` in a qol repository. It denies an edit that adds either gap:
 
 - an `[action.open]` run action that no exported `[[shortcuts]]` entry with `action = "open"` and no `[launcher]` table reaches. `qol-launcher` (it would open itself) and `qol-alt-tab` (a hotkey picker) are exempt in the hook.
-- a `qol-config.toml` beside the manifest with no `kind = "settings"` action. The tray hosts that page itself only when `[capabilities] gpui = true`.
+- a `qol-config.toml` beside the manifest with no `kind = "settings"` action. The tray hosts that page itself.
 
 A plugin with nothing to set (session, removeapp, explorer) ships no `qol-config.toml` and no settings action, and shows as a row on the core Plugins page instead of a settings page. The guard accepts that; never add a placeholder `qol-config.toml` to satisfy it.
 
-Gaps are compared before and after the edit, so a manifest that already had one only blocks when the edit adds a new one. `qac lint` without `--base` lists them all. There is no bypass: ship the entry in the same edit, or add a plugin that must not have one to the hook's exempt set with its reason.
+A gap is a fact about the manifest as it stands, so it is a rule about the code as it stands: any edit that leaves a gap is denied, and `qac lint` reports every gap with or without `--base`, so CI fails while any plugin on main has one. It was first written as a rule about added code, and the explorer manifest that prompted it kept its gap on main because every later lint compared it with a base that already had it. There is no bypass: ship the entry in the same edit, or add a plugin that must not have one to the hook's exempt set with its reason.
 
 Residual: the tray renders no plugin `[menu]` items (only its own Settings and mode toggle), so a tray menu entry is not plugin data and this guard does not ask for one. An open action under another id, or a window opened only by a runtime action, passes.
 
@@ -870,12 +870,12 @@ Residual: the tray renders no plugin `[menu]` items (only its own Settings and m
 The edit-time hooks only see new violations, so existing debt stays invisible until someone touches the file. `qac lint [path ...]` runs the qol-arch-code, cross-platform, cicd, logging, plugin data and plugin-contract hooks over whole tracked and untracked files (the whole repo when no path is given), counting every violation already there. It never consumes a bypass marker, and it skips `vendor/` and `third_party/`. Each hook exposes `lintFile(path, content, baseline)` through `bin/hook-lint-mode.cjs`, so a new filter in any of them is linted too.
 
 The rules come in two kinds, and lint treats them differently.
-Rules about the code as it stands (cfg placement, facade coverage, source layout, adapter-exclusive helpers, allow attributes) hold or fail on a file alone, so lint checks them on every file.
+Rules about the code as it stands (cfg placement, facade coverage, source layout, adapter-exclusive helpers, allow attributes, plugin data) hold or fail on a file alone, so lint checks them on every file.
 Rules about added code (platform decision signals, settings, active monitor, design, test deadlines, logging) compare a file with its earlier content, which a static file does not have.
 Without a base, lint counts every line as added, which turns "do not add X" into "X must never exist".
 `qac lint --base=<rev>` compares those rules with each file at `<rev>` instead: an unchanged file finds nothing, a changed file finds only what it added, and a file new since `<rev>` counts in full.
 CI runs `qac lint --base=<merge base>` over the whole repo, so rules about the code as it stands hold everywhere and rules about added code judge only the pull request.
-A rule goes in one kind or the other, never both: a new rule reads `readBaseline` only when it is about added code.
+A rule goes in one kind or the other, never both: a new rule reads `readBaseline` only when it is about added code. A missing entry, file or link is a fact about the code as it stands, never added code: comparing it with a base keeps every instance already on main.
 `#[cfg(target_os)]` on a `use` outside `platform/` is owned by qol-arch-cross-platform; qol-arch-code leaves those lines to it so one line is never two findings.
 
 Type `qac lint` as a bare prompt (the `hooks/qac-intercept.mjs` typed-verb hook answers with no model turn), run `/qac [path ...]`, or call `node scripts/qac.mjs lint --pretty`. Without `--pretty` it prints JSON; exit 0 is clean, 1 has findings, 2 is a bad verb, 3 is outside a git repository, 4 is a slip whose lane could not be forked.

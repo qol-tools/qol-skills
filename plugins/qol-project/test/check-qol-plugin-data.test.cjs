@@ -71,7 +71,7 @@ test('ignores files that are not a qol plugin manifest', () => {
     assert.equal(run({ tool_name: 'Write', tool_input: { file_path: outside, content: PLUGIN() + OPEN } }).decision, null);
 });
 
-test('an edit that leaves an existing gap alone passes', () => {
+test('an edit to a manifest that already has a gap is denied until the gap is fixed', () => {
     const dir = pluginDir();
     const file = path.join(dir, 'plugin.toml');
     fs.writeFileSync(file, PLUGIN() + OPEN);
@@ -79,7 +79,12 @@ test('an edit that leaves an existing gap alone passes', () => {
         tool_name: 'Edit',
         tool_input: { file_path: file, old_string: 'version = "0.1.0"', new_string: 'version = "0.2.0"' },
     });
-    assert.equal(result.decision, null);
+    assert.equal(result.decision.permissionDecision, 'deny');
+    const fixed = run({
+        tool_name: 'Edit',
+        tool_input: { file_path: file, old_string: 'version = "0.1.0"', new_string: `version = "0.2.0"\n${SHORTCUT()}` },
+    });
+    assert.equal(fixed.decision, null);
 });
 
 test('an edit that removes the launcher entry is denied', () => {
@@ -91,13 +96,12 @@ test('an edit that removes the launcher entry is denied', () => {
     assert.equal(result.decision.permissionDecision, 'deny');
 });
 
-test('lintFile reports every gap without a baseline and only new gaps with one', () => {
+test('lintFile reports every gap whatever the baseline holds', () => {
     const dir = pluginDir({ config: true });
     const file = path.join(dir, 'plugin.toml');
     const content = PLUGIN() + OPEN;
     assert.equal(lintFile(file, content).length, 2);
-    assert.deepEqual(lintFile(file, content, content), []);
-    const added = lintFile(file, content, PLUGIN() + OPEN + SHORTCUT());
-    assert.equal(added.length, 1);
-    assert.match(added[0], /no launcher entry/);
+    assert.equal(lintFile(file, content, content).length, 2);
+    assert.equal(lintFile(file, content, PLUGIN() + OPEN + SHORTCUT()).length, 2);
+    assert.deepEqual(lintFile(file, PLUGIN() + OPEN + SHORTCUT() + SETTINGS, content), []);
 });

@@ -77,20 +77,14 @@ function dataGaps(content, dir) {
     if (!settings && fs.existsSync(path.join(dir, 'qol-config.toml'))) {
         gaps.push({
             rule: 'settings',
-            text: `Settings contract has no settings action in ${MANIFEST}: line ${manifest.plugin.line} starts a plugin that ships qol-config.toml but declares no action with kind = "settings", so the launcher lists no "Settings > ${manifest.plugin.values.name ?? 'plugin'}" entry. Add [action.settings] with label = "Settings", kind = "settings", args = ["--settings"]; the tray hosts that page itself only with [capabilities] gpui = true.`,
+            text: `Settings contract has no settings action in ${MANIFEST}: line ${manifest.plugin.line} starts a plugin that ships qol-config.toml but declares no action with kind = "settings", so the launcher lists no "Settings > ${manifest.plugin.values.name ?? 'plugin'}" entry. Add [action.settings] with label = "Settings", kind = "settings", args = ["--settings"], and the tray hosts that page itself.`,
         });
     }
     return gaps;
 }
 
-function newGaps(filePath, before, after) {
-    const dir = path.dirname(filePath);
-    const known = new Set(dataGaps(before, dir).map(gap => gap.rule));
-    return dataGaps(after, dir).filter(gap => !known.has(gap.rule));
-}
-
 function reason(gap) {
-    return `${gap.text}\n[qol-plugin-data] ship the missing entry in the same edit (${SKILL_SECTION})`;
+    return `${gap.text}\n[qol-plugin-data] ship the missing entry in this edit (${SKILL_SECTION})`;
 }
 
 function deny(gaps) {
@@ -113,8 +107,7 @@ function evaluate(payload) {
     const input = payload.tool_input || {};
     const filePath = input.file_path || '';
     if (path.basename(filePath) !== MANIFEST || !inQolRepo(filePath)) return 0;
-    const existing = readExistingFile(filePath);
-    const gaps = newGaps(filePath, existing, prospectiveContent(tool, input, existing));
+    const gaps = dataGaps(prospectiveContent(tool, input, readExistingFile(filePath)), path.dirname(filePath));
     if (gaps.length === 0) return 0;
     deny(gaps);
     return 2;
