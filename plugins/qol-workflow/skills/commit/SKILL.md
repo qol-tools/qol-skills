@@ -1,7 +1,7 @@
 ---
 name: commit
 description: >
-  Commit message conventions for qol-tools repos. Use this skill EVERY TIME before invoking `git commit`.
+  Commit message conventions for qol-tools repos (qol-monorepo, qol-skills and other qol-* repos). Use this skill EVERY TIME before invoking `git commit` in one of them; any other repository follows its own conventions.
   The hard rule is: NEVER add Co-Authored-By, "Generated with Claude", or any Anthropic attribution.
   Loaded automatically by the pre-commit hook in qol-workflow.
 ---
