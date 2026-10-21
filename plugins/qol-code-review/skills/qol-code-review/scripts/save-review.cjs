@@ -21,6 +21,8 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 
 const VERDICTS = new Set(['pass', 'conditional', 'block', 'invalid', 'unknown']);
+const FIX_VERDICTS = new Set(['conditional', 'block']);
+const FIX_SEVERITIES = new Set(['blocker', 'high', 'medium', 'low']);
 
 function sanitizeSlug(value) {
     const slug = String(value || 'review')
@@ -108,6 +110,36 @@ function parseArgs(argv) {
     return options;
 }
 
+function findingIds(summary) {
+    const ids = new Set();
+    const add = (item) => {
+        if (item && typeof item.id === 'string' && item.id) {
+            ids.add(item.id);
+        }
+    };
+    for (const item of Array.isArray(summary?.must_fix) ? summary.must_fix : []) {
+        add(item);
+    }
+    for (const item of Array.isArray(summary?.deferred_followups) ? summary.deferred_followups : []) {
+        if (FIX_SEVERITIES.has(item?.severity)) {
+            add(item);
+        }
+    }
+    return [...ids];
+}
+
+function nextSteps(verdict, reviewPath, artifacts, fixIds) {
+    if (!FIX_VERDICTS.has(verdict)) {
+        return [`open ${reviewPath}`];
+    }
+    const source = artifacts.summary || reviewPath;
+    const ids = fixIds.length ? `: ${fixIds.join(', ')}` : '';
+    return [
+        `fix the findings now${ids}. Follow "Fixing the findings" in the qol-code-review skill, working from ${source}. ` +
+        'Stop here only when the user said review only, or the change is not one this session delivers.',
+    ];
+}
+
 function readInput(options) {
     if (options.in) {
         return fs.readFileSync(options.in, 'utf8');
@@ -146,12 +178,14 @@ function save(options, now, suffix) {
 
     const artifacts = { review: reviewPath };
     let summaryWarning = null;
+    let fixIds = [];
     if (options.json) {
         try {
             const parsed = JSON.parse(fs.readFileSync(options.json, 'utf8'));
             const summaryPath = path.join(dir, 'summary.json');
             fs.writeFileSync(summaryPath, `${JSON.stringify(parsed, null, 2)}\n`);
             artifacts.summary = summaryPath;
+            fixIds = findingIds(parsed);
         } catch (error) {
             summaryWarning = `Could not persist --json summary: ${error.message}`;
         }
@@ -172,11 +206,11 @@ function save(options, now, suffix) {
         },
         artifacts,
         commands: [],
-        next: [`open ${reviewPath}`],
+        next: nextSteps(verdict, reviewPath, artifacts, fixIds),
     };
     fs.writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
 
-    return { dir, reviewPath, reportPath, verdict, artifacts, summaryWarning };
+    return { dir, reviewPath, reportPath, verdict, artifacts, summaryWarning, next: report.next };
 }
 
 function printHelp() {
@@ -226,7 +260,7 @@ function run(argv) {
         `  report:  ${result.reportPath}\n` +
         (result.artifacts.summary ? `  summary: ${result.artifacts.summary}\n` : '') +
         `  verdict: ${result.verdict}\n` +
-        `Next: open ${JSON.stringify(result.reviewPath)}\n`,
+        `Next: ${result.next.join('\n')}\n`,
     );
 }
 
@@ -244,6 +278,8 @@ module.exports = {
     timestamp,
     buildRunId,
     assertSafeSegment,
+    findingIds,
+    nextSteps,
     parseArgs,
     save,
     run,

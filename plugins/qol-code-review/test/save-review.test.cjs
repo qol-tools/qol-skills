@@ -8,7 +8,7 @@ const fs = require('node:fs');
 const { spawnSync } = require('node:child_process');
 
 const SCRIPT = path.join(__dirname, '..', 'skills', 'qol-code-review', 'scripts', 'save-review.cjs');
-const { sanitizeSlug, buildRunId, assertSafeSegment, parseArgs } = require(SCRIPT);
+const { sanitizeSlug, buildRunId, assertSafeSegment, parseArgs, findingIds, nextSteps } = require(SCRIPT);
 
 function tempDir() {
     return fs.mkdtempSync(path.join(os.tmpdir(), 'cr-save-test-'));
@@ -114,4 +114,48 @@ test('fails early on empty review content', () => {
     const { exitCode, stderr } = run(['--slug', 's', '--in', src, '--out-dir', out]);
     assert.strictEqual(exitCode, 1);
     assert.match(stderr, /empty/);
+});
+
+test('findingIds takes must_fix plus deferred findings down to low', () => {
+    const summary = {
+        must_fix: [{ id: 'arch-1', severity: 'high' }, { id: 'arch-1', severity: 'high' }, { severity: 'high' }],
+        deferred_followups: [
+            { id: 'tests-1', severity: 'medium' },
+            { id: 'quality-1', severity: 'low' },
+            { id: 'note-1', severity: 'note' },
+        ],
+    };
+    assert.deepStrictEqual(findingIds(summary), ['arch-1', 'tests-1', 'quality-1']);
+    assert.deepStrictEqual(findingIds({}), []);
+    assert.deepStrictEqual(findingIds(null), []);
+});
+
+test('nextSteps opens the review on pass and invalid, and starts the fix round otherwise', () => {
+    const artifacts = { review: '/r/review.md', summary: '/r/summary.json' };
+    const cases = [
+        ['pass', ['x-1'], /^open \/r\/review\.md$/],
+        ['invalid', ['x-1'], /^open \/r\/review\.md$/],
+        ['unknown', [], /^open \/r\/review\.md$/],
+        ['conditional', ['x-1', 'y-2'], /^fix the findings now: x-1, y-2\. .*\/r\/summary\.json/],
+        ['block', [], /^fix the findings now\. .*\/r\/summary\.json/],
+    ];
+    for (const [verdict, ids, expected] of cases) {
+        const next = nextSteps(verdict, '/r/review.md', artifacts, ids);
+        assert.strictEqual(next.length, 1, verdict);
+        assert.match(next[0], expected, verdict);
+    }
+    assert.match(nextSteps('block', '/r/review.md', { review: '/r/review.md' }, [])[0], /working from \/r\/review\.md/);
+});
+
+test('a conditional review with a summary prints the fix round as the next step', () => {
+    const out = tempDir();
+    const src = path.join(out, 'in.md');
+    const json = path.join(out, 'summary.json');
+    fs.writeFileSync(src, '# Review\n');
+    fs.writeFileSync(json, JSON.stringify({ verdict: 'conditional', must_fix: [{ id: 'correctness-1', severity: 'high' }] }));
+    const { exitCode, stdout } = run(['--verdict', 'conditional', '--slug', 's', '--in', src, '--json', json, '--out-dir', out]);
+    assert.strictEqual(exitCode, 0);
+    assert.match(stdout, /^Next: fix the findings now: correctness-1\./m);
+    const report = JSON.parse(fs.readFileSync(path.join(path.dirname(reviewPathFrom(stdout)), 'report.json'), 'utf8'));
+    assert.match(report.next[0], /^fix the findings now: correctness-1\./);
 });

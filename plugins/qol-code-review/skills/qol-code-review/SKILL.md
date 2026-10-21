@@ -1,6 +1,6 @@
 ---
 name: qol-code-review
-description: Use when the user asks to review code, review a patch/diff/PR, run security/correctness/performance/architecture/release/CI review, spin up reviewer agents, delegate reviewers, or synthesize pass/conditional/block findings with severity, confidence, actionability, and machine-parseable output.
+description: Use when the user asks to review code, review a patch/diff/PR, run security/correctness/performance/architecture/release/CI review, spin up reviewer agents, delegate reviewers, synthesize pass/conditional/block findings with severity, confidence, actionability, and machine-parseable output, or fix the findings of a conditional or block review of a change the session delivers.
 ---
 
 # Code Review
@@ -9,11 +9,11 @@ description: Use when the user asks to review code, review a patch/diff/PR, run 
 
 Run independent reviewer agents over the same change set, keep findings separated by domain, then synthesize a severity-ordered go/no-go.
 
-The skill is for review orchestration, not implementation, unless the user explicitly asks to apply fixes after the review.
+The review itself is read-only: reviewer lanes and the synthesis never edit files or write comments.
 
-Default safety posture: read-only. Do not edit files or write comments unless the user explicitly requests edits.
+A review of a change the session delivers ends in fixes, not in a verdict. When the change is the session's own branch, worktree or pull request, or a qol-tools pull request the user asked it to review, a `conditional` or `block` verdict goes straight into the fix round in "Fixing the findings", in the same turn and without asking. The review stays read-only only when the user said review only or do not fix, when the change belongs to someone outside qol-tools, or when the verdict is `pass` or `invalid`.
 
-Always persist the finished review to a temporary markdown file via the bundled writer (see "Persisting the review"). This applies to every run, board or solo, pass or block. Writing that one temp artifact is the sole exception to the read-only posture; it never touches the reviewed codebase.
+Always persist the finished review to a temporary markdown file via the bundled writer (see "Persisting the review"). This applies to every run, board or solo, pass or block.
 
 ## Board Mode Contract
 
@@ -33,7 +33,7 @@ Always persist the finished review to a temporary markdown file via the bundled 
   - or explicit paths
 - Keep reviewers independent: pass scope + domain instructions without biasing expected findings.
 - Set follow-up reviewers with only the smallest set of relevant findings.
-- Keep any branch or checkout actions read-only unless explicitly permitted.
+- Keep branch and checkout actions read-only until the verdict; the fix round owns every edit.
 
 ## Runtime routing
 
@@ -347,7 +347,7 @@ Also include a machine-parseable block for downstream CI or follow-up agents:
 
 Required rule: security/correctness/release blockers must appear before any lower-priority notes.
 
-After producing the output above, persist it (see "Persisting the review"). The saved file path is part of the deliverable you report back.
+After producing the output above, persist it (see "Persisting the review"), then run the fix round when the verdict calls for one (see "Fixing the findings"). The saved file path is part of the deliverable you report back.
 
 ## Persisting the review (required)
 
@@ -367,7 +367,7 @@ This is a workflow node, not a manual step. A bundled writer owns the canonical 
    #   <review-producing command> | node "<skill-dir>/scripts/save-review.cjs" --verdict <v> --slug <slug>
    ```
 
-3. The writer creates `<tmpdir>/code-review/<run-id>/review.md` plus `report.json`, prints the absolute `review:` path, and prints the next command. Report that `review:` path to the user as part of the deliverable.
+3. The writer creates `<tmpdir>/code-review/<run-id>/review.md` plus `report.json`, prints the absolute `review:` path, and prints the next step: `open` the review on `pass` or `invalid`, or, on `conditional` or `block`, the fix round with the finding ids from `--json`. Report that `review:` path to the user as part of the deliverable.
 
 Node contract:
 
@@ -376,10 +376,29 @@ input : review markdown via --in <file> or stdin; --verdict and --slug modifiers
         optional --json <file> to persist the machine-parseable block as summary.json;
         optional --out-dir / --run-id overrides; optional CODE_REVIEW_OUT_DIR env to relocate the base
 work  : compute a stable run id, create the temp run dir, write review.md (+ summary.json), write report.json
-output: review.md (primary), report.json, optional summary.json; the canonical path printed to stdout
+output: review.md (primary), report.json, optional summary.json; the canonical path and the next step printed to stdout
 ```
 
 The writer fails early if the review content is empty. Node is always available in both runtimes, so this step has no extra dependency.
+
+## Fixing the findings
+
+A `conditional` or `block` verdict on a change the session delivers is a work list, not a stopping point. Never end the turn at the verdict to ask whether to fix; the writer's `Next:` line says when the round is due.
+
+1. Work from the saved `summary.json`: every `must_fix` entry, plus every blocker, high, medium and low finding, because only a `pass` verdict lets a pull request into the merge queue. Leave notes and quick wins unless they share a fix with a finding.
+2. Re-verify each finding before touching code. Read the cited lines on the current head and run its repro when it is cheap. A finding that no longer reproduces, or whose path claim is wrong, is skipped with the evidence.
+3. Treat `required_action` as a proposal. Fix the defect the finding names, in the smallest change that matches the surrounding code, and drop any part of the proposal that the evidence does not support.
+4. Fix a shared root cause once. Findings the synthesis merged, or that point at the same function, get one change and one test.
+5. Do not fix a finding that argues with a decision the user or owner made on purpose, such as a look, a layout or a scope cut. List it as settled with the decision; on a pull request, state the decision in a comment so the CI review settles it too.
+6. A finding that only the user can decide (design, scope, a trade-off with no evidence either way) goes to the user, or to the parent with `session_send` kind `ask` in a fork or lane. Fix every other finding meanwhile; one open question never holds the round.
+7. Add or flip the test each finding names, then run the repository's gate on the result, and commit on the reviewed branch under the repository's commit rules. For a pull request, push and park on the watcher: the CI review re-reviews the push, so no second local board runs. Without a pull request, rerun each fixed finding's repro instead.
+8. Report one line per finding, `fixed` or `skipped` with the reason, in the same shape the CI fix session uses:
+
+   ```json
+   {"fixes": [{"id": "architecture-1", "status": "fixed", "note": "What changed, in one line"}, {"id": "quality-2", "status": "skipped", "note": "Why it was left"}]}
+   ```
+
+The session that synthesized the verdict owns the round. In a qol-sessions round it may hand bounded edits to implementation lanes, but the triage in steps 2 to 6, the gate and the report stay with it.
 
 ## Pull request CI
 
