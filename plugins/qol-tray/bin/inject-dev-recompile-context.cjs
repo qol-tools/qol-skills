@@ -26,7 +26,7 @@ if (!QOL_PATH_COMPONENT.test(sessionCwd())) process.exit(0);
 
 const CONTEXT = `qol-tray dev-restart cheat sheet (load before any qol-tray daemon analysis):
 - Recompile is triggered from the qol dev dashboard (ctrl+r, or Enter on the Tray row), which POSTs /api/dev/recompile-self. No in-app Recompile button exists.
-- One recompile = full teardown: kill_all_plugin_processes -> stop_plugin_daemons (daemon_lifecycle begin_stop/finish_stops) -> manager.plugins.clear -> daemon_tracker registry::clear_all -> kill_orphan_daemons -> exec_restart(staged qol-tray binary).
+- One recompile = full teardown: kill_all_plugin_processes -> stop_plugin_daemons (daemon_lifecycle begin_stop/finish_stops) -> manager.plugins.clear -> daemon_tracker registry::clear_all -> kill_orphan_daemons (skips pids registered under the runtime dir's detached/, such as CLI Sessions park runners) -> exec_restart(staged qol-tray binary).
 - Net effect: every plugin daemon (plugin-lights, plugin-alt-tab, plugin-launcher, ...) dies, qol-tray execs the freshly-built binary in place, and daemons get respawned fresh.
 - DO NOT speculate about stale daemons or run pkill -f plugin-* if the user said they recompiled. The recompile already handled it.
 - Recompile does NOT touch plugin config files, the dongle, sync state, or rebuild plugin binaries; only the qol-tray binary is rebuilt.
