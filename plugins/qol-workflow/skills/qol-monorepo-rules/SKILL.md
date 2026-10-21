@@ -61,6 +61,17 @@ A session with a parent (a fork or a lane) talks to the user through that parent
 - When a check fails and you cannot fix it, report the pull request and what
   broke to your parent.
 
+## A review of your own change ends in fixes
+
+A qol-code-review you run on a change you deliver (your branch, worktree or
+pull request, or a qol-tools pull request the user asked you to review) that
+returns `conditional` or `block` goes straight into its fix round in the same
+turn: never stop at the verdict to ask whether to fix. Re-verify each finding,
+fix the real ones, settle the ones a user decision covers, ask only about the
+ones the user must decide, then gate, commit, push and park. Stay read-only only
+when the user said review only. Mechanics: "Fixing the findings" in
+`qol-code-review`.
+
 ## Every pull request is watched until it merges
 
 A pull request you open is yours until it merges. Do not report it done at
