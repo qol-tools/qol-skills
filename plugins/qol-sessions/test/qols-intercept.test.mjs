@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { join } from "node:path";
 
-import { cliSessionsBinary, commandFor, parsePrompt, renderDiagnostic, status, summarize, summarizePark } from "../hooks/qols-intercept.mjs";
+import { cliSessionsBinary, commandFor, parsePrompt, renderDiagnostic, status, summarize, summarizePark, wake } from "../hooks/qols-intercept.mjs";
 
 test("only prompts starting with qols are intercepted", () => {
   for (const prompt of ["fork this", "qolsfork x", "please qols fork x", "", undefined]) {
@@ -222,4 +222,28 @@ test("qols status names an outdated qol in one line and passes other failures th
   assert.deepEqual(status(failing("sessions data directory is unavailable\n")), {
     reason: "qols status: sessions data directory is unavailable",
   });
+});
+
+test("qols wake takes exactly one spawn key", () => {
+  assert.deepEqual(parsePrompt("qols wake ci-speed-2min"), { verb: "wake", key: "ci-speed-2min" });
+  for (const prompt of ["qols wake", "qols wake one two"]) {
+    const { verb, diagnostic } = parsePrompt(prompt);
+    assert.equal(verb, "help", prompt);
+    assert.match(renderDiagnostic(diagnostic), /usage: qols wake <key>$/, prompt);
+  }
+});
+
+test("qols wake runs the CLI Sessions wake command and reports its line or error", () => {
+  const calls = [];
+  const woke = wake("lane", "/bin/qcs", (bin, argv) => {
+    calls.push([bin, ...argv]);
+    return "woke lane in v1:kitty:1:2\n";
+  });
+  assert.deepEqual(calls, [["/bin/qcs", "wake", "lane"]]);
+  assert.deepEqual(woke, { reason: "qols wake: woke lane in v1:kitty:1:2", sent: true });
+  const busy = wake("lane", "/bin/qcs", () => {
+    throw Object.assign(new Error("exit 1"), { stderr: "`lane` is mid-turn\n" });
+  });
+  assert.deepEqual(busy, { reason: "qols wake: `lane` is mid-turn" });
+  assert.match(wake("lane", null).reason, /not installed/);
 });

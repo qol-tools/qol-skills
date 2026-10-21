@@ -20,6 +20,7 @@ const USAGE = [
   "qols new [prompt] [--harness H] [--model M] [--effort E] [--surface S] [--park]",
   "qols switchboard [--model M] [--effort E] [--surface S]",
   "qols park",
+  "qols wake <key>",
   "qols status",
   "fork: detached architect that owns the problem; bridge: lane that reports back here;",
   "test: a fork whose prompt is typed but not submitted, so the launch costs no tokens",
@@ -28,11 +29,12 @@ const USAGE = [
   "--park lets a fork close its terminal while it waits on a long command and reopen when it ends;",
   "a fork given a problem or prompt also closes once its turn ends",
   "park: toggle parking for this terminal; on, a park closes it and reopens the conversation later",
+  "wake: make a session read its waiting messages now, even while parked; reopens a closed park",
   "status: one line per lane with its attention, remote control, pull requests and last message",
   "values may be [aliases] from sessions.toml; left out, sessions.toml defaults apply",
 ].join("\n");
 
-const VERBS = ["fork", "bridge", "test", "new", "switchboard", "park", "status"];
+const VERBS = ["fork", "bridge", "test", "new", "switchboard", "park", "wake", "status"];
 
 const STALE_QOL = "qols status: this qol has no `qol sessions status`; update qol";
 
@@ -68,6 +70,7 @@ export function parsePrompt(prompt) {
   }
   if (verb === "park") return parseBare(source, tokens, verb, "qols park only toggles");
   if (verb === "status") return parseBare(source, tokens, verb, "qols status takes nothing");
+  if (verb === "wake") return parseWake(source, verbToken, tokens);
   const flags = [];
   while (tokens.length >= 1) {
     const last = tokens.at(-1).text;
@@ -121,6 +124,22 @@ export function parsePrompt(prompt) {
     };
   }
   return { verb, message: tokens.map((t) => t.text).join(" "), flags };
+}
+
+function parseWake(source, verbToken, tokens) {
+  if (tokens.length === 1) return { verb: "wake", key: tokens[0].text };
+  const [, extra] = tokens;
+  return {
+    verb: "help",
+    diagnostic: {
+      title: tokens.length === 0 ? "`qols wake` needs a session key" : `\`qols wake\` does not take \`${extra.text}\``,
+      source,
+      start: tokens.length === 0 ? verbToken.end : extra.start,
+      end: tokens.length === 0 ? verbToken.end + 1 : extra.end,
+      label: tokens.length === 0 ? "expected a spawn key here" : "wake takes one spawn key",
+      notes: [`usage: ${usageFor("wake")}`],
+    },
+  };
 }
 
 function parseTaskless(source, tokens, verb, flags) {
@@ -207,6 +226,7 @@ function reply(parsed, cwd) {
   if (parsed.verb === "help") return { reason: parsed.diagnostic ? renderDiagnostic(parsed.diagnostic) : USAGE };
   if (parsed.verb === "park") return park();
   if (parsed.verb === "status") return status();
+  if (parsed.verb === "wake") return wake(parsed.key);
   try {
     const output = execFileSync("qol", commandFor(parsed, cwd), {
       encoding: "utf8",
@@ -243,6 +263,15 @@ function park() {
     return { reason: summarizePark(state), sent: true };
   } catch (error) {
     return { reason: `qols park: ${`${error.stderr ?? ""}`.trim() || error.message}` };
+  }
+}
+
+export function wake(key, binary = cliSessionsBinary(), run = (bin, argv) => execFileSync(bin, argv, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] })) {
+  if (binary === null) return { reason: "qols wake: CLI Sessions is not installed in qol-tray" };
+  try {
+    return { reason: `qols wake: ${`${run(binary, ["wake", key])}`.trim()}`, sent: true };
+  } catch (error) {
+    return { reason: `qols wake: ${`${error.stderr ?? ""}`.trim() || error.message}` };
   }
 }
 
