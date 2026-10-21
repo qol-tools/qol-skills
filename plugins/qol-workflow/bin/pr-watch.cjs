@@ -24,18 +24,19 @@ const QUERY = `query($owner:String!,$name:String!,$number:Int!){repository(owner
 number url state isDraft isInMergeQueue mergeStateStatus autoMergeRequest{enabledAt}
 commits(last:1){nodes{commit{oid committedDate statusCheckRollup{contexts(first:100){nodes{__typename
 ... on CheckRun{name status conclusion detailsUrl checkSuite{workflowRun{databaseId workflow{databaseId}}}}
-... on StatusContext{context state targetUrl}}}}}}}
+... on StatusContext{context state description targetUrl createdAt}}}}}}}
 timelineItems(last:1,itemTypes:[ADDED_TO_MERGE_QUEUE_EVENT,REMOVED_FROM_MERGE_QUEUE_EVENT]){nodes{__typename
-... on RemovedFromMergeQueueEvent{reason createdAt}}}
+... on AddedToMergeQueueEvent{createdAt} ... on RemovedFromMergeQueueEvent{reason createdAt}}}
 comments(last:20){nodes{author{__typename login} body createdAt url}}}}}`;
 
 const HELP = `usage: pr-watch [<pr-url-or-number>] [--pretty] [--interval <s>] [--timeout <min>] [--until-ready]
 Blocks until the pull request merges or fails, then exits once.
 A draft with green checks exits 6 as design work waiting for the user; --until-ready keeps
 watching a draft until the user marks it ready, for a re-park after that report.
-Checks from an older run of a workflow are ignored once a newer run of it reports, and a
-failure seen in the first 120 s ends the watch only if it still holds then, so checks a
-rerun is about to replace do not end it.
+A failed merge queue status posted since the pull request was last queued ends the watch
+even while GitHub still holds the entry. Checks from an older run of a workflow are ignored
+once a newer run of it reports, and a failure seen in the first 120 s ends the watch only if
+it still holds then, so checks a rerun is about to replace do not end it.
 Exit: 0 merged, 1 failed, 2 usage, 3 no pull request, 4 gh error, 5 timeout, 6 idle, 7 review needs you.`;
 
 function gh(args) {
@@ -95,8 +96,9 @@ function fetchSnapshot(target, run) {
     return { pr };
 }
 
-function checksOf(commit, queued) {
-    const stale = (node) => queued && node.__typename === 'StatusContext' && node.context === QUEUE_STATUS;
+function checksOf(commit, queued, enqueuedAt) {
+    const stale = (node) => queued && node.__typename === 'StatusContext' && node.context === QUEUE_STATUS
+        && !(enqueuedAt && node.createdAt >= enqueuedAt);
     const nodes = (commit?.statusCheckRollup?.contexts?.nodes ?? []).filter((node) => !stale(node));
     const runOf = (node) => node.checkSuite?.workflowRun;
     const newest = new Map();
@@ -114,7 +116,7 @@ function checksOf(commit, queued) {
             failed: node.status === 'COMPLETED' && FAILED_CONCLUSIONS.has(node.conclusion),
         }
         : {
-            name: node.context,
+            name: node.context === QUEUE_STATUS && node.description ? `${node.context} (${node.description})` : node.context,
             url: node.targetUrl,
             done: node.state !== 'PENDING' && node.state !== 'EXPECTED',
             failed: FAILED_STATES.has(node.state),
@@ -175,7 +177,9 @@ function classify(pr, since = null, untilReady = false) {
     if (pr.state === 'MERGED') return { ...base, outcome: 'merged' };
     if (pr.state === 'CLOSED') return { ...base, outcome: 'failed', reasons: ['closed without merging'] };
 
-    const checks = checksOf(commit, pr.isInMergeQueue);
+    const event = pr.timelineItems?.nodes?.[0];
+    const enqueuedAt = event?.__typename === 'AddedToMergeQueueEvent' ? event.createdAt : null;
+    const checks = checksOf(commit, pr.isInMergeQueue, enqueuedAt);
     const failures = checks.filter((check) => check.failed).map(({ name, url }) => ({ name, url }));
     const reasons = failures.map((failure) => `check failed: ${failure.name}`);
     if (pr.mergeStateStatus === 'DIRTY') reasons.push('merge conflict with the base branch');

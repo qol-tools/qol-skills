@@ -103,8 +103,9 @@ already watches, since that watcher follows every push; the PreToolUse reminder
 stays silent in both cases. Residual: a harness whose
 transcript it cannot read (anything but Claude Code's JSONL) is not held at Stop. It exits once: 0 merged, 1 failed (a failed check or
 status on the head commit, a merge conflict, a merge queue removal, or the pull
-request closed; the failed `merge queue` status a sent-back run leaves on the
-head is ignored while the pull request is back in the queue), 3 no pull request, 4 `gh` kept failing, 5 still pending after
+request closed; a failed `merge queue` status ends the watch the moment the
+queue run posts it, even while GitHub still holds the failed entry, and one left
+by an earlier attempt is ignored once the pull request is queued again), 3 no pull request, 4 `gh` kept failing, 5 still pending after
 two hours, 6 checks green on a draft (design work waiting for the user) or on a
 ready pull request with auto-merge not armed, 7 a qol-code-review or
 queue-fix comment posted after the watcher started that needs you: findings

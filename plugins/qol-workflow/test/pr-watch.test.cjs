@@ -24,7 +24,8 @@ const run = (name, status, conclusion = null, id = 1) => ({
     __typename: 'CheckRun', name, status, conclusion, detailsUrl: `https://github.com/o/r/actions/runs/9/job/${id}`,
 });
 const inRun = (check, workflow, runId) => ({ ...check, checkSuite: { workflowRun: { databaseId: runId, workflow: { databaseId: workflow } } } });
-const status = (context, state) => ({ __typename: 'StatusContext', context, state, targetUrl: 'https://x' });
+const status = (context, state, createdAt = '2026-10-08T10:30:00Z') => ({ __typename: 'StatusContext', context, state, targetUrl: 'https://x', createdAt });
+const enqueued = (createdAt) => ({ __typename: 'AddedToMergeQueueEvent', createdAt });
 
 const cases = [
     ['merged', pr({ state: 'MERGED' }), 'merged'],
@@ -44,6 +45,8 @@ const cases = [
     ['errored status context', pr({ checks: [status('queue', 'ERROR')] }), 'failed'],
     ['pending status context', pr({ checks: [run('lint', 'COMPLETED', 'SUCCESS'), status('queue', 'PENDING')] }), 'pending'],
     ['merge queue status of a run before the pull request was queued again', pr({ queued: true, checks: [run('lint', 'COMPLETED', 'SUCCESS'), status('merge queue', 'FAILURE')] }), 'pending'],
+    ['merge queue status of the run that holds the queued pull request', pr({ queued: true, events: [enqueued('2026-10-08T10:20:00Z')], checks: [run('lint', 'COMPLETED', 'SUCCESS'), status('merge queue', 'FAILURE')] }), 'failed'],
+    ['merge queue status of a run before the latest enqueue', pr({ queued: true, events: [enqueued('2026-10-08T10:40:00Z')], checks: [run('lint', 'COMPLETED', 'SUCCESS'), status('merge queue', 'FAILURE')] }), 'pending'],
     ['merge queue status while the pull request is out of the queue', pr({ auto: false, checks: [run('lint', 'COMPLETED', 'SUCCESS'), status('merge queue', 'FAILURE')] }), 'failed'],
     ['merge conflict', pr({ merge: 'DIRTY' }), 'failed'],
     ['green and armed', pr({ checks: [run('lint', 'COMPLETED', 'SUCCESS')] }), 'pending'],
