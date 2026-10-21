@@ -12,8 +12,8 @@ There are no shared or reusable workflows in a separate repo; each workflow file
 
 ## Workflow inventory, by role
 
-- `ci.yml` - lint + test on push, pull request and merge group. One plan job runs every gate that needs no compiler (the repository hooks, the script tests, qac lint, the affected-crate plan via `.github/scripts/affected_crates.py`), and only its success starts the ubuntu, macos and windows matrix of fmt, clippy `-D warnings` and tests. The merge group's matrix is fail-fast; a pull request's keeps every OS result. No job waits for the review or watches the others: the review runs beside the workflow, and the queue admits a pull request only once both required checks pass. Skips itself on version-bump commits.
-- `plugin-version.yml` - versioning. Runs on push to main (or dispatch); computes a bump per release unit from conventional-commit history, commits `chore(plugins): bump plugin versions`, builds and packages every release candidate (targets from each plugin's `plugin.toml` `platforms` via `.github/scripts/plugin_matrix.py`), uploads the release files as `dist-<tag>-<target>` artifacts kept 90 days, and pushes `<id>-vX.Y.Z` tags.
+- `ci.yml` - lint + test on push, pull request and merge group. One plan job runs every gate that needs no compiler (the repository hooks, the script tests, qac lint, the affected-crate plan via `.github/scripts/affected_crates.py`), and only its success starts the ubuntu, macos and windows matrix of fmt, clippy `-D warnings` and tests. The plan compiles nothing for a diff of only Markdown or `.github` files, except Markdown that Rust source embeds with `include_str!` or `include_bytes!` (planned as source) and `ci.yml`, `affected_crates.py` and `cleanup_cgroup_journal.py` (planned as the full workspace). The merge group's matrix is fail-fast; a pull request's keeps every OS result. No job waits for the review or watches the others: the review runs beside the workflow, and the queue admits a pull request only once both required checks pass. Skips itself on version-bump commits.
+- `plugin-version.yml` - versioning. Runs on push to main (or dispatch); computes a bump per release unit from conventional-commit history, commits `chore(plugins): bump plugin versions`, builds and packages every release candidate, all plugins of one target in one `Candidate plugins (<target>)` job (targets from each plugin's `plugin.toml` `platforms` via `.github/scripts/plugin_matrix.py`; more plugins on one target than the 32 upload slots in `release_candidate.py` fails the job), uploads the release files as `dist-<tag>-<target>` artifacts kept 90 days, and pushes `<id>-vX.Y.Z` tags.
 - `release.yml` - plugin releases. Fires on a `<id>-vX.Y.Z` tag; verifies the tag's candidate attestation, downloads the release files from the Versioning run the attestation names, requires one per target, and pushes them to the registry. It builds nothing.
 - `qol-tray-release.yml` - host release. Fires on a `qol-tray-vX.Y.Z` tag and publishes the candidate's Linux, macOS and Windows packages as a GitHub Release, the same way.
 - `release-prune.yml` - scheduled cleanup of old releases.
@@ -112,6 +112,12 @@ build, so it saves no cache; only a direct push runs the full workflow on main. 
 prepare job pushes its bump commit with the `VERSIONING_DEPLOY_KEY` deploy key,
 because the Actions token cannot bypass a ruleset; tags stay on the Actions
 token so tag pushes never trigger the release workflows beside the dispatch.
+
+A pull request run uploads the base it tested as a `tested-base` artifact.
+The `merge_group` plan runs `.github/scripts/queue_trust.py` instead of planning afresh: when the pull request run of the entry's head passed the merge gate and nothing that landed since its tested base reaches a crate it tested, the entry is trusted.
+A trusted entry skips check, process-windows, the registry tool build and, when every OS plan skips, the release build, and the queue gate accepts it; otherwise the entry runs every affected job and the step logs why.
+`release_candidate.py` refuses a reused, batched queue run whose plan lacks the trust step.
+A head pushed and re-armed with `gh pr merge --auto` within seconds can enter the queue before its pull request run exists, so that entry gets no reuse.
 
 The squash commit's subject is the pull request title, and `plugin_version.py`
 picks the bump from it and from the `* type(scope): ...` lines of the squash
