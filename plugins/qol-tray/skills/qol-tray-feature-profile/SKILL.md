@@ -41,6 +41,8 @@ device/plugin-configs/<uid>.json       # local-only, gitignored (*/device/)
 Two declarations in `plugin.toml` drive routing:
 
 - `[config.scope]` is the per-field map (`field_x = "core" | "os" | "device"`). The legacy value `"any"` parses as Core via serde alias.
+- A `[config.scope]` key may be a quoted dotted path (`"audio.mic_device" = "device"`) that scopes one leaf of a nested object. Children of a key inherit its scope unless they have their own entry.
+- Every stored field in `qol-config.toml` must be covered by a `[config.scope]` entry, either its own key or an ancestor. `libs/config/tests/config_scope_guard.rs` fails the build otherwise. Hardware addresses, device and port names, monitor or audio endpoints and local absolute paths are `"device"`: sync never carries them.
 - `[config] default_scope = "..."` is the plugin-level fallback for fields that have no per-field entry.
 
 `scope_for(field)` is layered: per-field → `default_scope` → `Default::Core`.
@@ -56,9 +58,16 @@ For a single-platform plugin, the OS bucket is the **declared** platform, never 
 
 Read semantics (`load_plugin_config_merged`): the loader reads every scope
 defined by `ConfigScope` and merges according to the precedence function, with
-later scopes winning on key collision. A `Device` field therefore overrides the
-same key in a lower-precedence slice. An empty slice file is skipped, not
-treated as an empty overlay.
+later scopes winning on key collision. Objects merge leaf by leaf, so a nested
+`Device` path and its synced siblings recombine. A path declared `Device` is read
+only from the device slice: a copy found in the core or os slice came from
+another machine and is ignored. An empty slice file is skipped, not treated as
+an empty overlay.
+
+Reclassifying a stored field to `device` needs a pre-flight migration that moves
+the current synced value into this machine's device slice and strips it from the
+synced slices (`v3_115_to_v3_116_device_plugin_fields` is the pattern), or every
+machine loses the value on upgrade.
 
 Write semantics (`save_plugin_config_split`): split via declarations and write
 each non-empty slice to the path resolved for that plugin/scope. Remove an empty
