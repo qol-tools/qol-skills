@@ -49,6 +49,8 @@ Keep target cfg wiring inside feature-owned `platform/mod.rs` files. Picker/app 
 - Dismissal hides/removes the picker without terminating the daemon.
 - Reuse reapplies size, monitor placement, transparency, shadow, focus, and first-frame reveal requirements.
 - Image ownership drains through `rendering::image_registry` on view release; never drop the same GPUI image ID twice.
+- On X11, a visible picker holds the keyboard with `qol_gpui::popup_window::grab_keyboard`, so desktop shortcuts such as Cinnamon's `<Control><Alt>Tab` switcher cannot fire under it. The grab runs on gpui's own X connection, because a grab from a second connection takes the keys away from gpui. A grab refused while the tray's hotkey grab holds the keyboard is retried on the next window activation change. Every dismiss releases it, because the dismissed picker stays mapped as an invisible ghost and the X server would keep the grab.
+- A hidden picker that starts to show calls `capture_focus_return` before it takes focus. The picker activates itself before its window is shown, so a capture after that reads the picker as the active window and Escape leaves no window focused.
 
 Follow `qol-project:qol-plugin-gpui-surfaces` and `qol-langs:gpui-conventions` for hosted settings and compositor-safe retained-window reveal.
 
