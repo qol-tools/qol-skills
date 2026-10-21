@@ -25,6 +25,27 @@ is released as one "release unit" alongside the bundled `plugins/*`.
   since that unit's last tag (`feat` -> minor, `fix`/`perf` -> patch,
   `!`/`BREAKING CHANGE` -> major), counting only commits that touch the unit's
   package or its workspace dependency closure.
+- The commit title's scope then picks which of those units release. A scope
+  naming workspace members that a release unit builds releases every unit that
+  builds a named member, any unit whose own files the commit edits, and any
+  unit a changed crate or dependency reaches without reaching a named member.
+  `Cargo.lock` and root `[workspace.dependencies]` changes count per changed
+  name.
+- Shared build config (`rust-toolchain`, `.cargo/`, the root profile, patch and
+  workspace settings) releases every unit whatever the scope says. Unscoped
+  commits, umbrella and unknown scopes, and scopes naming only members no unit
+  builds (`fix(cli)`) keep the path rule.
+- Only the title sets the scope. The `* type(scope):` lines of a squash body
+  count for whether a commit releases and for the bump, never for the scope.
+- A shared-lib change scoped to one unit reaches the lib's other dependents only
+  at their next release, and their notes never list it. To ship it to every
+  dependent now, name the lib too: `fix(explorer,gpui)`.
+- `.githooks/pre-push` counts the same way and rejects a direct push to `main`
+  that releases half or more of the units; `QOL_ALLOW_WIDE_RELEASE=1` overrides
+  it, and only the owner approves that.
+- A change to this rule or to the scope list plans again every commit since
+  each unit's last tag, so units it skipped can release together. Run
+  `python3 .github/scripts/plugin_version.py` first to see the plan.
 
 ## 2. Release units (plugins + the host)
 
@@ -83,7 +104,9 @@ is released as one "release unit" alongside the bundled `plugins/*`.
 - macOS: a universal (aarch64 + x86_64) `.app` bundle, ad-hoc codesigned
   (`codesign --sign -`), shipped as `qol-tray-macos-universal.tar.gz`. macOS is
   always built; there is no Apple-signing-secret gate and no `.dmg`.
-- A final job publishes a GitHub Release for the tag with generated notes.
+- A final job publishes a GitHub Release for the tag with generated notes,
+  filtered by `release_notes.py` to the pull requests that counted toward the
+  tray. When that planning fails, the step warns and lists every pull request.
 - CI, candidate, and release jobs have explicit timeouts. A timeout is a
   circuit breaker; repair a repeatedly hanging test or build instead of merely
   raising the limit.

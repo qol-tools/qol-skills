@@ -42,6 +42,9 @@ optional body explaining WHY when non-obvious
   (`cli-sessions`, `sessions-engine`, `tray`, `plugins`), never a short form
   such as `sessions`; `. .githooks/commit-msg-lib.sh && qol_derive_scopes .`
   in the checkout prints the list
+- In qol-monorepo the title scope also picks which release units a shared
+  crate change releases: name every unit the change is for, and the shared lib
+  too when all its dependents need it (qol-tray:qol-tray-release-flow, section 1)
 - No trailing period in the subject
 - Wrap body at ~72 chars
 - A direct-to-main commit (explicit ask only) is one coherent logical delivery
@@ -58,7 +61,8 @@ subject: `feat` bumps minor, `fix` and `perf` bump patch, `!` or
 `BREAKING CHANGE` bumps major, and any other title releases nothing. Title every
 pull request `<type>(scope): summary` under the same rules as a commit, and use
 the highest-impact type of the commits it carries (one `feat` makes it `feat`).
-Always pass `--title`; `--fill` is refused.
+Only the title's scope picks which units release, so it names every unit the
+pull request is for. Always pass `--title`; `--fill` is refused.
 
 Incident: PR #40 was titled "Launcher and settings marks from one drawn set",
 so its two `feat` commits never counted. qol-tray and the launcher went out as
