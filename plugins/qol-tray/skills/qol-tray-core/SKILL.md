@@ -131,7 +131,12 @@ type = "status"
 query = "connection_status"      # references [query.connection_status]
 value_from = "state"
 tone_map = { ok = "success", offline = "danger" }
+hide_values = ["ok"]
 ```
+
+`hide_values` hides a status row while its value is one of the listed values,
+for a status another control on the page already shows. The row reappears for
+any other value or a query error.
 
 ```toml
 # qol-runtime.toml
