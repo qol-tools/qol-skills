@@ -191,6 +191,22 @@ fn draw(kit: Kit, scroll: &SelectionScroll, rail: Vec<AnyElement>) -> Stateful<D
     assert.strictEqual(r.exitCode, 0, r.stderr);
 });
 
+test('passes an overlay column that follows a scroller at its painted offset', () => {
+    const root = workspace();
+    const r = write(root, SURFACE, `use gpui::*;
+fn draw(rail_scroll: &SelectionScroll, dots: Vec<AnyElement>) -> Div {
+    div()
+        .absolute()
+        .top(rail_scroll.painted_offset_y())
+        .h_full()
+        .flex()
+        .flex_col()
+        .children(dots)
+}
+`);
+    assert.strictEqual(r.exitCode, 0, r.stderr);
+});
+
 test('passes a gpui surface built from theme tokens and kit parts', () => {
     const root = workspace();
     const r = write(root, SURFACE, `use gpui::*;

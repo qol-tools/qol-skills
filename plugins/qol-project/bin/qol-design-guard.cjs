@@ -66,7 +66,7 @@ const WEB_DEV = 'apps/tray/ui/views/dev/';
 const WEB_TOKEN_OWNERS = ['apps/tray/ui/styles/theme-tokens.css', 'apps/tray/ui/styles/generated-theme-tokens.css'];
 const SCANNED_EXTENSIONS = new Set(['.rs', '.js', '.mjs', '.css']);
 const LIST_CHILDREN = /^\.children\(([a-z_][a-z0-9_]*|[^()]*\.(iter|into_iter)\(\).*)\)?[,;)]*$/;
-const SCROLLED_CHAIN = /\.overflow_y_scroll\(\)|\.overflow_scroll\(\)|\.visible_range\(|_scroll\.handle\(\)\.offset\(\)/;
+const SCROLLED_CHAIN = /\.overflow_y_scroll\(\)|\.overflow_scroll\(\)|\.visible_range\(|_scroll\.handle\(\)\.offset\(\)|_scroll\.painted_offset_y\(\)/;
 
 const themeCache = new Map();
 const fontCache = new Map();
