@@ -11,6 +11,7 @@ const LOG_LINES = 40;
 const LOG_JOBS = 3;
 const GH_RETRIES = 5;
 const SETTLE_SECONDS = 120;
+const QUEUE_STATUS = 'merge queue';
 const ANSI = /\x1b\[[0-9;]*m/g;
 const LOG_NOISE = /^##\[(end)?group\]/;
 const REVIEW_MARKERS = { '<!-- qol-code-review -->': 'review', '<!-- qol-queue-fix -->': 'queue fix' };
@@ -94,8 +95,9 @@ function fetchSnapshot(target, run) {
     return { pr };
 }
 
-function checksOf(commit) {
-    const nodes = commit?.statusCheckRollup?.contexts?.nodes ?? [];
+function checksOf(commit, queued) {
+    const stale = (node) => queued && node.__typename === 'StatusContext' && node.context === QUEUE_STATUS;
+    const nodes = (commit?.statusCheckRollup?.contexts?.nodes ?? []).filter((node) => !stale(node));
     const runOf = (node) => node.checkSuite?.workflowRun;
     const newest = new Map();
     for (const run of nodes.map(runOf).filter((run) => run?.workflow)) {
@@ -173,7 +175,7 @@ function classify(pr, since = null, untilReady = false) {
     if (pr.state === 'MERGED') return { ...base, outcome: 'merged' };
     if (pr.state === 'CLOSED') return { ...base, outcome: 'failed', reasons: ['closed without merging'] };
 
-    const checks = checksOf(commit);
+    const checks = checksOf(commit, pr.isInMergeQueue);
     const failures = checks.filter((check) => check.failed).map(({ name, url }) => ({ name, url }));
     const reasons = failures.map((failure) => `check failed: ${failure.name}`);
     if (pr.mergeStateStatus === 'DIRTY') reasons.push('merge conflict with the base branch');

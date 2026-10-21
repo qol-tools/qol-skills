@@ -43,6 +43,8 @@ const cases = [
     ['failed status context', pr({ checks: [status('queue', 'FAILURE')] }), 'failed'],
     ['errored status context', pr({ checks: [status('queue', 'ERROR')] }), 'failed'],
     ['pending status context', pr({ checks: [run('lint', 'COMPLETED', 'SUCCESS'), status('queue', 'PENDING')] }), 'pending'],
+    ['merge queue status of a run before the pull request was queued again', pr({ queued: true, checks: [run('lint', 'COMPLETED', 'SUCCESS'), status('merge queue', 'FAILURE')] }), 'pending'],
+    ['merge queue status while the pull request is out of the queue', pr({ auto: false, checks: [run('lint', 'COMPLETED', 'SUCCESS'), status('merge queue', 'FAILURE')] }), 'failed'],
     ['merge conflict', pr({ merge: 'DIRTY' }), 'failed'],
     ['green and armed', pr({ checks: [run('lint', 'COMPLETED', 'SUCCESS')] }), 'pending'],
     ['green and queued', pr({ auto: false, queued: true, checks: [run('lint', 'COMPLETED', 'SUCCESS')] }), 'pending'],
