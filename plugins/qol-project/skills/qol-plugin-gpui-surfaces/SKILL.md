@@ -57,11 +57,13 @@ reassert, collapse/expand resize and dismissal all stay on the shared path.
 ## Contract settings are host-owned
 
 On Linux and macOS, qol-tray intercepts an action before normal plugin
-dispatch when all three conditions hold:
+dispatch when both conditions hold:
 
 1. The selected action has `kind = "settings"`.
 2. The plugin has `qol-config.toml`.
-3. `[capabilities] gpui = true` is present in `plugin.toml`.
+
+`[capabilities] gpui` plays no part: a plugin with no GPUI of its own
+(memory) still gets the hosted page.
 
 The first eligible request starts qol-tray's hidden settings-surface process.
 Later requests go to that process over its singleton socket. One GPUI
@@ -202,8 +204,9 @@ selects) are documented in `qol-project:qol-shared-libs`.
 1. **Settings action** in `plugin.toml` (`kind = "settings"`). qol-tray
    auto-exports a launcher entry (`<Name> Settings`) for every installed
    plugin with one - no per-plugin launcher code.
-2. **Native opt-in** via `[capabilities] gpui = true`. This capability covers
-   hosted contract settings as well as the existing GPUI lifecycle behavior.
+2. **Native opt-in** via `[capabilities] gpui = true` only when the plugin
+   draws its own GPUI windows: it covers the GPUI lifecycle (theme broadcast,
+   restart on accent change), not hosted contract settings.
 3. **Config contract** in `qol-config.toml`; do not create a second settings
    schema or plugin-local renderer.
 4. **Queries the contract references** are declared in

@@ -513,7 +513,7 @@ function manifestFindings(repo, dir, docs) {
         if (kind === 'toggle-config' && !stored.has(action.config_key)) {
             out.push(finding(doc.file, actionLine(id), 'toggle', id, `[action.${id}] toggles config_key ${JSON.stringify(action.config_key ?? null)}, which no stored qol-config.toml field declares`));
         }
-        if (!EXECUTABLE_KINDS.has(kind) || (kind === 'settings' && hasConfig && capabilities.gpui === true)) continue;
+        if (!EXECUTABLE_KINDS.has(kind) || (kind === 'settings' && hasConfig)) continue;
         const routes = routesFor(id, action, manifest, socket);
         if (routes.length === 0) {
             out.push(finding(doc.file, actionLine(id), 'target', id, `[action.${id}] has no enabled [daemon] socket and no [runtime] command, so the tray cannot run it`));

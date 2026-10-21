@@ -509,9 +509,7 @@ test('a hosted settings action needs no dispatch token', () => {
         'plugins/demo/src/main.rs': SOURCE.replace(' | Some("settings")', ''),
         'plugins/demo/plugin.toml': MANIFEST.replace(/\[action\.settings\][\s\S]*?\n\n/, ''),
     });
-    allowed(write(repo, 'plugins/demo/plugin.toml', MANIFEST.replace('doctor = true', 'doctor = true\ngpui = true')));
-    const reason = denial(write(repo, 'plugins/demo/plugin.toml', MANIFEST));
-    assert.match(reason, /\[action\.settings\] reaches the plugin as "settings"/);
+    allowed(write(repo, 'plugins/demo/plugin.toml', MANIFEST));
 });
 
 test('a shortcut to an undeclared action and a duplicate shortcut id are denied', () => {

@@ -170,7 +170,7 @@ HTTP surface for the contracts:
 
 The shared native GPUI settings host renders directly from `qol-config.toml`;
 it owns no second schema. On Linux and macOS, a settings action with
-`capabilities.gpui = true` and a config contract is intercepted by one
+a config contract is intercepted by one
 tray-owned native settings host. Other platforms and failed host starts
 continue through the plugin's mapped settings target.
 
