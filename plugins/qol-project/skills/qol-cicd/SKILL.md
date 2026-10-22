@@ -144,6 +144,13 @@ The `claude review` verdict job runs the pull request's own `claude-review.yml` 
 A pull request that changes either file, or adds a job of that name, therefore judges itself.
 Only an org ruleset that requires the workflow from a trusted ref closes that gap.
 
+A `claude review` check judges the head against the base of its run, so a pull request retargeted to main is held: `auto-merge-ready.yml` posts a failed `claude review` check on the head and fails its job with the reason, which the pull request watcher reports.
+A rerun reviews the old merge commit again, so close and reopen the pull request, or push a commit.
+The review comment records the base it judged, and a follow-up review stands on the last review only when both judged the same base, so the review after a retarget reads the whole pull request.
+The verdict fails when the base changed while the review ran, so a review in flight at the retarget cannot pass it.
+The newest `claude review` check decides, across check suites (live check on #289).
+Residual: a pull request armed before the retarget can enter the queue in the seconds before the failed check lands, and an owner override names a commit, so it carries over a retarget.
+
 ## Local verification
 
 ```bash
