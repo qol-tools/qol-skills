@@ -9,7 +9,7 @@ const { spawnSync } = require('node:child_process');
 
 const HOOK = path.join(__dirname, '..', 'bin', 'check-qol-arch-code.cjs');
 const { lintFile } = require(HOOK);
-const { osViolations, callViolations } = require(path.join(__dirname, '..', 'bin', 'qol-owner-guard.cjs'));
+const { osViolations, callViolations, textViolations } = require(path.join(__dirname, '..', 'bin', 'qol-owner-guard.cjs'));
 
 const OWNERS = {
     os: {
@@ -25,6 +25,18 @@ const OWNERS = {
         calls: ['setHasShadow', 'setStyleMask', 'DwmSetWindowAttribute', 'override_redirect'],
         entry_points: ['disable_window_shadow', 'square_window_corners'],
         allow: [{ path: 'libs/gpui/src/popup_window/platform/windows.rs', text: 'cloak', why: 'cloaking hides the window' }],
+    },
+    'desktop settings': {
+        owner: 'libs/desktop-settings/src/',
+        use: 'qol_desktop_settings::gsettings',
+        texts: ['gsettings'],
+        allow: [{ path: 'plugins/demo/src/doctor.rs', text: 'gsettings', why: 'the doctor reports where the binary is' }],
+    },
+    'qol folders': {
+        owner: 'libs/config/src/',
+        use: 'qol_config::cache_dir',
+        paths: ['dirs::cache_dir', 'dirs::data_dir'],
+        allow: [{ path: 'plugins/demo/src/legacy.rs', text: 'dirs::cache_dir', why: 'moves the old file' }],
     },
 };
 
@@ -359,4 +371,133 @@ test('a rulebook without an os entry still guards chrome', () => {
     const file = place(root, MACOS);
     assert.equal(write(file, PR_210).exitCode, 2);
     assert.equal(write(place(root, 'plugins/demo/src/platform.rs'), LIST).exitCode, 0);
+});
+
+const ownedBy = concept => ({
+    concept,
+    folders: [OWNERS[concept].owner].flat(),
+    use: OWNERS[concept].use,
+    calls: [],
+    entryPoints: new Set(),
+    texts: new Set(OWNERS[concept].texts || []),
+    paths: OWNERS[concept].paths || [],
+    allow: OWNERS[concept].allow.map(item => `${item.path}\0${item.text}`),
+});
+const SETTINGS = ownedBy('desktop settings');
+const FOLDERS = ownedBy('qol folders');
+const settings = (src, at = AT) => textViolations(at, src, SETTINGS);
+const folders = (src, at = AT) => textViolations(at, src, FOLDERS);
+const RUN = 'fn theme() -> Output {\n    Command::new("gsettings").args(["get", SCHEMA, KEY]).output().unwrap()\n}\n';
+const PICK = 'fn store() -> Option<PathBuf> {\n    dirs::cache_dir()\n}\n';
+
+const settingsRefused = [
+    ['a command', RUN, 1],
+    ['a raw string', 'const TOOL: &str = r#"gsettings"#;', 1],
+    ['a test module', '#[cfg(test)]\nmod tests {\n    #[test]\n    fn t() { let _ = "gsettings"; }\n}', 1],
+    ['two runs', RUN + RUN.replace('fn theme', 'fn tone'), 2],
+];
+
+const settingsAllowed = [
+    ['a longer string', 'const S: &str = "gsettings get failed";'],
+    ['a comment', '// runs gsettings\nfn f() {}'],
+    ['an identifier', 'fn gsettings(args: &[&str]) {}'],
+    ['the owner module', 'use qol_desktop_settings::gsettings;\nfn f() { let _ = gsettings::get("a", "b"); }'],
+];
+
+for (const [name, src, n] of settingsRefused) {
+    test(`text refused: ${name}`, () => assert.equal(settings(src).length, n, JSON.stringify(settings(src))));
+}
+
+for (const [name, src] of settingsAllowed) {
+    test(`text allowed: ${name}`, () => assert.deepEqual(settings(src), []));
+}
+
+test('a text names the concept and the literal', () => {
+    const [violation] = settings(RUN);
+    assert.equal(violation.line, 2);
+    assert.equal(violation.what, 'desktop settings outside its owner: "gsettings"');
+});
+
+test('the owner folder may use its texts', () => {
+    assert.deepEqual(settings(RUN, 'libs/desktop-settings/src/gsettings.rs'), []);
+});
+
+test('a text exception holds only for its file', () => {
+    assert.deepEqual(settings(RUN, 'plugins/demo/src/doctor.rs'), []);
+    assert.equal(settings(RUN, 'plugins/demo/src/tone.rs').length, 1);
+});
+
+const foldersRefused = [
+    ['a call', PICK, 1],
+    ['the path as a value', 'fn p() -> Option<PathBuf> { dirs::data_local_dir().or_else(dirs::data_dir) }', 1],
+    ['a brace import', 'use dirs::{cache_dir, home_dir};', 1],
+    ['a multi-line brace import', 'use dirs::{\n    home_dir,\n    data_dir,\n};', 1],
+    ['spaces around the separator', 'fn p() -> Option<PathBuf> { dirs :: cache_dir() }', 1],
+    ['two paths', 'fn p() { let _ = (dirs::cache_dir(), dirs::data_dir()); }', 2],
+];
+
+const foldersAllowed = [
+    ['another function of the module', 'fn p() -> Option<PathBuf> { dirs::home_dir() }'],
+    ['a longer identifier', 'fn p() -> Option<PathBuf> { dirs::cache_dir_v2() }'],
+    ['a module ending in the same name', 'fn p() -> Option<PathBuf> { qol_dirs::cache_dir() }'],
+    ['the owner function', 'fn p() -> Option<PathBuf> { qol_config::cache_dir() }'],
+    ['a comment', '// was dirs::cache_dir()\nfn f() {}'],
+    ['a string', 'const S: &str = "dirs::cache_dir";'],
+    ['a brace import without the name', 'use dirs::{home_dir, download_dir};'],
+];
+
+for (const [name, src, n] of foldersRefused) {
+    test(`path refused: ${name}`, () => assert.equal(folders(src).length, n, JSON.stringify(folders(src))));
+}
+
+for (const [name, src] of foldersAllowed) {
+    test(`path allowed: ${name}`, () => assert.deepEqual(folders(src), []));
+}
+
+test('a path names the concept and the path', () => {
+    const [violation] = folders(PICK);
+    assert.equal(violation.line, 2);
+    assert.equal(violation.what, 'qol folders outside its owner: dirs::cache_dir');
+});
+
+test('the owner folder may use its paths', () => {
+    assert.deepEqual(folders(PICK, 'libs/config/src/lib.rs'), []);
+});
+
+test('a path exception holds only for its file and path', () => {
+    const src = 'fn p() { let _ = (dirs::cache_dir(), dirs::data_dir()); }';
+    assert.deepEqual(folders(src, 'plugins/demo/src/legacy.rs').map(violation => violation.what), [
+        'qol folders outside its owner: dirs::data_dir',
+    ]);
+});
+
+test('blocks a new gsettings run on Write', () => {
+    const file = place(repo(), 'plugins/demo/src/tone.rs');
+    const r = write(file, RUN);
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /desktop settings outside its owner: "gsettings"/);
+    assert.match(r.stderr, /use: qol_desktop_settings::gsettings/);
+});
+
+test('passes an edit beside an existing folder pick', () => {
+    const file = place(repo(), 'plugins/demo/src/store.rs', PICK);
+    const r = run({
+        tool_name: 'Edit',
+        tool_input: { file_path: file, old_string: 'fn store()', new_string: 'fn store_path()' },
+        cwd: path.dirname(file),
+    });
+    assert.equal(r.exitCode, 0, r.stderr);
+});
+
+test('lint reports existing folder picks without a base', () => {
+    const file = place(repo(), 'plugins/demo/src/store.rs', PICK);
+    const messages = lintFile(file, PICK);
+    assert.equal(messages.length, 1);
+    assert.match(messages[0], /store\.rs:2 qol folders outside its owner: dirs::cache_dir/);
+});
+
+test('an entry without calls, texts or paths guards nothing', () => {
+    const root = repo({ rulebook: false });
+    place(root, '.qac/owners.json', JSON.stringify({ 'desktop settings': { ...OWNERS['desktop settings'], texts: [] } }));
+    assert.equal(write(place(root, 'plugins/demo/src/tone.rs'), RUN).exitCode, 0);
 });
