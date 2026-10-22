@@ -108,7 +108,7 @@
       "name": "qol-project",
       "description": "Project-level conventions for the qol-tools ecosystem: mission invariants, org layout, shared CI/release contracts, cross-platform architecture guardrails, shared library placement, plugin templates, and clean OS development environments for portability validation. Ships PreToolUse hooks that block architecture-contract violations plus a UserPromptSubmit hook that reminds Claude to consult qol-mission when prompts mention design/scope/issue terms in a qol-tools repo.",
       "source": "./plugins/qol-project",
-      "version": "0.23.31",
+      "version": "0.23.32",
       "author": {
         "name": "KMRH47"
       }
@@ -198,7 +198,7 @@
       "name": "qol-code-review",
       "description": "Code review skill with read-only review orchestration, domain-focused reviewer agents, contextual quick wins, severity/confidence gates, adversarial passes, and machine-parseable synthesis.",
       "source": "./plugins/qol-code-review",
-      "version": "0.3.11",
+      "version": "0.3.12",
       "author": {
         "name": "KMRH47"
       }
