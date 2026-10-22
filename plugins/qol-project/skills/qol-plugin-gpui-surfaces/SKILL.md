@@ -256,8 +256,12 @@ selects) are documented in `qol-project:qol-shared-libs`.
   before restoring opacity. A render callback or requested repaint without
   the bounds/viewport proof is insufficient: X11 may still have the old
   drawable, leaving the compositor to show the previously focused app until
-  the user moves the window. The GPUI-specific implementation constraint is
-  canonical in `qol-langs:gpui-conventions`.
+  the user moves the window. The gate needs a compositor: with no owner of
+  `_NET_WM_CM_S<screen>` (a desktop without one, or a panel opened before
+  the desktop's compositor starts) `Surface` opens the window shown and
+  skips it, since zero opacity hides nothing and a failed gate used to remove
+  the window. The GPUI-specific implementation constraint is canonical in
+  `qol-langs:gpui-conventions`.
   Every live native window title must be unique because placement and focus
   helpers resolve by title; retained activations intentionally keep the same
   title and native window ID.
