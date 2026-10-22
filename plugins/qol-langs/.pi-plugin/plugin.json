@@ -1,7 +1,7 @@
 {
   "name": "qol-langs",
   "description": "Personal-experience wells for languages and frameworks used in qol-tools: rust-conventions and gpui-conventions. Workspace-specific style and gotchas, not canonical library docs; for those, use context7.",
-  "version": "0.3.9",
+  "version": "0.3.10",
   "author": {
     "name": "KMRH47"
   }
