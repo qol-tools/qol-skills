@@ -2,8 +2,9 @@
 'use strict';
 
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
-const { trigger, parkBinary, isSwitchboard, watchedPullRequests } = require('./pr-watch-context.cjs');
+const { trigger, armsPullRequest, parkBinary, isSwitchboard, watchedPullRequests } = require('./pr-watch-context.cjs');
 
 const QOL_PATH_COMPONENT = /(^|[\\/])qol-[^\\/]+([\\/]|$)/;
 
@@ -12,9 +13,43 @@ const WATCHER_RUN = /(^|[\s;&|`(])node\s+\S*pr-watch\.cjs(\s|$)/;
 const PARKED_RUN = /(^|[\s;&|`(])\S*qol-cli-sessions(?:\.exe)?\s+park\b[^;&|\n]*\s--\s+node\s+\S*pr-watch\.cjs(\s|$)/;
 const WATCHER_HELP = /pr-watch\.cjs\s+(-h|--help)(\s|$)/;
 const HOLD = /(^|[\s;&|`(])gh\s+pr\s+merge\s[^;&|\n]*--disable-auto(\s|$)/;
+const TAIL_BYTES = 4 * 1024 * 1024;
+const TOOL_USE_ID = /^[\w-]+$/;
+
 function parkCommand(url) {
     const root = process.env.CLAUDE_PLUGIN_ROOT || path.resolve(__dirname, '..');
     return `${parkBinary()} park -- node ${path.join(root, 'bin', 'pr-watch.cjs')} ${url ?? '<pr-url>'} --pretty`;
+}
+
+function readTranscript(file, tail) {
+    if (!tail) return fs.readFileSync(file, 'utf8');
+    const fd = fs.openSync(file, 'r');
+    try {
+        const size = fs.fstatSync(fd).size;
+        const length = Math.min(size, tail);
+        const buffer = Buffer.alloc(length);
+        fs.readSync(fd, buffer, 0, length, size - length);
+        return buffer.toString('utf8');
+    } finally {
+        fs.closeSync(fd);
+    }
+}
+
+function settledArmings(dir = path.join(os.tmpdir(), HOOK_NAME)) {
+    const marker = (id) => (TOOL_USE_ID.test(id ?? '') ? path.join(dir, id) : null);
+    return {
+        has: (id) => Boolean(marker(id)) && fs.existsSync(marker(id)),
+        add: (id) => {
+            if (!marker(id)) return false;
+            try {
+                fs.mkdirSync(dir, { recursive: true });
+                fs.writeFileSync(marker(id), '');
+                return true;
+            } catch {
+                return false;
+            }
+        },
+    };
 }
 
 function readPayload() {
@@ -80,6 +115,43 @@ function unparkedPullRequest(calls, cwd, exec) {
     return null;
 }
 
+function unparkedArming(calls, cwd, exec, settled) {
+    let watched;
+    for (let index = calls.length - 1; index >= 0; index -= 1) {
+        const call = calls[index];
+        if (PARKED_RUN.test(call.command)) return null;
+        if (!call.ok) continue;
+        if (HOLD.test(call.command)) return null;
+        if (!armsPullRequest(call.command) || settled.has(call.id)) continue;
+        const hit = trigger(call.command, call.cwd || cwd, exec);
+        if (hit && !hit.url) return hit;
+        if (hit) {
+            watched ??= watchedPullRequests(exec);
+            if (!watched.has(hit.url)) return hit;
+        }
+        settled.add(call.id);
+    }
+    return null;
+}
+
+function letsThrough(payload) {
+    if ((payload.tool_name || payload.tool) !== 'Bash') return false;
+    const command = payload.tool_input?.command ?? '';
+    return PARKED_RUN.test(command) || HOLD.test(command) || armsPullRequest(command) === 'arm';
+}
+
+function denyUntilParked(hit) {
+    return {
+        hookSpecificOutput: {
+            hookEventName: 'PreToolUse',
+            permissionDecision: 'deny',
+            permissionDecisionReason:
+                'A pull request you opened or armed has no watcher, so a failed check or review would reach no one. Park on it before anything else.\n' +
+                `[${HOOK_NAME}] run \`${parkCommand(hit.url)}\`, or \`gh pr merge --disable-auto <number>\` if the user is testing or holding it`,
+        },
+    };
+}
+
 function blockStop(hit) {
     return {
         decision: 'block',
@@ -89,18 +161,27 @@ function blockStop(hit) {
     };
 }
 
-function decide(payload, readTranscript = (path) => fs.readFileSync(path, 'utf8'), exec, env = process.env) {
+function decide(payload, read = readTranscript, exec, env = process.env, settled = settledArmings()) {
     if (!QOL_PATH_COMPONENT.test(payload?.cwd || process.cwd())) return null;
     const event = payload?.hook_event_name;
     if (event === 'PreToolUse') {
-        if ((payload.tool_name || payload.tool) !== 'Bash') return null;
-        return unparkedWatcher(payload.tool_input?.command ?? '') ? denyUnparked() : null;
+        const bash = (payload.tool_name || payload.tool) === 'Bash';
+        if (bash && unparkedWatcher(payload.tool_input?.command ?? '')) return denyUnparked();
+        if (!payload.transcript_path || letsThrough(payload)) return null;
+        let transcript;
+        try {
+            transcript = read(payload.transcript_path, TAIL_BYTES);
+        } catch {
+            return null;
+        }
+        const hit = unparkedArming(bashCalls(transcript), payload.cwd || process.cwd(), exec, settled);
+        return hit && !isSwitchboard(env, exec) ? denyUntilParked(hit) : null;
     }
     if (event === 'Stop') {
         if (payload.stop_hook_active || !payload.transcript_path) return null;
         let transcript;
         try {
-            transcript = readTranscript(payload.transcript_path);
+            transcript = read(payload.transcript_path);
         } catch {
             return null;
         }
@@ -116,7 +197,7 @@ function main() {
     return 0;
 }
 
-module.exports = { decide, unparkedWatcher, bashCalls, unparkedPullRequest };
+module.exports = { decide, unparkedWatcher, bashCalls, unparkedPullRequest, unparkedArming, settledArmings };
 
 if (require.main === module) {
     try {

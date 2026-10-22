@@ -13,6 +13,7 @@ const PRE_TOOL_USE_HOOKS = [
     { matcher: "Bash", script: "bin/pr-deny-unconventional-title.cjs" },
     { matcher: "Bash", script: "bin/pr-watch-context.cjs" },
     { matcher: "Bash", script: "bin/pr-watch-park-guard.cjs" },
+    { matcher: "^(?![Bb]ash$)", script: "bin/pr-watch-park-guard.cjs" },
     { matcher: "Edit|Write|MultiEdit", script: "bin/deny-tool-matches.cjs" },
 ];
 

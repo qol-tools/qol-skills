@@ -92,6 +92,13 @@ function withoutHeredocs(command) {
     return command.replace(/<<-?\s*(['"]?)(\w+)\1([^\n]*)\n[\s\S]*?\n\s*\2(?=\n|$)/g, '$3');
 }
 
+function armsPullRequest(rawCommand) {
+    const command = rawCommand && withoutHeredocs(rawCommand);
+    if (!command || WATCHER_RUN.test(command)) return null;
+    if (PR_CREATE.test(command)) return 'create';
+    return PR_READY.test(command) || PR_AUTO_MERGE.test(command) ? 'arm' : null;
+}
+
 function trigger(rawCommand, cwd, exec = run) {
     const command = rawCommand && withoutHeredocs(rawCommand);
     if (!command || WATCHER_RUN.test(command)) return null;
@@ -160,7 +167,7 @@ function main() {
     return 0;
 }
 
-module.exports = { trigger, render, parkBinary, reminderText, silenced, pushDir, openPullRequestUrl, isSwitchboard, watchedPullRequests };
+module.exports = { trigger, armsPullRequest, render, parkBinary, reminderText, silenced, pushDir, openPullRequestUrl, isSwitchboard, watchedPullRequests };
 
 if (require.main === module) {
     process.exit(main());
