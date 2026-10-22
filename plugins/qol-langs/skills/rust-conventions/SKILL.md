@@ -65,6 +65,10 @@ When stopping child processes:
 - Use `qol-fs::{atomic_write, atomic_write_durable}` for regular file-content
   replacement; never hand-roll sibling temp writes and renames. Binary swaps,
   directory promotion, and no-clobber creation stay capability-local.
+- Move a file with `qol_fs::move_file`: it renames, and across filesystems
+  copies into a temporary sibling and renames that into place, so a failed
+  copy never leaves a truncated target. Never hand-roll a rename with an
+  `fs::copy` fallback.
 
 ## Performance
 
