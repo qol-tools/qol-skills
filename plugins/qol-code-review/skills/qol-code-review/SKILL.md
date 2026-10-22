@@ -402,7 +402,7 @@ The session that synthesized the verdict owns the round. In a qol-sessions round
 
 ## Pull request CI
 
-`scripts/ci-pr.cjs` is the whole review a CI job runs on a pull request; the workflow only installs Claude Code, seeds the plugins, calls it, pushes the patch it leaves and posts the comment it renders.
+`scripts/ci-pr.cjs` is the whole review a CI job runs on a pull request; the workflow only installs Claude Code, seeds the plugins, calls it, pushes the patch it leaves and posts the comment it renders. The comment ends in a hidden `<!-- base <ref> -->` line naming the base the review judged, and the workflow passes `--since` only when the last review judged the same base, so a pull request retargeted since is reviewed whole.
 Everything the run decides lives in `ci/`: `config.json` (model, effort, plugins to enable, denied tools, the verdicts that trigger a fix, the fix commit subject, the comment marker, and the model, effort, commit subject and comment marker of the merge queue fix), `review-prompt.md` (solo review plus one adversarial agent), `agents.json` (that agent, given the config's model and effort at run time), `fix-prompt.md` and `queue-fix-prompt.md`.
 
 Run it from the checkout of the pull request merged into its base:
