@@ -12,8 +12,8 @@ There are no shared or reusable workflows in a separate repo; each workflow file
 
 ## Workflow inventory, by role
 
-- `ci.yml` - lint + test on push, pull request and merge group. One plan job runs every gate that needs no compiler (the repository hooks, the script tests, qac lint, the affected-crate plan via `.github/scripts/affected_crates.py`), and only its success starts the ubuntu, macos and windows matrix of fmt, clippy `-D warnings` and tests. The plan compiles nothing for a diff of only Markdown or `.github` files, except Markdown that Rust source embeds with `include_str!` or `include_bytes!` (planned as source) and `ci.yml`, `affected_crates.py` and `cleanup_cgroup_journal.py` (planned as the full workspace). The merge group's matrix is fail-fast; a pull request's keeps every OS result. No job waits for the review or watches the others: the review runs beside the workflow, and the queue admits a pull request only once both required checks pass. Skips itself on version-bump commits.
-- `plugin-version.yml` - versioning. Runs on push to main (or dispatch); computes a bump per release unit from conventional-commit history, commits `chore(plugins): bump plugin versions`, builds and packages every release candidate, all plugins of one target in one `Candidate plugins (<target>)` job (targets from each plugin's `plugin.toml` `platforms` via `.github/scripts/plugin_matrix.py`; more plugins on one target than the 32 upload slots in `release_candidate.py` fails the job), uploads the release files as `dist-<tag>-<target>` artifacts kept 90 days, and pushes `<id>-vX.Y.Z` tags.
+- `ci.yml` - lint + test on push, pull request and merge group. One plan job runs every gate that needs no compiler (the repository hooks, the script tests, qac lint, the affected-crate plan via `.github/scripts/affected_crates.py`), and only its success starts the ubuntu, macos and windows matrix of fmt, clippy `-D warnings` and tests. The plan compiles nothing for a diff of only Markdown or `.github` files, except `ci.yml`, `affected_crates.py` and `cleanup_cgroup_journal.py` (planned as the full workspace). A file a crate embeds with `include_str!` or `include_bytes!` counts as a change to that crate wherever the file lives, and a `concat!` path counts every file under its literal start. The ubuntu leg runs the workspace-wide format, workspace-hack and lockfile gates whenever any OS has crates to test, and a leg that only lints restores no build cache and installs no system libraries. The registry tool build runs only when a change reaches `qol-plugin-registry`. The merge group's matrix is fail-fast; a pull request's keeps every OS result. No job waits for the review or watches the others: the review runs beside the workflow, and the queue admits a pull request only once both required checks pass. Skips itself on version-bump commits.
+- `plugin-version.yml` - versioning. Runs on push to main (or dispatch); computes a bump per release unit from conventional-commit history, commits `chore(plugins): bump plugin versions`, builds and packages every release candidate, all plugins of one target in one `Candidate plugins (<target>)` job (targets from each plugin's `plugin.toml` `platforms` via `.github/scripts/plugin_matrix.py`; more plugins on one target than the 32 upload slots in `release_candidate.py` fails the job), uploads the release files as `dist-<tag>-<target>` artifacts kept 90 days, and pushes `<id>-vX.Y.Z` tags. A run for an older push can cancel the pending run for main's head, so its "Resolve the newest source" step releases main's head once the head passed CI, and otherwise ends and leaves the release to the run of the next commit that passes CI. A revert releases as a patch: `revert(scope): ...`, and GitHub's `Revert "<subject>"` title under the reverted subject's scope.
 - `release.yml` - plugin releases. Fires on a `<id>-vX.Y.Z` tag; verifies the tag's candidate attestation, downloads the release files from the Versioning run the attestation names, requires one per target, and pushes them to the registry. It builds nothing.
 - `qol-tray-release.yml` - host release. Fires on a `qol-tray-vX.Y.Z` tag and publishes the candidate's Linux, macOS and Windows packages as a GitHub Release, the same way.
 - `release-prune.yml` - scheduled cleanup of old releases.
@@ -45,21 +45,28 @@ build nothing; they publish the candidate's files:
 | Workflow / job | cache-key |
 |---|---|
 | ci.yml check (ubuntu, macos) | `ci-${{ matrix.os }}` |
-| ci.yml process-windows | `ci-windows-sandbox` |
 | plugin-version.yml plugin_candidate | `plugin-release-${{ matrix.target }}` |
 | plugin-version.yml qol_tray candidates | `qol-tray-linux`, `qol-tray-macos`, `qol-tray-windows` |
 | ci.yml registry-tool, and the registry jobs of release.yml / plugin-index.yml / plugin-registry-backfill.yml / qol-tray-host-publish.yml / release-prune.yml | `plugin-registry` |
 
 Every rust-cache use runs with `save-if: ${{ github.ref == 'refs/heads/main' }}`
-so only main-fed jobs save caches, plus `cache-on-failure: true` so a red
-main job (a flaky test) still refreshes its namespace instead of leaving every
-later run cold. Cache keys embed the shared key, runner,
+so only main-fed jobs save caches, and never with `cache-on-failure`: every job
+that saves only compiles, so a failed or cancelled one would save an incomplete
+entry under a key no later run replaces. It saves nothing instead, and the next
+main run saves the whole entry. Cache keys embed the shared key, runner,
 RUSTFLAGS env hash, and lockfile hash; changing a namespace or RUSTFLAGS
 invalidates keys, so batch such changes into one deliberate cold wave.
 
 `.github/scripts/cache_prune.py` owns the total byte ceiling. Pruning groups by
-ref and namespace, expires unused entries, and removes superseded entries
-before current ones. Keep headroom below the hosting quota.
+ref and namespace and keeps the most recently used entries of each, by use and
+not by creation: after a lockfile revert main restores the older entry by its
+exact key and saves nothing, so the newer one is the stale one. It expires
+unused entries, then evicts until the total fits: superseded entries first, then
+release build caches, then the caches every pull request and merge queue run
+restores (`v0-rust-ci-`, `v0-rust-plugin-registry-`, `claude-seed-`), least
+recently used first within each. An entry restored in the last two hours goes
+last, because a later job of the same run, such as claude review's publish job,
+may restore it again. Keep headroom below the hosting quota.
 
 A job that compiles the workspace never holds an `actions: write` token: every
 build script, procedural macro and test it runs can read the checkout's stored
@@ -106,8 +113,8 @@ crates whose inputs are stable between commits.
 main merges pull requests through a merge queue (ruleset "main merge queue").
 PR runs of ci.yml do `cargo check --release`; the `merge_group` run and main
 pushes do the full `cargo build --release`, so a release-only link error sends
-the PR back instead of landing, and main keeps the release cache warm for the
-queue. A push that lands a commit the queue already passed skips lint, test and
+the PR back instead of landing, unless the queue trusts the entry (below), and
+main keeps the release cache warm for the queue. A push that lands a commit the queue already passed skips lint, test and
 build, so it saves no cache; only a direct push runs the full workflow on main. Org and repo admins bypass the queue for direct pushes. The Versioning
 prepare job pushes its bump commit with the `VERSIONING_DEPLOY_KEY` deploy key,
 because the Actions token cannot bypass a ruleset; tags stay on the Actions
@@ -115,7 +122,9 @@ token so tag pushes never trigger the release workflows beside the dispatch.
 
 A pull request run uploads the base it tested as a `tested-base` artifact.
 The `merge_group` plan runs `.github/scripts/queue_trust.py` instead of planning afresh: when the pull request run of the entry's head passed the merge gate and nothing that landed since its tested base reaches a crate it tested, the entry is trusted.
-A trusted entry skips check, process-windows, the registry tool build and, when every OS plan skips, the release build, and the queue gate accepts it; otherwise the entry runs every affected job and the step logs why.
+A trusted entry skips check, the registry tool build and, when every OS plan skips, the release build, and the queue gate accepts it; otherwise the entry runs every affected job and the step logs why.
+The batch plans a trusted entry's release build against the entry ahead, so its own crates are never release-linked before it lands, and a release-only link error first fails the Versioning candidate build after merge.
+That gap is deliberate (#271): trust trades the link for queue time.
 `release_candidate.py` refuses a reused, batched queue run whose plan lacks the trust step.
 A head pushed and re-armed with `gh pr merge --auto` within seconds can enter the queue before its pull request run exists, so that entry gets no reuse.
 
@@ -126,6 +135,11 @@ units release; qol-tray:qol-tray-release-flow, section 1, owns that rule. The pl
 conventional" step runs `.githooks/commit-msg` on that subject: it fails the
 `merge_group` run and only warns on pull request runs, because a title edit does
 not rerun them. See the qol-workflow:commit skill, "Pull request titles".
+A batch's combined pull request names its originals' scopes in its title, because a title with no scope releases every unit the batch reaches.
+
+The `claude review` verdict job runs the pull request's own `claude-review.yml` and `review_gate.py`, and the ruleset accepts any Actions job named `claude review`.
+A pull request that changes either file, or adds a job of that name, therefore judges itself.
+Only an org ruleset that requires the workflow from a trusted ref closes that gap.
 
 ## Local verification
 
