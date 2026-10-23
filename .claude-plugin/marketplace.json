@@ -108,7 +108,7 @@
       "name": "qol-project",
       "description": "Project-level conventions for the qol-tools ecosystem: mission invariants, org layout, shared CI/release contracts, cross-platform architecture guardrails, shared library placement, plugin templates, and clean OS development environments for portability validation. Ships PreToolUse hooks that block architecture-contract violations plus a UserPromptSubmit hook that reminds Claude to consult qol-mission when prompts mention design/scope/issue terms in a qol-tools repo.",
       "source": "./plugins/qol-project",
-      "version": "0.23.35",
+      "version": "0.23.36",
       "author": {
         "name": "KMRH47"
       }
@@ -153,7 +153,7 @@
       "name": "qol-plugin-removeapp",
       "description": "Skills for the plugin-removeapp plugin: leftover attribution, package-manager guards, and safe identity-checked removal.",
       "source": "./plugins/qol-plugin-removeapp",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "author": {
         "name": "KMRH47"
       }
