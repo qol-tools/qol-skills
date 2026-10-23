@@ -556,6 +556,9 @@ test('a config scope must name a stored key or a parent path of one', () => {
     allowed(write(repo, 'plugins/demo/plugin.toml', `${MANIFEST}\n[config.scope]\n"general.enabled" = "device"\n`));
     assert.match(denial(write(repo, 'plugins/demo/plugin.toml', `${MANIFEST}\n[config.scope]\nstate = "device"\n`)), /\[config\] scope\.state names no stored qol-config\.toml key or parent of one/);
     assert.match(denial(write(repo, 'plugins/demo/plugin.toml', `${MANIFEST}\n[config.scope]\n"general.missing" = "device"\n`)), /\[config\] scope\.general\.missing names no stored qol-config\.toml key/);
+    assert.match(denial(write(repo, 'plugins/demo/plugin.toml', `${MANIFEST}\n[config.scope]\ntitle_bar = "os"\n`)), /\[config\] scope\.title_bar names no stored qol-config\.toml key/);
+    const framed = fixture({ 'plugins/demo/qol-config.toml': `${CONFIG}\n[window]\ntitle_bar = true\n` });
+    allowed(write(framed, 'plugins/demo/plugin.toml', `${MANIFEST}\n[config.scope]\ntitle_bar = "os"\n`));
 });
 
 test('a toggle-config action must name a stored field', () => {

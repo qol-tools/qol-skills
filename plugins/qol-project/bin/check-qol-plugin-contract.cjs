@@ -472,7 +472,9 @@ function checkboxIds(items) {
 
 function storedKeys(repo, configDoc) {
     const keys = new Set();
-    if (!configDoc || !isTable(configDoc.value) || !isTable(configDoc.value.field)) return keys;
+    if (!configDoc || !isTable(configDoc.value)) return keys;
+    if (typeof configDoc.value.window?.title_bar === 'boolean') keys.add('title_bar');
+    if (!isTable(configDoc.value.field)) return keys;
     for (const [id, field] of Object.entries(configDoc.value.field)) {
         if (isStored(repo, field)) keys.add(typeof field.config_key === 'string' ? field.config_key : id);
     }
