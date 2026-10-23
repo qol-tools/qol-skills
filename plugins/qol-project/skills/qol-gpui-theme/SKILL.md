@@ -286,6 +286,7 @@ which one and fill in the words; they never style one by hand.
 | Scroll cue | `kit.scroll_cue(ScrollSource, ground)` | fade, chevron and bar at every edge with more; windowed lists keep one row between the chosen row and a faded edge. Every `.overflow_y_scroll()` tracks a `SelectionScroll` handle and follows the chosen row with `SelectionScroll::follow`, and a full-height column of rows is a scroller: rows past the window scroll, never squeeze or run under the hint bar. A `ScrollGrip` laid over the cue makes the bar seekable: a press on the track centres the thumb there and a press on the thumb drags it from where it was held; `seek_handle` seeks a `ScrollHandle` |
 | Icon | `qol_gpui::icon::icon(Icon, size, ink)` | drawn SVG for every symbol the shipped fonts lack: enter, tab, backspace, arrows, the mac modifiers, close, tick, more, prompt and the rest |
 | Action circle | `Kit::action_circle(size, state)` inside `Kit::action_row` | `ACTION_CIRCLE_SIZE` 46, `HEIGHT_CONTROL` 36 or `HEIGHT_INLINE` 28, gap `ACTION_CIRCLE_GAP` 14; Resting, Primary, Armed, Disabled |
+| Menu | `kit.menu(width)`, `kit.menu_row(id, name, key, selected)`, `kit.menu_rule()` | a floating column on the menu ground with a `LINE` strong hairline and `float_shadow`, padded `SPACE_TIGHT` and occluding the mouse; each row is `HEIGHT_INLINE` tall with a `ListName` name, an optional key name in soft ink and the band highlight when selected; the rule is a separator hairline inset by `SPACE_INSET`. The crumb trail's folded crumbs and Explorer's pin and folder menus are built from these |
 
 Keys have one namer: `qol_hotkeys::chord::caps` turns a chord into caps, lowercase
 words joined by `+` on Linux and Windows (`win` on Windows) and glyphs with no
@@ -318,6 +319,7 @@ same `tile_arts`, `choose_step` and `choose_hints`.
 | Crumb trail | `components::settings_crumb_trail` | the Heading style, separator `/` at px `SPACE_TIGHT` |
 | Setting row | `SettingsRow::setting` | h `HEIGHT_SETTING_ROW`, px `SPACE_INSET`, py `SPACE_TIGHT`, gap `SPACE_CELL`; `.separated(true)` draws the top hairline |
 | Rule / add row | `SettingsRow::rule` / `::add` | h `HEIGHT_RULE_ROW`, same insets, rounded `RADIUS_CONTROL` |
+| Carried row | `SettingsRow::lifted(lift)` over `settings_row_shade(lift, kit)` | a reorder card's picked-up entry: as `lift` runs from 0 to 1 the row rises `SPACE_INSET`, moves right by `SPACE_CELL` and takes the float shadow, over a shade on the pane well ground that fills the slot it will land in |
 | Label group | `components::settings_label_group(label, Option<description>, row, kit)` | `flex_1 min_w_0 flex flex_col`, gap `SPACE_STACK`; `settings_label` + optional `settings_description` |
 | Value group | `settings_value_group()` | gap `SPACE_INSET` |
 | Toggle | `SettingsToggle` | 40 x 24 track (`HEIGHT_INLINE - 4`), knob inset `SPACE_STACK` |

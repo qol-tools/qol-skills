@@ -23,6 +23,8 @@ and toasts remain plugin-owned.
 | `SettingsRuntime::tray` | `settings_panel/` | Routes hosted runtime queries and actions through qol-tray's existing HTTP API |
 | `open_from_async` / `open_plugin_settings` | `settings_panel/` | Plugin-owned fallback entrypoints for code already running GPUI |
 | Choose, list and item cards | `settings_panel/view/` | Select and multi-select rows push a choice card (`choose_card.rs`); list rows push a list card and its item cards (`list_card.rs`) |
+| Entries cards | `settings_panel/view/` | An `object_array` or option-less `string_array` pushes an entries card. With `reorder = true` the card picks entries up and carries them (`entries_carry.rs`), and `add_label` names its add row |
+| Menu | `kit.rs` | `kit.menu(width)`, `kit.menu_row(id, name, key, selected)` and `kit.menu_rule()` build every floating menu; a surface never styles its own |
 | `ScrollList` | `scroll_list.rs` | Selection + scroll-window state shared with launcher/removeapp |
 
 `Surface::show_focused` is for interactive panels (`Render + Focusable`),
@@ -116,7 +118,11 @@ extend `settings_panel/` instead. What the kit module guarantees:
 1. Values load via `GET /api/plugins/{id}/config` on the tray
    (127.0.0.1:42700), falling back to the plugin's `config.json` only
    when the tray is unreachable; `resolve_config` merges them over the
-   contract.
+   contract. The retained window rereads every source's stored values
+   each time it is presented (`stored_values.rs`) and updates the rows
+   whose stored value changed, unless a card or an edit is open or a save
+   ran after the read started, so a value a plugin saves itself
+   (Explorer's pins) shows the next time the window opens.
 2. `ResolvedField` kinds map to row controls: boolean → toggle (space),
    select → choice card, string_array with `options` or `query` →
    multi-select choice card, number → typed edit with min/max clamp,
@@ -134,6 +140,17 @@ extend `settings_panel/` instead. What the kit module guarantees:
    an optional RGB `accent`; shared renderers preserve that generic decoration,
    while the producing domain owns its meaning. Never teach `qol-gpui` about
    provider, device, session, or tool identities.
+
+   A reorder card (`reorder = true` on an `object_array` or an option-less
+   `string_array`) orders its entries from the keyboard: Enter or a click
+   picks an entry up, Up and Down carry it, Enter puts it down and Esc puts
+   it back; Ctrl+Up and Ctrl+Down carry it while Ctrl is held and put it
+   down on release. The order saves on put-down, and entries in a reorder
+   card open no edit form. `add_label` names the add row ("+ {add_label}",
+   default "+ Add"), and an `object_array` may set `row_label`, a template
+   of its item fields ("{name}"). Validation rejects a template with no item
+   field or an unknown one, and rejects `reorder` or `add_label` on any
+   other kind.
 3. All query-backed controls use the shared `SettingsRuntime`. Hosted panel
    persistence uses the tray config endpoint, while `SettingsRuntime::tray`
    sends queries and actions through the existing HTTP and action paths. If a
