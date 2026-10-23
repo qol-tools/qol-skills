@@ -54,6 +54,18 @@ configuration, applied by the reveal path while the window is still hidden
 above other windows; CLI Sessions is the reference consumer. Reveal, focus
 reassert, collapse/expand resize and dismissal all stay on the shared path.
 
+`Surface::title_bar(bool)` picks the window frame. `Panel` defaults to the
+system title bar and `OverlayPanel` to none. With the frame on, the window
+manager draws the title bar and buttons and resizes the window from its frame;
+an overlay keeps its above-others level but gets a normal caption on Windows
+and the floating level on macOS. With it off, a surface with a `min_size`
+resizes from its own edges. A windowed plugin lets the user choose: declare
+`[window]` with `title_bar = <default>` in `qol-config.toml`, which adds a
+"Window" section with one "System title bar" switch scoped to this machine,
+and pass the stored value to `.title_bar(...)` when the window opens.
+Explorer, Remove App and the Shot editor default it on, CLI Sessions off; the
+settings panel is always framed and the launcher and alt-tab stay popups.
+
 ## Contract settings are host-owned
 
 On Linux and macOS, qol-tray intercepts an action before normal plugin
@@ -264,7 +276,10 @@ selects) are documented in `qol-project:qol-shared-libs`.
   `qol-langs:gpui-conventions`.
   Every live native window title must be unique because placement and focus
   helpers resolve by title; retained activations intentionally keep the same
-  title and native window ID.
+  title and native window ID. A second live window with the same title gets a
+  `-N` suffix, and a title is freed when its window goes away, however it
+  closes. Rename a live window only through `SurfaceDismisser::retitle`, which
+  keeps the reservation and the focus retry on the new name.
 - **Interactive surfaces are `WindowKind::Normal`** on Linux; PopUp maps
   to a non-focusable NOTIFICATION and keystrokes leak to the terminal.
 - **Overlay panels use `SurfaceKind::OverlayPanel`, never a local overlay
