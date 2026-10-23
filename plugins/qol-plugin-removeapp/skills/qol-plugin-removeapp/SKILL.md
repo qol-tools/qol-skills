@@ -49,6 +49,8 @@ Protected apps and running apps are separate concerns from all three: protection
 
 **Change the UI:** keep it keyboard-first, and keep the confirmation surface honest about total size and what will be removed.
 
+**Settings:** `qol-config.toml` declares only `[window] title_bar = true`, the "System title bar" switch, read when the window opens. Opening it again after the window manager closed it builds a new window, since only Escape quits the process.
+
 ## Invariants
 
 - Nothing is removed without passing attribution, guards, and a matching identity snapshot.
