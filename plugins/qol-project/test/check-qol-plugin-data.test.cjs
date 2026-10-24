@@ -105,3 +105,52 @@ test('lintFile reports every gap whatever the baseline holds', () => {
     assert.equal(lintFile(file, content, PLUGIN() + OPEN + SHORTCUT()).length, 2);
     assert.deepEqual(lintFile(file, PLUGIN() + OPEN + SHORTCUT() + SETTINGS, content), []);
 });
+
+const DAEMON = port => `\n[daemon]\nenabled = true\ncommand = "qol-x"\nport = ${port}\n`;
+
+function siblingPlugin(dir, folder, id, port) {
+    const sibling = path.join(path.dirname(dir), folder);
+    fs.mkdirSync(sibling, { recursive: true });
+    fs.writeFileSync(path.join(sibling, 'plugin.toml'), PLUGIN(id) + DAEMON(port));
+}
+
+const PORT_CASES = [
+    ['port another plugin declares', [['lights', 'qol-lights', 42710]], 42710, /Daemon port is taken in plugin\.toml: line 14 sets \[daemon\] port = 42710, which qol-lights already declares/],
+    ['port two plugins declare', [['lights', 'qol-lights', 42710], ['sound', 'qol-sound', 42710]], 42710, /which qol-lights, qol-sound already declares/],
+    ['free port', [['lights', 'qol-lights', 42710]], 42720, null],
+    ['no sibling plugins', [], 42710, null],
+];
+
+for (const [name, siblings, port, expected] of PORT_CASES) {
+    test(`port: ${name}`, () => {
+        const dir = pluginDir();
+        for (const [folder, id, taken] of siblings) siblingPlugin(dir, folder, id, taken);
+        const result = write(dir, PLUGIN() + DAEMON(port));
+        assert.equal(result.status, 0);
+        if (expected === null) {
+            assert.equal(result.decision, null);
+            return;
+        }
+        assert.equal(result.decision.permissionDecision, 'deny');
+        assert.match(result.decision.permissionDecisionReason, expected);
+        assert.match(result.decision.permissionDecisionReason, /give this daemon a free port/);
+    });
+}
+
+test('port: a sibling folder without a manifest or a daemon port is ignored', () => {
+    const dir = pluginDir();
+    fs.mkdirSync(path.join(path.dirname(dir), 'empty'), { recursive: true });
+    const noPort = path.join(path.dirname(dir), 'session');
+    fs.mkdirSync(noPort, { recursive: true });
+    fs.writeFileSync(path.join(noPort, 'plugin.toml'), PLUGIN('qol-session'));
+    assert.equal(write(dir, PLUGIN() + DAEMON(42710)).decision, null);
+});
+
+test('port: lintFile reports a collision whatever the baseline holds', () => {
+    const dir = pluginDir();
+    siblingPlugin(dir, 'lights', 'qol-lights', 42710);
+    const file = path.join(dir, 'plugin.toml');
+    const content = PLUGIN() + DAEMON(42710);
+    assert.equal(lintFile(file, content).length, 1);
+    assert.equal(lintFile(file, content, content).length, 1);
+});

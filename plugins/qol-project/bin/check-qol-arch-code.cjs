@@ -50,6 +50,7 @@ const path = require('node:path');
 const design = require('./qol-design-guard.cjs');
 const lintMode = require('./hook-lint-mode.cjs');
 const owners = require('./qol-owner-guard.cjs');
+const events = require('./qol-event-guard.cjs');
 const { inQolRepo } = require('./qol-repo.cjs');
 
 const INSPECTED_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
@@ -1486,6 +1487,28 @@ function findNewOwnerViolations(filePath, newContent) {
     return violations.length > 0 ? { relative, violations } : null;
 }
 
+function blockEvents(filePath, violations) {
+    lintMode.report(process.stderr, `qol-arch-code runtime event violation in ${filePath}.
+
+This edit breaks the runtime event contract every subscriber parses:
+
+${events.formatViolations(violations)}
+
+Event variants are past tense, and payloads only grow: a new field carries
+#[serde(default)] (or is an Option), and a shape change is a new variant,
+never a rename or a removal.
+
+Reference: qol-project:qol-arch-channels skill, "Rules".
+
+Bypass for this edit only:
+  touch .claude/bypass-qol-arch-code
+`);
+}
+
+function findNewEventViolations(filePath, newContent) {
+    return events.newViolations(filePath, readBaseline(filePath), newContent);
+}
+
 function main() {
     const raw = readStdin().trim();
     if (!raw) return 0;
@@ -1539,6 +1562,12 @@ function evaluate(payload) {
     const ownerViolation = deadlineContent ? findNewOwnerViolations(filePath, deadlineContent) : null;
     if (ownerViolation && !consumeBypass(cwd, filePath, basename)) {
         blockOwner(filePath, ownerViolation.relative, ownerViolation.violations);
+        return 2;
+    }
+
+    const eventViolations = deadlineContent ? findNewEventViolations(filePath, deadlineContent) : [];
+    if (eventViolations.length > 0 && !consumeBypass(cwd, filePath, basename)) {
+        blockEvents(filePath, eventViolations);
         return 2;
     }
 

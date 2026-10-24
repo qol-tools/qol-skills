@@ -31,7 +31,7 @@ function parseValue(text) {
 }
 
 function parseManifest(content) {
-    const manifest = { plugin: null, actions: new Map(), shortcuts: [], launcher: false };
+    const manifest = { plugin: null, actions: new Map(), shortcuts: [], launcher: false, daemon: null };
     let table = null;
     content.split(/\r?\n/).forEach((raw, index) => {
         const line = raw.trim();
@@ -39,17 +39,21 @@ function parseManifest(content) {
         if (header) {
             const name = header[2];
             const array = header[1] === '[[';
-            table = { line: index + 1, values: {} };
+            table = { line: index + 1, values: {}, lines: {} };
             const action = /^action\.(?:"([^"]+)"|([\w-]+))$/.exec(name);
             if (array && name === 'shortcuts') manifest.shortcuts.push(table);
             else if (array) return;
             else if (name === 'plugin') manifest.plugin = table;
             else if (name === 'launcher') manifest.launcher = true;
+            else if (name === 'daemon') manifest.daemon = table;
             else if (action) manifest.actions.set(action[1] ?? action[2], table);
             return;
         }
         const pair = /^([\w-]+)\s*=\s*(.+)$/.exec(line);
-        if (pair && table) table.values[pair[1]] = parseValue(pair[2].trim());
+        if (pair && table) {
+            table.values[pair[1]] = parseValue(pair[2].trim());
+            table.lines[pair[1]] = index + 1;
+        }
     });
     return manifest;
 }
@@ -58,6 +62,35 @@ function reachesOpenFromLauncher(manifest) {
     if (manifest.launcher) return true;
     return manifest.shortcuts.some(shortcut =>
         (shortcut.values.action ?? 'open') === 'open' && shortcut.values.export_to_launcher !== false);
+}
+
+function daemonPort(manifest) {
+    const port = manifest.daemon?.values.port;
+    return typeof port === 'string' && /^\d+$/.test(port) ? port : null;
+}
+
+function readManifest(file) {
+    try {
+        return parseManifest(fs.readFileSync(file, 'utf8'));
+    } catch {
+        return null;
+    }
+}
+
+function portOwners(dir, port) {
+    const parent = path.dirname(dir);
+    let entries;
+    try {
+        entries = fs.readdirSync(parent, { withFileTypes: true });
+    } catch {
+        return [];
+    }
+    return entries
+        .filter(entry => entry.isDirectory() && path.join(parent, entry.name) !== dir)
+        .map(entry => ({ folder: entry.name, manifest: readManifest(path.join(parent, entry.name, MANIFEST)) }))
+        .filter(({ manifest }) => manifest?.plugin && daemonPort(manifest) === port)
+        .map(({ folder, manifest }) => manifest.plugin.values.id ?? folder)
+        .sort();
 }
 
 function dataGaps(content, dir) {
@@ -80,11 +113,20 @@ function dataGaps(content, dir) {
             text: `Settings contract has no settings action in ${MANIFEST}: line ${manifest.plugin.line} starts a plugin that ships qol-config.toml but declares no action with kind = "settings", so the launcher lists no "Settings > ${manifest.plugin.values.name ?? 'plugin'}" entry. Add [action.settings] with label = "Settings", kind = "settings", args = ["--settings"], and the tray hosts that page itself.`,
         });
     }
+    const port = daemonPort(manifest);
+    const owners = port ? portOwners(dir, port) : [];
+    if (owners.length > 0) {
+        gaps.push({
+            rule: 'port',
+            text: `Daemon port is taken in ${MANIFEST}: line ${manifest.daemon.lines.port} sets [daemon] port = ${port}, which ${owners.join(', ')} already declares, so whichever daemon starts second cannot bind it. Pick a port no other plugin.toml declares.`,
+            hint: 'give this daemon a free port in this edit',
+        });
+    }
     return gaps;
 }
 
 function reason(gap) {
-    return `${gap.text}\n[qol-plugin-data] ship the missing entry in this edit (${SKILL_SECTION})`;
+    return `${gap.text}\n[qol-plugin-data] ${gap.hint ?? 'ship the missing entry in this edit'} (${SKILL_SECTION})`;
 }
 
 function deny(gaps) {

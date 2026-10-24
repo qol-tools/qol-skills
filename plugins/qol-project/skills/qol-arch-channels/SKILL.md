@@ -19,6 +19,16 @@ Four channels, pick one. Don't invent a fifth.
 - Event variants are past-tense VerbNoun: `FocusChanged`, `MonitorsChanged`, `LauncherAppsSynced`.
 - Payloads are additive only. Breaking shape = new variant, never rename.
 - Use `#[serde(default)]` on new fields so old subscribers still parse.
+- The qol-arch-code hook enforces these three on `RuntimeEventKind` and
+  `RuntimeEvent` wherever they are declared (`bin/qol-event-guard.cjs`).
+  Every variant's last word is a past participle, in any file state. Against
+  the file before the edit, or the lint base: a variant that disappears, a
+  `RuntimeEvent` field that disappears, and a field added to an existing
+  `RuntimeEvent` variant without `#[serde(default)]`, `skip` or an `Option`
+  type are denied. A new variant's fields need no default, since no older
+  subscriber knows the variant. Residual: a field whose type changes keeps
+  its name and passes, and payload structs outside those two enums are not
+  checked.
 - A tray-owned helper process is not automatically a fifth host/plugin
   channel. The native settings singleton socket only activates qol-tray's own
   GPUI host; panel persistence and `SettingsRuntime::tray` keep plugin config,

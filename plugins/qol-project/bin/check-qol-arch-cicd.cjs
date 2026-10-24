@@ -55,6 +55,8 @@ const PLATFORM_CRATES = new Set([
 
 const lintMode = require('./hook-lint-mode.cjs');
 const { inQolRepo } = require('./qol-repo.cjs');
+const crateDirection = require('./crate-direction.cjs');
+const { readExistingFile, prospectiveContent } = require('./hook-edit-content.cjs');
 
 function readStdin() {
     try {
@@ -366,6 +368,28 @@ Bypass for this edit only:
 `);
 }
 
+function blockCrateDirection(filePath, violations) {
+    const detail = violations
+        .map(v => `  line ${v.line}: ${v.from} depends on ${v.dependency} (${v.target})`)
+        .join('\n');
+    lintMode.report(process.stderr, `qol-arch-cicd violation in ${filePath}.
+
+Found dependencies that point outward:
+
+${detail}
+
+Crates depend inward only. A crate under libs/ depends on libs/ and vendor/,
+never on plugins/, apps/ or tools/, and a plugin never depends on another
+plugin, on apps/ or on tools/. Put the neutral contract both sides need in
+libs/ and have each crate use it directly.
+
+Reference: qol-shared-libs skill, "Dependency rules".
+
+Bypass for this edit only:
+  touch .claude/bypass-qol-arch-cicd
+`);
+}
+
 function main() {
     const raw = readStdin().trim();
     if (!raw) return 0;
@@ -436,6 +460,12 @@ function evaluate(payload) {
         const platformCrates = findUnconditionalPlatformCrates(newContent);
         if (platformCrates.length > 0) {
             blockPlatformCrates(filePath, platformCrates);
+            return 2;
+        }
+        const manifest = prospectiveContent(tool, input, readExistingFile(filePath));
+        const outward = crateDirection.violations(filePath, manifest);
+        if (outward.length > 0) {
+            blockCrateDirection(filePath, outward);
             return 2;
         }
     }
