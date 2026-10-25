@@ -72,7 +72,7 @@ Use `qol-project:qol-plugin-gpui-surfaces` and `qol-langs:gpui-conventions`; ver
 
 Source-check the selected adapter before proposing display-server alternatives. Add support by implementing the platform capability and cleanup semantics first, then update `plugin.toml`. Record unsupported substrate work in issues/specs, not a skill TODO section.
 
-Cinnamon recording runs inside the compositor through `Cinnamon.Recorder`, which buffers frames and falls to the encoder's speed once the encoder lags, so encoder throughput is the recorded frame rate. Prefer the NVENC H.264 pipeline when Cinnamon's GStreamer has `nvh264enc` and remux it on stop; CPU VP8 is the fallback and reaches only about 27 fps at 2560x1440 on real desktop content.
+Linux recording prefers x11grab with ffmpeg's `h264_nvenc` whenever a one-frame NVENC probe succeeds. `Cinnamon.Recorder` reads every frame back inside the compositor and turns off fullscreen unredirection, so even with NVENC a game fell from 110 to about 50 fps and the capture reached 31 fps; x11grab with NVENC kept the game smooth at a full 60 fps capture. The Cinnamon recorder (NVENC or CPU VP8 inside it) stays the path without a working NVENC, and libx264 x11grab is the last resort.
 
 ## Verification
 
