@@ -72,7 +72,7 @@ Use `qol-project:qol-plugin-gpui-surfaces` and `qol-langs:gpui-conventions`; ver
 
 Source-check the selected adapter before proposing display-server alternatives. Add support by implementing the platform capability and cleanup semantics first, then update `plugin.toml`. Record unsupported substrate work in issues/specs, not a skill TODO section.
 
-Linux recording prefers x11grab with ffmpeg's `h264_nvenc` whenever a one-frame NVENC probe succeeds. `Cinnamon.Recorder` reads every frame back inside the compositor and turns off fullscreen unredirection, so even with NVENC a game fell from 110 to about 50 fps and the capture reached 31 fps; x11grab with NVENC kept the game smooth at a full 60 fps capture. The Cinnamon recorder (NVENC or CPU VP8 inside it) stays the path without a working NVENC, and libx264 x11grab is the last resort.
+Linux recording prefers NVIDIA frame capture (NvFBC) piped into ffmpeg's `h264_nvenc` whenever a one-frame NVENC probe succeeds: a helper process loads `libnvidia-fbc.so.1` at run time, sends gpu-screen-recorder's interoperability key because GeForce drivers refuse NvFBC without it, and writes whole BGRA frames to ffmpeg's stdin. x11grab reads the screen in 24-row chunks, so a fullscreen game's flip landing between chunks tore the top 24 to 48 rows in about 5 to 7% of frames; NvFBC frames never tear. When NvFBC fails to start or writes no file within 3 s, the helper is killed and x11grab with NVENC records instead. `Cinnamon.Recorder` reads every frame back inside the compositor and turns off fullscreen unredirection, so a game fell from 110 to about 50 fps; it stays the path without a working NVENC, and libx264 x11grab is the last resort.
 
 ## Verification
 
