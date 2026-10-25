@@ -227,6 +227,10 @@ function derivesDeserialize(attrs) {
     return attrs.some(attr => /\bderive\s*\([^)]*\bDeserialize\b/.test(attr));
 }
 
+function derivesSerialize(attrs) {
+    return attrs.some(attr => /\bderive\s*\([^)]*\bSerialize\b/.test(attr));
+}
+
 function splitWords(name) {
     return name.split('_').filter(Boolean);
 }
@@ -512,6 +516,7 @@ function fileItems(file, lexed) {
             name,
             file,
             deserialize: derivesDeserialize(attrs),
+            serialize: derivesSerialize(attrs),
             renameAll: itemValue(items, 'rename_all')[0],
             renameAllFields: itemValue(items, 'rename_all_fields')[0],
             denyUnknown: hasItem(items, 'deny_unknown_fields'),

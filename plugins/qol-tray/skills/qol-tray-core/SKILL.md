@@ -236,6 +236,19 @@ or rename changes the rule without touching the hook. It checks:
 - **Settings**: every stored `qol-config.toml` field binds to a field of a
   plugin `Deserialize` struct that code reads, and the plugin mentions every
   `qol-runtime.toml` action and query.
+- **Status values**: every state a `label_map` or `tone_map` names appears as
+  a string literal, or as the wire name of a `Serialize` enum variant, in the
+  plugin's own `src` outside tests. A state the plugin
+  never emits is a label nobody sees. Boolean `true` and `false` keys are
+  exempt, since the host maps them from the value itself. Emit the state from
+  the plugin or delete it from the map.
+- **Platform scope**: a stored field whose every reader file sits in one OS's
+  platform code (a path segment or file stem `linux`, `macos` or `windows`)
+  declares `platforms` on the field or its section, and names no OS that code
+  does not cover. Any reader in shared code, or readers in the platform code
+  of all three systems, means no finding. Without it the other systems show a
+  setting that does nothing. Add `platforms = [...]` naming the OSes whose
+  code reads it, or read it on the others.
 - **Headers**: every settings page shows a section header and a sub header
   before any option. Each `[section.<id>]` needs a non-empty `description`, a
   section with exactly one field must not share that field's label (trimmed,
@@ -254,6 +267,11 @@ debt never blocks unrelated work. A finding keeps its identity (file, rule and
 the key or id it names) while its wording changes, and a second copy of one
 counts as added. `qac lint` without a base reports every finding in each
 contract file. There is no bypass. Fix the code or delete the key.
+
+Residual: both settings rules read source strings and field names, not
+behaviour. A state built at run time (`format!`, a `Display` impl) is
+invisible to the status rule, and a reader in shared code that is itself
+`cfg`-gated to one OS is invisible to the platform rule. Review catches those.
 
 Incident (2026-10-20): lights declared `duration_seconds` on a runtime action
 the spec has no field for, its stream `throttle_ms` was never read by the

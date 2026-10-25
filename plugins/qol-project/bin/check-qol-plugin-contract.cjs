@@ -31,6 +31,8 @@ const CONTRACT_PATH = /^(plugins\/[^/]+)\/(?:plugin|qol-config|qol-runtime)\.tom
 const SOURCE_PATH = /^(plugins\/[^/]+)\/(?:src\/.+\.rs|Cargo\.toml)$/;
 const CANDIDATE_PATH = /[\\/]plugins[\\/][^\\/]+[\\/](?:plugin\.toml|qol-config\.toml|qol-runtime\.toml|Cargo\.toml|src[\\/].+\.rs)$|[\\/]libs[\\/](?:plugin-api|config|conventions|platform|theme)[\\/]src[\\/].+\.rs$/;
 const SKILL = 'qol-tray:qol-tray-core, "Contracts are honoured to the letter"';
+const PLATFORM_OS = new Set(['linux', 'macos', 'windows']);
+const BOOLEAN_STATES = new Set(['true', 'false']);
 const MAX_LISTED = 12;
 const CACHE_SLACK = 4;
 
@@ -56,6 +58,8 @@ const RULES = {
     binding: ['Setting is never read by the plugin', "read the key through a field of the plugin's Deserialize config struct before declaring it, or delete the setting"],
     subHeader: ['Settings header has no sub header', 'give the section, or the contract root when fields sit outside every section, a non-empty description'],
     redundantHeader: ['Settings header repeats its only row', 'give the section a label that differs from its only field label, or add a second field'],
+    statusValue: ['Status value is never emitted', 'emit the state from the plugin or delete it from the map'],
+    platformScope: ['Setting is read on one OS only', 'add platforms = [...] naming the OSes whose code reads it, or read it on the others'],
     unhandled: ['Runtime entry is never handled', "handle the id in the plugin's dispatch before declaring it, or delete it from qol-runtime.toml"],
 };
 
@@ -291,6 +295,10 @@ function factsIn(repo, files) {
     return files.map(file => repo.facts(file)).filter(Boolean);
 }
 
+function taggedFacts(repo, files) {
+    return files.map(file => ({ file, facts: repo.facts(file) })).filter(entry => entry.facts);
+}
+
 function contractSchema(repo) {
     return repo.memo('schema', () => rust.schemaOf(factsIn(repo, SCHEMA_DIRS.flatMap(dir => rustFiles(repo, dir))).map(facts => facts.items)));
 }
@@ -370,9 +378,10 @@ function binaries(dir, cargo, files) {
 function pluginFacts(repo, dir) {
     return repo.memo(`plugin:${dir}`, () => {
         const cargo = parseToml(repo.read(`${dir}/Cargo.toml`)) ?? {};
-        const own = factsIn(repo, rustFiles(repo, `${dir}/src`));
-        const deps = factsIn(repo, pathDependencies(repo, dir, cargo).flatMap(dep => rustFiles(repo, `${dep}/src`)));
-        const all = [...own, ...deps];
+        const ownTagged = taggedFacts(repo, rustFiles(repo, `${dir}/src`));
+        const depTagged = taggedFacts(repo, pathDependencies(repo, dir, cargo).flatMap(dep => rustFiles(repo, `${dep}/src`)));
+        const own = ownTagged.map(entry => entry.facts);
+        const all = [...own, ...depTagged.map(entry => entry.facts)];
         const strings = new Set();
         const reads = new Set();
         for (const facts of all) {
@@ -383,6 +392,9 @@ function pluginFacts(repo, dir) {
             bins: binaries(dir, cargo, repo.list(`${dir}/src`)),
             strings,
             ownStrings: new Set(own.flatMap(facts => facts.strings)),
+            ownWires: new Set(own.flatMap(facts => facts.items.defs).filter(def => def.kind === 'enum' && def.serialize).flatMap(def => def.variants.map(variant => rust.variantWire(variant, def.renameAll)))),
+            hasOwnSource: own.length > 0,
+            sources: [...ownTagged, ...depTagged].map(entry => ({ file: entry.file, reads: new Set(entry.facts.reads), strings: new Set(entry.facts.strings) })),
             reads,
             schema: rust.schemaOf(all.map(facts => facts.items)),
             doctorWired: own.some(facts => facts.doctor),
@@ -641,6 +653,66 @@ function bindingGap(facts, key) {
     return 'matches no Deserialize struct field and no string';
 }
 
+function readerFiles(facts, key) {
+    const segments = key.split('.');
+    const matches = chainMatches(facts.schema, segments);
+    if (matches.includes(true)) return [];
+    if (matches.length) {
+        const names = new Set(matches.map(match => match.rust));
+        return facts.sources.filter(source => [...names].some(name => source.reads.has(name)));
+    }
+    return facts.sources.filter(source => source.strings.has(key) || source.strings.has(segments[segments.length - 1]));
+}
+
+function platformOf(dir, file) {
+    const inside = file.startsWith(`${dir}/`) ? file.slice(dir.length + 1) : file;
+    const parts = inside.replace(/\.rs$/, '').split('/');
+    return parts.find(part => PLATFORM_OS.has(part)) ?? null;
+}
+
+function declaredPlatforms(field, section) {
+    const lists = [field.platforms, section?.platforms].filter(list => Array.isArray(list) && list.length);
+    if (!lists.length) return null;
+    return lists.reduce((kept, list) => kept.filter(os => list.includes(os)));
+}
+
+function platformGap(facts, dir, key, field, section) {
+    const files = readerFiles(facts, key);
+    if (!files.length) return null;
+    const systems = files.map(source => platformOf(dir, source.file));
+    if (systems.includes(null)) return null;
+    const covered = new Set(systems);
+    const where = [...new Set(files.map(source => source.file))].sort().join(', ');
+    const declared = declaredPlatforms(field, section);
+    if (!declared) {
+        if (covered.size === PLATFORM_OS.size) return null;
+        return `is read only in ${where} (${[...covered].sort().join(', ')} code), but neither the field nor its section declares platforms, so the other systems show a setting that does nothing`;
+    }
+    const extra = declared.filter(os => !covered.has(os));
+    if (extra.length) {
+        return `declares platforms ${extra.join(', ')}, but it is read only in ${where} (${[...covered].sort().join(', ')} code), so there it does nothing`;
+    }
+    return null;
+}
+
+function statusFindings(doc, dir, facts, fields) {
+    const out = [];
+    if (!facts.hasOwnSource) return out;
+    for (const [id, field] of Object.entries(fields)) {
+        if (!isTable(field)) continue;
+        for (const map of ['label_map', 'tone_map']) {
+            if (!isTable(field[map])) continue;
+            for (const state of Object.keys(field[map])) {
+                if (BOOLEAN_STATES.has(state) || facts.ownStrings.has(state) || facts.ownWires.has(state)) continue;
+                if (map === 'tone_map' && isTable(field.label_map) && state in field.label_map) continue;
+                const line = toml.keyLine(doc.lines, field, map) || toml.keyLine(doc.lines, fields, id);
+                out.push(finding(doc.file, line, 'statusValue', `${id}:${state}`, `[field.${id}] ${map} maps the state "${state}", but no string or serialized enum variant in ${dir}/src outside tests emits it`));
+            }
+        }
+    }
+    return out;
+}
+
 function filled(value) {
     return typeof value === 'string' && value.trim() !== '';
 }
@@ -691,8 +763,12 @@ function configFindings(repo, dir, docs) {
         const gap = bindingGap(facts, key);
         if (gap) {
             out.push(finding(doc.file, toml.keyLine(doc.lines, fields, id), 'binding', id, `[field.${id}] stores "${key}", which ${gap} in ${dir}/src or its path dependencies`));
+            continue;
         }
+        const scope = platformGap(facts, dir, key, field, sections[field.section]);
+        if (scope) out.push(finding(doc.file, toml.keyLine(doc.lines, fields, id), 'platformScope', id, `[field.${id}] stores "${key}", which ${scope}`));
     }
+    out.push(...statusFindings(doc, dir, facts, fields));
     return out;
 }
 

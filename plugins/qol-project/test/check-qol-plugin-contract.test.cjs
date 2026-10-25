@@ -170,6 +170,12 @@ pub struct FieldSpec {
     pub active_query: Option<String>,
     #[serde(default)]
     pub section: Option<String>,
+    #[serde(default)]
+    pub platforms: Option<Vec<String>>,
+    #[serde(default)]
+    pub label_map: Option<IndexMap<String, String>>,
+    #[serde(default)]
+    pub tone_map: Option<IndexMap<String, String>>,
 }
 
 impl FieldSpec {
@@ -203,6 +209,8 @@ pub struct SectionSpec {
     pub description: Option<String>,
     #[serde(default)]
     pub actions: Vec<String>,
+    #[serde(default)]
+    pub platforms: Option<Vec<String>>,
 }
 
 #[derive(Deserialize)]
@@ -271,10 +279,10 @@ const TRAY = `fn honour(manifest: &PluginManifest, config: &ConfigSpecV1, runtim
     }
     let _ = (&config.schema_version, &config.title, &config.description, &config.section);
     for field in config.field.values() {
-        let _ = (&field.kind, &field.label, &field.config_key, &field.default, &field.query, &field.active_query, &field.section);
+        let _ = (&field.kind, &field.label, &field.config_key, &field.default, &field.query, &field.active_query, &field.section, &field.platforms, &field.label_map, &field.tone_map);
     }
     for section in config.section.values() {
-        let _ = (&section.label, &section.description, &section.actions);
+        let _ = (&section.label, &section.description, &section.actions, &section.platforms);
     }
     let _ = (&runtime.schema_version, &runtime.actions, &runtime.queries);
     for query in runtime.queries.values() {
@@ -635,6 +643,109 @@ test('root fields need a top-level description', () => {
     assert.match(reason, /Settings header has no sub header: fields outside every section show under a General header/);
     denial(write(repo, 'plugins/demo/qol-config.toml', CONFIG.replace(/description = .*\n/, 'description = ""\n')));
     allowed(write(repo, 'plugins/demo/qol-config.toml', 'schema_version = 1\n\n[section.audio]\nlabel = "Audio"\ndescription = "How the demo sounds."\n' + SECTION_FIELDS));
+});
+
+const EMITTER = `
+pub fn state() -> &'static str {
+    "ok"
+}
+`;
+
+const ADAPTER = `use serde::Deserialize;
+
+#[derive(Deserialize)]
+pub struct Audio {
+    pub adapter: String,
+}
+
+pub fn read(audio: &Audio) -> String {
+    audio.adapter.clone()
+}
+`;
+
+const ADAPTER_FIELD = '\n[field.adapter]\ntype = "string"\nlabel = "Adapter"\nconfig_key = "adapter"\n';
+
+function adapterRepo(file, extra = {}) {
+    return fixture({ [`plugins/demo/src/${file}`]: ADAPTER, ...extra });
+}
+
+test('a status map key the plugin never emits is denied, while emitted and boolean keys pass', () => {
+    const repo = fixture({ 'plugins/demo/src/state.rs': EMITTER });
+    const field = (map, keys) => CONFIG.replace('query = "status"', `query = "status"\n${map} = { ${keys} }`);
+    allowed(write(repo, 'plugins/demo/qol-config.toml', field('label_map', 'ok = "Fine", true = "On", false = "Off"')));
+    allowed(write(repo, 'plugins/demo/qol-config.toml', field('tone_map', 'ok = "success"')));
+    const label = denial(write(repo, 'plugins/demo/qol-config.toml', field('label_map', 'ok = "Fine", no_target = "No dongle"')));
+    assert.match(label, /Status value is never emitted: \[field\.state\] label_map maps the state "no_target", but no string or serialized enum variant in plugins\/demo\/src outside tests emits it/);
+    assert.doesNotMatch(label, /"ok"/);
+    assert.match(label, /emit the state from the plugin or delete it from the map/);
+    const tone = denial(write(repo, 'plugins/demo/qol-config.toml', field('tone_map', 'ok = "success", offline = "danger"')));
+    assert.match(tone, /tone_map maps the state "offline"/);
+});
+
+test('a status state emitted as a serialized enum variant passes', () => {
+    const lifecycle = '#[derive(Serialize)]\n#[serde(rename_all = "snake_case")]\npub enum Lifecycle {\n    Idle,\n    StillListening,\n    #[serde(rename = "halt")]\n    Stopping,\n}\n';
+    const repo = fixture({ 'plugins/demo/src/state.rs': EMITTER, 'plugins/demo/src/lifecycle.rs': lifecycle });
+    allowed(write(repo, 'plugins/demo/qol-config.toml', CONFIG.replace('query = "status"', 'query = "status"\nlabel_map = { idle = "Idle", still_listening = "Listening", halt = "Halting" }')));
+    const unserialized = fixture({ 'plugins/demo/src/state.rs': EMITTER, 'plugins/demo/src/lifecycle.rs': lifecycle.replace('#[derive(Serialize)]\n', '') });
+    const reason = denial(write(unserialized, 'plugins/demo/qol-config.toml', CONFIG.replace('query = "status"', 'query = "status"\nlabel_map = { still_listening = "Listening" }')));
+    assert.match(reason, /maps the state "still_listening"/);
+});
+
+test('a state listed in both status maps is reported once', () => {
+    const repo = fixture();
+    const reason = denial(write(repo, 'plugins/demo/qol-config.toml', CONFIG.replace('query = "status"', 'query = "status"\nlabel_map = { gone = "Gone" }\ntone_map = { gone = "danger" }')));
+    assert.equal(reason.match(/maps the state "gone"/g).length, 1);
+});
+
+test('a status map is not judged when the plugin has no source of its own', () => {
+    const repo = fixture({ 'plugins/demo/src/main.rs': null });
+    allowed(write(repo, 'plugins/demo/qol-config.toml', CONFIG.replace('query = "status"', 'query = "status"\nlabel_map = { gone = "Gone" }')));
+});
+
+test('a setting read only in one OS platform file needs platforms naming that OS', () => {
+    for (const [file, system] of [['platform/linux.rs', 'linux'], ['platform/macos/mod.rs', 'macos'], ['platform/windows/input.rs', 'windows'], ['macos.rs', 'macos']]) {
+        const repo = adapterRepo(file);
+        const reason = denial(write(repo, 'plugins/demo/qol-config.toml', `${CONFIG}${ADAPTER_FIELD}`));
+        assert.match(reason, new RegExp(`Setting is read on one OS only: \\[field\\.adapter\\] stores "adapter", which is read only in plugins/demo/src/${file.replace(/[./]/g, '\\$&')} \\(${system} code\\), but neither the field nor its section declares platforms`));
+        assert.match(reason, /add platforms = \[\.\.\.\] naming the OSes whose code reads it, or read it on the others/);
+        allowed(write(repo, 'plugins/demo/qol-config.toml', `${CONFIG}${ADAPTER_FIELD}platforms = ["${system}"]\n`));
+    }
+});
+
+test('section platforms cover a field read only in one OS platform file', () => {
+    const repo = adapterRepo('platform/linux.rs');
+    const sectioned = (platforms, field = '') => `${CONFIG}\n[section.host]\nlabel = "Host"\ndescription = "The host system."\n${platforms}\n[field.adapter]\ntype = "string"\nlabel = "Adapter"\nconfig_key = "adapter"\nsection = "host"\n${field}`;
+    allowed(write(repo, 'plugins/demo/qol-config.toml', sectioned('platforms = ["linux"]\n')));
+    assert.match(denial(write(repo, 'plugins/demo/qol-config.toml', sectioned(''))), /neither the field nor its section declares platforms/);
+    assert.match(denial(write(repo, 'plugins/demo/qol-config.toml', sectioned('platforms = ["linux", "macos"]\n'))), /declares platforms macos, but it is read only in plugins\/demo\/src\/platform\/linux\.rs \(linux code\)/);
+});
+
+test('platforms naming an OS no reader covers is denied', () => {
+    const repo = adapterRepo('platform/linux.rs');
+    const reason = denial(write(repo, 'plugins/demo/qol-config.toml', `${CONFIG}${ADAPTER_FIELD}platforms = ["linux", "windows"]\n`));
+    assert.match(reason, /declares platforms windows, but it is read only in plugins\/demo\/src\/platform\/linux\.rs \(linux code\)/);
+});
+
+test('readers in several OS files are covered by the union of their platforms', () => {
+    const repo = adapterRepo('platform/linux.rs', { 'plugins/demo/src/platform/macos.rs': ADAPTER });
+    allowed(write(repo, 'plugins/demo/qol-config.toml', `${CONFIG}${ADAPTER_FIELD}platforms = ["linux", "macos"]\n`));
+    denial(write(repo, 'plugins/demo/qol-config.toml', `${CONFIG}${ADAPTER_FIELD}`));
+});
+
+test('a setting read in the platform code of every OS needs no platforms', () => {
+    const repo = adapterRepo('platform/linux.rs', { 'plugins/demo/src/platform/macos.rs': ADAPTER, 'plugins/demo/src/platform/windows/mod.rs': ADAPTER });
+    allowed(write(repo, 'plugins/demo/qol-config.toml', `${CONFIG}${ADAPTER_FIELD}`));
+});
+
+test('a setting also read in shared code needs no platforms', () => {
+    const repo = adapterRepo('platform/linux.rs', { 'plugins/demo/src/shared.rs': ADAPTER });
+    allowed(write(repo, 'plugins/demo/qol-config.toml', `${CONFIG}${ADAPTER_FIELD}`));
+    allowed(write(repo, 'plugins/demo/qol-config.toml', `${CONFIG}${ADAPTER_FIELD}platforms = ["linux", "windows"]\n`));
+});
+
+test('a plugin directory named after an OS does not make its shared code platform code', () => {
+    const repo = fixture({ 'plugins/linux/Cargo.toml': CARGO, 'plugins/linux/plugin.toml': MANIFEST, 'plugins/linux/qol-config.toml': CONFIG, 'plugins/linux/qol-runtime.toml': RUNTIME, 'plugins/linux/src/main.rs': `${SOURCE}${ADAPTER}` });
+    allowed(write(repo, 'plugins/linux/qol-config.toml', `${CONFIG}${ADAPTER_FIELD}`));
 });
 
 test('a runtime entry the plugin never mentions is denied', () => {
