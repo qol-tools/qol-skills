@@ -34,6 +34,13 @@ Adjacent durable knowledge lives in dedicated skills - do not duplicate it here:
 Feature-driven: the menu appends each registered feature's items, an update item
 when a newer version is available, then `Quit`. There are no per-plugin tray items.
 
+`Mute notifications` (`features/notifications/menu.rs`) is the inverse of the
+Notifications page's `Show notifications` switch: both write `enabled` in
+`notifications.json`. Off, the tray drops every plugin push and mirrored toast
+(it still acks the push, so daemons do not fall back to the OS notifier) and
+`gate::native_allowed_now` keeps tray-less daemons quiet too. Startup-failure
+and already-running notices ignore it.
+
 ## Plugin system (the model)
 
 - Plugins live in `~/.config/qol-tray/plugins/`, external to this codebase. Each has a `plugin.toml` manifest, binary entrypoints, and an optional `config.json`.
