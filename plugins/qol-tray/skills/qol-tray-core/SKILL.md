@@ -229,6 +229,18 @@ or rename changes the rule without touching the hook. It checks:
 - **Settings**: every stored `qol-config.toml` field binds to a field of a
   plugin `Deserialize` struct that code reads, and the plugin mentions every
   `qol-runtime.toml` action and query.
+- **Headers**: every settings page shows a section header and a sub header
+  before any option. Each `[section.<id>]` needs a non-empty `description`, a
+  section with exactly one field must not share that field's label (trimmed,
+  case-insensitive), and when any field has no `section` the contract's
+  top-level `description` must be non-empty.
+
+Why headers: the gpui settings panel drops a section header whose label equals
+its only row's label (`header_is_redundant` in the monorepo's
+`libs/gpui/src/settings_panel/view/mod.rs`), so the page would open on a bare
+option with no header. A header without a `description` has no sub header.
+Fields outside every section render under a General header whose sub header is
+the top-level `description`.
 
 Edits, and `qac lint --base` in CI, are judged on what they add, so existing
 debt never blocks unrelated work. A finding keeps its identity (file, rule and

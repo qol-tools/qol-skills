@@ -148,6 +148,8 @@ pub struct ConfigSpecV1 {
     #[serde(default)]
     pub title: Option<String>,
     #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
     pub field: IndexMap<String, FieldSpec>,
     #[serde(default)]
     pub section: IndexMap<String, SectionSpec>,
@@ -197,6 +199,8 @@ impl FieldKind {
 #[derive(Deserialize)]
 pub struct SectionSpec {
     pub label: String,
+    #[serde(default)]
+    pub description: Option<String>,
     #[serde(default)]
     pub actions: Vec<String>,
 }
@@ -265,12 +269,12 @@ const TRAY = `fn honour(manifest: &PluginManifest, config: &ConfigSpecV1, runtim
     if let Some(runtime) = &manifest.runtime {
         let _ = &runtime.command;
     }
-    let _ = (&config.schema_version, &config.title, &config.section);
+    let _ = (&config.schema_version, &config.title, &config.description, &config.section);
     for field in config.field.values() {
         let _ = (&field.kind, &field.label, &field.config_key, &field.default, &field.query, &field.active_query, &field.section);
     }
     for section in config.section.values() {
-        let _ = (&section.label, &section.actions);
+        let _ = (&section.label, &section.description, &section.actions);
     }
     let _ = (&runtime.schema_version, &runtime.actions, &runtime.queries);
     for query in runtime.queries.values() {
@@ -306,6 +310,7 @@ items = []
 
 const CONFIG = `schema_version = 1
 title = "Demo"
+description = "Switch the demo on and watch its state."
 
 [field.enabled]
 type = "boolean"
@@ -587,6 +592,49 @@ test('a section listing an undeclared action is denied', () => {
     const repo = fixture();
     const reason = denial(write(repo, 'plugins/demo/qol-config.toml', `${CONFIG}\n[section.main]\nlabel = "Main"\nactions = ["export"]\n`));
     assert.match(reason, /\[section\.main\] actions lists "export"/);
+});
+
+const SECTION_FIELDS = `
+[field.volume]
+type = "boolean"
+label = "Volume"
+config_key = "general.enabled"
+section = "audio"
+
+[field.balance]
+type = "status"
+label = "Balance"
+query = "status"
+section = "audio"
+`;
+
+test('sections with a sub header and a distinct lead row pass', () => {
+    const repo = fixture();
+    allowed(write(repo, 'plugins/demo/qol-config.toml', `${CONFIG.replace(/\[field\.enabled\][\s\S]*$/, '')}\n[section.audio]\nlabel = "Audio"\ndescription = "How the demo sounds."\n${SECTION_FIELDS}\n[section.solo]\nlabel = "Solo"\ndescription = "One row."\n\n[field.single]\ntype = "status"\nlabel = "Single row"\nquery = "status"\nsection = "solo"\n`));
+});
+
+test('a section without a description is denied', () => {
+    const repo = fixture();
+    const reason = denial(write(repo, 'plugins/demo/qol-config.toml', `${CONFIG}\n[section.audio]\nlabel = "Audio"\n${SECTION_FIELDS}`));
+    assert.match(reason, /Settings header has no sub header: \[section\.audio\] has no description/);
+    const blank = denial(write(repo, 'plugins/demo/qol-config.toml', `${CONFIG}\n[section.audio]\nlabel = "Audio"\ndescription = "  "\n${SECTION_FIELDS}`));
+    assert.match(blank, /\[section\.audio\] has no description/);
+});
+
+test('a section sharing the label of its only field is denied', () => {
+    const repo = fixture();
+    const only = '\n[section.audio]\nlabel = " Volume "\ndescription = "How loud."\n\n[field.volume]\ntype = "boolean"\nlabel = "volume"\nconfig_key = "general.enabled"\nsection = "audio"\n';
+    const reason = denial(write(repo, 'plugins/demo/qol-config.toml', `${CONFIG}${only}`));
+    assert.match(reason, /Settings header repeats its only row: \[section\.audio\] label " Volume " equals the label of its only field \[field\.volume\]/);
+    allowed(write(repo, 'plugins/demo/qol-config.toml', `${CONFIG}${only}\n[field.balance]\ntype = "status"\nlabel = "Balance"\nquery = "status"\nsection = "audio"\n`));
+});
+
+test('root fields need a top-level description', () => {
+    const repo = fixture();
+    const reason = denial(write(repo, 'plugins/demo/qol-config.toml', CONFIG.replace(/description = .*\n/, '')));
+    assert.match(reason, /Settings header has no sub header: fields outside every section show under a General header/);
+    denial(write(repo, 'plugins/demo/qol-config.toml', CONFIG.replace(/description = .*\n/, 'description = ""\n')));
+    allowed(write(repo, 'plugins/demo/qol-config.toml', 'schema_version = 1\n\n[section.audio]\nlabel = "Audio"\ndescription = "How the demo sounds."\n' + SECTION_FIELDS));
 });
 
 test('a runtime entry the plugin never mentions is denied', () => {

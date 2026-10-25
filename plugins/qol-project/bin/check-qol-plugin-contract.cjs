@@ -54,6 +54,8 @@ const RULES = {
     toggle: ['Toggle action names no stored setting', 'point config_key at a stored qol-config.toml field'],
     scope: ['Config scope names no stored setting', 'scope a stored qol-config.toml key or one of its parent paths'],
     binding: ['Setting is never read by the plugin', "read the key through a field of the plugin's Deserialize config struct before declaring it, or delete the setting"],
+    subHeader: ['Settings header has no sub header', 'give the section, or the contract root when fields sit outside every section, a non-empty description'],
+    redundantHeader: ['Settings header repeats its only row', 'give the section a label that differs from its only field label, or add a second field'],
     unhandled: ['Runtime entry is never handled', "handle the id in the plugin's dispatch before declaring it, or delete it from qol-runtime.toml"],
 };
 
@@ -639,6 +641,31 @@ function bindingGap(facts, key) {
     return 'matches no Deserialize struct field and no string';
 }
 
+function filled(value) {
+    return typeof value === 'string' && value.trim() !== '';
+}
+
+function headerFindings(doc, fields, sections) {
+    const out = [];
+    const config = doc.value;
+    const entries = Object.entries(fields).filter(([, field]) => isTable(field));
+    for (const [id, section] of Object.entries(sections)) {
+        if (!isTable(section)) continue;
+        if (!filled(section.description)) {
+            out.push(finding(doc.file, toml.keyLine(doc.lines, section, 'description'), 'subHeader', id, `[section.${id}] has no description, so its header shows no sub header`));
+        }
+        const rows = entries.filter(([, field]) => field.section === id);
+        const label = typeof section.label === 'string' ? section.label.trim().toLowerCase() : null;
+        if (rows.length === 1 && label !== null && typeof rows[0][1].label === 'string' && rows[0][1].label.trim().toLowerCase() === label) {
+            out.push(finding(doc.file, toml.keyLine(doc.lines, section, 'label'), 'redundantHeader', id, `[section.${id}] label "${section.label}" equals the label of its only field [field.${rows[0][0]}], so the settings panel drops the header`));
+        }
+    }
+    if (entries.some(([, field]) => field.section === undefined) && !filled(config.description)) {
+        out.push(finding(doc.file, toml.keyLine(doc.lines, config, 'description'), 'subHeader', 'root', 'fields outside every section show under a General header, but the top-level description that serves as its sub header is empty'));
+    }
+    return out;
+}
+
 function configFindings(repo, dir, docs) {
     const doc = docs['qol-config.toml'];
     const config = doc.value;
@@ -657,6 +684,7 @@ function configFindings(repo, dir, docs) {
             }
         }
     }
+    out.push(...headerFindings(doc, fields, sections));
     for (const [id, field] of Object.entries(fields)) {
         if (!isStored(repo, field)) continue;
         const key = typeof field.config_key === 'string' ? field.config_key : id;
