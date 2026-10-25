@@ -72,6 +72,8 @@ Use `qol-project:qol-plugin-gpui-surfaces` and `qol-langs:gpui-conventions`; ver
 
 Source-check the selected adapter before proposing display-server alternatives. Add support by implementing the platform capability and cleanup semantics first, then update `plugin.toml`. Record unsupported substrate work in issues/specs, not a skill TODO section.
 
+Cinnamon recording runs inside the compositor through `Cinnamon.Recorder`, which buffers frames and falls to the encoder's speed once the encoder lags, so encoder throughput is the recorded frame rate. Prefer the NVENC H.264 pipeline when Cinnamon's GStreamer has `nvh264enc` and remux it on stop; CPU VP8 is the fallback and reaches only about 27 fps at 2560x1440 on real desktop content.
+
 ## Verification
 
 Run format, build, Clippy with warnings denied, tests, and `cargo run -q -p qol -- check`. Compile every manifest-declared target. Capture, overlay, pin, and cleanup claims require live platform evidence; a compile check is not runtime support.
