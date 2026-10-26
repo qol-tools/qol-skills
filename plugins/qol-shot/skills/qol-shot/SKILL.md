@@ -50,6 +50,10 @@ is `Kit::heading`, `Kit::segmented_group` with `Kit::segment`, and `Kit::hint_ba
 never a local button, header, or hint recipe. Shared actions keep one key table
 across surfaces (`c` copy, `p` copy path, `o` open folder, Esc closes); a surface
 adds letters only for actions the others do not offer.
+Only the editor is user-resizable: it remembers its size under the `qol-shot-editor`
+window key, its minimum is the action row width by the chrome plus a 160 px image,
+and the screenshot is refitted to the live viewport each render while strokes stay
+in normalized image space.
 Capture and recording status messages use the shared `Toast` and `ToastHost`;
 qol-shot owns only stage policy, semantic tone, safety-barrier invocation, and
 trace context. A retained or keepalive window must be compositor-safe,
