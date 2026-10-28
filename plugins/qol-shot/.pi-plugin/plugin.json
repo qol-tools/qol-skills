@@ -1,7 +1,7 @@
 {
   "name": "qol-shot",
   "description": "Skills for the qol-shot plugin: screenshot and screen-recording capture, native overlays, output and clipboard on Linux, macOS and Windows.",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "author": {
     "name": "KMRH47"
   }
