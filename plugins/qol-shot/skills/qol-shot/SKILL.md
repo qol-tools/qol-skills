@@ -64,6 +64,12 @@ Warm windows come from one pool keyed by window kind plus monitor topology plus
 size. An entry whose topology no longer matches the live set is dropped, never
 reused; do not add a second warm-window cache beside the pool.
 
+gpui keeps a painted `Arc<RenderImage>`'s GPU texture until `Window::drop_image`
+runs or the window closes, so a warm window passes every image it lets go of
+(finish, recycle, reuse, upgrade) to `ui::release_image`. Without it the
+reused selector kept each screenshot's frozen full-screen frame, about 25 MB of
+GPU memory per screenshot, until NVENC could no longer start beside a game.
+
 Selector viewport bounds and physical monitor bounds are distinct coordinate
 spaces. Every monitor-relative transient uses the shared `qol-gpui` placement
 contract with physical monitor bounds, then converts the result to window-local
@@ -76,7 +82,7 @@ Use `qol-project:qol-plugin-gpui-surfaces` and `qol-langs:gpui-conventions`; ver
 
 Source-check the selected adapter before proposing display-server alternatives. Add support by implementing the platform capability and cleanup semantics first, then update `plugin.toml`. Record unsupported substrate work in issues/specs, not a skill TODO section.
 
-Linux recording prefers NVIDIA frame capture (NvFBC) piped into ffmpeg's `h264_nvenc` whenever a one-frame NVENC probe succeeds: a helper process loads `libnvidia-fbc.so.1` at run time, sends gpu-screen-recorder's interoperability key because GeForce drivers refuse NvFBC without it, and writes whole BGRA frames to ffmpeg's stdin. x11grab reads the screen in 24-row chunks, so a fullscreen game's flip landing between chunks tore the top 24 to 48 rows in about 5 to 7% of frames; NvFBC frames never tear. When NvFBC fails to start or writes no file within 3 s, the helper is killed and x11grab with NVENC records instead. `Cinnamon.Recorder` reads every frame back inside the compositor and turns off fullscreen unredirection, so a game fell from 110 to about 50 fps; it stays the path without a working NVENC, and libx264 x11grab is the last resort.
+Linux recording prefers NVIDIA frame capture (NvFBC) piped into ffmpeg's `h264_nvenc` whenever a one-frame NVENC probe succeeds: a helper process loads `libnvidia-fbc.so.1` at run time, sends gpu-screen-recorder's interoperability key because GeForce drivers refuse NvFBC without it, and writes whole BGRA frames to ffmpeg's stdin. x11grab reads the screen in 24-row chunks, so a fullscreen game's flip landing between chunks tore the top 24 to 48 rows in about 5 to 7% of frames; NvFBC frames never tear. When NvFBC fails to start or writes no file within 3 s, the helper is killed and x11grab with NVENC records instead. `Cinnamon.Recorder` reads every frame back inside the compositor and turns off fullscreen unredirection, so a game fell from 110 to about 50 fps; it stays the path without a working NVENC, and libx264 x11grab is the last resort. The probe runs only when `/proc/driver/nvidia/version` exists, caches only success, and logs ffmpeg's error on failure, so a failure from a full GPU is retried on the next recording.
 
 ## Verification
 
