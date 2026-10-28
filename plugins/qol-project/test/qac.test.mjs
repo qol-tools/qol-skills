@@ -230,8 +230,18 @@ test("hookResponse hands a fix brief to the model and blocks everything else", (
   assert.deepEqual(hookResponse("fix", 1, "brief\n"), {
     hookSpecificOutput: { hookEventName: "UserPromptSubmit", additionalContext: "brief" },
   });
-  assert.deepEqual(hookResponse("fix", 0, "qac fix: nothing to fix"), { decision: "block", reason: "qac fix: nothing to fix" });
-  assert.deepEqual(hookResponse("lint", 1, "x"), { decision: "block", reason: "x" });
+  assert.deepEqual(hookResponse("fix", 0, "qac fix: nothing to fix", {}, {}), { decision: "block", reason: "qac fix: nothing to fix" });
+  assert.deepEqual(hookResponse("lint", 1, "x", {}, {}), { decision: "block", reason: "x" });
+});
+
+test("hookResponse hides the prompt of a run that finished under Claude Code, so the box clears", () => {
+  const hidden = { decision: "block", reason: "x", hookSpecificOutput: { hookEventName: "UserPromptSubmit", suppressOriginalPrompt: true } };
+  const shown = { decision: "block", reason: "x" };
+  const claude = { CLAUDECODE: "1" };
+  assert.deepEqual(hookResponse("lint", 0, "x", {}, claude), hidden);
+  assert.deepEqual(hookResponse("lint", 1, "x", {}, claude), hidden);
+  assert.deepEqual(hookResponse("lint", 2, "x", {}, claude), shown);
+  assert.deepEqual(hookResponse("lint", 0, "x", { turn_id: "t1" }, claude), shown);
 });
 
 test("help lists the verbs without a line about help itself", () => {

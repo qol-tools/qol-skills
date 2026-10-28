@@ -22,19 +22,25 @@ export function parsePrompt(prompt, cwd) {
   return [...args, ...flags];
 }
 
-export function hookResponse(verb, status, output) {
+export function hookResponse(verb, status, output, input = {}, env = process.env) {
   const text = output.trim() || `qac ${verb}: nothing to do`;
   if (verb === "fix" && status === FINDINGS) {
     return { hookSpecificOutput: { hookEventName: "UserPromptSubmit", additionalContext: text } };
   }
-  return { decision: "block", reason: text };
+  const consumed = (status === 0 || status === FINDINGS) && env.CLAUDECODE === "1" && input.turn_id === undefined;
+  return {
+    decision: "block",
+    reason: text,
+    ...(consumed && { hookSpecificOutput: { hookEventName: "UserPromptSubmit", suppressOriginalPrompt: true } }),
+  };
 }
 
 function main() {
   let prompt = "";
   let cwd = "";
+  let input;
   try {
-    const input = JSON.parse(readFileSync(0, "utf8") || "{}");
+    input = JSON.parse(readFileSync(0, "utf8") || "{}");
     if (typeof input.prompt === "string") prompt = input.prompt;
     if (typeof input.cwd === "string") cwd = input.cwd;
   } catch {
@@ -54,7 +60,7 @@ function main() {
       || (error instanceof Error ? error.message : String(error));
   }
 
-  process.stdout.write(`${JSON.stringify(hookResponse(args[0], status, output))}\n`);
+  process.stdout.write(`${JSON.stringify(hookResponse(args[0], status, output, input))}\n`);
   process.exit(0);
 }
 
