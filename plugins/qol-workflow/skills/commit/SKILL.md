@@ -19,11 +19,12 @@ description: >
 - `noreply@anthropic.com`
 - Anything resembling AI attribution, in any form, fuzzy or exact
 
-The author has stated this multiple times. It is non-negotiable. If you forget,
-the `commit-deny-coauthor` PreToolUse hook will block the commit and you will
-have to re-attempt with a clean message. The same hook checks the body of
-`gh pr create`, `gh pr edit` and `gh pr comment`, inline or through
-`--body-file`, so pull requests carry no attribution either.
+The author has stated this multiple times. It is non-negotiable. The kit
+plugin (kmrh47-skills) enforces it in every repo: its `commit-guard`
+PreToolUse hook blocks the commit, and you will have to re-attempt with a
+clean message. The same hook checks the body of `gh pr create`, `gh pr edit`
+and `gh pr comment`, inline or through `--body-file`, so pull requests carry
+no attribution either.
 
 ## Format
 

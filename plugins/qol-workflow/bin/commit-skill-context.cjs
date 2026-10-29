@@ -4,8 +4,8 @@
  * inject the qol-tools `commit` skill content as additionalContext so Claude
  * is reminded of the conventions BEFORE forming the commit message.
  *
- * Proactive half. The reactive half is `commit-deny-coauthor.cjs`, which
- * blocks commits whose message already contains an AI attribution.
+ * Proactive half. The kit plugin's commit-guard hook is the reactive half:
+ * it blocks commits whose message already contains an AI attribution.
  *
  * Silent on errors — a failing reminder must never block a commit.
  */
@@ -87,7 +87,7 @@ function main() {
 ${body}
 
 Apply these rules to the commit you are about to make. The hard rule on no
-AI attribution is enforced by a separate deny hook — do not test it.`;
+AI attribution is enforced by the kit plugin's commit-guard hook; do not test it.`;
 
     const out = {
         hookSpecificOutput: {

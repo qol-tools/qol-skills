@@ -10,7 +10,6 @@ const OUTSIDE = '/home/u/Git/Economy';
 
 const CASES = [
     ['commit-skill-context.cjs', { hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: "git commit -m 'fix: x'" } }],
-    ['commit-deny-coauthor.cjs', { hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: "git commit -m 'x\n\nCo-Authored-By: Claude <noreply@anthropic.com>'" } }],
     ['branch-deny-agent-checkout.cjs', { hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: ['git', 'switch', '-c', 'feat/x'].join(' ') } }],
     ['pr-watch-context.cjs', { hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: "gh pr create --title 'fix: x' --body x" } }],
     ['pr-watch-park-guard.cjs', { hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'node bin/pr-watch.cjs 1' } }],

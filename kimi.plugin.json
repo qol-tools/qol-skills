@@ -163,11 +163,6 @@
     {
       "event": "PreToolUse",
       "matcher": "Bash",
-      "command": "node plugins/qol-workflow/bin/commit-deny-coauthor.cjs"
-    },
-    {
-      "event": "PreToolUse",
-      "matcher": "Bash",
       "command": "node plugins/qol-workflow/bin/branch-deny-checkout-in-main-clone.cjs"
     },
     {

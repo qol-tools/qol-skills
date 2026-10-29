@@ -6,7 +6,6 @@ const PLUGIN_DIR = path.resolve(__dirname, "../..");
 
 const PRE_TOOL_USE_HOOKS = [
     { matcher: "Bash", script: "bin/commit-skill-context.cjs" },
-    { matcher: "Bash", script: "bin/commit-deny-coauthor.cjs" },
     { matcher: "Bash", script: "bin/branch-deny-checkout-in-main-clone.cjs" },
     { matcher: "Bash", script: "bin/branch-deny-agent-checkout.cjs" },
     { matcher: "Bash", script: "bin/branch-deny-pid-branch-name.cjs" },
