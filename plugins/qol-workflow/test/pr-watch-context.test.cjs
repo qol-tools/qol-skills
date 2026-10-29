@@ -195,7 +195,7 @@ test('the hook still injects the park text without agent_id', () => {
     assert.match(text, /park -- node/);
 });
 
-test('the switchboard exemption does not cover a subagent', () => {
+test('the switchboard exemption does not cover a subagent', { skip: process.platform === 'win32' }, () => {
     const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'qol-kitten-'));
     const kitten = path.join(bin, 'kitten');
     fs.writeFileSync(kitten, `#!/bin/sh\necho '${kittyLs(9, { qol_session_key: 'switchboard' })}'\n`, { mode: 0o755 });
@@ -205,15 +205,9 @@ test('the switchboard exemption does not cover a subagent', () => {
 });
 
 test('the reader flag silences the subagent reminder too', () => {
-    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'qol-pr-watch-flag-sub-'));
-    fs.mkdirSync(path.join(home, '.claude'));
-    fs.writeFileSync(path.join(home, '.claude', '.qol-pr-watch-reminder-off'), '');
-    const result = spawnSync('node', [HOOK], {
-        input: JSON.stringify({ tool_name: 'Bash', tool_input: { command: 'gh pr create --title "a: b"' }, cwd: home, agent_id: 'a1' }),
-        encoding: 'utf8',
-        env: { ...process.env, HOME: home, CLAUDE_CONFIG_DIR: '', CLAUDE_PLUGIN_ROOT: PLUGIN_ROOT, KITTY_WINDOW_ID: '' },
-    });
-    assert.equal(result.stdout, '');
+    const config = fs.mkdtempSync(path.join(os.tmpdir(), 'qol-pr-watch-flag-sub-'));
+    fs.writeFileSync(path.join(config, '.qol-pr-watch-reminder-off'), '');
+    assert.equal(runSubagentHook('gh pr create --title "a: b"', { CLAUDE_CONFIG_DIR: config }).stdout, '');
 });
 
 test('the subagent reminder stays silent on unrelated commands', () => {
