@@ -19,6 +19,7 @@ const GIT_PUSH = /(^|[\s;&|`(])git\s+(-C\s+\S+\s+)?push(\s|$)/;
 const WATCHER_RUN = /pr-watch\.cjs/;
 const DEFAULT_BRANCHES = new Set(['main', 'master', 'HEAD']);
 const BLOCK = /<!-- inject:pr-watch:start -->\s*([\s\S]*?)\s*<!-- inject:pr-watch:end -->/;
+const SUBAGENT_BLOCK = /<!-- inject:pr-watch-subagent:start -->\s*([\s\S]*?)\s*<!-- inject:pr-watch-subagent:end -->/;
 const FLAG = '.qol-pr-watch-reminder-off';
 const GH_TIMEOUT_MS = 4000;
 
@@ -39,10 +40,10 @@ function silenced(env = process.env, home = os.homedir()) {
     return dirs.some((dir) => fs.existsSync(path.join(dir, FLAG)));
 }
 
-function reminderText(root) {
+function reminderText(root, subagent = false) {
     try {
         const skill = fs.readFileSync(path.join(root, 'skills', 'qol-monorepo-rules', 'SKILL.md'), 'utf8');
-        return BLOCK.exec(skill)?.[1] ?? '';
+        return (subagent ? SUBAGENT_BLOCK : BLOCK).exec(skill)?.[1] ?? '';
     } catch {
         return '';
     }
@@ -152,10 +153,11 @@ function main() {
 
     const command = payload.tool_input?.command ?? '';
     const hit = trigger(command, payload.cwd || process.cwd());
-    if (!hit || isSwitchboard() || (hit.url && watchedPullRequests().has(hit.url))) return 0;
+    const subagent = Boolean(payload.agent_id);
+    if (!hit || (!subagent && isSwitchboard()) || (hit.url && watchedPullRequests().has(hit.url))) return 0;
 
     const root = pluginRoot();
-    const text = reminderText(root);
+    const text = reminderText(root, subagent);
     if (!text) return 0;
 
     process.stdout.write(JSON.stringify({

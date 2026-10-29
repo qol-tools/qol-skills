@@ -209,6 +209,10 @@
       "command": "node plugins/qol-workflow/bin/pr-watch-park-guard.cjs"
     },
     {
+      "event": "SubagentStop",
+      "command": "node plugins/qol-workflow/bin/pr-watch-park-guard.cjs"
+    },
+    {
       "event": "UserPromptSubmit",
       "command": "node plugins/qol-workflow-nodes/hooks/inject_workflow_nodes_reminder.mjs"
     },

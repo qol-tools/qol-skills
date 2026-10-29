@@ -50,7 +50,8 @@ user said not to push.
 
 ## Forks and lanes report to their parent
 
-A session with a parent (a fork or a lane) talks to the user through that parent:
+A terminal session with a parent (a fork or a lane) talks to the user through
+that parent; a switchboard fork is a subagent and follows "Switchboard forks" below:
 
 - When your pull request has merged, or nothing is left that anyone must do, send
   one line to your parent with `session_send` kind `report` and `done: true`, then
@@ -60,6 +61,14 @@ A session with a parent (a fork or a lane) talks to the user through that parent
   comes back as a message. `AskUserQuestion` is refused in a lane.
 - When a check fails and you cannot fix it, report the pull request and what
   broke to your parent.
+
+## Switchboard forks
+
+A fork the switchboard starts runs as a Claude Code subagent inside the
+switchboard, not in a terminal of its own. It cannot park: it watches its pull
+request with the watcher in the background (Bash `run_in_background: true`, then
+end the turn), reports with its final message instead of `session_send`, and asks
+the user by ending its turn with the question and a recommended answer.
 
 ## A review of your own change ends in fixes
 
@@ -81,6 +90,10 @@ A pull request you open is yours until it merges. Do not report it done at
 [qol-pr-watch] When this command succeeds, park this session on the pull request watcher before any other tool call, then end your turn with one line saying what you wait for: `<qol-cli-sessions> park -- node <qol-workflow>/bin/pr-watch.cjs <pr-url> --pretty`. The terminal stays open and the watcher's exit code and output are submitted into it when it exits, unless parking is on for this session: then the terminal closes once the turn ends and qol resumes this same conversation in a new tab with the result. Park's output says which applies. If park itself fails, report the error to the user; never run the watcher outside park. A failure or review the watcher reports comes before any other work, even mid-turn. Exit 1 is a failure with the failed steps' logs: fix it on the branch, gate locally, push, and park on the watcher again. Exit 7 is review feedback from the qol-code-review bot: fix the findings it left for you, pull the branch first when the bot pushed a fix commit, then park on the watcher again; a finding against a decision the user made on purpose is answered in a pull request comment instead, then the review is rerun. Exit 0 is merged: a fork or lane then sends its parent one line with session_send kind report and done true. Exit 6 on a ready pull request means arm `gh pr merge --auto` and park again; on a draft it is design work waiting for the user's approval: leave it unarmed, report it to your parent (or the user, without one), and park again with `--until-ready` added so the watcher waits for the user to mark it ready. Never poll with sleep loops or repeated `gh pr checks`. Skip only a pull request the user is testing or holding.
 <!-- inject:pr-watch:end -->
 
+<!-- inject:pr-watch-subagent:start -->
+[qol-pr-watch] You run as a subagent and cannot park. When this command succeeds, start the pull request watcher with Bash `run_in_background: true` before any other tool call, as the bare command, no park and no wrapper: `node <qol-workflow>/bin/pr-watch.cjs <pr-url> --pretty`. Then end your turn with one line saying what you wait for; Claude Code wakes you with the exit code and output when the watcher exits. A failure or review the watcher reports comes before any other work. Exit 1 is a failure with the failed steps' logs: fix it on the branch, gate locally, push, start the watcher in the background again and end your turn. Exit 7 is review feedback from the qol-code-review bot: fix the findings it left for you, pull the branch first when the bot pushed a fix commit, then start the watcher again; a finding against a decision the user made on purpose is answered in a pull request comment instead, then the review is rerun. Exit 0 is merged: your final message is the one-line report. Exit 6 on a ready pull request means arm `gh pr merge --auto` and start the watcher again; on a draft it is design work waiting for the user's approval: leave it unarmed, start the watcher again with `--until-ready` added, and end your turn saying the draft waits for the user's approval. Never poll with sleep loops or repeated `gh pr checks`. Skip only a pull request the user is testing or holding.
+<!-- inject:pr-watch-subagent:end -->
+
 The watcher polls GitHub inside its own process, so no turn is spent until
 there is an outcome. Parking puts it under a detached CLI Sessions process instead of
 the harness. The terminal waits open unless parking is on for the session, which
@@ -90,7 +103,8 @@ it for the current terminal, and `session_fork` with `park: true` or
 lists parked sessions, and `qol sessions unpark <id>` stops the wait and
 resumes the conversation early.
 
-Parking is enforced by `pr-watch-park-guard.cjs`. On PreToolUse it denies a
+Parking is enforced by `pr-watch-park-guard.cjs` (a subagent is held to the
+background watcher instead, described below). On PreToolUse it denies a
 watcher run that is not wrapped in `qol-cli-sessions park --`, and it denies every
 other tool call while the latest successful `gh pr create`, `gh pr ready` or
 `gh pr merge --auto` in the transcript has no park after it, so a failed check
@@ -119,11 +133,31 @@ session transcript and blocks ending the turn while the latest successful
 open pull request has no successful park after it; `gh pr merge --disable-auto`
 (the testing or holding exception) releases it. It blocks once per stop, so a
 park that keeps failing cannot trap the session. It never blocks the
-switchboard (the kitty window tagged `qol_session_key=switchboard`), which park
-refuses, and it skips a pull request a waiting park in `qol-cli-sessions parked`
+switchboard session (the kitty window tagged `qol_session_key=switchboard`, with
+no `agent_id` in the hook payload), which park refuses, and it skips a pull request a waiting park in `qol-cli-sessions parked`
 already watches, since that watcher follows every push; the PreToolUse reminder
 stays silent in both cases. Residual: a harness whose
-transcript it cannot read (anything but Claude Code's JSONL) is not held at Stop. It exits once: 0 merged, 1 failed (a failed check or
+transcript it cannot read (anything but Claude Code's JSONL) is not held at Stop.
+
+For a call with `agent_id` (a subagent, such as a switchboard fork) the guard
+holds the same line with a background watcher in place of the park. Hooks fire
+on a subagent's tool calls, and a subagent runs in the switchboard's process, so
+the switchboard exemption never applies to it. PreToolUse denies a watcher run
+that is wrapped in `qol-cli-sessions park --` or lacks
+`tool_input.run_in_background: true`, and the deny names the exact bare command.
+An arming counts as watched once a later successful Bash call with
+`run_in_background: true` runs `pr-watch.cjs`; `gh pr merge --disable-auto`
+releases it and a failed watcher start releases it like a failed park. The
+subagent's own transcript is
+`<parent transcript folder>/<parent session id>/subagents/agent-<agent_id>.jsonl`
+(searched recursively under `subagents/` for nested agents), because the
+PreToolUse payload's `transcript_path` is the parent's. `SubagentStop` mirrors
+Stop on `agent_transcript_path` and blocks once, naming the pull request and the
+background command. Residual: a subagent whose transcript the guard cannot find
+is not held, and a background watcher counts as started without checking that it
+still runs.
+
+It exits once: 0 merged, 1 failed (a failed check or
 status on the head commit, a merge conflict, a merge queue removal, or the pull
 request closed; a failed `merge queue` status ends the watch the moment the
 queue run posts it, even while GitHub still holds the failed entry, and one left
@@ -161,7 +195,8 @@ request. Report to the user when it merges, or when a failure needs their
 decision; a failure you cannot attribute to the change (a flake that passes on
 rerun, an outage) is reported with the evidence, never silently rerun forever.
 
-A PreToolUse hook (`pr-watch-context.cjs`) injects the paragraph above, with
+A PreToolUse hook (`pr-watch-context.cjs`) injects the paragraph above (the
+background-watcher paragraph when the payload has `agent_id`), with
 the absolute path filled in, before `gh pr create`, `gh pr ready`,
 `gh pr merge --auto`, and a `git push` to a branch with an open pull request.
 `~/.claude/.qol-pr-watch-reminder-off` silences it. Residual: the hook cannot

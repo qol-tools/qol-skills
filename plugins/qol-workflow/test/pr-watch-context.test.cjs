@@ -149,3 +149,73 @@ test('the hook stays silent on unrelated commands and bad input', () => {
     assert.equal(bad.status, 0);
     assert.equal(bad.stdout, '');
 });
+
+test('the subagent reminder is read from its own skill block', () => {
+    const text = reminderText(PLUGIN_ROOT, true);
+    assert.match(text, /^\[qol-pr-watch\]/);
+    assert.match(text, /run_in_background: true/);
+    assert.match(text, /<qol-workflow>\/bin\/pr-watch\.cjs <pr-url> --pretty/);
+    assert.doesNotMatch(text, /park --|<qol-cli-sessions>|inject:pr-watch/);
+    assert.notEqual(text, reminderText(PLUGIN_ROOT));
+});
+
+test('the subagent reminder keeps the exit code handling', () => {
+    const text = reminderText(PLUGIN_ROOT, true);
+    for (const needle of [/Exit 1\b/, /Exit 7\b/, /Exit 6\b/, /Exit 0\b/, /--until-ready/, /gh pr merge --auto/, /one-line report/]) assert.match(text, needle);
+});
+
+test('a missing subagent block is silent', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pr-watch-root-'));
+    fs.mkdirSync(path.join(root, 'skills', 'qol-monorepo-rules'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'skills', 'qol-monorepo-rules', 'SKILL.md'), '<!-- inject:pr-watch:start -->\nx\n<!-- inject:pr-watch:end -->');
+    assert.equal(reminderText(root, false), 'x');
+    assert.equal(reminderText(root, true), '');
+});
+
+function runSubagentHook(command, env = {}, payload = {}) {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'qol-pr-watch-sub-'));
+    return spawnSync('node', [HOOK], {
+        input: JSON.stringify({ tool_name: 'Bash', tool_input: { command }, cwd: home, agent_id: 'a1b2c3', agent_type: 'project-fork', ...payload }),
+        encoding: 'utf8',
+        env: { ...process.env, HOME: home, CLAUDE_CONFIG_DIR: '', CLAUDE_PLUGIN_ROOT: PLUGIN_ROOT, KITTY_WINDOW_ID: '', ...env },
+    });
+}
+
+test('the hook injects the background-watcher text into a subagent', () => {
+    const result = runSubagentHook('gh pr create --title "feat(x): y"');
+    assert.equal(result.status, 0);
+    const text = JSON.parse(result.stdout).hookSpecificOutput.additionalContext;
+    assert.match(text, /run_in_background: true/);
+    assert.match(text, new RegExp(`node ${PLUGIN_ROOT.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/bin/pr-watch\\.cjs`));
+    assert.doesNotMatch(text, /park --/);
+});
+
+test('the hook still injects the park text without agent_id', () => {
+    const text = JSON.parse(runHook('gh pr create --title "feat(x): y"').stdout).hookSpecificOutput.additionalContext;
+    assert.match(text, /park -- node/);
+});
+
+test('the switchboard exemption does not cover a subagent', () => {
+    const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'qol-kitten-'));
+    const kitten = path.join(bin, 'kitten');
+    fs.writeFileSync(kitten, `#!/bin/sh\necho '${kittyLs(9, { qol_session_key: 'switchboard' })}'\n`, { mode: 0o755 });
+    const env = { KITTY_WINDOW_ID: '9', PATH: `${bin}:${process.env.PATH}` };
+    assert.equal(runHook('gh pr create --title "feat(x): y"', env).stdout, '');
+    assert.match(runSubagentHook('gh pr create --title "feat(x): y"', env).stdout, /run_in_background: true/);
+});
+
+test('the reader flag silences the subagent reminder too', () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'qol-pr-watch-flag-sub-'));
+    fs.mkdirSync(path.join(home, '.claude'));
+    fs.writeFileSync(path.join(home, '.claude', '.qol-pr-watch-reminder-off'), '');
+    const result = spawnSync('node', [HOOK], {
+        input: JSON.stringify({ tool_name: 'Bash', tool_input: { command: 'gh pr create --title "a: b"' }, cwd: home, agent_id: 'a1' }),
+        encoding: 'utf8',
+        env: { ...process.env, HOME: home, CLAUDE_CONFIG_DIR: '', CLAUDE_PLUGIN_ROOT: PLUGIN_ROOT, KITTY_WINDOW_ID: '' },
+    });
+    assert.equal(result.stdout, '');
+});
+
+test('the subagent reminder stays silent on unrelated commands', () => {
+    assert.equal(runSubagentHook('ls').stdout, '');
+});
