@@ -41,13 +41,27 @@ Headless plugins request a host-owned toast route instead of starting a GPUI
 application solely for feedback.
 
 `SurfaceKind::Panel` is the single window-behavior contract for ordinary QoL
-GPUI panels: the declared size is fixed against user resize/maximize, the
-window is centered on the active monitor, and it remains a normal movable
-task-switcher window. Mark only non-interactive top chrome with the shared
-`PanelDragArea::panel_drag_area`; never put a drag listener on the whole root,
-where child clicks would start window moves. Retained settings panels may
-change their declared size programmatically when replacing content; the shared
-surface layer must update the native size constraint with that change.
+GPUI panels: the window opens at its declared size, centered on the active
+monitor, and stays a normal movable, resizable task-switcher window that never
+shrinks below its `min_size` (the declared size when unset). Mark only
+non-interactive top chrome with the shared `PanelDragArea::panel_drag_area`;
+never put a drag listener on the whole root, where child clicks would start
+window moves. Retained settings panels may change their declared size
+programmatically when replacing content; the shared surface layer must update
+the native size constraint with that change.
+
+A size the panel did not ask for in the last 250 ms is the user's, whether a
+frame drag or a window tool (window-actions over AX, a tiling window manager)
+set it: the panel keeps it, `SurfaceDismisser::user_sized` turns true, and a
+remembered panel reopens at it. A maximized or fullscreen size never counts. A
+panel changes its own size only through `SurfaceDismisser::resize_window` or
+`OpenedSurface::resize`, and its minimum only through
+`SurfaceDismisser::set_min_size`; each marks the request, so a window manager
+clamp that answers it is not the user's. A bare `window.resize` on a panel
+reads as the user's. The settings panel fits its height to the page until the
+user sizes it, and never while it is maximized or fullscreen. Incident: until
+2026-10-29 only drags counted, so the page fit undid window-actions' centre,
+maximize and snaps on Settings, and centre left it off centre at its old size.
 
 `SurfaceKind::OverlayPanel` is the same window contract plus the shared overlay
 configuration, applied by the reveal path while the window is still hidden
