@@ -314,6 +314,8 @@ test('the hook exports the architect envelope pattern and receiver context', () 
     assert.ok(ARCHITECT_ENVELOPE_PATTERN.test('  [qol session bridge to architect]'));
     assert.ok(!ARCHITECT_ENVELOPE_PATTERN.test('[qol session bridge]\nAct as the implementation agent'));
     assert.ok(!ARCHITECT_ENVELOPE_PATTERN.test('[qol session bridge to architect-extra]'));
+    assert.ok(ARCHITECT_ENVELOPE_PATTERN.test('[qol session] Message from fix-alt-tab: look\n> at this\n\nCompletion fragments: `QOL_BRIDGE_DONE_` and `abc123`.'));
+    assert.ok(!ARCHITECT_ENVELOPE_PATTERN.test('[qol session] Message from fix-alt-tab: done, tests green'));
     assert.ok(typeof ARCHITECT_RECEIVER_CONTEXT === 'string');
     assert.ok(ARCHITECT_RECEIVER_CONTEXT.length > 0);
     assert.ok(shouldInject({
