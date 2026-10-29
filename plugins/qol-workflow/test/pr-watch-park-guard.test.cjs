@@ -276,13 +276,13 @@ test('a subagent foreground watcher is denied with the exact bare background com
     const reason = out.hookSpecificOutput.permissionDecisionReason;
     assert.equal(out.hookSpecificOutput.permissionDecision, 'deny');
     assert.equal(reason.split('\n').length, 2);
-    assert.match(reason, /\n\[pr-watch-park-guard\] call Bash with run_in_background true and the bare command `node \S+bin\/pr-watch\.cjs https:\/\/github\.com\/o\/r\/pull\/7 --pretty`/);
+    assert.match(reason, /\n\[pr-watch-park-guard\] call Bash with run_in_background true and the bare command `node \S+pr-watch\.cjs https:\/\/github\.com\/o\/r\/pull\/7 --pretty`/);
     assert.doesNotMatch(reason, /qol-cli-sessions/);
 });
 
 test('a subagent parked watcher is denied and the bare command drops the park', () => {
     const reason = subPre([], runBg(PARK)).hookSpecificOutput.permissionDecisionReason;
-    assert.match(reason, /`node \S+bin\/pr-watch\.cjs https:\/\/github\.com\/o\/r\/pull\/7 --pretty`/);
+    assert.match(reason, /`node \S+pr-watch\.cjs https:\/\/github\.com\/o\/r\/pull\/7 --pretty`/);
     assert.doesNotMatch(reason, /park --/);
 });
 
