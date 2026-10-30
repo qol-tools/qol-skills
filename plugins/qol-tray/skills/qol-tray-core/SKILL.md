@@ -82,6 +82,7 @@ config_key = "general.enabled"
 [capabilities]
 gpui = true
 doctor = true
+headless = true                  # optional - loads when qol-tray runs headless
 
 [[shortcuts]]
 id = "calendar"
@@ -302,6 +303,33 @@ Condvar blocking). The **one hard host-app invariant**: the macOS tray icon and
 `NSApplication.run()` must be created on the main thread, with tokio on a
 background thread. Broader Rust platform gotchas → `qol-tray-rust`; the
 strategy-pattern methodology that replaces scattered `#[cfg]` → `qol-arch-code`.
+
+## Running without a desktop
+
+- **No icon**: when the tray icon cannot be created (on Linux, no appindicator
+  library or no status notifier host), qol-tray keeps running without it and
+  shows a "running without its icon" notice. A slow Linux icon start is
+  followed in the background and reported only if it fails.
+- **Headless mode**: `qol-tray --headless` (see `qol-tray help`), and on Linux
+  automatic when `qol_platform::has_display()` finds no display. It turns off
+  the tray icon, settings windows, toasts and hotkey capture; settings, `exec`,
+  the MCP endpoint, daemon restarts and linked devices keep working. Restarts
+  re-exec with the same arguments, so the flag persists.
+- **One switch, checked at the owner**: `headless_mode::active()` is read inside
+  the entry points that own each surface (the settings surface, plugin
+  notifications, native notifications, `hotkeys::start_capture_with_fallback`,
+  plugin loading), never by their callers. A caller-side check once missed the
+  dev promotion path, which started hotkey capture headless.
+- **Plugins opt in**: headless qol-tray loads only plugins whose
+  `[capabilities]` declare `headless = true`, logs each skipped one, and an
+  action of a skipped plugin fails with a "runs headless" reason. Declare it
+  only when the plugin's daemon works with no display at all: CLI Sessions stays
+  out because its daemon drives kitty windows.
+- **Trap**: a qol-tray started from a systemd user unit, SSH or a container
+  without the display variables runs headless for its whole lifetime. Import
+  `DISPLAY`/`WAYLAND_DISPLAY` into that environment to keep the full tray.
+- macOS and Windows headless skip their platform event loop, so a signal is
+  the only way to stop qol-tray there.
 
 ## Icon
 
