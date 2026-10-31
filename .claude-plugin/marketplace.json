@@ -144,7 +144,7 @@
       "name": "qol-plugin-cli-sessions",
       "description": "Skills for the qol-cli-sessions plugin: live CLI session overview, per-tool interpretation, and attention status.",
       "source": "./plugins/qol-plugin-cli-sessions",
-      "version": "0.1.26",
+      "version": "0.1.27",
       "author": {
         "name": "KMRH47"
       }
@@ -180,7 +180,7 @@
       "name": "qol-sessions",
       "description": "Architect-to-implementer feature loop for independent terminals with event-signalled rounds, explicit closure, and a canonical final report.",
       "source": "./plugins/qol-sessions",
-      "version": "0.8.26",
+      "version": "0.8.27",
       "author": {
         "name": "KMRH47"
       }
