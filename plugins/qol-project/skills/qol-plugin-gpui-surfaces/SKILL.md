@@ -283,6 +283,29 @@ selects) are documented in `qol-project:qol-shared-libs`.
   last-focused window's monitor). Toasts use `snapshot_cursor` corners.
   qol-arch-code's active-monitor guard denies windows opened outside the
   kit and `ActiveMonitor`s built outside `qol_gpui::monitor`.
+- **Content drawn inside a full-display overlay avoids the display's dead
+  zones.** A dead zone is part of the panel that cannot show pixels: the
+  MacBook camera notch. A reserved area (menu bar, Dock, taskbar, panel
+  struts, the work area) still shows pixels and is not a dead zone, because
+  an overlay that freezes the whole screen covers it on purpose.
+  `qol_gpui::dead_zone` owns the question: `DeadZoneProvider` with one
+  adapter per OS, `native_dead_zones(monitor)` for the live answer.
+  `MonitorPlacement::projected_bounds` takes the zones, so an overlay cannot
+  place content without answering it; `clear_bounds` and `clear_area` serve
+  windows and stacks of several elements. The macOS adapter reads
+  `NSScreen.safeAreaInsets.top` (macOS 12+) and the widths of
+  `auxiliaryTopLeftArea` and `auxiliaryTopRightArea`, so only the notch's
+  span is dead and content beside it keeps its place. Windows and Linux
+  report none: desktop Windows has no cutout API (`SPI_GETWORKAREA` and
+  `MONITORINFO.rcWork` are reserved areas), and X11 `_NET_WORKAREA`, struts
+  and Wayland layer-shell exclusive zones are reserved areas too. Asahi
+  Linux hides the notch by shortening the display mode, so the reported
+  monitor already excludes it. An answer the OS cannot give (off the main
+  thread on macOS, no matching `NSScreen`, an unlisted target) is
+  `DeadZoneReport::Unknown`, which places as no zones and emits a
+  `DEAD_ZONE` trace. There is no qac rule for this: whether a `Bounds`
+  came from a top-anchored placement is data flow the token guards cannot
+  see, so the required `zones` argument is the gate.
 - **The Surface picks each kind's native chrome; show and hide only change
   visibility.** The `SurfaceKind` reveal path calls the chrome entry points
   (`configure_popup_window`, `configure_overlay_window`,

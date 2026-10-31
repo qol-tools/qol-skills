@@ -76,6 +76,12 @@ contract with physical monitor bounds, then converts the result to window-local
 coordinates when rendering inside an overlay. A spanning selector viewport is
 never a monitor.
 
+The capture chip and the selector guide form one top-center stack. Both pass the
+monitor's `qol_gpui::dead_zone` report to their placement, and the guide is
+placed inside the chip's clear area, so on a notched MacBook display the chip
+moves below the notch and the guide keeps its gap below the chip. A display that
+reports no dead zone keeps the original positions.
+
 Use `qol-project:qol-plugin-gpui-surfaces` and `qol-langs:gpui-conventions`; verify cold and retained reveal in the compositor-backed environment.
 
 ## Platform work
