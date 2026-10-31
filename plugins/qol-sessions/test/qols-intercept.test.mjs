@@ -2,7 +2,19 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { join } from "node:path";
 
-import { cliSessionsBinary, commandFor, parsePrompt, renderDiagnostic, status, summarize, summarizePark, wake } from "../hooks/qols-intercept.mjs";
+import {
+  cliSessionsBinary,
+  commandFor,
+  forkedBySwitchboard,
+  isSwitchboard,
+  parsePrompt,
+  renderDiagnostic,
+  status,
+  summarize,
+  summarizePark,
+  switchboardContext,
+  wake,
+} from "../hooks/qols-intercept.mjs";
 
 test("only prompts starting with qols are intercepted", () => {
   for (const prompt of ["fork this", "qolsfork x", "please qols fork x", "", undefined]) {
@@ -191,6 +203,59 @@ test("the new and switchboard summaries name the session and the resolved launch
   assert.equal(summarize("switchboard", launched), "qols switchboard: v1:kitty:k1 (claude claude-opus-5-5 low tab)");
   assert.equal(summarize("switchboard", { opened: "focused", session: "v1:kitty:k1" }), "qols switchboard: focused v1:kitty:k1");
   assert.equal(summarize("switchboard", { opened: "started_kitty", program: "kitty" }), "qols switchboard: started kitty for it");
+});
+
+test("the switchboard is the kitty window whose qol_session_key user var is switchboard", () => {
+  const listing = (vars) => JSON.stringify([{ tabs: [{ windows: [{ id: 7, user_vars: vars }] }] }]);
+  const calls = [];
+  const ls = (output) => (argv) => {
+    calls.push(argv);
+    return output;
+  };
+  assert.equal(isSwitchboard({ KITTY_WINDOW_ID: "7" }, ls(listing({ qol_session_key: "switchboard" }))), true);
+  assert.deepEqual(calls, [["@", "ls", "--match", "id:7"]]);
+  assert.equal(isSwitchboard({ KITTY_WINDOW_ID: "7" }, ls(listing({ qol_session_key: "lane-1" }))), false);
+  assert.equal(isSwitchboard({ KITTY_WINDOW_ID: "7" }, ls(listing({}))), false);
+  assert.equal(isSwitchboard({ KITTY_WINDOW_ID: "8" }, ls(listing({ qol_session_key: "switchboard" }))), false);
+  assert.equal(isSwitchboard({ KITTY_WINDOW_ID: "7" }, ls("not json")), false);
+  const missing = () => {
+    throw Object.assign(new Error("spawnSync kitten ENOENT"), { code: "ENOENT" });
+  };
+  assert.equal(isSwitchboard({ KITTY_WINDOW_ID: "7" }, missing), false);
+  calls.length = 0;
+  assert.equal(isSwitchboard({}, ls(listing({ qol_session_key: "switchboard" }))), false);
+  assert.deepEqual(calls, [], "kitten runs only inside a kitty window");
+});
+
+test("in the switchboard only fork, bridge and new reach the model", () => {
+  for (const prompt of ["qols fork x", "qols bridge x", "qols new x", "qols new", "qols fork x --harness codex"]) {
+    assert.equal(forkedBySwitchboard(parsePrompt(prompt), () => true), true, prompt);
+    assert.equal(forkedBySwitchboard(parsePrompt(prompt), () => false), false, prompt);
+  }
+  for (const prompt of ["qols test x", "qols switchboard", "qols park", "qols status", "qols wake key", "qols help"]) {
+    assert.equal(forkedBySwitchboard(parsePrompt(prompt), () => assert.fail(prompt)), false, prompt);
+  }
+});
+
+test("the switchboard note names what to start and sends terminal flags to session_fork", () => {
+  assert.equal(
+    switchboardContext(parsePrompt("qols fork fix the flaky test")),
+    "[qols] `qols fork` reached you because the switchboard starts sessions as forks, not terminals: treat it as the user asking for a fork that owns the problem in their words, and start it as your role describes.",
+  );
+  const cases = [
+    ["qols bridge look into it", "a fork that does the task in their words and reports back to you"],
+    ["qols new fix it", "a new session for their words"],
+    ["qols new", "a new empty session"],
+  ];
+  for (const [prompt, ask] of cases) {
+    const note = switchboardContext(parsePrompt(prompt));
+    assert.ok(note.includes(`asking for ${ask}, and start it`), prompt);
+    assert.ok(!note.includes("session_fork"), prompt);
+  }
+  assert.match(
+    switchboardContext(parsePrompt("qols new --harness codex")),
+    /as your role describes\. `--model` and `--effort` set the fork's model and effort; `--harness` naming another tool than claude, `--surface` or `--park` ask for a terminal, so call session_fork with them\.$/,
+  );
 });
 
 test("qols status takes nothing else", () => {

@@ -25,6 +25,7 @@ const USAGE = [
   "fork: detached architect that owns the problem; bridge: lane that reports back here;",
   "test: a fork whose prompt is typed but not submitted, so the launch costs no tokens",
   "new: a fork without the chat copy; with no prompt, a blank session you type into",
+  "in the switchboard, fork, bridge and new reach it as your request, and it starts a fork for them",
   "switchboard: your one control chat; always claude, effort low unless --effort says otherwise",
   "--park lets a fork close its terminal while it waits on a long command and reopen when it ends;",
   "a fork given a problem or prompt also closes once its turn ends",
@@ -37,6 +38,14 @@ const USAGE = [
 const VERBS = ["fork", "bridge", "test", "new", "switchboard", "park", "wake", "status"];
 
 const STALE_QOL = "qols status: this qol has no `qol sessions status`; update qol";
+
+const SWITCHBOARD_KEY = "switchboard";
+const KITTY_TIMEOUT_MS = 4000;
+const SWITCHBOARD_ASKS = {
+  fork: "a fork that owns the problem in their words",
+  bridge: "a fork that does the task in their words and reports back to you",
+  new: "a new session for their words",
+};
 
 function usageFor(verb) {
   return USAGE.split("\n").find((line) => line === `qols ${verb}` || line.startsWith(`qols ${verb} `));
@@ -195,6 +204,32 @@ export function cliSessionsBinary(env = process.env, home = homedir(), exists = 
   return exists(plugin) ? plugin : null;
 }
 
+function kittenLs(argv) {
+  return execFileSync("kitten", argv, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: KITTY_TIMEOUT_MS });
+}
+
+export function isSwitchboard(env = process.env, run = kittenLs) {
+  const window = env.KITTY_WINDOW_ID;
+  if (!window) return false;
+  try {
+    const windows = JSON.parse(run(["@", "ls", "--match", `id:${window}`])).flatMap((os) => os.tabs.flatMap((tab) => tab.windows));
+    return windows.some((win) => String(win.id) === window && win.user_vars?.qol_session_key === SWITCHBOARD_KEY);
+  } catch {
+    return false;
+  }
+}
+
+export function forkedBySwitchboard({ verb }, inSwitchboard = isSwitchboard) {
+  return Object.hasOwn(SWITCHBOARD_ASKS, verb) && inSwitchboard();
+}
+
+export function switchboardContext({ verb, message, flags }) {
+  const ask = verb === "new" && message === undefined ? "a new empty session" : SWITCHBOARD_ASKS[verb];
+  const note = `[qols] \`qols ${verb}\` reached you because the switchboard starts sessions as forks, not terminals: treat it as the user asking for ${ask}, and start it as your role describes.`;
+  if (flags.length === 0) return note;
+  return `${note} \`--model\` and \`--effort\` set the fork's model and effort; \`--harness\` naming another tool than claude, \`--surface\` or \`--park\` ask for a terminal, so call session_fork with them.`;
+}
+
 export function summarizePark(state) {
   return state === "parking on"
     ? "qols park: on; a park closes this terminal and reopens the conversation when the wait ends"
@@ -227,6 +262,7 @@ function reply(parsed, cwd) {
   if (parsed.verb === "park") return park();
   if (parsed.verb === "status") return status();
   if (parsed.verb === "wake") return wake(parsed.key);
+  if (forkedBySwitchboard(parsed)) return { context: switchboardContext(parsed) };
   try {
     const output = execFileSync("qol", commandFor(parsed, cwd), {
       encoding: "utf8",
