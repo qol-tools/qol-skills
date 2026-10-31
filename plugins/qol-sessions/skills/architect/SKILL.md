@@ -79,7 +79,7 @@ it remains authorized, preserving any later user redirect.
    - 11, 13 and 14 wait on the user or a second session, so the Stop guard lets the turn end on them; 12 keeps the block until the verdict is recorded.
 7. Accept with `qols loop close <key> --outcome accepted`, or `--outcome paused --remaining <text>` for a redirect or blocker; a paused close keeps every worktree, and a closed loop cannot be closed again with the other outcome.
    The driver writes the retro line, so the architect only runs the drift gate and any nudge pipeline that follows it; pass `--skill-gap <text>` when the spec guidance or this skill fell short, and a `spec` verdict fills the gap by itself.
-   Commit per git-trees, then push the branch and open its pull request per qol-monorepo-rules without asking: auto-merge armed, or a draft that waits for the user's approval when the change involves design (UI, or architecture such as a new command, a file format or a large refactor), with `Session: <key>` as the body's last line; never push `main` unless asked.
+   Commit per git-trees, then push the branch and open its pull request per qol-monorepo-rules without asking: landed as "Every pull request merges itself" says (in qol-monorepo a draft marked ready once checks, review and any live test pass), with `Session: <key>` as the body's last line; never push `main` unless asked.
 
 ## Lane brief
 

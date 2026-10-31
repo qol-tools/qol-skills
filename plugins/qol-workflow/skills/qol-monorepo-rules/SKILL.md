@@ -30,23 +30,37 @@ is refused. Details: `qol-workflow:commit`.
 
 ## Every pull request merges itself
 
-Right after `gh pr create` in a qol-tools repository, run `gh pr merge --auto <number>`
-so the merge queue lands the pull request once its checks pass. The CI and the
-merge queue are the gate; do not wait for a merge go-ahead. A draft gets it once
-the user marks it ready. The one exception: when the user says they are testing or
-holding a pull request, run `gh pr merge --disable-auto <number>` and wait for
-their word.
+In qol-monorepo every pull request opens as a draft, and you take it to the
+merge queue yourself:
+
+1. Open it with `gh pr create --draft` and watch it.
+2. A failed check or a review finding is fixed, pushed and watched again.
+3. Once checks and the claude review pass, the watcher exits 6 with what the
+   `live test` check found. That check lists the changed files that match
+   `.github/live-test-paths`: UI, and surfaces another program draws, which
+   only a person looking at the change can confirm.
+4. Nothing to test by hand: mark it ready with `gh pr ready`. That arms
+   auto-merge and the merge queue lands it.
+5. Live test needed: test the change end to end in a guest ("Runtime behavior
+   verifies in a guest VM"). When it works, mark it ready. When it does not,
+   fix it, push and watch again.
+
+In another qol-tools repository, run `gh pr merge --auto <number>` right after
+`gh pr create`, unless the change involves design (UI, or architecture such as a
+new command, a file format or a large refactor): open that as a draft that
+waits for the user's approval, and never mark it ready yourself.
+
+The CI and the merge queue are the gate; do not wait for a merge go-ahead. The
+one exception: when the user says they are testing or holding a pull request,
+run `gh pr merge --disable-auto <number>` and wait for their word.
 
 ## Never ask whether to push or open a pull request
 
-When your work leaves commits on a branch, push the branch and open a pull
-request without asking, then arm auto-merge with `gh pr merge --auto`, unless the
-change involves design (UI, or architecture such as a new command, a file format
-or a large refactor): open that as a draft with `gh pr create --draft` and report
-that it waits for the user's approval. Put `Session: <key>` as the last line of
-the pull request body, where `<key>` is your spawn key in `sessions_list`. Never
-force-push, and never mark a draft ready yourself. Skip the push only when the
-user said not to push.
+When your work leaves commits on a branch, push the branch and open its pull
+request without asking, as "Every pull request merges itself" says. Put
+`Session: <key>` as the last line of the pull request body, where `<key>` is your
+spawn key in `sessions_list`. Never force-push. Skip the push only when the user
+said not to push.
 
 ## Forks and lanes report to their parent
 
@@ -101,11 +115,11 @@ A pull request you open is yours until it merges. Do not report it done at
 `gh pr create`; listen for its outcome and fix what fails.
 
 <!-- inject:pr-watch:start -->
-[qol-pr-watch] When this command succeeds, park this session on the pull request watcher before any other tool call, then end your turn with one line saying what you wait for: `<qol-cli-sessions> park -- node <qol-workflow>/bin/pr-watch.cjs <pr-url> --pretty`. The terminal stays open and the watcher's exit code and output are submitted into it when it exits, unless parking is on for this session: then the terminal closes once the turn ends and qol resumes this same conversation in a new tab with the result. Park's output says which applies. If park itself fails, report the error to the user; never run the watcher outside park. A failure or review the watcher reports comes before any other work, even mid-turn. Exit 1 is a failure with the failed steps' logs: fix it on the branch, gate locally, push, and park on the watcher again. Exit 7 is review feedback from the qol-code-review bot: fix the findings it left for you, pull the branch first when the bot pushed a fix commit, then park on the watcher again; a finding against a decision the user made on purpose is answered in a pull request comment instead, then the review is rerun. Exit 0 is merged: a fork or lane then sends its parent one line with session_send kind report and done true. Exit 6 on a ready pull request means arm `gh pr merge --auto` and park again; on a draft it is design work waiting for the user's approval: leave it unarmed, report it to your parent (or the user, without one), and park again with `--until-ready` added so the watcher waits for the user to mark it ready. Never poll with sleep loops or repeated `gh pr checks`. Skip only a pull request the user is testing or holding.
+[qol-pr-watch] When this command succeeds, park this session on the pull request watcher before any other tool call, then end your turn with one line saying what you wait for: `<qol-cli-sessions> park -- node <qol-workflow>/bin/pr-watch.cjs <pr-url> --pretty`. The terminal stays open and the watcher's exit code and output are submitted into it when it exits, unless parking is on for this session: then the terminal closes once the turn ends and qol resumes this same conversation in a new tab with the result. Park's output says which applies. If park itself fails, report the error to the user; never run the watcher outside park. A failure or review the watcher reports comes before any other work, even mid-turn. Exit 1 is a failure with the failed steps' logs: fix it on the branch, gate locally, push, and park on the watcher again. Exit 7 is review feedback from the qol-code-review bot: fix the findings it left for you, pull the branch first when the bot pushed a fix commit, then park on the watcher again; a finding against a decision the user made on purpose is answered in a pull request comment instead, then the review is rerun. Exit 0 is merged: a fork or lane then sends its parent one line with session_send kind report and done true. Exit 6 on a ready pull request means arm `gh pr merge --auto` and park again. Exit 6 on a draft carries live_test: `not needed` means mark it ready with `gh pr ready` and park again; `needed` means test the change end to end in a guest first, then mark it ready and park again when it works, or fix, push and park again when it does not; null is design work waiting for the user's approval: leave it unarmed, report it to your parent (or the user, without one), and park again with `--until-ready` added so the watcher waits for the user to mark it ready. Never poll with sleep loops or repeated `gh pr checks`. Skip only a pull request the user is testing or holding.
 <!-- inject:pr-watch:end -->
 
 <!-- inject:pr-watch-subagent:start -->
-[qol-pr-watch] You run as a subagent and cannot park. When this command succeeds, start the pull request watcher with Bash `run_in_background: true` before any other tool call, as the bare command, no park and no wrapper: `node <qol-workflow>/bin/pr-watch.cjs <pr-url> --pretty`. Then end your turn with one line saying what you wait for; Claude Code wakes you with the exit code and output when the watcher exits. A failure or review the watcher reports comes before any other work. Exit 1 is a failure with the failed steps' logs: fix it on the branch, gate locally, push, start the watcher in the background again and end your turn. Exit 7 is review feedback from the qol-code-review bot: fix the findings it left for you, pull the branch first when the bot pushed a fix commit, then start the watcher again; a finding against a decision the user made on purpose is answered in a pull request comment instead, then the review is rerun. Exit 0 is merged: your final message is the one-line report. Exit 6 on a ready pull request means arm `gh pr merge --auto` and start the watcher again; on a draft it is design work waiting for the user's approval: leave it unarmed, start the watcher again with `--until-ready` added, and end your turn saying the draft waits for the user's approval. Never poll with sleep loops or repeated `gh pr checks`. Skip only a pull request the user is testing or holding.
+[qol-pr-watch] You run as a subagent and cannot park. When this command succeeds, start the pull request watcher with Bash `run_in_background: true` before any other tool call, as the bare command, no park and no wrapper: `node <qol-workflow>/bin/pr-watch.cjs <pr-url> --pretty`. Then end your turn with one line saying what you wait for; Claude Code wakes you with the exit code and output when the watcher exits. A failure or review the watcher reports comes before any other work. Exit 1 is a failure with the failed steps' logs: fix it on the branch, gate locally, push, start the watcher in the background again and end your turn. Exit 7 is review feedback from the qol-code-review bot: fix the findings it left for you, pull the branch first when the bot pushed a fix commit, then start the watcher again; a finding against a decision the user made on purpose is answered in a pull request comment instead, then the review is rerun. Exit 0 is merged: your final message is the one-line report. Exit 6 on a ready pull request means arm `gh pr merge --auto` and start the watcher again. Exit 6 on a draft carries live_test: `not needed` means mark it ready with `gh pr ready` and start the watcher again; `needed` means test the change end to end in a guest first, then mark it ready and start the watcher again when it works, or fix, push and start it again when it does not; null is design work waiting for the user's approval: leave it unarmed, start the watcher again with `--until-ready` added, and end your turn saying the draft waits for the user's approval. Never poll with sleep loops or repeated `gh pr checks`. Skip only a pull request the user is testing or holding.
 <!-- inject:pr-watch-subagent:end -->
 
 The watcher polls GitHub inside its own process, so no turn is spent until
@@ -176,12 +190,16 @@ status on the head commit, a merge conflict, a merge queue removal, or the pull
 request closed; a failed `merge queue` status ends the watch the moment the
 queue run posts it, even while GitHub still holds the failed entry, and one left
 by an earlier attempt is ignored once the pull request is queued again), 3 no pull request, 4 `gh` kept failing, 5 still pending after
-two hours, 6 checks green on a draft (design work waiting for the user) or on a
-ready pull request with auto-merge not armed, 7 a qol-code-review or
-queue-fix comment posted after the watcher started that needs you: findings
-"left for you", a fix commit the bot pushed to the branch, or a failed review
-or fix. With `--until-ready` a green draft keeps it watching until the user marks
-it ready. Only a pass verdict or an owner override lets the pull request into the
+two hours, 6 checks green on a draft or on a ready pull request with auto-merge
+not armed, 7 a qol-code-review or queue-fix comment posted after the watcher
+started that needs you: findings "left for you", a fix commit the bot pushed to
+the branch, or a failed review or fix. On a green draft, `live_test` carries the
+title of the newest completed `live test` check run: `not needed` (No live test
+needed), `needed` (Live test needed), or null when the pull request has no such
+check, which means design work waiting for the user. The check always succeeds,
+so it never holds the queue; `.github/scripts/live_test.py` in qol-monorepo
+posts it from `.github/live-test-paths`. With `--until-ready` a green draft keeps
+it watching until it is marked ready. Only a pass verdict or an owner override lets the pull request into the
 merge queue, so every open finding of a conditional or block review is left for you. A pass
 keeps it watching; the latest comment supersedes earlier ones. A push to the branch
 while it runs is followed, because it always reads the latest head commit. Checks

@@ -72,8 +72,28 @@ for (const [name, input, expected] of cases) {
 test('classify tells a green draft to stay unarmed', () => {
     const verdict = classify(pr({ draft: true, auto: false, checks: [run('lint', 'COMPLETED', 'SUCCESS')] }));
     assert.equal(verdict.outcome, 'idle');
-    assert.match(verdict.reasons[0], /draft: design work waiting for the user's approval; leave auto-merge off, report it to your parent, then park again with --until-ready/);
+    assert.equal(verdict.live_test, null);
+    assert.match(verdict.reasons[0], /no live test check: design work waiting for the user's approval; leave auto-merge off, report it to your parent, then park again with --until-ready/);
     assert.equal(classify(pr({ draft: true, auto: false, checks: [run('lint', 'IN_PROGRESS')] })).outcome, 'pending');
+});
+
+const liveTest = (title, status = 'COMPLETED') => ({ ...run('live test', status, status === 'COMPLETED' ? 'SUCCESS' : null), title });
+
+test('classify reads the live test check on a green draft', () => {
+    const lint = run('lint', 'COMPLETED', 'SUCCESS');
+    const draft = (checks, untilReady = false) => classify(pr({ draft: true, auto: false, checks }), null, untilReady);
+    const plain = draft([lint, liveTest('No live test needed')]);
+    assert.equal(plain.outcome, 'idle');
+    assert.equal(plain.live_test, 'not needed');
+    assert.match(plain.reasons[0], /mark it ready with gh pr ready/);
+    const ui = draft([lint, liveTest('Live test needed')]);
+    assert.equal(ui.live_test, 'needed');
+    assert.match(ui.reasons[0], /test the change end to end in a guest/);
+    assert.equal(draft([lint, liveTest('No live test needed'), liveTest('Live test needed')]).live_test, 'needed');
+    assert.equal(draft([lint, liveTest('Something else')]).live_test, null);
+    assert.equal(draft([lint, liveTest('Live test needed', 'IN_PROGRESS')]).outcome, 'pending');
+    assert.equal(draft([lint, liveTest('Live test needed')], true).outcome, 'pending');
+    assert.equal(classify(pr({ draft: true, auto: false, checks: [run('lint', 'COMPLETED', 'FAILURE'), liveTest('No live test needed')] })).outcome, 'failed');
 });
 
 test('classify keeps a reported draft pending until it is marked ready, then asks to arm it', () => {

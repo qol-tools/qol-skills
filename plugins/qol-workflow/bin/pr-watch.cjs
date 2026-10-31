@@ -21,11 +21,18 @@ const FIX_COMMIT = /\/commit\/([0-9a-f]{40})\)/;
 const LEFT_FOR_YOU = /(\d+) left for you/;
 const REVIEW_FAILED = /Review failed|Fixing failed|outside this pull request|Nothing was changed/;
 const SHAPE_LINE = /^\*\*Shape:\*\* `([^`]+)`/;
+const LIVE_TEST_CHECK = 'live test';
+const LIVE_TEST_TITLES = { 'Live test needed': 'needed', 'No live test needed': 'not needed' };
+const DRAFT_REASONS = {
+    'not needed': 'checks and review pass on a draft and the live test check found nothing to test by hand: mark it ready with gh pr ready, then watch it again',
+    needed: 'checks and review pass on a draft and the live test check lists files a person must see working: test the change end to end in a guest (qol-project:qol-dev-environments); when it works, mark it ready with gh pr ready and watch it again; when it does not, fix it, push and watch again',
+    unknown: 'checks are green on a draft with no live test check: design work waiting for the user\'s approval; leave auto-merge off, report it to your parent, then park again with --until-ready',
+};
 
 const QUERY = `query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){
 number url state isDraft isInMergeQueue mergeStateStatus autoMergeRequest{enabledAt}
 commits(last:1){nodes{commit{oid committedDate statusCheckRollup{contexts(first:100){nodes{__typename
-... on CheckRun{name status conclusion detailsUrl checkSuite{workflowRun{databaseId workflow{databaseId}}}}
+... on CheckRun{name title status conclusion detailsUrl checkSuite{workflowRun{databaseId workflow{databaseId}}}}
 ... on StatusContext{context state description targetUrl createdAt}}}}}}}
 timelineItems(last:1,itemTypes:[ADDED_TO_MERGE_QUEUE_EVENT,REMOVED_FROM_MERGE_QUEUE_EVENT]){nodes{__typename
 ... on AddedToMergeQueueEvent{createdAt} ... on RemovedFromMergeQueueEvent{reason createdAt}}}
@@ -33,8 +40,10 @@ comments(last:20){nodes{author{__typename login} body createdAt url}}}}}`;
 
 const HELP = `usage: pr-watch [<pr-url-or-number>] [--pretty] [--interval <s>] [--timeout <min>] [--until-ready]
 Blocks until the pull request merges or fails, then exits once.
-A draft with green checks exits 6 as design work waiting for the user; --until-ready keeps
-watching a draft until the user marks it ready, for a re-park after that report.
+A draft with green checks exits 6 with live_test read from the "live test" check: "not needed"
+says to mark it ready, "needed" says to test it end to end first, and null (no such check)
+means design work waiting for the user; --until-ready keeps watching a draft until it is
+marked ready, for a re-park after that report.
 A failed merge queue status posted since the pull request was last queued ends the watch
 even while GitHub still holds the entry. Checks from an older run of a workflow are ignored
 once a newer run of it reports, and a failure seen in the first 120 s ends the watch only if
@@ -175,6 +184,12 @@ function latestReview(pr, since) {
     return null;
 }
 
+function liveTestOf(commit) {
+    const runs = (commit?.statusCheckRollup?.contexts?.nodes ?? [])
+        .filter((node) => node.__typename === 'CheckRun' && node.name === LIVE_TEST_CHECK && node.status === 'COMPLETED');
+    return LIVE_TEST_TITLES[runs[runs.length - 1]?.title] ?? null;
+}
+
 function classify(pr, since = null, untilReady = false) {
     const commit = pr.commits?.nodes?.[0]?.commit ?? {};
     const base = { head: commit.oid ?? null, reasons: [], failures: [] };
@@ -196,7 +211,8 @@ function classify(pr, since = null, untilReady = false) {
 
     const settled = checks.length > 0 && checks.every((check) => check.done);
     if (settled && pr.isDraft && !untilReady) {
-        return { ...base, outcome: 'idle', reasons: ['checks are green on a draft: design work waiting for the user\'s approval; leave auto-merge off, report it to your parent, then park again with --until-ready'] };
+        const liveTest = liveTestOf(commit);
+        return { ...base, outcome: 'idle', live_test: liveTest, reasons: [DRAFT_REASONS[liveTest ?? 'unknown']] };
     }
     if (settled && !pr.isDraft && !pr.autoMergeRequest && !pr.isInMergeQueue) {
         return { ...base, outcome: 'idle', reasons: ['checks are green on a ready pull request but auto-merge is not armed; arm it with gh pr merge --auto'] };

@@ -98,7 +98,7 @@ Atomic-commit rule still holds (one logical change per commit, repo always green
 
 This applies to both routes:
 
-- **PR route (default):** open the pull request from the worktree branch and run `gh pr merge --auto <number>` right after `gh pr create` (after `gh pr ready` for a draft); the merge queue squashes it once its checks pass. Then park the session on `bin/pr-watch.cjs` with `qol-cli-sessions park --` until it merges and fix what fails (qol-workflow:qol-monorepo-rules, "Every pull request is watched until it merges"). Do not merge-commit or rebase-merge the branch stack into `main`.
+- **PR route (default):** open the pull request from the worktree branch as a draft and mark it ready with `gh pr ready` once checks, review and any live test pass, which arms auto-merge (qol-workflow:qol-monorepo-rules, "Every pull request merges itself"); the merge queue squashes it once its checks pass. Then park the session on `bin/pr-watch.cjs` with `qol-cli-sessions park --` until it merges and fix what fails (qol-workflow:qol-monorepo-rules, "Every pull request is watched until it merges"). Do not merge-commit or rebase-merge the branch stack into `main`.
 - **Direct route (explicit ask only):** from the main clone, `git merge --squash <feature-branch>`, commit, then push `main`. Never push `HEAD:main` directly from the worktree.
 
 If an agent thinks a worktree should land as multiple commits, it must ask first and name the independently revertible deliveries.
