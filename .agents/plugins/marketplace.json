@@ -269,18 +269,6 @@
       "category": "Productivity"
     },
     {
-      "name": "qol-workflow-nodes",
-      "source": {
-        "source": "local",
-        "path": "./plugins/qol-workflow-nodes"
-      },
-      "policy": {
-        "installation": "INSTALLED_BY_DEFAULT",
-        "authentication": "ON_INSTALL"
-      },
-      "category": "Productivity"
-    },
-    {
       "name": "qol-memory",
       "source": {
         "source": "local",

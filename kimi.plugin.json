@@ -28,8 +28,7 @@
     "./plugins/qol-trace-discipline/skills/",
     "./plugins/qol-tray/skills/",
     "./plugins/qol-voice/skills/",
-    "./plugins/qol-workflow/skills/",
-    "./plugins/qol-workflow-nodes/skills/"
+    "./plugins/qol-workflow/skills/"
   ],
   "hooks": [
     {
@@ -95,6 +94,11 @@
       "event": "PreToolUse",
       "matcher": "Bash",
       "command": "node plugins/qol-project/bin/check-qol-logging.cjs"
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "command": "node plugins/qol-project/hooks/qac-trust-guard.mjs"
     },
     {
       "event": "SessionStart",
@@ -196,11 +200,6 @@
       "command": "node plugins/qol-workflow/bin/pr-watch-park-guard.cjs"
     },
     {
-      "event": "PreToolUse",
-      "matcher": "Edit|Write|MultiEdit",
-      "command": "node plugins/qol-workflow/bin/deny-tool-matches.cjs"
-    },
-    {
       "event": "UserPromptSubmit",
       "command": "node plugins/qol-workflow/bin/qol-cicd-context.cjs"
     },
@@ -211,18 +210,6 @@
     {
       "event": "SubagentStop",
       "command": "node plugins/qol-workflow/bin/pr-watch-park-guard.cjs"
-    },
-    {
-      "event": "UserPromptSubmit",
-      "command": "node plugins/qol-workflow-nodes/hooks/inject_workflow_nodes_reminder.mjs"
-    },
-    {
-      "event": "PreCompact",
-      "command": "node plugins/qol-workflow-nodes/hooks/clear_workflow_nodes_sentinel.mjs"
-    },
-    {
-      "event": "SessionStart",
-      "command": "node plugins/qol-workflow-nodes/hooks/clear_workflow_nodes_sentinel.mjs"
     }
   ]
 }

@@ -1,4 +1,4 @@
-// @generated hook-kit diagnostic.mjs sha256:79ec6cd68ba56e1acf3efcd083f18a3d09761901c2e256ebdc6f39eb5e5d922a - do not edit; change qol-skills/kit-src/hook-kit, then run vs vendor
+// @generated hook-kit diagnostic.mjs sha256:79ec6cd68ba56e1acf3efcd083f18a3d09761901c2e256ebdc6f39eb5e5d922a - do not edit; change qol-skills/kit-src/hook-kit, then run its scripts/vendor-hook-kit.mjs
 function distance(a, b) {
   let row = Array.from({ length: b.length + 1 }, (_, i) => i);
   for (let i = 1; i <= a.length; i++) {

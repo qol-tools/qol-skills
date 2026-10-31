@@ -2,6 +2,7 @@
 'use strict';
 
 const { spawnSync } = require('node:child_process');
+const { createHash } = require('node:crypto');
 
 const EXIT = { merged: 0, failed: 1, usage: 2, missing: 3, gh: 4, timeout: 5, idle: 6, review: 7 };
 const FAILED_CONCLUSIONS = new Set(['FAILURE', 'CANCELLED', 'TIMED_OUT', 'ACTION_REQUIRED', 'STARTUP_FAILURE']);
@@ -19,6 +20,7 @@ const REVIEW_AUTHOR = 'github-actions';
 const FIX_COMMIT = /\/commit\/([0-9a-f]{40})\)/;
 const LEFT_FOR_YOU = /(\d+) left for you/;
 const REVIEW_FAILED = /Review failed|Fixing failed|outside this pull request|Nothing was changed/;
+const SHAPE_LINE = /^\*\*Shape:\*\* `([^`]+)`/;
 
 const QUERY = `query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){
 number url state isDraft isInMergeQueue mergeStateStatus autoMergeRequest{enabledAt}
@@ -150,6 +152,8 @@ function parseReview(body, url) {
         if (item && severity && item[1] !== 'Full review') {
             findings.push({ severity, title: unescapeHtml(item[1]), status: item[2] || (severity === 'settled' ? 'settled' : 'open') });
         }
+        const shape = SHAPE_LINE.exec(line)?.[1];
+        if (shape && findings.length > 0) findings[findings.length - 1].shape = shape;
     }
     const left = Number(LEFT_FOR_YOU.exec(body)?.[1] ?? 0);
     const fixCommit = FIX_COMMIT.exec(alert.join('\n'))?.[1] ?? null;
@@ -244,6 +248,30 @@ function render(report) {
     return lines.join('\n');
 }
 
+function slipArgument(text) {
+    return `"${String(text).replace(/["\\$`]/g, '').trim()}"`;
+}
+
+function shapeFingerprint(shape) {
+    return createHash('sha256').update(`review\n${shape}`).digest('hex').slice(0, 16);
+}
+
+function followUps(code, report) {
+    if (code === EXIT.review) {
+        const from = report.url ?? report.review?.url;
+        return (report.review?.findings ?? [])
+            .filter((finding) => finding.shape && finding.severity !== 'settled')
+            .map((finding) => `qac slip --fingerprint ${shapeFingerprint(finding.shape)} --from ${from} --route qac-check --judge review --rule ${slipArgument(finding.shape)} --message ${slipArgument(finding.shape)}`);
+    }
+    if (code === EXIT.failed) {
+        const failures = (report.failures ?? []).filter((failure) => failure.url);
+        const run = failures.find((failure) => !AGGREGATE_JOB.test(failure.name)) ?? failures[0];
+        if (!run) return [];
+        return [`If the local gate had passed, record the miss: qac slip --from ${run.url} "<what slipped>"`];
+    }
+    return [];
+}
+
 function wait(seconds) {
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, seconds * 1000);
 }
@@ -305,10 +333,11 @@ function main(argv) {
     }
     const { code, report } = watch(opts);
     process.stdout.write(`${opts.pretty ? render(report) : JSON.stringify(report)}\n`);
+    for (const line of followUps(code, report)) process.stderr.write(`${line}\n`);
     return code;
 }
 
-module.exports = { classify, parseReview, parseArgs, parseTarget, resolveTarget, attachLogs, cleanLogLine, render, watch, EXIT, SETTLE_SECONDS };
+module.exports = { classify, parseReview, parseArgs, parseTarget, resolveTarget, attachLogs, cleanLogLine, render, watch, followUps, EXIT, SETTLE_SECONDS };
 
 if (require.main === module) {
     process.exit(main(process.argv.slice(2)));

@@ -74,3 +74,23 @@ test("a header that a CRLF checkout rewrote still matches", () => {
   writeFileSync(file, readFileSync(file, "utf8").replace(/\n/g, "\r\n"));
   assert.equal(run(root, "--check").status, 0);
 });
+
+test("a consumer whose plugin folder is absent is skipped, so one list serves several repos", () => {
+  const root = fresh();
+  write(root, "kit-src/hook-kit/consumers.json", '["p","ghost"]\n');
+  const vendor = run(root);
+  assert.equal(vendor.status, 0, vendor.stderr);
+  assert.ok(!existsSync(path.join(root, "plugins", "ghost")));
+  const check = run(root, "--check");
+  assert.equal(check.status, 0, check.stdout);
+  assert.match(check.stdout, /2 vendored copies match/);
+});
+
+test("a repo with none of the consumers vendors nothing", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "hook-kit-vendor-"));
+  write(root, "kit-src/hook-kit/a.mjs", "export const a = 1;\n");
+  write(root, "kit-src/hook-kit/consumers.json", '["ghost"]\n');
+  assert.equal(run(root).status, 0);
+  assert.equal(run(root, "--check").status, 0);
+  assert.ok(!existsSync(path.join(root, "plugins")));
+});

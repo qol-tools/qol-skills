@@ -1,1 +1,1 @@
-{ "modules": ["./clear-consumed-prompt.ts"] }
+{ "modules": ["./answer-band.ts"] }

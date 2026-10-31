@@ -5,7 +5,6 @@ const { spawnSync } = require('node:child_process');
 
 const TIER_RULE_MARKER = '[qol-sessions tier rule]';
 const COMPACT_SUMMARY_PATTERN = /"isCompactSummary"\s*:\s*true/;
-const LANE_TIER = 'flash';
 const LANE_PROBE_TIMEOUT_MS = 3000;
 
 const BRIDGE_ENVELOPE_PATTERN = /^\s*\[qol session bridge\](?:\s|$)/i;
@@ -21,7 +20,7 @@ const TIER_RULE = [
     '[qol-sessions tier rule]',
     'The current session is the architect and final reviewer; multi-step delegated work runs through the qol sessions surface (session_spawn + wake + session_bridge collection), never in-harness and never through a raw harness spawn.',
     'Every implementation, research, and preliminary-review lane is spawned with session_spawn carrying an explicit tool, model, and, where the harness takes one, effort: any harness/model pair the sessions.toml tool_models mapping declares may launch (allowed_models is the spending allowlist; spawn_model is the default model; an undeclared pair is refused), and the harness, model, and effort the user names are the binding. A missing model or a foreground round that suspends the architect in an open tool call is a refusal point, never a silent choice.',
-    'session_spawn, lane sets, and session_fork share one launch-flag source: effort reaches claude as --effort and pi as --thinking, and every claude launch starts with --dangerously-skip-permissions, so never hand-roll harness flags and never reach for session_fork to get an effort level or skipped permissions on work that should be a bridged lane.',
+    'session_spawn, lane sets, and session_fork share one launch-flag source: effort reaches claude as --effort and pi as --thinking, and every claude launch through them starts with --dangerously-skip-permissions (headless qols loop driver lanes instead run with acceptEdits and Bash disallowed), so never hand-roll harness flags and never reach for session_fork to get an effort level or skipped permissions on work that should be a bridged lane.',
     'Spawned lanes implement and report; the architect personally reviews, synthesizes verdicts, and accepts in-session.',
     'Lanes edit only the code the architect named: building, testing, linting, formatting, and committing belong to the architect, who reviews the diff and runs the gate once for the whole round, so a lane never runs cargo build, cargo test, cargo clippy, cargo fmt, or any other build or verification command and never commits.',
     'Domain protocols live in their owning skills (qol-code-review, qol-adversarial-test, qol-debug); sessions supplies lanes, tiers, and gating only.',
@@ -108,18 +107,18 @@ function alreadyInContext(transcriptPath, marker) {
 function laneSpawnAvailable(run = spawnSync) {
     let result;
     try {
-        result = run('qol', ['sessions', 'capability', '--tier', LANE_TIER], {
+        result = run('qol', ['sessions', 'capability'], {
             encoding: 'utf8',
             timeout: LANE_PROBE_TIMEOUT_MS,
         });
     } catch {
-        return true;
+        return false;
     }
-    if (!result || result.error || result.status !== 0) return true;
+    if (!result || result.error || result.status !== 0) return false;
     try {
-        return JSON.parse(result.stdout).lane_spawn !== false;
+        return JSON.parse(result.stdout).lane_spawn === true;
     } catch {
-        return true;
+        return false;
     }
 }
 
@@ -156,7 +155,6 @@ module.exports = {
     alreadyInContext,
     laneSpawnAvailable,
     liveContextLines,
-    LANE_TIER,
     TIER_RULE_MARKER,
     ARCHITECT_ENVELOPE_PATTERN,
     ARCHITECT_RECEIVER_CONTEXT,

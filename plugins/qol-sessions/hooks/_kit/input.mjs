@@ -1,4 +1,4 @@
-// @generated hook-kit input.mjs sha256:b64bd67b358430b279f0b6b151e7e2ec0c7b3596e1f5b77128fd21036cef465e - do not edit; change qol-skills/kit-src/hook-kit, then run vs vendor
+// @generated hook-kit input.mjs sha256:b64bd67b358430b279f0b6b151e7e2ec0c7b3596e1f5b77128fd21036cef465e - do not edit; change qol-skills/kit-src/hook-kit, then run its scripts/vendor-hook-kit.mjs
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 

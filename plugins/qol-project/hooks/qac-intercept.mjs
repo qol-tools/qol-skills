@@ -1,10 +1,12 @@
 #!/usr/bin/env node
-import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-const CLI = fileURLToPath(new URL("../scripts/qac.mjs", import.meta.url));
-const VERBS = ["lint", "fix", "slip", "slips", "help"];
+import { runCli, runPromptCommand } from "./_kit/prompt-command.mjs";
+
+export const CLI = fileURLToPath(new URL("../scripts/qac.mjs", import.meta.url));
+export const ANSWERED = [0, 1, 5, 6];
+const TIMEOUT_MS = 110000;
+const VERBS = ["lint", "fix", "slip", "slips", "gate", "trust", "traps", "init", "help"];
 const FINDINGS = 1;
 
 export function parsePrompt(prompt, cwd) {
@@ -22,46 +24,29 @@ export function parsePrompt(prompt, cwd) {
   return [...args, ...flags];
 }
 
-export function hookResponse(verb, status, output, input = {}, env = process.env) {
-  const text = output.trim() || `qac ${verb}: nothing to do`;
-  if (verb === "fix" && status === FINDINGS) {
-    return { hookSpecificOutput: { hookEventName: "UserPromptSubmit", additionalContext: text } };
+function runQac(argv, cwd) {
+  return runCli(CLI, argv, { cwd, answered: ANSWERED, timeoutMs: TIMEOUT_MS });
+}
+
+export function decide(prompt, cwd, run = runQac) {
+  const argv = parsePrompt(prompt, cwd);
+  if (argv === null || argv[0] !== "fix") return argv;
+  const result = run(argv, cwd);
+  if (result.kind === "answered" && result.status === FINDINGS) {
+    return { context: result.text || "qac fix: nothing to do" };
   }
-  const consumed = (status === 0 || status === FINDINGS) && env.CLAUDECODE === "1" && input.turn_id === undefined;
-  return {
-    decision: "block",
-    reason: text,
-    ...(consumed && { hookSpecificOutput: { hookEventName: "UserPromptSubmit", suppressOriginalPrompt: true } }),
-  };
+  return { reason: result.text || "qac fix: nothing to do", sent: result.kind === "answered" };
 }
 
 function main() {
-  let prompt = "";
-  let cwd = "";
-  let input;
-  try {
-    input = JSON.parse(readFileSync(0, "utf8") || "{}");
-    if (typeof input.prompt === "string") prompt = input.prompt;
-    if (typeof input.cwd === "string") cwd = input.cwd;
-  } catch {
-    process.exit(0);
-  }
-
-  const args = parsePrompt(prompt, cwd);
-  if (args === null) process.exit(0);
-
-  let output;
-  let status = 0;
-  try {
-    output = execFileSync(process.execPath, [CLI, ...args], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
-  } catch (error) {
-    status = error.status ?? -1;
-    output = `${error.stdout ?? ""}${error.stderr ?? ""}`.trim()
-      || (error instanceof Error ? error.message : String(error));
-  }
-
-  process.stdout.write(`${JSON.stringify(hookResponse(args[0], status, output, input))}\n`);
-  process.exit(0);
+  runPromptCommand({
+    parse: (prompt, cwd) => decide(prompt, cwd),
+    cli: CLI,
+    prefix: "qac",
+    cwd: "input",
+    answered: ANSWERED,
+    handle: (cli, argv, options) => runCli(cli, argv, { ...options, timeoutMs: TIMEOUT_MS }),
+  });
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) main();

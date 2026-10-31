@@ -12,7 +12,12 @@ const FINAL_REPORT = '## What landed\n\nLoop fixed.\n\n## Before\n\nRounds stopp
 const {
     blockReason,
     currentBranch,
+    driverArmReceipt,
+    driverCloseReceipt,
+    runsDriverVerb,
     featureLoopPhase,
+    featureLoopState,
+    bashExit,
 } = require('../bin/guard-session-feature-loop.cjs');
 
 function assistant(uuid, parentUuid, content) {
@@ -479,4 +484,391 @@ test('a closed:false sibling without any pending round still blocks (no close ev
     } finally {
         fs.rmSync(root, { recursive: true });
     }
+});
+
+const ARMED_RECEIPT = JSON.stringify({ loop_armed: true, key: 'k1', base: 'abc123', spec_sha: 'def456' });
+const CLOSED_RECEIPT = JSON.stringify({
+    loop_closed: true,
+    final_report: { outcome: 'accepted', key: 'k1', attempts: 1, gate: 'clean', remaining: '', worktree: '/tmp/wt' },
+});
+
+function bashCall(uuid, parentUuid, id, command, input = {}) {
+    return assistant(uuid, parentUuid, [{
+        type: 'tool_use',
+        id,
+        name: 'Bash',
+        input: { command, ...input },
+    }]);
+}
+
+function bashResult(uuid, parentUuid, id, text, isError = false) {
+    return user(uuid, parentUuid, [{
+        type: 'tool_result',
+        tool_use_id: id,
+        is_error: isError,
+        content: [{ type: 'text', text }],
+    }]);
+}
+
+function openedLoop(text = ARMED_RECEIPT) {
+    return [
+        bashCall('open-call', null, 'open-1', 'qols loop open k1 --spec spec.md'),
+        bashResult('open-result', 'open-call', 'open-1', text),
+    ];
+}
+
+test('a driver open receipt arms the loop and the Stop guard blocks', () => {
+    const entries = openedLoop();
+    assert.equal(featureLoopPhase(entries), 'review');
+    const result = runHook(entries);
+    assert.equal(result.status, 0);
+    const output = JSON.parse(result.stdout);
+    assert.equal(output.decision, 'block');
+    assert.match(output.reason, /qols loop close/);
+});
+
+test('a driver open receipt among other output and in pretty form still arms', () => {
+    const noisy = openedLoop(`baseline gate: clean\n${ARMED_RECEIPT}\n`);
+    const pretty = openedLoop(JSON.stringify({ loop_armed: true, key: 'k1' }, null, 2));
+    const escaped = openedLoop('<persisted-output>\nPreview: {\\"loop_armed\\": true, \\"key\\": \\"k1\\"}\n</persisted-output>');
+    for (const entries of [noisy, pretty, escaped]) {
+        assert.equal(featureLoopPhase(entries), 'review');
+        assert.equal(JSON.parse(runHook(entries).stdout).decision, 'block');
+    }
+});
+
+test('a backgrounded driver run lets the turn end and its task notification re-arms the block', () => {
+    const entries = [
+        ...openedLoop(),
+        bashCall('run-call', 'open-result', 'run-1', 'qols loop run k1', { run_in_background: true }),
+        bashResult('run-result', 'run-call', 'run-1', 'Command running in background with ID: bg-1.'),
+        assistant('ended', 'run-result', 'Lane running; ending the turn.'),
+    ];
+    assert.equal(featureLoopPhase(entries), 'waiting');
+    const waiting = runHook(entries);
+    assert.equal(waiting.status, 0);
+    assert.equal(waiting.stdout, '');
+
+    const woken = [
+        ...entries,
+        user('notice', 'ended', '<task-notification>\n<task-id>bg-1</task-id>\n<status>completed</status>\n</task-notification>'),
+    ];
+    assert.equal(featureLoopPhase(woken), 'review');
+    assert.equal(JSON.parse(runHook(woken).stdout).decision, 'block');
+
+    const woken2 = [
+        ...entries,
+        user('notice', 'ended', [{ type: 'text', text: '<task-notification>\n<status>completed</status>\n</task-notification>' }]),
+    ];
+    assert.equal(featureLoopPhase(woken2), 'review');
+});
+
+test('a foreground driver run keeps the loop in review', () => {
+    const entries = [
+        ...openedLoop(),
+        bashCall('gate-call', 'open-result', 'gate-1', 'qols loop run k1 --gate-only'),
+        bashResult('gate-result', 'gate-call', 'gate-1', '{"gate":"clean"}'),
+    ];
+    assert.equal(featureLoopPhase(entries), 'review');
+    assert.equal(JSON.parse(runHook(entries).stdout).decision, 'block');
+});
+
+test('the driver close receipt disarms the loop', () => {
+    const entries = [
+        ...openedLoop(),
+        bashCall('close-call', 'open-result', 'close-1', 'qols loop close k1 --outcome accepted'),
+        bashResult('close-result', 'close-call', 'close-1', CLOSED_RECEIPT),
+    ];
+    assert.equal(featureLoopPhase(entries), 'idle');
+    const result = runHook(entries);
+    assert.equal(result.status, 0);
+    assert.equal(result.stdout, '');
+    const summary = [...entries, assistant('final', 'close-result', 'Accepted; nothing remains.')];
+    assert.equal(runHook(summary).stdout, '');
+});
+
+test('a driver close receipt with a string report or a persisted preview also disarms', () => {
+    const stringReport = JSON.stringify({ loop_closed: true, final_report: FINAL_REPORT });
+    const persisted = `<persisted-output>\nPreview: {\\"loop_closed\\": true, \\"final_report\\": {\\"outcome\\": \\"paused\\"}}\n</persisted-output>`;
+    for (const receipt of [stringReport, persisted, `closing worktrees\n${CLOSED_RECEIPT}\n`]) {
+        const entries = [
+            ...openedLoop(),
+            bashCall('close-call', 'open-result', 'close-1', 'qols loop close k1 --outcome paused'),
+            bashResult('close-result', 'close-call', 'close-1', receipt),
+        ];
+        assert.equal(featureLoopPhase(entries), 'idle');
+        assert.equal(runHook(entries).stdout, '');
+    }
+});
+
+test('failed, partial, or unrelated Bash output cannot arm or disarm a driver loop', () => {
+    const failedOpen = openedLoop();
+    failedOpen[1] = bashResult('open-result', 'open-call', 'open-1', ARMED_RECEIPT, true);
+    assert.equal(featureLoopPhase(failedOpen), 'idle');
+    assert.equal(runHook(failedOpen).stdout, '');
+
+    const falseArm = openedLoop('{"loop_armed":false,"key":"k1"}');
+    assert.equal(featureLoopPhase(falseArm), 'idle');
+
+    const unrelated = openedLoop('nothing to see here');
+    assert.equal(featureLoopPhase(unrelated), 'idle');
+
+    for (const receipt of [
+        '{"loop_closed":false,"final_report":{"outcome":"accepted"}}',
+        '{"loop_closed":true}',
+        '{"loop_closed":true,"final_report":""}',
+        'qols: unknown outcome',
+    ]) {
+        const entries = [
+            ...openedLoop(),
+            bashCall('close-call', 'open-result', 'close-1', 'qols loop close k1 --outcome accepted'),
+            bashResult('close-result', 'close-call', 'close-1', receipt),
+        ];
+        assert.equal(featureLoopPhase(entries), 'review');
+        assert.equal(JSON.parse(runHook(entries).stdout).decision, 'block');
+    }
+
+    const erroredClose = [
+        ...openedLoop(),
+        bashCall('close-call', 'open-result', 'close-1', 'qols loop close k1 --outcome accepted'),
+        bashResult('close-result', 'close-call', 'close-1', CLOSED_RECEIPT, true),
+    ];
+    assert.equal(featureLoopPhase(erroredClose), 'review');
+});
+
+test('a receipt in a result that is not from a Bash call is ignored', () => {
+    const entries = [
+        user('stray', null, [{
+            type: 'tool_result',
+            tool_use_id: 'unknown-call',
+            content: [{ type: 'text', text: ARMED_RECEIPT }],
+        }]),
+    ];
+    assert.equal(featureLoopPhase(entries), 'idle');
+});
+
+test('a later open re-arms a closed driver loop', () => {
+    const entries = [
+        ...openedLoop(),
+        bashCall('close-call', 'open-result', 'close-1', 'qols loop close k1 --outcome accepted'),
+        bashResult('close-result', 'close-call', 'close-1', CLOSED_RECEIPT),
+        bashCall('open2-call', 'close-result', 'open-2', 'qols loop open k1-v2 --spec spec.md'),
+        bashResult('open2-result', 'open2-call', 'open-2', ARMED_RECEIPT.replace('k1', 'k1-v2')),
+    ];
+    assert.equal(featureLoopPhase(entries), 'review');
+});
+
+test('Bash output does not change an engine-armed loop', () => {
+    const entries = [
+        bridgeCall('call', null),
+        bridgeResult('result', 'call', '{"completed":true,"completion_marker":"QOL_BRIDGE_DONE_123"}'),
+        bashCall('bash-call', 'result', 'bash-1', 'qols loop run k1', { run_in_background: true }),
+        bashResult('bash-result', 'bash-call', 'bash-1', 'Command running in background with ID: bg-1.'),
+    ];
+    assert.equal(featureLoopPhase(entries), 'review');
+    const waiting = [
+        bridgeCall('call', null),
+        bridgeResult('result', 'call', 'still running; moved to the background'),
+        user('notice', 'result', '<task-notification>done</task-notification>'),
+    ];
+    assert.equal(featureLoopPhase(waiting), 'waiting');
+});
+
+test('receipt helpers accept only complete driver receipts', () => {
+    assert.ok(driverArmReceipt(ARMED_RECEIPT));
+    assert.ok(!driverArmReceipt('{"loop_armed":false}'));
+    assert.ok(driverCloseReceipt(CLOSED_RECEIPT));
+    assert.ok(!driverCloseReceipt('{"loop_closed":true}'));
+    assert.ok(!driverCloseReceipt('{"loop_closed":false,"final_report":{"a":1}}'));
+});
+
+test('a cat of a file containing a receipt does not arm or disarm a driver loop', () => {
+    const catted = [
+        bashCall('cat-call', null, 'cat-1', 'cat plugins/qol-sessions/test/guard-session-feature-loop.test.cjs'),
+        bashResult('cat-result', 'cat-call', 'cat-1', `const R = '${ARMED_RECEIPT}';`),
+    ];
+    assert.equal(featureLoopPhase(catted), 'idle');
+    assert.equal(runHook(catted).stdout, '');
+
+    const echoed = [
+        bashCall('echo-call', null, 'echo-1', 'echo "qols loop open k1"'),
+        bashResult('echo-result', 'echo-call', 'echo-1', ARMED_RECEIPT),
+    ];
+    assert.equal(featureLoopPhase(echoed), 'idle');
+
+    const closeCatted = [
+        ...openedLoop(),
+        bashCall('cat-call', 'open-result', 'cat-1', 'cat notes/close-receipt.json'),
+        bashResult('cat-result', 'cat-call', 'cat-1', CLOSED_RECEIPT),
+    ];
+    assert.equal(featureLoopPhase(closeCatted), 'review');
+    assert.equal(JSON.parse(runHook(closeCatted).stdout).decision, 'block');
+});
+
+test('the real qols loop and loop.mjs open and close commands arm and disarm', () => {
+    const opens = [
+        'qols loop open k1 --spec spec.md',
+        'node plugins/qol-sessions/scripts/loop.mjs open k1 --spec spec.md',
+        'cd /repo && qols loop open k1 --spec spec.md --pretty',
+        'QOLS_HEADLESS_LANES=1 qols loop open k1 --spec spec.md',
+    ];
+    for (const command of opens) {
+        const armed = [
+            bashCall('open-call', null, 'open-1', command),
+            bashResult('open-result', 'open-call', 'open-1', ARMED_RECEIPT),
+        ];
+        assert.equal(featureLoopPhase(armed), 'review', command);
+        assert.equal(JSON.parse(runHook(armed).stdout).decision, 'block', command);
+        const closed = [
+            ...armed,
+            bashCall('close-call', 'open-result', 'close-1', command.replace(' open ', ' close ')),
+            bashResult('close-result', 'close-call', 'close-1', CLOSED_RECEIPT),
+        ];
+        assert.equal(featureLoopPhase(closed), 'idle', command);
+        assert.equal(runHook(closed).stdout, '', command);
+    }
+});
+
+test('runsDriverVerb matches only commands that run the driver verb', () => {
+    assert.ok(runsDriverVerb('qols loop open k1', 'open'));
+    assert.ok(runsDriverVerb('node scripts/loop.mjs close k1 --outcome accepted', 'close'));
+    assert.ok(!runsDriverVerb('qols loop open k1', 'close'));
+    assert.ok(!runsDriverVerb('cat loop.mjs', 'open'));
+    assert.ok(!runsDriverVerb('rg "qols loop open" docs', 'open'));
+    assert.ok(!runsDriverVerb(undefined, 'open'));
+});
+
+function runResult(exit, body) {
+    return [
+        bashCall('run-call', 'open-result', 'run-1', 'qols loop run k1'),
+        bashResult('run-result', 'run-call', 'run-1', exit === 0 ? body : `Exit code ${exit}\n${body}`, exit !== 0),
+    ];
+}
+
+test('driver run exits 11, 13 and 14 are user boundaries that allow the stop', () => {
+    const bodies = {
+        11: '{"result":{"state":"needs_trust","reason":"untrusted"}}',
+        13: '{"result":{"state":"question","question":"which file?"}}',
+        14: '{"result":{"state":"handover","briefs":["/tmp/brief.md"]}}',
+    };
+    for (const [exit, body] of Object.entries(bodies)) {
+        const entries = [...openedLoop(), ...runResult(Number(exit), body)];
+        assert.equal(featureLoopPhase(entries), 'user', exit);
+        const result = runHook(entries);
+        assert.equal(result.status, 0);
+        assert.equal(result.stdout, '', exit);
+    }
+});
+
+test('a driver run after a user boundary blocks the stop again', () => {
+    const entries = [
+        ...openedLoop(),
+        ...runResult(14, '{"result":{"state":"handover"}}'),
+        bashCall('gate-call', 'run-result', 'gate-1', 'qols loop run k1 --gate-only'),
+        bashResult('gate-result', 'gate-call', 'gate-1', '{"result":{"state":"green"}}'),
+    ];
+    assert.equal(featureLoopPhase(entries), 'review');
+    assert.equal(JSON.parse(runHook(entries).stdout).decision, 'block');
+});
+
+test('driver run exit 12 blocks the stop and the text names qols loop verdict', () => {
+    const entries = [...openedLoop(), ...runResult(12, '{"result":{"state":"escalation"}}')];
+    assert.equal(featureLoopState(entries).escalated, true);
+    const output = JSON.parse(runHook(entries).stdout);
+    assert.equal(output.decision, 'block');
+    assert.match(output.reason, /qols loop verdict k1 --blame/);
+    assert.match(output.reason, /exit 12/);
+});
+
+test('driver run exits 0 and 10 keep the plain block text', () => {
+    for (const exit of [0, 10]) {
+        const entries = [...openedLoop(), ...runResult(exit, '{"result":{"state":"green"}}')];
+        const output = JSON.parse(runHook(entries).stdout);
+        assert.equal(output.decision, 'block');
+        assert.doesNotMatch(output.reason, /qols loop verdict/);
+    }
+});
+
+test('a run result without the exit prefix still maps its state to a user boundary', () => {
+    assert.equal(bashExit('{"result":{"state":"handover"}}'), 14);
+    assert.equal(bashExit('{"state":"needs_trust"}'), 11);
+    assert.equal(bashExit('{"result":{"state":"question"}}'), 13);
+    assert.equal(bashExit('{"result":{"state":"escalation"}}'), 12);
+    assert.equal(bashExit('Exit code 10\n{}'), 10);
+    assert.equal(bashExit('{"result":{"state":"green"}}'), null);
+    const entries = [
+        ...openedLoop(),
+        bashCall('run-call', 'open-result', 'run-1', 'qols loop run k1'),
+        bashResult('run-result', 'run-call', 'run-1', '{"result":{"state":"handover"}}'),
+    ];
+    assert.equal(featureLoopPhase(entries), 'user');
+});
+
+test('a foreign pending checkpoint without an initiator cannot release a driver loop', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'guard-foreign-store-'));
+    try {
+        const store = path.join(root, 'pending-bridge');
+        writeCheckpoint(store, 'foreign.json', {
+            session: 'other',
+            driver: 'someone-else',
+            completion_marker: 'QOL_BRIDGE_DONE_X',
+            completed: false,
+            closed: false,
+        });
+        const pending = runHook(openedLoop(), { checkpoint_dir: store });
+        assert.equal(JSON.parse(pending.stdout).decision, 'block');
+
+        fs.rmSync(store, { recursive: true });
+        writeCheckpoint(store, 'closed.json', {
+            session: 'other',
+            driver: 'someone-else',
+            completion_marker: 'QOL_BRIDGE_DONE_Y',
+            completed: true,
+            closed: true,
+        });
+        const closedStore = runHook(openedLoop(), { checkpoint_dir: store });
+        assert.equal(JSON.parse(closedStore.stdout).decision, 'block');
+    } finally {
+        fs.rmSync(root, { recursive: true });
+    }
+});
+
+test('a pretty close line disarms the driver loop', () => {
+    const entries = [
+        ...openedLoop(),
+        bashCall('close-call', 'open-result', 'close-1', 'qols loop close k1 --outcome accepted --pretty'),
+        bashResult('close-result', 'close-call', 'close-1', 'loop k1 closed accepted: 2 attempts, gate clean\nkept worktree /tmp/wt\nremaining: None.'),
+    ];
+    assert.equal(featureLoopPhase(entries), 'idle');
+    assert.equal(runHook(entries).stdout, '');
+});
+
+test('a pretty open line arms the driver loop', () => {
+    const entries = openedLoop('loop k1 armed on abcdef123456 via handover\n  worktree 1: /tmp/wt (loop-k1)');
+    assert.equal(featureLoopPhase(entries), 'review');
+});
+
+test('closing one of two driver loops keeps the stop blocked until the other closes', () => {
+    const closeOf = (key) => JSON.stringify({
+        loop_closed: true,
+        final_report: { outcome: 'accepted', key, attempts: 1, gate: 'clean', remaining: 'None.', worktree: '/tmp/wt' },
+    });
+    const entries = [
+        ...openedLoop(),
+        bashCall('open2-call', 'open-result', 'open-2', 'qols loop open k2 --spec spec.md'),
+        bashResult('open2-result', 'open2-call', 'open-2', JSON.stringify({ loop_armed: true, key: 'k2' })),
+        bashCall('close-call', 'open2-result', 'close-1', 'qols loop close k1 --outcome accepted'),
+        bashResult('close-result', 'close-call', 'close-1', closeOf('k1')),
+    ];
+    assert.equal(featureLoopPhase(entries), 'review');
+    assert.deepEqual(featureLoopState(entries).keys, ['k2']);
+    assert.equal(JSON.parse(runHook(entries).stdout).decision, 'block');
+
+    const both = [
+        ...entries,
+        bashCall('close2-call', 'close-result', 'close-2', 'qols loop close k2 --outcome accepted'),
+        bashResult('close2-result', 'close2-call', 'close-2', closeOf('k2')),
+    ];
+    assert.equal(featureLoopPhase(both), 'idle');
+    assert.equal(runHook(both).stdout, '');
 });

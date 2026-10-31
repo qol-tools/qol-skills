@@ -377,3 +377,16 @@ test('conversation reads the pull request, its threads and the issues the author
         fs.rmSync(bin, { recursive: true, force: true });
     }
 });
+
+test('renderComment draws a Shape line that pr-watch parses, only for findings that carry a shape', () => {
+    const shaped = REVIEW.replace(
+        "\"id\": \"security-1\"",
+        "\"id\": \"security-1\",\n          \"shape\": \"unwrap-in-daemon-loop\"",
+    );
+    const body = renderComment({ ...BASE, markdown: shaped });
+    const shapeLine = /^\*\*Shape:\*\* `([^`]+)`/;
+    const shapes = body.split('\n').map((line) => shapeLine.exec(line)?.[1]).filter(Boolean);
+    assert.deepStrictEqual(shapes, ['unwrap-in-daemon-loop']);
+    assert.ok(body.includes('**Action:** Allow only | Read\n\n**Shape:** `unwrap-in-daemon-loop`'));
+    assert.ok(!renderComment({ ...BASE, markdown: REVIEW }).includes('**Shape:**'));
+});
