@@ -825,6 +825,16 @@ Counts are compared before and after the edit, so existing uses (the launcher an
 
 Residual: the guard sees tokens, not data flow. It misses a kit opener that ranks another value above the signal without building an `ActiveMonitor` or calling `remembered_monitor`, a cross-process open that carries no monitor (the settings POST), and the tray's own focus and cursor stamping. Placement tests in `libs/gpui/tests/placement.rs` and guest runs cover those.
 
+### Enforcement: tool-match guard
+
+Per-tool behavior lives in the strategy for that tool. A `match` on the tool in shared code is a second registry that drifts from the facade, so every new harness would have to be added in two places and the second one is the one that gets forgotten.
+
+`bin/check-qol-arch-code.cjs` enforces this at edit time for Rust under `/libs/terminal-sessions/src/cli/` and `/plugins/cli-sessions/src/`. The shape is `match tool {` or `match <name>.tool {` (the regex `\bmatch\s+(?:[a-zA-Z_]\w*\.)?tool\s*\{`), so `match s.tool {`, `match session.tool {` and `match tool{` are denied, while `match status {`, `match toolbox {`, `match tool_name {` and `if tool == Tool::Pi {` pass. Exempt paths are `/builtins/` (the strategies themselves), `/tests/`, `/test/` and `/session/tool.rs` (the one tool-keyed completion policy table).
+
+It denies an edit that raises the count of such matches in a file above the count in the file's baseline, with the message "tool match violation". Move the variant behavior into `builtins/<tool>/`, a registered strategy or a `platform/<variant>/` module and consume the facade. Existing matches only block when they grow, and `qac lint` lists them all. Bypass one edit with `touch .claude/bypass-qol-arch-code`. The cli-sessions law that this guard serves is "Naming and per-tool backends" in `qol-plugin-cli-sessions`.
+
+Residual: the guard sees the token shape only. A chain of `if tool == ..` comparisons, a `matches!(tool, ..)`, a `match` on a binding that was copied out of the tool (`let kind = session.tool; match kind {`), a table keyed by tool outside `session/tool.rs`, and code outside the two scoped roots pass. Review catches those.
+
 ### Enforcement: owner guard
 
 A concept with one owner is named only through that owner. The repo declares its owners in `.qac/owners.json` at its root; each entry names the owner folder, what to use instead, and the exceptions. A test in the owning crate fails when the entry disagrees with the owner's own definition, so the rule is derived from the code it protects, not from a list typed into this hook. With no `.qac/owners.json`, the guard does nothing.
@@ -883,7 +893,7 @@ CI runs `qac lint --base=<merge base>` over the whole repo, so rules about the c
 A rule goes in one kind or the other, never both: a new rule reads `readBaseline` only when it is about added code. A missing entry, file or link is a fact about the code as it stands, never added code: comparing it with a base keeps every instance already on main.
 `#[cfg(target_os)]` on a `use` outside `platform/` is owned by qol-arch-cross-platform; qol-arch-code leaves those lines to it so one line is never two findings.
 
-Type `qac lint` as a bare prompt (the `hooks/qac-intercept.mjs` typed-verb hook answers with no model turn), run `/qac [path ...]`, or call `node scripts/qac.mjs lint --pretty`. Without `--pretty` it prints JSON; exit 0 is clean, 1 has findings, 2 is a bad verb, 3 is outside a git repository, 4 is a slip whose lane could not be forked.
+Type `qac lint` as a bare prompt (the `hooks/qac-intercept.mjs` typed-verb hook answers with no model turn), run `/qac [path ...]`, or call `node scripts/qac.mjs lint --pretty`. Without `--pretty` it prints JSON; exit 0 is clean, 1 has findings, 2 is a bad verb, 3 is outside a git repository, 4 is a slip whose lane could not be forked, 5 is a gate that could not judge, 6 is a gate where only flaky judges failed.
 
 While it runs, it writes `$XDG_RUNTIME_DIR/agent-progress/qac.json` (the spool softwords uses), so the claude-statusline bar shows files done out of total and then the finding count for ten seconds. Every run writes a self-contained HTML report to `$XDG_RUNTIME_DIR/qac/<repo>.html`: a filterable list of flagged files beside a code view that highlights each violating line with its note inline, located from the hook's `line N` references or its exported `LOCATORS` patterns (`src/locate.mjs`). `--open` (on for the prompt hook and `/qac`) opens it in the default web browser rather than the `text/html` handler, so the console only gets one summary line.
 
@@ -898,6 +908,29 @@ A pattern's first sight forks a claude lane with `qol sessions fork` (the `opus`
 Later sightings only count, so one pattern never gets two lanes; a fork that failed is retried on the next sighting.
 The lane ends with `qac slip <pattern> --added`, or with `--infeasible <reason>` when no deterministic rule can see the pattern, and an infeasible pattern is never forked for again.
 `qac slips` lists every pattern with its status. Help and exit codes: `qac help`.
+
+### Gate: `qac gate`
+
+`qac gate` is the verdict a feature loop waits for.
+It runs the repo's judges over the working tree, compares the findings with a baseline, checks that nobody weakened the checks, and writes `gate.json` plus per-judge logs to `--out` (default `<git-common-dir>/qac/last-gate`).
+The judges come from `.qac/judges.json` as committed at `--base` (default `HEAD`), never from the working tree, so an agent cannot edit its own judges; without one in the repo, the per-user file `$XDG_CONFIG_HOME/qac/judges/<repo_id>.json` is used, and without either the verdict is `could_not_judge` with `no judges: run qac init`.
+Run `qac init` once per repo to write a starter config, and `qac init --exclude` to keep it out of the repository.
+
+Trust comes before execution: a judge, setup or `--accept` command runs only after a person ran `qac trust approve`, which records the config's hash in `$XDG_STATE_HOME/qac/trust.json` (default `~/.local/state`).
+`--accept` commands that start with one of the config's `accept_prefixes` need no approval.
+An agent never runs `qac trust approve` for itself; `qac trust` alone reports what is still untrusted and exits 1.
+
+Read the verdict, not the exit code alone:
+- `findings`: a judge failed on something that was not already in the `--baseline`, or a tamper entry exists (a suppression added, a test deleted or moved out of the test globs, a file hidden by a local exclude, a protected file or file outside `--owned` changed, a spec whose hash moved). Fix the code; never the check.
+- `flaky_only`: a test judge failed and then passed on a rerun, so it proves nothing either way. Treat it as infrastructure, not as green.
+- `could_not_judge`: setup failed, a command is untrusted, a judge could not start, or there is no config. The code was not judged at all.
+- `clean`: every judge that ran passed. Judges marked `where: "ci"` are listed in `omitted` and did not run.
+
+Findings carry a `fingerprint` that stays the same across line moves and renamed values.
+`--exclude-fingerprint` drops one finding when the judge, not the code, is wrong.
+When the same fingerprint is caught on the first attempt in several separate loops, `qac traps` lists it: the agents keep walking into it, so `qac slip --fingerprint <fp> --from <source>` records it and a rule lane is forked once it was seen in two loops.
+Findings from judges that only report an exit code are not promotable to a rule.
+Flags, defaults and exit codes: `qac help --pretty`.
 
 ## Sibling skills
 

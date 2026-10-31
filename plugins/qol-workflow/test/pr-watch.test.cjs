@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { classify, parseReview, parseArgs, parseTarget, attachLogs, cleanLogLine, render, watch, EXIT } = require('../bin/pr-watch.cjs');
+const { classify, parseReview, parseArgs, parseTarget, attachLogs, cleanLogLine, render, watch, followUps, EXIT } = require('../bin/pr-watch.cjs');
 
 function pr({ state = 'OPEN', draft = false, checks = [], merge = 'BLOCKED', auto = true, armed = '2026-10-08T10:00:00Z', queued = false, events = [], committed = '2026-10-08T10:00:00Z', comments = [] } = {}) {
     return {
@@ -300,4 +300,82 @@ test('a failed check wins over a review and still carries it', () => {
     assert.equal(verdict.outcome, 'failed');
     assert.equal(verdict.review.fix_commit, FIX);
     assert.match(render({ pr: 7, ...verdict, failures: [] }), /pull it before your next push/);
+});
+
+const REVIEW_SHAPES = `${REVIEW_LEFT.trimEnd()}
+
+#### High · 2
+
+<details><summary>Unwrap in the daemon loop</summary>
+
+\`correctness-1\`
+
+**Shape:** \`unwrap-in-daemon-loop\`
+
+**Action:** use the error path
+
+</details>
+
+<details><summary>Wrong default</summary>
+
+\`correctness-2\`
+
+**Action:** change it
+
+</details>
+
+#### Settled · 1
+
+<details><summary>Rail rows squeeze</summary>
+
+\`ui-2\`
+
+**Shape:** \`rail-rows\`
+
+</details>
+`;
+
+test('parseReview attaches a shape to the finding it sits in and leaves the others bare', () => {
+    const review = parseReview(REVIEW_SHAPES, 'https://c');
+    assert.deepEqual(review.findings, [
+        { severity: 'high', title: 'Unwrap in the daemon loop', status: 'open', shape: 'unwrap-in-daemon-loop' },
+        { severity: 'high', title: 'Wrong default', status: 'open' },
+        { severity: 'settled', title: 'Rail rows squeeze', status: 'settled', shape: 'rail-rows' },
+    ]);
+});
+
+test('followUps on a review prints one qac slip line per shaped finding and none for settled ones', () => {
+    const verdict = classify(pr({ comments: [bot(REVIEW_SHAPES)] }), SINCE);
+    const report = { pr: 7, url: 'https://github.com/o/r/pull/7', ...verdict };
+    assert.equal(verdict.outcome, 'review');
+    assert.deepEqual(followUps(EXIT.review, report), [
+        'qac slip --from https://github.com/o/r/pull/7 --route qac-check "unwrap-in-daemon-loop"',
+    ]);
+});
+
+test('followUps strips quoting characters from a shape and stays silent without shapes', () => {
+    const review = { findings: [{ severity: 'high', title: 't', status: 'open', shape: 'a"b$(c)`d' }] };
+    assert.deepEqual(followUps(EXIT.review, { url: 'https://u', review }), ['qac slip --from https://u --route qac-check "ab(c)d"']);
+    assert.deepEqual(followUps(EXIT.review, { url: 'https://u', review: { findings: [{ severity: 'high', title: 't', status: 'open' }] } }), []);
+    assert.deepEqual(followUps(EXIT.review, { url: 'https://u' }), []);
+});
+
+test('followUps on a failed CI run asks the architect to record a miss from the run url', () => {
+    const failures = [
+        { name: 'gate', url: 'https://github.com/o/r/actions/runs/1/job/2' },
+        { name: 'lint', url: 'https://github.com/o/r/actions/runs/1/job/3' },
+    ];
+    assert.deepEqual(
+        followUps(EXIT.failed, { url: 'https://u', failures }),
+        ['If the local gate had passed, record the miss: qac slip --from https://github.com/o/r/actions/runs/1/job/3 "<what slipped>"'],
+    );
+    assert.equal(followUps(EXIT.failed, { failures: [failures[0]] })[0].includes('/job/2'), true);
+    assert.deepEqual(followUps(EXIT.failed, { failures: [] }), []);
+    assert.deepEqual(followUps(EXIT.failed, { failures: [{ name: 'lint' }] }), []);
+});
+
+test('followUps prints nothing for any other exit', () => {
+    for (const code of [EXIT.merged, EXIT.usage, EXIT.missing, EXIT.gh, EXIT.timeout, EXIT.idle]) {
+        assert.deepEqual(followUps(code, { url: 'u', failures: [{ name: 'x', url: 'y' }], review: { findings: [{ severity: 'high', shape: 's' }] } }), []);
+    }
 });

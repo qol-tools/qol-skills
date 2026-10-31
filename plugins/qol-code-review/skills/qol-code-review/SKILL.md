@@ -325,6 +325,7 @@ Also include a machine-parseable block for downstream CI or follow-up agents:
       "confidence": "high",
       "file": "path/to/file",
       "line": 42,
+      "shape": "unwrap-in-daemon-loop",
       "required_action": "Concrete action"
     }
   ],
@@ -344,6 +345,8 @@ Also include a machine-parseable block for downstream CI or follow-up agents:
   "verification": []
 }
 ```
+
+`shape` is optional: a short lowercase slug naming the code shape behind the defect (`unwrap-in-daemon-loop`, `println-outside-cli`), written only when the defect is an instance of a pattern a deterministic check could catch. Leave it out for a defect that is specific to this change. The CI comment draws it as a `**Shape:**` line in the finding, which `pr-watch` turns into a `qac slip` command on exit 7.
 
 Required rule: security/correctness/release blockers must appear before any lower-priority notes.
 
@@ -392,7 +395,8 @@ A `conditional` or `block` verdict on a change the session delivers is a work li
 5. Do not fix a finding that argues with a decision the user or owner made on purpose, such as a look, a layout or a scope cut. List it as settled with the decision; on a pull request, state the decision in a comment so the CI review settles it too.
 6. A finding that only the user can decide (design, scope, a trade-off with no evidence either way) goes to the user, or to the parent with `session_send` kind `ask` in a fork or lane. Fix every other finding meanwhile; one open question never holds the round.
 7. Add or flip the test each finding names, then run the repository's gate on the result, and commit on the reviewed branch under the repository's commit rules. For a pull request, push and park on the watcher: the CI review re-reviews the push, so no second local board runs. Without a pull request, rerun each fixed finding's repro instead.
-8. Report one line per finding, `fixed` or `skipped` with the reason, in the same shape the CI fix session uses:
+8. Record each fixed finding that carries a `shape`: run `qac slip --from <pull-request-url, or the review path without one> --route qac-check "<shape>"` once per distinct shape. A shape the local gate already catches needs no slip, so skip it when `qac gate` reported that fingerprint.
+9. Report one line per finding, `fixed` or `skipped` with the reason, in the same shape the CI fix session uses:
 
    ```json
    {"fixes": [{"id": "architecture-1", "status": "fixed", "note": "What changed, in one line"}, {"id": "quality-2", "status": "skipped", "note": "Why it was left"}]}

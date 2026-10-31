@@ -56,6 +56,9 @@ const { inQolRepo } = require('./qol-repo.cjs');
 const INSPECTED_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 const OS_BASENAMES = new Set(['linux.rs', 'macos.rs', 'windows.rs']);
 const TESTS_PATH_RE = /[\\/]tests[\\/]/;
+const TOOL_MATCH = /\bmatch\s+(?:[a-zA-Z_]\w*\.)?tool\s*\{/;
+const TOOL_MATCH_ROOTS = ['/libs/terminal-sessions/src/cli/', '/plugins/cli-sessions/src/'];
+const TOOL_MATCH_EXEMPT = ['/builtins/', '/tests/', '/test/', '/session/tool.rs'];
 const EXAMPLES_PATH_RE = /[\\/]examples[\\/]/;
 const PLUGIN_ROOT_RUST_FILES = new Set(['main.rs', 'lib.rs', 'cli.rs']);
 const QOL_TRAY_ROOT_RUST_FILES = new Set(['main.rs', 'lib.rs']);
@@ -1487,6 +1490,37 @@ function findNewOwnerViolations(filePath, newContent) {
     return violations.length > 0 ? { relative, violations } : null;
 }
 
+function toolMatchScope(filePath) {
+    const normalized = filePath.replace(/\\/g, '/');
+    if (!TOOL_MATCH_ROOTS.some(root => normalized.includes(root))) return false;
+    return !TOOL_MATCH_EXEMPT.some(exempt => normalized.includes(exempt));
+}
+
+function countToolMatches(content) {
+    return (content.match(new RegExp(TOOL_MATCH.source, 'g')) || []).length;
+}
+
+function findNewToolMatches(filePath, newContent) {
+    if (!toolMatchScope(filePath)) return false;
+    return countToolMatches(newContent) > countToolMatches(readBaseline(filePath) || '');
+}
+
+function blockToolMatch(filePath) {
+    lintMode.report(process.stderr, `qol-arch-code tool match violation in ${filePath}.
+
+A \`match\` on the tool in shared code is a second registry that drifts from the
+facade; per-tool behavior belongs in the backend for that tool.
+
+Move the variant behavior into a backend module (builtins/<tool>/name.rs,
+platform/<variant>/, a registered strategy) and consume the facade.
+
+Reference: qol-plugin-cli-sessions skill, "Naming and per-tool backends".
+
+Bypass for this edit only:
+  touch .claude/bypass-qol-arch-code
+`);
+}
+
 function blockEvents(filePath, violations) {
     lintMode.report(process.stderr, `qol-arch-code runtime event violation in ${filePath}.
 
@@ -1568,6 +1602,11 @@ function evaluate(payload) {
     const eventViolations = deadlineContent ? findNewEventViolations(filePath, deadlineContent) : [];
     if (eventViolations.length > 0 && !consumeBypass(cwd, filePath, basename)) {
         blockEvents(filePath, eventViolations);
+        return 2;
+    }
+
+    if (deadlineContent && findNewToolMatches(filePath, deadlineContent) && !consumeBypass(cwd, filePath, basename)) {
+        blockToolMatch(filePath);
         return 2;
     }
 
@@ -1660,6 +1699,7 @@ const LOCATORS = [
     { label: 'platform token + storage/path routing', re: PLATFORM_TOKEN },
     { label: 'platform token + branching', re: PLATFORM_TOKEN },
     { label: 'compile_error!', re: COMPILE_ERROR },
+    { label: 'match on the tool in shared code', re: TOOL_MATCH },
     ...TEST_DEADLINE_SIGNALS.map(signal => ({ label: signal.label, re: signal.pattern })),
     { label: 'production deadline shortened under #[cfg(test)]', re: TEST_OVERRIDE_CONST },
 ];

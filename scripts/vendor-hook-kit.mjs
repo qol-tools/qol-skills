@@ -8,7 +8,7 @@ const HEADER = /^\/\/ @generated hook-kit ([\w-]+)\.mjs sha256:([0-9a-f]{64}) /;
 const SKIP = new Set(["_kit", "node_modules", ".git"]);
 
 export function header(module, hash) {
-  return `// @generated hook-kit ${module}.mjs sha256:${hash} - do not edit; change qol-skills/kit-src/hook-kit, then run vs vendor`;
+  return `// @generated hook-kit ${module}.mjs sha256:${hash} - do not edit; change qol-skills/kit-src/hook-kit, then run its scripts/vendor-hook-kit.mjs`;
 }
 
 export function sha256(text) {
@@ -60,11 +60,12 @@ function label(file, module, want, have, kit) {
   return "ok";
 }
 
-export function vendorState(root) {
-  const kitDir = path.join(root, "kit-src", "hook-kit");
+export function vendorState(root, kitRoot = root) {
+  const kitDir = path.join(kitRoot, "kit-src", "hook-kit");
   const kit = new Map(modules(kitDir).map((module) => [module, readFileSync(path.join(kitDir, `${module}.mjs`), "utf8")]));
-  const consumers = JSON.parse(readFileSync(path.join(kitDir, "consumers.json"), "utf8"));
   const pluginsDir = path.join(root, "plugins");
+  const consumers = JSON.parse(readFileSync(path.join(kitDir, "consumers.json"), "utf8"))
+    .filter((plugin) => existsSync(path.join(pluginsDir, plugin)));
   const vendored = existsSync(pluginsDir)
     ? readdirSync(pluginsDir).filter((plugin) => existsSync(path.join(pluginsDir, plugin, "hooks", "_kit")))
     : [];
@@ -88,8 +89,8 @@ export function vendorState(root) {
   return entries;
 }
 
-function check(root) {
-  const entries = vendorState(root);
+function check(root, kitRoot) {
+  const entries = vendorState(root, kitRoot);
   const drift = entries.filter((entry) => entry.label !== "ok");
   for (const entry of drift) console.log(`${entry.label} ${entry.rel}`);
   if (drift.length > 0) {
@@ -100,10 +101,10 @@ function check(root) {
   return 0;
 }
 
-function vendor(root) {
+function vendor(root, kitRoot) {
   let status = 0;
   let changed = 0;
-  for (const entry of vendorState(root)) {
+  for (const entry of vendorState(root, kitRoot)) {
     if (entry.label === "ok") continue;
     changed += 1;
     if (entry.label === "orphan") {
@@ -123,7 +124,8 @@ function vendor(root) {
 }
 
 function main(argv) {
-  let root = fileURLToPath(new URL("..", import.meta.url));
+  const kitRoot = fileURLToPath(new URL("..", import.meta.url));
+  let root = kitRoot;
   let mode = vendor;
   for (let index = 0; index < argv.length; index += 1) {
     if (argv[index] === "--check") mode = check;
@@ -133,7 +135,8 @@ function main(argv) {
       return 2;
     }
   }
-  return mode(path.resolve(root));
+  const target = path.resolve(root);
+  return mode(target, existsSync(path.join(target, "kit-src", "hook-kit")) ? target : kitRoot);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

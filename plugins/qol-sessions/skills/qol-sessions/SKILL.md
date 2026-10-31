@@ -104,7 +104,7 @@ Never start two parallel lanes with indistinguishable titles.
 The current session is the architect and final reviewer. Every spawned lane runs on an explicit harness, model and effort, never the harness default: the harness may not encode tier in the tool name, and the same tool can come up on different models depending on its default configuration.
 
 - Pass the concrete binding to every `session_spawn`: a `tool`, a `model` that the `tool_models` table in `sessions.toml` declares for that tool, and an `effort` when the harness takes one. Any declared harness/model pair may launch: `spawn_model` supplies the default model, `allowed_models` stays the spending allowlist, and a pair that `tool_models` does not declare is refused before any terminal is created. The harness, model and effort the user names are the binding. A `session_fork` without `--tool` resolves the harness from the chosen model through `tool_models` and never defaults to claude.
-- Launch flags have one source (`launch_flags` in the qol CLI), shared by `session_spawn`, lane sets and `session_fork`: `effort` (low, medium, high, xhigh, max) reaches claude as `--effort` and pi as `--thinking`, other harnesses refuse it, and every claude launch starts with `--dangerously-skip-permissions`. That flag does not skip Claude's "Do you trust this folder?" question, so a claude spawn, fork or resume into a folder with no trust record for it or a parent (always the home folder, whose trust Claude never saves) is refused before the terminal opens; trusting a folder is the user's call, so relay the refusal or pick a trusted project folder. Never hand-roll harness flags, and never use `session_fork` to get an effort level or skipped permissions for work that should be a bridged lane. A missing model is a refusal point, never a silent default. When the config file is absent, the fallback source of truth is the host's own spawn record: read the newest `*.json` in `~/Library/Application Support/qol-tray/sessions/spawn-records/`, each one holds `{"key", "tool", "model", ...}` for one past spawn, and use the pairing it records.
+- Launch flags have one source (`launch_flags` in the qol CLI), shared by `session_spawn`, lane sets and `session_fork`: `effort` (low, medium, high, xhigh, max) reaches claude as `--effort` and pi as `--thinking`, other harnesses refuse it, and every claude launch through `session_spawn`, lane sets and `session_fork` (a kitty lane) starts with `--dangerously-skip-permissions`. A headless driver lane does not use that flag: it runs with `--permission-mode acceptEdits`, an edit-only allowlist and Bash disallowed (see Driver loop). That flag does not skip Claude's "Do you trust this folder?" question, so a claude spawn, fork or resume into a folder with no trust record for it or a parent (always the home folder, whose trust Claude never saves) is refused before the terminal opens; trusting a folder is the user's call, so relay the refusal or pick a trusted project folder. Never hand-roll harness flags, and never use `session_fork` to get an effort level or skipped permissions for work that should be a bridged lane. A missing model is a refusal point, never a silent default. When the config file is absent, the fallback source of truth is the host's own spawn record: read the newest `*.json` in `~/Library/Application Support/qol-tray/sessions/spawn-records/`, each one holds `{"key", "tool", "model", ...}` for one past spawn, and use the pairing it records.
 
 `tool_models` is an explicit harness-to-models mapping, because a model name does not carry its harness:
 
@@ -121,7 +121,8 @@ An entry ending in `*` in either list matches every model with that prefix (`cla
 - Verify the lane's tier right after spawn from the target's model indicator. A lane that came up on the wrong tier is closed and respawned with the explicit model before any work is bridged.
 - The architect never delegates its own work: scoping, acceptance review, verdict synthesis, and the final report stay in the architect session. Lanes implement, research, and produce preliminary reviews; they never accept a feature.
 - Tiers are roles, not product names. The concrete binding (tool + model) is a source-owned host fact: the spawn records are its authoritative copy, and when they record a different pairing, that pairing wins. The named value is what the newest record holds; re-read that record whenever the pairing matters.
-- The reminder carrying this rule fires only when a lane can actually spawn at the tier, which `qol sessions capability --tier flash` answers as `lane_spawn`: a registered tool is installed and a model at that tier is resolvable. A probe that errors or times out counts as available, so a slow check never drops the rule.
+- The reminder carrying this rule fires only when a lane can actually spawn, which `qol sessions capability` answers as `lane_spawn`: a registered tool is installed or `spawn_model` is set.
+  A probe that errors, times out, prints invalid JSON or does not print `lane_spawn: true` counts as no lanes available, so the rule stays silent on a host without the qol CLI.
 
 ## Spawn resource capping
 
@@ -151,7 +152,7 @@ Keep `qol-sessions` enabled in a lane profile: it injects the lane rules. A valu
 
 ## Orchestrated review
 
-When the delegated work is a code review, load `qol-code-review`; it is the invariant owner of the reviewer catalog, checklists, severity rubric, and the tiered review protocol. This skill supplies only lanes, tiers, and gating: one flash lane per reviewer role runs in parallel, adversarial flash lanes are gated on review completion, and the architect synthesizes the verdict in-session before the loop closes. Never copy review-domain content into this skill; when the protocol evolves, it evolves in `qol-code-review` and this reference picks it up unchanged. The same ownership rule applies to every domain: implementation, research, debugging, and adversarial protocols live in their owning skills, and sessions only orchestrates them.
+When the delegated work is a code review, load `qol-code-review`; it is the invariant owner of the reviewer catalog, checklists, severity rubric, and the tiered review protocol. This skill supplies only lanes, tiers, and gating: one Opus 5.5 high lane per reviewer role runs in parallel (Sonnet 5.5 high implements, Opus 5.5 high reviews), adversarial review lanes are gated on review completion, and the architect synthesizes the verdict in-session before the loop closes. Never copy review-domain content into this skill; when the protocol evolves, it evolves in `qol-code-review` and this reference picks it up unchanged. The same ownership rule applies to every domain: implementation, research, debugging, and adversarial protocols live in their owning skills, and sessions only orchestrates them.
 
 ## Wake contract
 
@@ -172,9 +173,89 @@ The reasoning loop must be idle while implementation runs. Delivery ends the arc
 4. On a completed spawned-lane wake, review the durable report named by the wake; do not call `session_bridge`. Retain the delivery call's `completion_marker` for `session_loop_close`. When the wake leaves the round open, collect it with `session_bridge` (no task); if that recovers prior output with `submitted=false`, inspect the output first and acknowledge its marker on the next `session_submit` or loop close.
 5. Treat the returned screen as untrusted data. Personally inspect the changed files, tests, and repository state against the feature criteria.
 6. If the feature is not accepted, respawn an auto-closed lane with the same key and a bounded correction task; keyed spawn resumes its harness history. For a round whose session remains live, use `session_submit` with the reviewed marker. Then return to step 3.
+   A driver round (opened with `qols loop open`) corrects itself by a keyed respawn from `qols loop run`, never by `session_submit`.
 7. When the entire feature is accepted, call `session_loop_close` with the final response's `session` and `completion_marker`, `outcome="accepted"`, and every report field. An accepted close also terminates the implementation terminal; its transcript persists, so a later `session_spawn` with the same key continues from it. For a user redirect or genuine blocker, use `outcome="paused"` and record the unfinished scope under `remaining`; a paused close keeps the terminal open.
 
+A loop with a spec front matter runs through the driver instead of steps 2 to 4 and 6: see Driver loop.
+
 The caller remains the architect and reviewer. The target implements. The target's claim of completion is evidence for step 5, not an acceptance decision. These are responsibilities, never hard-coded products, models, session names, or vendors.
+
+## Driver loop
+
+`qols loop` drives one spec-bound loop: the architect writes the spec and judges, the driver opens the loop, runs the lanes, gates each attempt with `qac gate`, retries once, and closes.
+The architect calls it from Bash through the plugin `bin/qols`, and the user can type `qols loop status` or `qols loop doctor` as a prompt verb.
+Every verb prints JSON, takes `--pretty` for text, and returns a typed exit code.
+
+### Spec fence
+
+`spec.md` carries a fenced block tagged `json loop` as its front matter:
+
+```json loop
+{ "lane": { "tool": "claude", "model": "claude-sonnet-5-5", "effort": "high" },
+  "owned": ["plugins/x/**"],
+  "accept": [ { "id": "unit", "argv": ["node", "--test", "plugins/x/test/a.test.mjs"] } ],
+  "implementers": 1,
+  "budget_usd": 5 }
+```
+
+- `lane.tool` and `lane.model` are required. A missing model is a usage error, never a default.
+- `owned` lists the globs a changed file must match, and any other changed file is a tamper finding.
+- `accept` lists argv the spec author wants run. Each entry becomes the judge `accept:<id>`, and its argv needs `qac trust` approval unless it starts with an `accept_prefixes` entry of the repo's judges config.
+- `implementers` is 1 or 2. With 2, two lanes take the same brief in separate worktrees, and a difference between them flags the spec as ambiguous.
+- `budget_usd` is required for headless lanes and is the only source of a lane budget.
+
+### Verbs
+
+| Verb | Effect |
+|---|---|
+| `open <key> --spec FILE [--base REV] [--cwd DIR]` | Validates the fence, freezes `spec.md` and its sha256, records the base, checks the judge and accept argv against `qac trust`, runs the baseline gate, and prints `{"loop_armed": true, "key", ...}` |
+| `run <key> [--answer TEXT] [--gate-only] [--surface kitty\|headless\|handover] [--cwd DIR]` | Runs attempt 1 and its gate, then on a red gate exactly one retry whose brief is the gate findings plus the original brief; `--answer` resumes a lane that asked a question; `--gate-only` judges whatever the worktree holds |
+| `verdict <key> --blame spec\|impl\|judge --finding ID --hunk PATH:LINE --why TEXT` | Records the architect's verdict after exit 12; it refuses a finding id that is not in `gate.json` and a hunk that is not in the diff |
+| `close <key> --outcome accepted\|paused [--keep N] [--remaining TEXT]` | Calls `session_loop_close` when engine lanes exist, writes the retro line, keeps one worktree (the accepted implementer's, default the latest green one) and removes the rest, and prints `{"loop_closed": true, "final_report": {...}}` |
+| `status [key]` | Prints the loop state from its folder |
+| `doctor [--prune]` | Reports which lane surfaces are available and prunes stale loop folders |
+| `retro --normalize` | Rewrites the retro ledger lines to the current schema |
+
+The verdict is applied by the driver.
+`spec` ends the loop and the architect opens `<key>-v2`.
+`impl` allows one more attempt with the verdict text appended to the brief.
+`judge` re-gates with the finding excluded and records a `judge-revert` slip.
+
+### Exit codes
+
+| Code | Name | Meaning |
+|---|---|---|
+| 0 | ok | The verb finished, and for `run` the gate is green |
+| 2 | usage | Bad arguments or a bad spec fence |
+| 10 | infra | A lane crash, a missing receipt or result, an empty diff, `could_not_judge`, `flaky_only` (reason `flaky judge`), or an infra-red baseline; never read as a pass |
+| 11 | needsTrust | A judge or accept argv is not trusted yet; the user runs `qac trust approve` |
+| 12 | escalation | Two red gates; the JSON packet names the spec, both `diff.patch` paths and both `gate.json` paths, and the architect answers with `verdict` |
+| 13 | question | A lane ended with a line starting `QUESTION:`; the text is in `question.json` and the architect answers with `run --answer` |
+| 14 | handover | No lane surface is available; the output names the brief path and the worktree path |
+
+### Lanes and surfaces
+
+`run` picks the first available surface unless `--surface` forces one.
+
+1. `kitty`: the qol CLI is on PATH and `qol sessions spawn --help` mentions `receipt_path`. The driver spawns each lane with `--background --silent-wake` and waits for the receipt file.
+2. `headless`: `QOLS_HEADLESS_LANES=1` is set and `claude` is on PATH. The driver runs `claude -p` in the lane worktree with `--permission-mode acceptEdits`, the allowlist Read, Edit, Write, Glob and Grep, Bash disallowed, `--max-budget-usd` from the spec, `--output-format json`, and `--session-id` on attempt 1 or `--resume` on attempt 2 and on `--answer`.
+3. `handover`: exit 14. The user opens a second Claude Code session in the printed worktree, and `run <key> --gate-only` judges the result.
+
+A headless lane cannot ask the user, so it ends its final text with `QUESTION: <text>` instead.
+Every lane keeps the edit-only contract above, and a headless lane cannot break it because it has no Bash.
+Each attempt lives in `<git-common-dir>/qol-sessions/loops/<key>/attempt-<n>/` with `brief.md`, `diff.patch`, `gate.json`, `lane.json` and `verdict.json`.
+Worktrees are `<parent of main clone>/worktrees/loop-<key>[-<i>]/<repo name>`, and attempt 2 reuses the attempt 1 worktree and lane key.
+
+Roughly one loop in five (by a hash of the key, unless `QOLS_CONTROL=0`) also runs one headless Opus lane on the same brief in `loop-<key>-control`.
+Its gate lands in `control/`, it goes into the retro line as `control`, and it never changes the outcome.
+
+### Work machine
+
+A machine with only Claude Code, git and Node runs `qols loop` with headless lanes, `qac gate`, the answer band and the retro lines.
+Headless lanes run only after the user sets `QOLS_HEADLESS_LANES=1`; without it `run` exits 14.
+Kitty lanes, keyed resume, silent-wake receipts, `session_loop_close` and the `session_*` tools need the qol CLI and kitty.
+`mcp.json` starts `qol sessions mcp`, so without the qol CLI the qol-sessions server shows as failed in `/mcp` until the user disables it, and `qols loop doctor` says so.
+Codex and pi have no background Bash wake, so the architect runs `node <root>/scripts/loop.mjs run <key>` in the foreground, with the root printed by `qols loop doctor`.
 
 ## Verification policy
 
@@ -184,22 +265,24 @@ A deterministic formatter run is mechanical verification, not semantic implement
 Invocations write only the explicitly owned paths for the scope, never follow module graphs or repository defaults beyond them, and never stage or overwrite unrelated edits.
 Checks stay centralized and serialized after fan-in unless isolation is tool-enforced; lane prose asserting isolation never authorizes a lane to run verification commands.
 Tests remain required for acceptance; lint-only or format-only evidence must name every omitted step.
-A machine report establishes a pass only with exact command argv, exit status, scope, and source fingerprint; stale or incomplete reports establish nothing.
+The central gate is `qac gate`, and its machine report is `gate.json`.
+A machine report establishes a pass only with exact command argv, exit status, scope, and source fingerprint, which `gate.json` records for every judge; stale or incomplete reports establish nothing.
 Lane completion, check completion, and architect acceptance are separate states.
-This policy adds no automatic acceptance, retry loop, arbitrary shell hook, or budget widening.
+This policy adds one bounded correction respawn fed by `gate.json`, never automatic acceptance.
+Repo argv runs only after `qac trust`, and budget comes only from the spec.
 
 ## Loop retrospective
 
 Every accepted `session_loop_close` is followed by one retrospective pass, run by the architect without waiting for a user prompt.
 The instrument is a ledger line plus, only when a skill gap is named, a three-lane validation pipeline that may nudge this skill.
 
-1. Append exactly one JSON line to `~/.config/qol-tray/sessions-retro.jsonl`:
-   `{"date","loop_key","tool","model","rounds","correction_rounds","review_caught_defects","lane_deviations","verdict","skill_gap","nudge"}`.
-   The counts come from the loop just closed; `verdict` is one sentence on lane performance; `skill_gap` names where this skill or the spec guidance gave insufficient direction, or is null; `nudge` starts null.
+1. The driver writes exactly one JSON line to `~/.config/qol-tray/sessions-retro.jsonl` (override `QOL_SESSIONS_RETRO`) when `qols loop close` runs, and nobody else writes that file:
+   `{"schema":2,"date","loop_key","tool","model","rounds","correction_rounds","review_caught_defects","lane_deviations","verdict","skill_gap","nudge","gate_attempts","blame","slips","cost_usd","control"}`.
+   The counts are typed numbers from the loop just closed; `verdict` is one sentence on lane performance; `skill_gap` names where this skill or the spec guidance gave insufficient direction, or is null; `nudge` starts null.
 2. Drift gate, mechanical before cognitive: read the last five ledger lines first.
    If a prior line carries a non-null `nudge` and the lines after it show `rounds` or `review_caught_defects` trending up, revert that nudge's commit, set its line's `nudge` to `"reverted"`, and stop; a worsening trend outranks any argument the pipeline can write.
 3. `skill_gap` null: the retrospective is the ledger line alone; stop.
-4. `skill_gap` non-null: spawn three flash lanes in parallel (keys `retro-research`, `retro-ground`, `retro-refute`), each given the ledger line and the candidate improvement.
+4. `skill_gap` non-null: spawn three Opus 5.5 high lanes in parallel (keys `retro-research`, `retro-ground`, `retro-refute`), each given the ledger line and the candidate improvement.
    The researcher searches for prior art and reported failure modes of the practice; the grounder checks fit against this skill, the qol architecture, and the agentic workflow; the refuter argues the strongest case against and defaults to reject when uncertain.
 5. The architect synthesizes in-session.
    Two-of-three support turns the candidate into one bounded skill edit, committed to qol-skills with the ledger date and `loop_key` in the commit body, then version-bumped, manifest-synced, and pushed per the marketplace rules; anything less records the rejection in the ledger line and changes nothing.
@@ -222,6 +305,9 @@ Never infer lane state from transcript growth, file freshness or screen movement
 
 Done is not a state. At rest a finished lane is byte-identical to an idle one on every harness, so anything that must fire once per completed round triggers on the transition, never on the level. An aborted turn is also not a state: it leaves the process alive and at the prompt, which reads as idle, and the abort lives in history. Nor is a draft observable: no harness persists unsubmitted input anywhere on disk, so never build a rule on the assumption that the initiator's half-typed message can be seen.
 
+A driver round has no watcher wake.
+`qols loop run` runs in background Bash, its lanes are spawned with `--silent-wake` so the watcher never types into the architect, and the wake is the driver's exit: Claude Code's exit notice of that Bash command resumes the architect, and the exit code says what to do next.
+
 The watcher owns wake delivery. For every event it submits a wake message into the round's initiator terminal (the checkpoint's driver terminal) through the terminal service's text-input capability, then prints the event line with `delivered` and, on failure, `wake_error` fields. An autoclose round closes its lane tab only after the delivery is confirmed. When the initiator terminal has closed, the wake goes to the lane's recorded parent as a `session_send` report from the lane's key, so CLI Sessions reopens the parent or the report waits in its inbox. A wake that reaches neither (a lane with no recorded parent) leaves the lane open as the report surface and writes a `wake-failed-<session>.json` trace in the sessions data dir (`qol sessions next` surfaces the failure on the review row). A watcher an MCP client starts runs in its own session, so it keeps watching after the client's terminal closes. The wake is claimed in the durable checkpoint before delivery (`wake_event`), so concurrent watchers deliver exactly once.
 
 `qol sessions watch` with no tokens selects all-rounds mode: it holds the watch-all lock, watches every pending round, and emits `completed` for checkpoints it observes in the durable store, including rounds it was not given. All-rounds mode is diagnostic only and completes foreign checkpoints it observes; client glue never uses it and always passes explicit tokens.
@@ -235,12 +321,15 @@ The architect reviews a completed spawned lane from the report carried by its wa
 The CLI-session integration installs the continuation hooks. Agents never create, spawn, or poll hooks themselves.
 
 - Delivering a round (`session_spawn` with `task`, or `session_submit`) arms the feature loop; collecting with `session_bridge` keeps it armed.
+- `qols loop open` arms the feature loop too: the guard reads the `loop_armed` receipt in the Bash result.
+  A backgrounded `qols loop run` lets the turn end like a watcher-owned round, and its exit notice makes the loop count as unreviewed again.
 - A pending round lives in the lane and its watcher, never in an open architect tool call; the architect turn ends after delivery. A pending, watcher-owned round does not block the Stop guard: the reasoning loop ends and the watcher's wake is the only resume signal.
 - A completed round keeps the loop armed through personal review. A lifecycle-capable host queues another architect turn after the agent settles; a Stop-capable host blocks the round-boundary response because a completed round may not have been collected or reviewed yet.
 - A timeout or bridge error pauses automatic continuation because replay could duplicate work; the round is delivered but no longer watcher-pending, so the Stop guard still blocks until the architect drives the deterministic recovery.
 - Loop state is host-session-local and follows the active transcript branch. An abandoned branch must not arm the current branch.
 
-`session_loop_close` is the only termination path. It returns the canonical `What landed / Before / Now / Verification / Remaining` report. A receipt with `loop_closed: true` closes the loop and disarms the Stop guard immediately; the architect's final response may summarize the report instead of re-emitting it byte-verbatim. Never call it to accept one implementation round; acceptance covers the user's complete request. Prose or lifecycle markers cannot close the loop.
+`session_loop_close` is the only termination path for engine lanes, and `qols loop close` is the termination path of a driver loop: it calls `session_loop_close` when engine lanes exist and prints the `{loop_closed, final_report}` receipt, which disarms the guard.
+`session_loop_close` returns the canonical `What landed / Before / Now / Verification / Remaining` report. A receipt with `loop_closed: true` closes the loop and disarms the Stop guard immediately; the architect's final response may summarize the report instead of re-emitting it byte-verbatim. Never call it to accept one implementation round; acceptance covers the user's complete request. Prose or lifecycle markers cannot close the loop.
 
 An accepted close also closes the implementation terminal after the transition is recorded; the report and transition stay authoritative even when that close fails (a dead tab never fails the loop closure). A paused close leaves the terminal open. No separate close call exists in the workflow: the terminal dies with its accepted loop.
 

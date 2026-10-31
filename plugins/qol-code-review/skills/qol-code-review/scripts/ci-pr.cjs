@@ -589,9 +589,10 @@ function renderComment({ markdown, headSha, runUrl, repoUrl, since, fixSha, fixO
         if (!/^[\w./-]+$/.test(String(f.file || '')) || !Number.isInteger(line) || line < 1) return '';
         return `${repoUrl}/blob/${headSha}/${f.file}#L${Math.max(1, line - SNIPPET_LINES)}-L${line + SNIPPET_LINES}`;
     };
+    const shapeOf = (f) => String(f.shape || '').replace(/[`\s]+/g, '');
     const item = (f) => {
         const { status, note } = statusOf(f);
-        const body = [`${where(f)}\`${f.id}\``, `**Action:** ${f.required_action || ''}`, note ? `**${status === 'fixed' ? 'Fix' : 'Left'}:** ${note}` : ''].filter(Boolean).join('\n\n');
+        const body = [`${where(f)}\`${f.id}\``, `**Action:** ${f.required_action || ''}`, shapeOf(f) ? `**Shape:** \`${shapeOf(f)}\`` : '', note ? `**${status === 'fixed' ? 'Fix' : 'Left'}:** ${note}` : ''].filter(Boolean).join('\n\n');
         const title = String(f.title || f.required_action || f.id).replace(/\s+/g, ' ').replace(/</g, '&lt;');
         return [`<details><summary>${title}${['fixed', 'skipped'].includes(status) ? ` <code>${status}</code>` : ''}</summary>\n\n${body}\n\n</details>`, diffBlock(byId.get(f.id) || []) || snippet(f)];
     };

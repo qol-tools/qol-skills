@@ -1,0 +1,36 @@
+#!/usr/bin/env node
+'use strict';
+
+const fs = require('node:fs');
+const path = require('node:path');
+const { spawnSync } = require('node:child_process');
+
+function pluginRoot() {
+    return path.resolve(path.dirname(fs.realpathSync(__filename)), '..');
+}
+
+function main(argv) {
+    const [first, ...rest] = argv;
+    if (first !== 'loop') {
+        const word = first === undefined ? '' : first;
+        process.stderr.write(
+            word === ''
+                ? 'usage: qols loop <verb> ...\n'
+                : `qols: "${word}" is a typed verb of the prompt surface, not a shell command. Shell usage: qols loop <verb> ...\n`,
+        );
+        return 2;
+    }
+    const script = path.join(pluginRoot(), 'scripts', 'loop.mjs');
+    const result = spawnSync(process.execPath, [script, ...rest], { stdio: 'inherit' });
+    if (result.error) {
+        process.stderr.write(`qols: cannot start ${script}: ${result.error.message}\n`);
+        return 10;
+    }
+    return result.status === null ? 1 : result.status;
+}
+
+if (require.main === module) {
+    process.exitCode = main(process.argv.slice(2));
+}
+
+module.exports = { main, pluginRoot };

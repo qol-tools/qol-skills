@@ -50,11 +50,6 @@
       "command": "node bin/pr-watch-park-guard.cjs"
     },
     {
-      "event": "PreToolUse",
-      "matcher": "Edit|Write|MultiEdit",
-      "command": "node bin/deny-tool-matches.cjs"
-    },
-    {
       "event": "UserPromptSubmit",
       "command": "node bin/qol-cicd-context.cjs"
     },

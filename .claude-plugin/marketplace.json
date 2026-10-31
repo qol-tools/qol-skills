@@ -204,15 +204,6 @@
       }
     },
     {
-      "name": "qol-workflow-nodes",
-      "description": "Personal productivity rule for KMRH47: when work repeats or performance work needs before/after evidence, convert it into deterministic workflow nodes, measurement ledgers, explicit inputs, outputs, reports, and composable orchestrators instead of burning human memory and agent tokens.",
-      "source": "./plugins/qol-workflow-nodes",
-      "version": "0.2.11",
-      "author": {
-        "name": "KMRH47"
-      }
-    },
-    {
       "name": "qol-memory",
       "description": "Long-context memory for agent sessions: ask settled facts from prior sessions, capture new ones, and get the units that landed since your last session in this directory.",
       "source": "./plugins/qol-memory",

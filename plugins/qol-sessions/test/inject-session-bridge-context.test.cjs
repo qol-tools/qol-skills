@@ -14,7 +14,6 @@ const os = require('node:os');
 const {
     alreadyInContext,
     laneSpawnAvailable,
-    LANE_TIER,
     TIER_RULE_MARKER,
     ARCHITECT_ENVELOPE_PATTERN,
     ARCHITECT_RECEIVER_CONTEXT,
@@ -26,11 +25,27 @@ const {
     shouldInjectTierRule,
 } = require('../bin/inject-session-bridge-context.cjs');
 
-function run(payload) {
-    return spawnSync('node', [HOOK], {
-        input: JSON.stringify(payload),
-        encoding: 'utf8',
-    });
+function fakeQolDir(body) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qol-fake-bin-'));
+    if (body !== null) {
+        const file = path.join(dir, 'qol');
+        fs.writeFileSync(file, `#!/bin/sh\n${body}\n`);
+        fs.chmodSync(file, 0o755);
+    }
+    return dir;
+}
+
+function run(payload, qolBody = "printf '%s' '{\"lane_spawn\":true}'") {
+    const dir = fakeQolDir(qolBody);
+    try {
+        return spawnSync(process.execPath, [HOOK], {
+            input: JSON.stringify(payload),
+            encoding: 'utf8',
+            env: { ...process.env, PATH: dir },
+        });
+    } finally {
+        fs.rmSync(dir, { recursive: true });
+    }
 }
 
 test('bridge topics are role-based and bind lanes to a declared harness and model', () => {
@@ -118,11 +133,29 @@ test('the tier rule waits until a lane can actually spawn at the tier', () => {
     const probe = (result) => laneSpawnAvailable(() => result);
     assert.ok(probe({ status: 0, stdout: JSON.stringify({ lane_spawn: true }) }));
     assert.ok(!probe({ status: 0, stdout: JSON.stringify({ lane_spawn: false }) }));
-    assert.ok(probe({ status: 0, stdout: 'not json' }));
-    assert.ok(probe({ status: 1, stdout: JSON.stringify({ lane_spawn: false }) }));
-    assert.ok(probe({ error: new Error('ENOENT'), status: null, stdout: '' }));
-    assert.ok(laneSpawnAvailable(() => { throw new Error('spawn failed'); }));
-    assert.equal(LANE_TIER, 'flash');
+    assert.ok(!probe({ status: 0, stdout: 'not json' }));
+    assert.ok(!probe({ status: 0, stdout: JSON.stringify({}) }));
+    assert.ok(!probe({ status: 1, stdout: JSON.stringify({ lane_spawn: true }) }));
+    assert.ok(!probe({ error: new Error('ENOENT'), status: null, stdout: '' }));
+    assert.ok(!probe(undefined));
+    assert.ok(!laneSpawnAvailable(() => { throw new Error('spawn failed'); }));
+    let probed = null;
+    laneSpawnAvailable((program, args) => {
+        probed = [program, ...args];
+        return { status: 0, stdout: JSON.stringify({ lane_spawn: true }) };
+    });
+    assert.deepEqual(probed, ['qol', 'sessions', 'capability']);
+});
+
+test('a failed capability probe is silent instead of an error', () => {
+    const qolCwd = '/media/kmrh47/WD_SN850X/Git/qol-skills';
+    const payload = { hook_event_name: 'UserPromptSubmit', prompt: 'fix padding', cwd: qolCwd };
+    for (const body of [null, 'exit 3', 'printf "%s" "not json"', "printf '%s' '{\"lane_spawn\":false}'"]) {
+        const result = run(payload, body);
+        assert.equal(result.status, 0);
+        assert.equal(result.stdout, '');
+        assert.equal(result.stderr, '');
+    }
 });
 
 test('a bridge-topic prompt still receives the bridge context after the tier rule is settled', () => {
@@ -333,7 +366,7 @@ test('other hook events and malformed input stay silent', () => {
     assert.equal(wrongEvent.status, 0);
     assert.equal(wrongEvent.stdout, '');
 
-    const malformed = spawnSync('node', [HOOK], { input: 'not-json', encoding: 'utf8' });
+    const malformed = spawnSync(process.execPath, [HOOK], { input: 'not-json', encoding: 'utf8' });
     assert.equal(malformed.status, 0);
     assert.equal(malformed.stdout, '');
 });

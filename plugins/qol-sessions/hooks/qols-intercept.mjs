@@ -2,11 +2,11 @@
 import { execFileSync, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { closest, renderDiagnostic } from "./_kit/diagnostic.mjs";
-import { runPromptCommand } from "./_kit/prompt-command.mjs";
+import { runCli, runPromptCommand } from "./_kit/prompt-command.mjs";
 
 export { renderDiagnostic };
 
@@ -22,6 +22,7 @@ const USAGE = [
   "qols park",
   "qols wake <key>",
   "qols status",
+  "qols loop [key | doctor]",
   "fork: detached architect that owns the problem; bridge: lane that reports back here;",
   "test: a fork whose prompt is typed but not submitted, so the launch costs no tokens",
   "new: a fork without the chat copy; with no prompt, a blank session you type into",
@@ -32,10 +33,15 @@ const USAGE = [
   "park: toggle parking for this terminal; on, a park closes it and reopens the conversation later",
   "wake: make a session read its waiting messages now, even while parked; reopens a closed park",
   "status: one line per lane with its attention, remote control, pull requests and last message",
+  "loop: the loop-gate runs of this repo, or one run by key, or the driver doctor; open, run, verdict and close run from the architect's Bash",
   "values may be [aliases] from sessions.toml; left out, sessions.toml defaults apply",
 ].join("\n");
 
-const VERBS = ["fork", "bridge", "test", "new", "switchboard", "park", "wake", "status"];
+const VERBS = ["fork", "bridge", "test", "new", "switchboard", "park", "wake", "status", "loop"];
+
+const ARCHITECT_LOOP_VERBS = ["open", "run", "verdict", "close"];
+const PLUGIN_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+const QOL_TIMEOUT_MS = 100000;
 
 const STALE_QOL = "qols status: this qol has no `qol sessions status`; update qol";
 
@@ -80,6 +86,7 @@ export function parsePrompt(prompt) {
   if (verb === "park") return parseBare(source, tokens, verb, "qols park only toggles");
   if (verb === "status") return parseBare(source, tokens, verb, "qols status takes nothing");
   if (verb === "wake") return parseWake(source, verbToken, tokens);
+  if (verb === "loop") return parseLoop(source, verbToken, tokens);
   const flags = [];
   while (tokens.length >= 1) {
     const last = tokens.at(-1).text;
@@ -149,6 +156,32 @@ function parseWake(source, verbToken, tokens) {
       notes: [`usage: ${usageFor("wake")}`],
     },
   };
+}
+
+function parseLoop(source, verbToken, tokens) {
+  const [first, ...extra] = tokens;
+  if (first === undefined) return { verb: "loop", args: ["status"] };
+  const word = first.text.toLowerCase();
+  if (ARCHITECT_LOOP_VERBS.includes(word)) return { verb: "loop", usage: loopArchitectUsage(word) };
+  const wrong = extra[0] ?? (first.text.startsWith("-") ? first : undefined);
+  if (wrong !== undefined) {
+    return {
+      verb: "help",
+      diagnostic: {
+        title: `\`qols loop\` does not take \`${wrong.text}\``,
+        source,
+        start: wrong.start,
+        end: wrong.end,
+        label: extra.length > 0 ? "loop takes one key or doctor" : "a loop key is a name, not a flag",
+        notes: [`usage: ${usageFor("loop")}`],
+      },
+    };
+  }
+  return { verb: "loop", args: word === "doctor" ? ["doctor"] : ["status", first.text] };
+}
+
+function loopArchitectUsage(word) {
+  return `usage: ${usageFor("loop")}; ${ARCHITECT_LOOP_VERBS.join(", ")} run from the architect's Bash: node scripts/loop.mjs ${word} ...`;
 }
 
 function parseTaskless(source, tokens, verb, flags) {
@@ -256,59 +289,68 @@ export function summarize(verb, outcome) {
   return `qols bridge: ${outcome.key} (${launch}); its report arrives here as the next prompt`;
 }
 
+function runBinary(bin, argv) {
+  return runCli(argv[0], argv.slice(1), { bin, timeoutMs: QOL_TIMEOUT_MS });
+}
+
+function watchSession(session) {
+  spawn("qol", ["sessions", "watch", session], { detached: true, stdio: "ignore" }).unref();
+}
+
 function reply(parsed, cwd) {
   if (parsed === null) return null;
   if (parsed.verb === "help") return { reason: parsed.diagnostic ? renderDiagnostic(parsed.diagnostic) : USAGE };
   if (parsed.verb === "park") return park();
   if (parsed.verb === "status") return status();
   if (parsed.verb === "wake") return wake(parsed.key);
+  if (parsed.verb === "loop") return loopReply(parsed, cwd);
   if (forkedBySwitchboard(parsed)) return { context: switchboardContext(parsed) };
+  return launch(parsed, cwd);
+}
+
+export function launch(parsed, cwd, run = runBinary, watch = watchSession) {
+  const result = run("qol", commandFor(parsed, cwd));
+  if (result.kind !== "answered") return { reason: `qols ${parsed.verb}: ${result.text}` };
   try {
-    const output = execFileSync("qol", commandFor(parsed, cwd), {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    const outcome = JSON.parse(output);
-    if (parsed.verb === "bridge") {
-      spawn("qol", ["sessions", "watch", outcome.session], { detached: true, stdio: "ignore" }).unref();
-    }
+    const outcome = JSON.parse(result.text);
+    if (parsed.verb === "bridge") watch(outcome.session);
     return { reason: summarize(parsed.verb, outcome), sent: true };
   } catch (error) {
-    return { reason: `qols ${parsed.verb}: ${`${error.stderr ?? ""}`.trim() || error.message}` };
+    return { reason: `qols ${parsed.verb}: ${error.message}` };
   }
 }
 
-export function status(run = (argv) => execFileSync("qol", argv, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] })) {
-  try {
-    return { reason: `${run(["sessions", "status"])}`.trimEnd() || "qols status: no lanes", sent: true };
-  } catch (error) {
-    const stderr = `${error.stderr ?? ""}`.trim();
-    if (stderr.startsWith("unknown qol sessions subcommand `status`")) return { reason: STALE_QOL };
-    return { reason: `qols status: ${stderr || error.message}` };
-  }
+export function loopCommand({ args }, cwd, root = PLUGIN_ROOT) {
+  return [join(root, "scripts", "loop.mjs"), [...args, "--pretty", "--cwd", cwd]];
 }
 
-function park() {
-  const binary = cliSessionsBinary();
+export function loopReply(parsed, cwd, run = runCli, root = PLUGIN_ROOT) {
+  if (parsed.usage !== undefined) return { reason: parsed.usage };
+  const [cli, argv] = loopCommand(parsed, cwd, root);
+  const result = run(cli, argv, { cwd, timeoutMs: QOL_TIMEOUT_MS });
+  if (result.kind !== "answered") return { reason: `qols loop: ${result.text}` };
+  return { reason: result.text || "qols loop: nothing to report", sent: true };
+}
+
+export function status(run = (argv) => runBinary("qol", argv)) {
+  const result = run(["sessions", "status"]);
+  if (result.kind === "answered") return { reason: result.text || "qols status: no lanes", sent: true };
+  if (result.text.startsWith("unknown qol sessions subcommand `status`")) return { reason: STALE_QOL };
+  return { reason: `qols status: ${result.text}` };
+}
+
+export function park(binary = cliSessionsBinary(), run = runBinary) {
   if (binary === null) return { reason: "qols park: CLI Sessions is not installed in qol-tray" };
-  try {
-    const state = execFileSync(binary, ["parking", "toggle"], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-    }).trim();
-    return { reason: summarizePark(state), sent: true };
-  } catch (error) {
-    return { reason: `qols park: ${`${error.stderr ?? ""}`.trim() || error.message}` };
-  }
+  const result = run(binary, ["parking", "toggle"]);
+  if (result.kind !== "answered") return { reason: `qols park: ${result.text}` };
+  return { reason: summarizePark(result.text), sent: true };
 }
 
-export function wake(key, binary = cliSessionsBinary(), run = (bin, argv) => execFileSync(bin, argv, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] })) {
+export function wake(key, binary = cliSessionsBinary(), run = runBinary) {
   if (binary === null) return { reason: "qols wake: CLI Sessions is not installed in qol-tray" };
-  try {
-    return { reason: `qols wake: ${`${run(binary, ["wake", key])}`.trim()}`, sent: true };
-  } catch (error) {
-    return { reason: `qols wake: ${`${error.stderr ?? ""}`.trim() || error.message}` };
-  }
+  const result = run(binary, ["wake", key]);
+  if (result.kind !== "answered") return { reason: `qols wake: ${result.text}` };
+  return { reason: `qols wake: ${result.text}`, sent: true };
 }
 
 function main() {

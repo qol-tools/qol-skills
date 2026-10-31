@@ -7,6 +7,10 @@ import {
   commandFor,
   forkedBySwitchboard,
   isSwitchboard,
+  launch,
+  loopCommand,
+  loopReply,
+  park,
   parsePrompt,
   renderDiagnostic,
   status,
@@ -269,24 +273,27 @@ test("qols status takes nothing else", () => {
   }
 });
 
+const answered = (text) => ({ kind: "answered", status: 0, text });
+const failedRun = (text, kind = "failed") => ({ kind, status: 1, text });
+
 test("qols status answers with the qol sessions status output and drops the prompt", () => {
   let argv;
-  const lines = "sb-engine  working  rc  #212  pushed the fix\n";
-  assert.deepEqual(status((args) => ((argv = args), lines)), { reason: lines.trimEnd(), sent: true });
+  const lines = "sb-engine  working  rc  #212  pushed the fix";
+  assert.deepEqual(status((args) => ((argv = args), answered(lines))), { reason: lines, sent: true });
   assert.deepEqual(argv, ["sessions", "status"]);
-  assert.deepEqual(status(() => ""), { reason: "qols status: no lanes", sent: true });
+  assert.deepEqual(status(() => answered("")), { reason: "qols status: no lanes", sent: true });
 });
 
 test("qols status names an outdated qol in one line and passes other failures through", () => {
-  const failing = (stderr) => () => {
-    throw Object.assign(new Error("Command failed"), { stderr });
-  };
-  const stale = status(failing("unknown qol sessions subcommand `status`\n\nqol sessions\n...usage..."));
-  assert.equal(stale.reason, "qols status: this qol has no `qol sessions status`; update qol");
-  assert.equal(stale.sent, undefined);
-  assert.deepEqual(status(failing("sessions data directory is unavailable\n")), {
+  for (const kind of ["failed", "usage"]) {
+    const stale = status(() => failedRun("unknown qol sessions subcommand `status`\n\nqol sessions\n...usage...", kind));
+    assert.equal(stale.reason, "qols status: this qol has no `qol sessions status`; update qol");
+    assert.equal(stale.sent, undefined);
+  }
+  assert.deepEqual(status(() => failedRun("sessions data directory is unavailable")), {
     reason: "qols status: sessions data directory is unavailable",
   });
+  assert.deepEqual(status(() => failedRun("timed out after 100 s")), { reason: "qols status: timed out after 100 s" });
 });
 
 test("qols wake takes exactly one spawn key", () => {
@@ -302,13 +309,128 @@ test("qols wake runs the CLI Sessions wake command and reports its line or error
   const calls = [];
   const woke = wake("lane", "/bin/qcs", (bin, argv) => {
     calls.push([bin, ...argv]);
-    return "woke lane in v1:kitty:1:2\n";
+    return answered("woke lane in v1:kitty:1:2");
   });
   assert.deepEqual(calls, [["/bin/qcs", "wake", "lane"]]);
   assert.deepEqual(woke, { reason: "qols wake: woke lane in v1:kitty:1:2", sent: true });
-  const busy = wake("lane", "/bin/qcs", () => {
-    throw Object.assign(new Error("exit 1"), { stderr: "`lane` is mid-turn\n" });
-  });
+  const busy = wake("lane", "/bin/qcs", () => failedRun("`lane` is mid-turn"));
   assert.deepEqual(busy, { reason: "qols wake: `lane` is mid-turn" });
+  assert.deepEqual(wake("lane", "/bin/qcs", () => failedRun("usage: wake <key>", "usage")), { reason: "qols wake: usage: wake <key>" });
   assert.match(wake("lane", null).reason, /not installed/);
 });
+
+test("qols park toggles through the CLI Sessions binary and reports the new state", () => {
+  const calls = [];
+  const run = (bin, argv) => {
+    calls.push([bin, ...argv]);
+    return answered("parking on");
+  };
+  assert.deepEqual(park("/bin/qcs", run), { reason: summarizePark("parking on"), sent: true });
+  assert.deepEqual(calls, [["/bin/qcs", "parking", "toggle"]]);
+  assert.deepEqual(park("/bin/qcs", () => failedRun("no socket")), { reason: "qols park: no socket" });
+  assert.match(park(null).reason, /not installed/);
+});
+
+test("fork, test, new and bridge launches answer with the summary and drop the prompt", () => {
+  const calls = [];
+  const outcome = { key: "fork-1a2b", tool: "claude", model: "claude-opus-5-5", effort: "high", surface: "tab" };
+  const run = (bin, argv) => {
+    calls.push([bin, argv]);
+    return answered(JSON.stringify(outcome));
+  };
+  const reply = launch(parsePrompt("qols fork fix it --model opus"), "/repo", run);
+  assert.deepEqual(reply, { reason: "qols fork: fork-1a2b (claude claude-opus-5-5 high tab)", sent: true });
+  assert.deepEqual(calls, [["qol", ["sessions", "fork", "--cwd", "/repo", "--brief", "fix it", "--model", "opus"]]]);
+});
+
+test("a bridge launch starts the watcher on the new session", () => {
+  const watched = [];
+  const run = () => answered(JSON.stringify({ key: "lane-1", session: "v1:kitty:1:2", tool: "claude", model: "m", effort: "e", surface: "tab" }));
+  const reply = launch(parsePrompt("qols bridge look into it"), "/repo", run, (session) => watched.push(session));
+  assert.equal(reply.sent, true);
+  assert.match(reply.reason, /^qols bridge: lane-1 /);
+  assert.deepEqual(watched, ["v1:kitty:1:2"]);
+  launch(parsePrompt("qols fork x"), "/repo", run, () => assert.fail("only a bridge watches"));
+});
+
+test("a launch that fails, times out, prints a usage line or prints no JSON leaves the line in the box", () => {
+  const parsed = parsePrompt("qols fork fix it");
+  for (const kind of ["failed", "usage"]) {
+    assert.deepEqual(launch(parsed, "/repo", () => failedRun("no such model", kind)), { reason: "qols fork: no such model" });
+  }
+  assert.deepEqual(launch(parsed, "/repo", () => failedRun("timed out after 100 s")), { reason: "qols fork: timed out after 100 s" });
+  const garbled = launch(parsed, "/repo", () => answered("not json"));
+  assert.equal(garbled.sent, undefined);
+  assert.match(garbled.reason, /^qols fork: /);
+  const noWatch = launch(parsePrompt("qols bridge x"), "/repo", () => failedRun("boom"), () => assert.fail("no watcher on a failed launch"));
+  assert.equal(noWatch.sent, undefined);
+});
+
+test("qols loop with nothing, a key, or doctor maps onto the loop driver", () => {
+  assert.deepEqual(parsePrompt("qols loop"), { verb: "loop", args: ["status"] });
+  assert.deepEqual(parsePrompt("QOLS Loop"), { verb: "loop", args: ["status"] });
+  assert.deepEqual(parsePrompt("qols loop fix-cache"), { verb: "loop", args: ["status", "fix-cache"] });
+  assert.deepEqual(parsePrompt("qols loop Fix-Cache"), { verb: "loop", args: ["status", "Fix-Cache"] });
+  assert.deepEqual(parsePrompt("qols loop doctor"), { verb: "loop", args: ["doctor"] });
+  assert.deepEqual(parsePrompt("qols loop DOCTOR"), { verb: "loop", args: ["doctor"] });
+});
+
+test("qols loop open, run, verdict and close answer with a usage line that sends them to the architect's Bash", () => {
+  for (const verb of ["open", "run", "verdict", "close", "RUN"]) {
+    for (const prompt of [`qols loop ${verb}`, `qols loop ${verb} k --spec s.md`]) {
+      const { usage, args } = parsePrompt(prompt);
+      assert.equal(args, undefined, prompt);
+      assert.match(usage, /^usage: qols loop \[key \| doctor\]; open, run, verdict, close run from the architect's Bash: node scripts\/loop\.mjs /, prompt);
+      assert.ok(usage.endsWith(`${verb.toLowerCase()} ...`), prompt);
+    }
+  }
+  assert.deepEqual(loopReply(parsePrompt("qols loop run k"), "/repo", () => assert.fail("never runs")), {
+    reason: parsePrompt("qols loop run k").usage,
+  });
+});
+
+test("qols loop refuses extra words and flags with a diagnostic", () => {
+  const cases = [
+    ["qols loop key more", "more", "loop takes one key or doctor"],
+    ["qols loop doctor --prune", "--prune", "loop takes one key or doctor"],
+    ["qols loop --help", "--help", "a loop key is a name, not a flag"],
+  ];
+  for (const [prompt, token, label] of cases) {
+    const { verb, diagnostic } = parsePrompt(prompt);
+    assert.equal(verb, "help", prompt);
+    assert.equal(diagnostic.title, `\`qols loop\` does not take \`${token}\``, prompt);
+    assert.equal(diagnostic.label, label, prompt);
+    assert.equal(prompt.slice(diagnostic.start, diagnostic.end), token, prompt);
+    assert.match(renderDiagnostic(diagnostic), /usage: qols loop \[key \| doctor\]$/, prompt);
+  }
+});
+
+test("qols loop runs loop.mjs from the plugin root with --pretty and the input cwd", () => {
+  assert.deepEqual(loopCommand({ args: ["status"] }, "/repo", "/plugin"), [join("/plugin", "scripts", "loop.mjs"), ["status", "--pretty", "--cwd", "/repo"]]);
+  assert.deepEqual(loopCommand({ args: ["status", "k1"] }, "/repo", "/plugin")[1], ["status", "k1", "--pretty", "--cwd", "/repo"]);
+  assert.deepEqual(loopCommand({ args: ["doctor"] }, "/repo", "/plugin")[1], ["doctor", "--pretty", "--cwd", "/repo"]);
+  const calls = [];
+  const reply = loopReply({ verb: "loop", args: ["status", "k1"] }, "/repo", (cli, argv, options) => {
+    calls.push([cli, argv, options]);
+    return answered("k1  green  attempt 1");
+  }, "/plugin");
+  assert.deepEqual(reply, { reason: "k1  green  attempt 1", sent: true });
+  assert.deepEqual(calls, [[join("/plugin", "scripts", "loop.mjs"), ["status", "k1", "--pretty", "--cwd", "/repo"], { cwd: "/repo", timeoutMs: 100000 }]]);
+});
+
+test("qols loop with no output, a failure or a usage error leaves the box alone", () => {
+  const parsed = { verb: "loop", args: ["status"] };
+  assert.deepEqual(loopReply(parsed, "/repo", () => answered("")), { reason: "qols loop: nothing to report", sent: true });
+  assert.deepEqual(loopReply(parsed, "/repo", () => failedRun("loop.mjs: infra: no git repository")), {
+    reason: "qols loop: loop.mjs: infra: no git repository",
+  });
+  assert.deepEqual(loopReply(parsed, "/repo", () => failedRun("usage: loop.mjs <verb>", "usage")), {
+    reason: "qols loop: usage: loop.mjs <verb>",
+  });
+});
+
+test("an unknown command lists loop among the commands", () => {
+  const reason = renderDiagnostic(parsePrompt("qols brige x").diagnostic);
+  assert.match(reason, /commands are fork, bridge, test, new, switchboard, park, wake, status, loop/);
+});
+
