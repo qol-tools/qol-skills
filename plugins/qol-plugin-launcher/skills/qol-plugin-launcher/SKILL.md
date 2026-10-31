@@ -38,6 +38,7 @@ Keep platform differences inside feature-owned `platform/` modules. Keep ranking
 - Query and selection state reset according to config through one controller transition.
 - Blocking discovery/index work never occupies GPUI executor workers.
 - Reveal follows the shared compositor-safe surface contract.
+- Each activation summons `FocusPriority::Launcher` and does not show while alt-tab holds a live claim; every dismiss and failed open releases it. The rules live in `qol-project:qol-plugin-gpui-surfaces` (focus priority).
 
 ## Search and launch invariants
 

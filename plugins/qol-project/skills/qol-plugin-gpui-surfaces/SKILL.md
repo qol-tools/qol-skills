@@ -25,6 +25,7 @@ and toasts remain plugin-owned.
 | Choose, list and item cards | `settings_panel/view/` | Select and multi-select rows push a choice card (`choose_card.rs`); list rows push a list card and its item cards (`list_card.rs`) |
 | Entries cards | `settings_panel/view/` | An `object_array` or option-less `string_array` pushes an entries card. With `reorder = true` the card picks entries up and carries them (`entries_carry.rs`), and `add_label` names its add row |
 | Menu | `kit.rs` | `kit.menu(width)`, `kit.menu_row(id, name, key, selected)` and `kit.menu_rule()` build every floating menu; a surface never styles its own |
+| Focus priority | `focus_priority/` | Rank of summoned popups that hold key focus, and the cross-process claims that make a lower popup stand down (see invariants) |
 | `ScrollList` | `scroll_list.rs` | Selection + scroll-window state shared with launcher/removeapp |
 
 `Surface::show_focused` is for interactive panels (`Render + Focusable`),
@@ -347,6 +348,26 @@ selects) are documented in `qol-project:qol-shared-libs`.
   `cx.defer`; a re-entrant `WindowHandle::update` from inside that window's own
   event dispatch fails silently. Destructive dismissals are one-shot. Retained
   settings dismissals stay reusable across every park/reveal cycle.
+- **A lower-ranked popup stands down while a higher one holds focus.**
+  `qol_gpui::focus_priority` ranks summoned popups that hold key focus:
+  `FocusPriority::Launcher` below `FocusPriority::AltTab`. A popup calls
+  `summon(priority, title)` when it starts to show. While another process
+  holds a live higher claim it returns `Summon::Outranked`, and the popup does
+  not show; otherwise it writes the claim (pid, title, time) as
+  `<priority>.json` under the runtime dir's `focus-priority/`. Every hide and
+  every failed open calls `release(priority)`, which removes only this
+  process's claim. While a higher claim from another process is live, every
+  shared re-assert path stands down: the macOS input hold releases instead of
+  re-asserting on resign-key or resign-active, the X11 input hold loop exits,
+  and `reassert_focus_until_held_with` stops. A claim counts only while its pid
+  lives and for at most `CLAIM_MAX_AGE` (`focus_priority/store.rs`), so a
+  crashed or stuck claimant cannot lock a lower popup out. A popup that never
+  summons holds no rank and never yields. A new popup that holds key focus
+  adds its variant in rank order and summons and releases on its show, hide
+  and open-failure paths; two popups that both re-assert without a rank flap
+  focus until one runs out of retries, as the launcher and alt-tab did on
+  macOS. Traces: `FOCUS_PRIORITY` (`step=claimed`, `outranked`, `released`,
+  `yield`), `HOLD_YIELD`, `INPUT_HOLD_YIELD` and `FOCUS_REASSERT step=yielded`.
 - **State colors come from the theme** (`state_on`/`state_off` etc. in
   the palette structs). No literal colors in surface code - a qol-theme
   test enforces this.
