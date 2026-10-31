@@ -70,6 +70,16 @@ request with the watcher in the background (Bash `run_in_background: true`, then
 end the turn), reports with its final message instead of `session_send`, and asks
 the user by ending its turn with the question and a recommended answer.
 
+Claude Code drops a subagent from the agent list 30 seconds after its turn ends
+unless a background command of its own still runs, and the user can then no
+longer select it or type to it, so a fork that seems dead is only idle. Before a
+fork ends a turn that leaves anything for the user (a question, a draft waiting
+for approval, a report the user may answer, or Ready), it starts its hold once:
+Bash `sleep infinity` with `run_in_background: true`, which costs nothing and
+never wakes it. Once nothing is left for anyone to do, such as after its pull
+request merged, it stops the hold with TaskStop before its final message, and
+then leaves the list; SendMessage still resumes it.
+
 ## A review of your own change ends in fixes
 
 A qol-code-review you run on a change you deliver (your branch, worktree or
