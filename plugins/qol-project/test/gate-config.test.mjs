@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import {
-  CONFIG_PATH, canonicalJson, judgesSha, loadConfig, normalizeConfig, normalizeJudge,
+  ALWAYS_PROTECTED, CONFIG_PATH, canonicalJson, judgesSha, loadConfig, normalizeConfig, normalizeJudge,
   normalizeRemote, repoId, setupSha, userConfigPath, validateConfig,
 } from "../src/gate/config.mjs";
 
@@ -78,13 +78,13 @@ test("repoId hashes the origin url, else the main clone path", () => {
     "remote get-url origin": new Error("no remote"),
     "rev-parse --path-format=absolute --git-common-dir": "/home/me/code/proj/.git\n",
   });
-  assert.equal(repoId("/home/me/code/proj/sub", { exec: without.exec }), sha16("/home/me/code/proj"));
+  assert.equal(repoId("/home/me/code/proj/sub", { exec: without.exec }), sha16(path.resolve("/home/me/code/proj")));
 
   const worktree = gitFake({
     "remote get-url origin": "",
     "rev-parse --path-format=absolute --git-common-dir": "/home/me/code/proj/.git\n",
   });
-  assert.equal(repoId("/home/me/worktrees/x", { exec: worktree.exec }), sha16("/home/me/code/proj"));
+  assert.equal(repoId("/home/me/worktrees/x", { exec: worktree.exec }), sha16(path.resolve("/home/me/code/proj")));
 });
 
 test("userConfigPath follows XDG_CONFIG_HOME, else ~/.config", () => {
@@ -131,15 +131,16 @@ test("validateConfig names every kind of mistake", () => {
 
 test("normalizeConfig fills defaults and always protects .qac/**", () => {
   const config = normalizeConfig({ version: 1, judges: [] });
-  assert.deepEqual(config.protected, [".qac/**"]);
+  assert.deepEqual(config.protected, [...ALWAYS_PROTECTED]);
+  for (const glob of [".qac/**", "**/rustfmt.toml", "**/.rustfmt.toml", "**/clippy.toml", "**/.clippy.toml", "**/.cargo/**", "**/.claude/**", "**/.gitattributes"]) assert.ok(config.protected.includes(glob), glob);
   assert.deepEqual(config.defaults, { test_runs_on_red: 3, timeout_s: 600 });
   assert.deepEqual(config.retention, { loops: 50 });
   assert.deepEqual([config.setup, config.tests, config.accept_prefixes], [[], [], []]);
   const filled = normalizeConfig(VALID);
-  assert.deepEqual(filled.protected, [".qac/**", "docs/**"]);
+  assert.deepEqual(filled.protected, [...ALWAYS_PROTECTED, "docs/**"]);
   assert.deepEqual(filled.defaults, { test_runs_on_red: 2, timeout_s: 30 });
   assert.equal(filled.retention.loops, 7);
-  assert.equal(normalizeConfig({ ...VALID, protected: [".qac/**"] }).protected.length, 1);
+  assert.equal(normalizeConfig({ ...VALID, protected: [".qac/**"] }).protected.length, ALWAYS_PROTECTED.length);
 });
 
 test("normalizeJudge applies the documented defaults", () => {

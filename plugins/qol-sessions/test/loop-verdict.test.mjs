@@ -7,6 +7,9 @@ import test from "node:test";
 import { EXIT, LoopError } from "../src/loop/paths.mjs";
 import { diffHunks, hunkContains, parseHunkRef, recordVerdict, validateVerdict } from "../src/loop/verdict.mjs";
 
+const BIN = path.join("/bin");
+const QAC = path.join(BIN, "qac");
+
 const DIFF = [
   "diff --git a/src/a.js b/src/a.js",
   "--- a/src/a.js",
@@ -44,8 +47,8 @@ function setup() {
   const optionsSeen = [];
   const state = { slipStatus: 0 };
   const deps = {
-    env: { PATH: "/bin" },
-    exists: (file) => file === "/bin/qac" || (file.startsWith(os.tmpdir()) && fs.existsSync(file)),
+    env: { PATH: BIN },
+    exists: (file) => file === QAC || (file.startsWith(os.tmpdir()) && fs.existsSync(file)),
     now: () => new Date("2026-10-31T12:00:00Z"),
     exec: (argv, options) => {
       calls.push(argv);
@@ -69,6 +72,14 @@ test("diffHunks does not mistake body lines that look like file headers", () => 
   const hunks = diffHunks(patch);
   assert.equal(hunks.length, 1);
   assert.equal(hunks[0].newFile, "f.txt");
+});
+
+test("diffHunks decodes git's C-quoted file names", () => {
+  const quoted = '"b/d/\\303\\251\\"x\\\\y\\t.txt"';
+  const patch = ["--- /dev/null", `+++ ${quoted}`, "@@ -0,0 +1 @@", "+a", ""].join("\n");
+  const hunks = diffHunks(patch);
+  assert.deepEqual(hunks.map((hunk) => hunk.newFile), ['d/\u00e9"x\\y\t.txt']);
+  assert.equal(hunkContains(hunks, 'd/\u00e9"x\\y\t.txt', 1), true);
 });
 
 test("diffHunks handles new and deleted files", () => {
@@ -150,7 +161,7 @@ test("a judge verdict records a judge-revert slip with the finding fingerprint",
   assert.equal(result.next, "qols loop run k1 --gate-only");
   const slip = ctx.calls.find((argv) => argv[1] === "slip");
   assert.deepEqual(slip, [
-    "/bin/qac", "slip", "--fingerprint", "fp1", "--from", "verdict:k1", "--route", "judge-revert", "--loop", "k1", "--cwd", ctx.repo,
+    QAC, "slip", "--fingerprint", "fp1", "--from", "verdict:k1", "--route", "judge-revert", "--loop", "k1", "--cwd", ctx.repo,
     "--judge", "eslint", "--rule", "no-unused", "--message", "unused 'x'",
   ]);
 });
@@ -174,6 +185,26 @@ test("a failing slip still records the verdict but exits 10", () => {
   assert.equal(result.exit, EXIT.infra);
   assert.equal(result.slip.error, "ledger locked");
   assert.equal(fs.existsSync(path.join(ctx.attempt, "verdict.json")), true);
+});
+
+test("every verdict records the file of the blamed finding so the re-gate can exclude exactly that finding", () => {
+  const ctx = setup();
+  recordVerdict("k1", { blame: "judge", finding: "eslint#1", hunk: "src/a.js:2", why: "false positive" }, { cwd: ctx.repo }, ctx.deps);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(ctx.attempt, "verdict.json"), "utf8")).file, "src/a.js");
+});
+
+test("a judge verdict on a finding without a file is rejected because the re-gate could not exclude exactly it", () => {
+  const ctx = setup();
+  fs.writeFileSync(
+    path.join(ctx.attempt, "gate.json"),
+    JSON.stringify({ ...GATE, findings: [{ id: "eslint#1", judge: "eslint", rule: "no-unused", line: 2, message: "unused 'x'", fingerprint: "fp1" }] }),
+  );
+  assert.throws(
+    () => recordVerdict("k1", { blame: "judge", finding: "eslint#1", hunk: "src/a.js:2", why: "false positive" }, { cwd: ctx.repo }, ctx.deps),
+    (error) => error instanceof LoopError && error.exit === EXIT.usage && /names no file/.test(error.message),
+  );
+  assert.equal(fs.existsSync(path.join(ctx.attempt, "verdict.json")), false);
+  assert.equal(recordVerdict("k1", { blame: "impl", finding: "eslint#1", hunk: "src/a.js:2", why: "x" }, { cwd: ctx.repo }, ctx.deps).verdict.file, null);
 });
 
 test("a judge verdict on a tamper entry is rejected because it has no fingerprint", () => {

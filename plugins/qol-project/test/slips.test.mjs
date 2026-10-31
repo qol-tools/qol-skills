@@ -349,11 +349,11 @@ test("withLock stops waiting when the stale lock cannot be removed", () => {
   assert.throws(() => withLock(file, () => 1, stuck), { code: "ELOCK" });
 });
 
-test("recordSlip holds the lock across the read, the fork and the append", () => {
+test("recordSlip decides and appends under the lock, forks outside it, then appends the lane under the lock again", () => {
   const seen = [];
   const deps = ledger();
   const lock = () => existsSync(`${deps.file}.lock`);
-  recordSlip("p", { cwd: "/w" }, {
+  const result = recordSlip("p", { cwd: "/w" }, {
     ...deps,
     fork: entry => {
       seen.push(["fork", lock()]);
@@ -364,12 +364,44 @@ test("recordSlip holds the lock across the read, the fork and the append", () =>
       throw new Error("none");
     },
     append: (file, text) => {
-      seen.push(["append", lock()]);
+      seen.push(["append", lock(), JSON.parse(text).lane]);
       appendFileSync(file, text);
     },
   });
-  assert.deepEqual(seen, [["read", true], ["fork", true], ["append", true]]);
+  assert.deepEqual(seen, [["read", true], ["append", true, "forking"], ["fork", false], ["read", true], ["append", true, "qac-rule-p"]]);
   assert.equal(lock(), false);
+  assert.deepEqual([result.forked, result.entry.lane, result.error], [true, "qac-rule-p", null]);
+});
+
+test("a second recorder during a slow fork is neither blocked nor forks again, and no sighting is lost", () => {
+  const deps = ledger();
+  recordFingerprint(FP, deps);
+  let during = null;
+  const slow = {
+    ...deps,
+    fork: entry => {
+      during = recordFingerprint({ ...FP, loop: "k3", from: "https://x/pull/3" }, { ...deps, fork: () => assert.fail("forked twice") });
+      return laneKey(entry.id);
+    },
+  };
+  const second = recordFingerprint({ ...FP, loop: "k2", from: "https://x/pull/2" }, slow);
+  assert.equal(second.forked, true);
+  assert.deepEqual([during.due, during.forked, during.error], [false, false, null]);
+  const [entry] = listSlips(deps);
+  assert.equal(entry.lane, "qac-rule-fp-abcd1234abcd1234");
+  assert.deepEqual(entry.loops, ["k1", "k2", "k3"]);
+  assert.equal(entry.seen, 3);
+});
+
+test("a failed fork clears the pending lane so a later sighting can fork again", () => {
+  const deps = ledger({ fork: () => { throw Object.assign(new Error("no"), { stderr: "boom\nmore" }); } });
+  recordFingerprint(FP, deps);
+  const failed = recordFingerprint({ ...FP, loop: "k2" }, deps);
+  assert.deepEqual([failed.due, failed.forked, failed.entry.lane], [true, false, null]);
+  assert.equal(failed.error, "qol sessions fork failed: boom");
+  assert.equal(listSlips(deps)[0].lane, null);
+  const retry = recordFingerprint({ ...FP, loop: "k3" }, { ...deps, fork: entry => laneKey(entry.id) });
+  assert.deepEqual([retry.due, retry.forked], [true, true]);
 });
 
 test("recordSlip entries carry kind, route, repo_id and loops, defaulting old entries", () => {
@@ -524,7 +556,7 @@ test("without qol on PATH a due entry hands over its brief instead of forking", 
   assert.equal(second.entry.lane, null);
   assert.ok(second.brief.startsWith(`Open a session in ${path.resolve("/git/qol-skills")} and give it this brief:\n`));
   assert.match(second.brief, /fingerprint abcd1234abcd1234/);
-  assert.match(second.brief, /slip --fingerprint abcd1234abcd1234 --added/);
+  assert.match(second.brief, /slip --fingerprint abcd1234abcd1234 --entry fp-abcd1234abcd1234 --added/);
   assert.match(renderSlip(second), /qol is not on PATH, so no lane was forked/);
   const slug = recordSlip("p", { cwd: "/w" }, deps);
   assert.deepEqual([slug.handover, slug.forked, slug.entry.lane], [true, false, null]);
@@ -565,11 +597,12 @@ test("rulesRepo chooses its home per route", () => {
 
 test("laneBrief fits its route and its key kind", () => {
   const slug = { pattern: "dbg! in tests", first_seen: "2026-10-20", sources: [] };
-  const fingerprint = { ...slug, kind: "fingerprint", fingerprint: "ff00ff00ff00ff00", judge: "clippy", rule: "r", message: "m", loops: ["k1", "k2"], sources: ["u"] };
+  const fingerprint = { ...slug, id: "fp-r1-ff00ff00ff00ff00", kind: "fingerprint", fingerprint: "ff00ff00ff00ff00", judge: "clippy", rule: "r", message: "m", loops: ["k1", "k2"], sources: ["u"] };
   const clone = laneBrief({ ...fingerprint, route: "qac-check" }, "/c/qac.mjs");
   assert.match(clone, /the finding "m" \(judge clippy, rule r, fingerprint ff00ff00ff00ff00\) slipped past the local gate \(first seen 2026-10-20, seen in loops k1, k2, from u\)/);
   assert.match(clone, /direct to main/);
-  assert.match(clone, /node "\/c\/qac.mjs" slip --fingerprint ff00ff00ff00ff00 --added/);
+  assert.match(clone, /node "\/c\/qac.mjs" slip --fingerprint ff00ff00ff00ff00 --entry fp-r1-ff00ff00ff00ff00 --added/);
+  assert.match(clone, /--entry fp-r1-ff00ff00ff00ff00 --infeasible "<reason>"/);
   assert.match(clone, /--infeasible "<reason>"/);
   const linter = laneBrief({ ...slug, route: "repo-linter" }, "c");
   assert.match(linter, /clippy.toml, the eslint config, ruff settings/);

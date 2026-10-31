@@ -23,7 +23,7 @@ function setup() {
   writeJson(path.join(loops, "alpha", "attempt-1", "gate.json"), { verdict: "findings", findings: [{ id: "a#1" }, { id: "a#2" }], tamper: [{ id: "tamper#1" }] });
   writeJson(path.join(loops, "alpha", "attempt-1", "lane.json"), { surface: "headless", session: "s1", exit: 0, cost_usd: 0.3, question: null });
   writeJson(path.join(loops, "beta", "loop.json"), { ...base, key: "beta", surface: "kitty" });
-  writeJson(path.join(loops, "beta", "question.json"), { text: "which db?" });
+  writeJson(path.join(loops, "beta", "question.json"), { attempt: 1, slot: null, index: 1, question: "which db?" });
   writeJson(path.join(loops, "gamma", "loop.json"), { ...base, key: "gamma" });
   writeJson(path.join(loops, "gamma", "closed.json"), { outcome: "accepted" });
   writeJson(path.join(loops, "delta", "loop.json"), { ...base, key: "delta" });
@@ -38,7 +38,7 @@ function setup() {
 
 test("status lists every loop with a derived phase and skips folders without loop.json", () => {
   const ctx = setup();
-  const result = statusLoop(undefined, { cwd: ctx.repo }, ctx.deps);
+  const result = statusLoop(undefined, { cwd: ctx.repo, all: true }, ctx.deps);
   assert.equal(result.exit, EXIT.ok);
   assert.deepEqual(result.loops.map((loop) => [loop.key, loop.phase]), [
     ["alpha", "gate:findings"],
@@ -47,6 +47,31 @@ test("status lists every loop with a derived phase and skips folders without loo
     ["eps", "running"],
     ["gamma", "closed"],
   ]);
+});
+
+test("the listing hides closed loops unless asked, and a named closed loop is still shown", () => {
+  const ctx = setup();
+  const open = statusLoop(undefined, { cwd: ctx.repo }, ctx.deps);
+  assert.deepEqual(open.loops.map((loop) => loop.key), ["alpha", "beta", "delta", "eps"]);
+  assert.equal(statusLoop("gamma", { cwd: ctx.repo }, ctx.deps).loop.phase, "closed");
+});
+
+test("status shows the cost so far, lanes plus the control lane", () => {
+  const ctx = setup();
+  assert.equal(statusLoop("alpha", { cwd: ctx.repo }, ctx.deps).loop.cost_usd, 0.3);
+  writeJson(path.join(ctx.loops, "alpha", "control", "lane.json"), { surface: "headless", exit: 0, cost_usd: 1.1 });
+  assert.equal(statusLoop("alpha", { cwd: ctx.repo }, ctx.deps).loop.cost_usd, 1.4);
+  assert.equal(statusLoop("eps", { cwd: ctx.repo }, ctx.deps).loop.cost_usd, 0);
+});
+
+test("two implementers list the open question of each lane", () => {
+  const ctx = setup();
+  writeJson(path.join(ctx.loops, "two", "loop.json"), { schema: 1, key: "two", implementers: 2, worktrees: [], surface: "kitty" });
+  writeJson(path.join(ctx.loops, "two", "question-1.json"), { slot: 1, index: 1, attempt: 1, question: "a?" });
+  writeJson(path.join(ctx.loops, "two", "question-2.json"), { slot: 2, index: 2, attempt: 1, question: "b?" });
+  const { loop } = statusLoop("two", { cwd: ctx.repo }, ctx.deps);
+  assert.equal(loop.phase, "question");
+  assert.deepEqual(loop.questions.map((question) => question.question), ["a?", "b?"]);
 });
 
 test("status of one loop reports attempts, lane facts, baseline and outcome", () => {
@@ -67,7 +92,7 @@ test("status of one loop reports attempts, lane facts, baseline and outcome", ()
     },
   ]);
   assert.equal(statusLoop("gamma", { cwd: ctx.repo }, ctx.deps).loop.outcome, "accepted");
-  assert.deepEqual(statusLoop("beta", { cwd: ctx.repo }, ctx.deps).loop.question, { text: "which db?" });
+  assert.deepEqual(statusLoop("beta", { cwd: ctx.repo }, ctx.deps).loop.questions, [{ attempt: 1, slot: null, index: 1, question: "which db?" }]);
 });
 
 test("a loop with no attempts is armed", () => {

@@ -17,7 +17,7 @@ function unquote(value) {
   return double ? double[1] : value;
 }
 
-export function readDiagnostics(lines, start) {
+function readDiagnostics(lines, start) {
   if (lines[start]?.trim() !== "---") return {};
   const out = {};
   let key = null;

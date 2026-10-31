@@ -1,53 +1,12 @@
-import { closeSync, mkdirSync, openSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync, appendFileSync } from "node:fs";
+import { appendFileSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { withLock } from "../lock.mjs";
+import { DEFAULT_RETENTION_LOOPS } from "./config.mjs";
 
-const LOCK_WAIT_MS = 2000;
-const LOCK_STALE_MS = 10000;
-const LOCK_RETRY_MS = 25;
 const NULL_LOOP_KEEP_MS = 30 * 24 * 60 * 60 * 1000;
-const DEFAULT_RETENTION_LOOPS = 50;
 
 export function gatesFile(commonDir) {
   return path.join(commonDir, "qac", "gates.jsonl");
-}
-
-function sleepMs(ms) {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
-}
-
-function removeIfStale(lock, nowMs) {
-  try {
-    if (nowMs - statSync(lock).mtimeMs <= LOCK_STALE_MS) return false;
-    unlinkSync(lock);
-    return true;
-  } catch (error) {
-    return error.code === "ENOENT";
-  }
-}
-
-function acquire(lock, deps) {
-  const nowMs = deps.nowMs ?? Date.now;
-  const sleep = deps.sleep ?? sleepMs;
-  const deadline = nowMs() + LOCK_WAIT_MS;
-  for (;;) {
-    try {
-      closeSync(openSync(lock, "wx"));
-      return;
-    } catch (error) {
-      if (error.code !== "EEXIST") throw error;
-      if (removeIfStale(lock, nowMs())) continue;
-      if (nowMs() >= deadline) throw new Error(`gate index lock is busy: ${lock}`);
-      sleep(LOCK_RETRY_MS);
-    }
-  }
-}
-
-function release(lock) {
-  try {
-    unlinkSync(lock);
-  } catch {
-    return;
-  }
 }
 
 function parseLines(text) {
@@ -98,10 +57,7 @@ export function appendGate(commonDir, line, deps = {}) {
   const loops = Number.isInteger(requested) && requested > 0 ? requested : DEFAULT_RETENTION_LOOPS;
   const stamp = deps.now ? deps.now() : entry.at ?? new Date().toISOString();
   entry.at ??= typeof stamp === "string" ? stamp : new Date(toMs(stamp)).toISOString();
-  mkdirSync(path.dirname(file), { recursive: true });
-  const lock = `${file}.lock`;
-  acquire(lock, deps);
-  try {
+  return withLock(file, () => {
     const all = [...existingLines(file, read), entry];
     const kept = prune(all, loops, toMs(stamp));
     if (kept.length === all.length) {
@@ -112,9 +68,7 @@ export function appendGate(commonDir, line, deps = {}) {
       renameSync(temp, file);
     }
     return { file, kept: kept.length, dropped: all.length - kept.length };
-  } finally {
-    release(lock);
-  }
+  }, deps);
 }
 
 export function readGates(commonDir, deps = {}) {

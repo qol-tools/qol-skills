@@ -12,6 +12,7 @@ const PRE_TOOL_USE_HOOKS = [
     { matcher: "Edit|Write|MultiEdit|NotebookEdit", script: "bin/check-qol-plugin-data.cjs" },
     { matcher: "Edit|Write|MultiEdit|NotebookEdit", script: "bin/check-qol-plugin-contract.cjs" },
     { matcher: "Bash", script: "bin/check-qol-logging.cjs" },
+    { matcher: "Bash", script: "hooks/qac-trust-guard.mjs" },
 ];
 
 const USER_PROMPT_SUBMIT_HOOKS = [

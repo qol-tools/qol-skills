@@ -14,11 +14,12 @@ const LOOP = { key: "k1", lane: { tool: "claude", model: "claude-sonnet-5-5" }, 
 
 const ATTEMPTS = [
   { n: 1, index: null, gate: { verdict: "findings", tamper: [{ id: "tamper#1" }] }, lane: { cost_usd: 0.5 }, verdict: null },
-  { n: 2, index: null, gate: { verdict: "clean", tamper: [] }, lane: { cost_usd: 0.25 }, verdict: { blame: "judge" } },
+  { n: 2, index: null, gate: { verdict: "clean", tamper: [] }, lane: { cost_usd: 0.25 }, verdict: { blame: "judge", fingerprint: "fp1" } },
 ];
 
 test("retroLine carries the documented fields plus the schema 2 additions", () => {
-  const line = retroLine({ loop: LOOP, attempts: ATTEMPTS, outcome: "accepted", now: new Date("2026-10-31T10:00:00Z") });
+  const control = { verdict: "findings", cost_usd: 1.5 };
+  const line = retroLine({ loop: LOOP, attempts: ATTEMPTS, outcome: "accepted", now: new Date("2026-10-31T10:00:00Z"), control });
   assert.deepEqual(Object.keys(line), [
     "date", "loop_key", "tool", "model", "rounds", "correction_rounds", "review_caught_defects", "lane_deviations",
     "verdict", "skill_gap", "nudge", "schema", "gate_attempts", "blame", "slips", "cost_usd", "control",
@@ -37,9 +38,9 @@ test("retroLine carries the documented fields plus the schema 2 additions", () =
   assert.equal(line.schema, 2);
   assert.equal(line.gate_attempts, 2);
   assert.equal(line.blame, "judge");
-  assert.equal(line.slips, 1);
+  assert.deepEqual(line.slips, ["fp1"]);
   assert.equal(line.cost_usd, 0.75);
-  assert.equal(line.control, true);
+  assert.deepEqual(line.control, { verdict: "findings", cost_usd: 1.5 });
 });
 
 test("retroLine copes with a loop that never ran an attempt", () => {
@@ -48,9 +49,19 @@ test("retroLine copes with a loop that never ran an attempt", () => {
   assert.equal(line.correction_rounds, 0);
   assert.equal(line.blame, null);
   assert.equal(line.cost_usd, 0);
-  assert.equal(line.control, false);
+  assert.equal(line.control, null);
+  assert.deepEqual(line.slips, []);
   assert.equal(line.tool, null);
   assert.match(line.verdict, /^paused: 0 attempts, 0 red gates, latest gate none\.$/);
+});
+
+test("skill_gap is the --skill-gap text, else the last spec verdict, else null", () => {
+  const now = new Date("2026-10-31T10:00:00Z");
+  const spec = [{ n: 1, index: null, gate: { verdict: "findings", tamper: [] }, lane: null, verdict: { blame: "spec", finding: "qac#2", why: "two readings of the owned paths" } }];
+  assert.equal(retroLine({ loop: LOOP, attempts: spec, outcome: "paused", now }).skill_gap, "the spec was blamed for qac#2: two readings of the owned paths");
+  assert.equal(retroLine({ loop: LOOP, attempts: spec, outcome: "paused", now, skillGap: "  name the test folder " }).skill_gap, "name the test folder");
+  assert.equal(retroLine({ loop: LOOP, attempts: ATTEMPTS, outcome: "accepted", now }).skill_gap, null);
+  assert.equal(retroLine({ loop: LOOP, attempts: ATTEMPTS, outcome: "accepted", now }).nudge, null);
 });
 
 test("two implementers of one round count as a single round", () => {
@@ -65,7 +76,7 @@ test("two implementers of one round count as a single round", () => {
 
 test("retroFile honours QOL_SESSIONS_RETRO and otherwise uses the qol-tray config dir", () => {
   assert.equal(retroFile({ env: { QOL_SESSIONS_RETRO: "/x/r.jsonl", HOME: "/h" } }), "/x/r.jsonl");
-  assert.equal(retroFile({ env: { HOME: "/h" } }), "/h/.config/qol-tray/sessions-retro.jsonl");
+  assert.equal(retroFile({ env: { HOME: "/h" } }), path.join("/h", ".config", "qol-tray", "sessions-retro.jsonl"));
   assert.equal(legacyRetroFile("/a/sessions-retro.jsonl"), "/a/sessions-retro.v1.jsonl");
 });
 

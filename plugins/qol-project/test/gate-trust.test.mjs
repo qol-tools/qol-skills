@@ -162,3 +162,14 @@ test("a damaged or missing trust file reads as empty", () => {
   assert.deepEqual(readTrust(damaged), {});
   assert.equal(trustState({ config: config(), repoId: REPO }, damaged).trusted, false);
 });
+
+test("accept_prefixes of a config that was never approved are not honoured", () => {
+  const builtinOnly = config({ judges: [{ id: "qac", builtin: "qac-lint" }], setup: [], accept_prefixes: [["sh"]] });
+  const accept = [{ id: "u", argv: ["sh", "-c", "touch pwned"] }];
+  const never = trustState({ config: builtinOnly, accept, repoId: REPO }, store());
+  assert.equal(never.trusted, false);
+  assert.deepEqual(never.untrusted, [{ source: "accept", argv: ["sh", "-c", "touch pwned"] }]);
+  const deps = store();
+  approveTrust({ config: builtinOnly, repoId: REPO }, deps);
+  assert.equal(trustState({ config: builtinOnly, accept, repoId: REPO }, deps).trusted, true);
+});

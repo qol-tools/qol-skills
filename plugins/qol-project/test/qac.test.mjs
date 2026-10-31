@@ -3,8 +3,8 @@ import assert from "node:assert";
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
-import { pathToFileURL } from "node:url";
+import { execFileSync, spawnSync } from "node:child_process";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { parsePrompt } from "../hooks/qac-intercept.mjs";
 import { FIX_FILE_LIMIT, fixBrief, fixGuidance, lint, renderHelp, splitRule, summarize } from "../src/qac.mjs";
 import { progressReporter } from "../src/progress.mjs";
@@ -13,7 +13,9 @@ import { locate } from "../src/locate.mjs";
 import { EXIT, ROUTES, VERBS, parseArgs, run } from "../scripts/qac.mjs";
 import { repoId } from "../src/gate/config.mjs";
 import { GATE_EXIT } from "../src/gate/gate.mjs";
-import { listSlips } from "../src/slips.mjs";
+import { listSlips, recordFingerprint } from "../src/slips.mjs";
+
+const QAC_CLI = fileURLToPath(new URL("../scripts/qac.mjs", import.meta.url));
 
 function repo(files) {
   const root = path.join(mkdtempSync(path.join(tmpdir(), "qac-")), "qol-monorepo");
@@ -299,22 +301,25 @@ test("EXIT adds the gate codes and agrees with the gate module", () => {
   for (const [name, code] of Object.entries(GATE_EXIT)) assert.equal(EXIT[name], code, name);
 });
 
-test("parseArgs reads the gate flags in either form and repeats --exclude-fingerprint", () => {
+test("parseArgs reads the gate flags in either form and repeats --exclude-finding", () => {
   const args = parseArgs([
     "gate", "--cwd", "/w", "--base=main", "--out", "/o", "--accept", "a.json", "--owned=o.json",
     "--spec", "s.md", "--spec-sha", "abc", "--baseline", "b.json",
-    "--exclude-fingerprint", "f1", "--exclude-fingerprint=f2", "--loop", "k", "--attempt", "2", "--keep", "--pretty",
+    "--exclude-finding", "f1=a.js", "--exclude-finding=f2=b=c.js", "--loop", "k", "--attempt", "2", "--keep", "--pretty",
   ]);
   assert.equal(args.verb, "gate");
   assert.deepEqual(
     [args.cwd, args.base, args.out, args.accept, args.owned, args.spec, args.specSha, args.baseline, args.loop, args.attempt],
     ["/w", "main", "/o", "a.json", "o.json", "s.md", "abc", "b.json", "k", "2"],
   );
-  assert.deepEqual(args.excludeFingerprints, ["f1", "f2"]);
+  assert.deepEqual(args.excludeFindings, ["f1=a.js", "f2=b=c.js"]);
+  assert.equal(args.removedExcludeFlag, false);
   assert.equal(args.keep, true);
   assert.equal(args.exclude, false);
   assert.equal(args.pretty, true);
-  assert.deepEqual(parseArgs(["gate"]).excludeFingerprints, []);
+  assert.deepEqual(parseArgs(["gate"]).excludeFindings, []);
+  assert.equal(parseArgs(["gate", "--exclude-fingerprint", "f1"]).removedExcludeFlag, true);
+  assert.equal(parseArgs(["gate", "--exclude-fingerprint=f1"]).removedExcludeFlag, true);
   assert.equal(parseArgs(["gate"]).attempt, null);
   const slip = parseArgs(["slip", "--fingerprint", "fp", "--from=v", "--judge", "j", "--rule", "r", "--message", "m x", "--route", "tamper", "--min", "3"]);
   assert.deepEqual([slip.fingerprint, slip.from, slip.judge, slip.rule, slip.message, slip.route, slip.min], ["fp", "v", "j", "r", "m x", "tamper", "3"]);
@@ -327,7 +332,7 @@ test("help lists every verb, flag and exit code", () => {
   for (const verb of ["qac gate", "qac trust [approve]", "qac traps", "qac init", "qac slip --fingerprint=<fp>"]) assert.ok(help.includes(verb), verb);
   for (const flag of [
     "--out=<dir>", "--accept=<file>", "--owned=<file>", "--spec=<file>", "--spec-sha=<sha>", "--baseline=<gate.json>",
-    "--exclude-fingerprint=<fp>", "--loop=<key>", "--attempt=<n>", "--keep", "--min=<n>", "--exclude", "--judge=<id>",
+    "--exclude-finding=<fp>=<file>", "--entry=<id>", "--loop=<key>", "--attempt=<n>", "--keep", "--min=<n>", "--exclude", "--judge=<id>",
     "--rule=<rule>", "--message=<text>", "--route=<route>", "--base=<rev>", "--cwd=<dir>", "--pretty",
   ]) assert.ok(help.includes(flag), flag);
   for (const route of ROUTES) assert.ok(help.includes(route), route);
@@ -351,18 +356,51 @@ test("run gate maps the flags to runGate options and returns its exit code", asy
   const { lines, out } = collect();
   const flags = [
     "--cwd=/w", "--base", "main", "--out=/o", "--accept", "a.json", "--owned", "o.json", "--spec", "s.md", "--spec-sha", "abc",
-    "--baseline", "b.json", "--exclude-fingerprint", "f1", "--exclude-fingerprint=f2", "--loop", "k", "--attempt", "2", "--keep",
+    "--baseline", "b.json", "--exclude-finding", "f1=a.js", "--exclude-finding=f2=", "--loop", "k", "--attempt", "2", "--keep",
   ];
   assert.equal(await run(["gate", ...flags], { out, gateDeps }), 1);
   assert.deepEqual(calls[0], {
     cwd: "/w", base: "main", out: "/o", accept: "a.json", owned: "o.json", spec: "s.md", specSha: "abc", baseline: "b.json",
-    excludeFingerprints: ["f1", "f2"], loop: "k", attempt: 2, keep: true,
+    excludeFindings: [{ fingerprint: "f1", file: "a.js" }, { fingerprint: "f2", file: "" }], loop: "k", attempt: 2, keep: true,
   });
   assert.deepEqual(JSON.parse(lines[0]), { ...verdict, path: "/g/gate.json" });
 
   assert.equal(await run(["gate", "--cwd=/w", "--pretty"], { out, gateDeps }), 1);
-  assert.deepEqual([calls[1].base, calls[1].attempt, calls[1].keep, calls[1].excludeFingerprints], ["HEAD", null, false, []]);
+  assert.deepEqual([calls[1].base, calls[1].attempt, calls[1].keep, calls[1].excludeFindings], ["HEAD", null, false, []]);
   assert.equal(lines[1], "qac gate: findings\ngate: /g/gate.json");
+});
+
+test("run gate refuses a malformed --exclude-finding and the removed --exclude-fingerprint", async () => {
+  const { lines, out } = collect();
+  const gateDeps = { runGate: async () => assert.fail("ran the gate") };
+  assert.equal(await run(["gate", "--exclude-finding", "nofile"], { out, gateDeps }), EXIT.usage);
+  assert.match(JSON.parse(lines[0]).error, /--exclude-finding must be <fingerprint>=<repo-relative file>/);
+  assert.equal(await run(["gate", "--exclude-finding", "=a.js"], { out, gateDeps }), EXIT.usage);
+  assert.equal(await run(["gate", "--exclude-fingerprint", "f1"], { out, gateDeps }), EXIT.usage);
+  assert.match(JSON.parse(lines[2]).error, /--exclude-fingerprint was removed; use --exclude-finding/);
+});
+
+test("run gate prints an index failure instead of dropping it", async () => {
+  const verdict = { verdict: "clean", reason: null, judges: [], findings: [], tamper: [], omitted: [] };
+  const gateDeps = { runGate: async () => ({ exit: 0, gate: verdict, path: "/g/gate.json", indexError: "could not lock /g/gates.jsonl" }) };
+  const { lines, out } = collect();
+  assert.equal(await run(["gate"], { out, gateDeps }), 0);
+  assert.equal(JSON.parse(lines[0]).index_error, "could not lock /g/gates.jsonl");
+  assert.equal(await run(["gate", "--pretty"], { out, gateDeps }), 0);
+  assert.equal(lines[1], "qac gate: clean\ngate: /g/gate.json\nindex: could not lock /g/gates.jsonl");
+});
+
+test("a throw inside the CLI ends with exit 5 and a JSON error, not Node's exit 1", () => {
+  const root = repo({});
+  const blocker = path.join(root, "afile");
+  writeFileSync(blocker, "x");
+  const quiet = mkdtempSync(path.join(tmpdir(), "qac-home-"));
+  const result = spawnSync(process.execPath, [QAC_CLI, "gate", `--cwd=${root}`, `--out=${path.join(blocker, "out")}`], {
+    encoding: "utf8",
+    env: { ...process.env, HOME: quiet, XDG_CONFIG_HOME: quiet, XDG_STATE_HOME: quiet, XDG_DATA_HOME: quiet },
+  });
+  assert.equal(result.status, EXIT.couldNotJudge);
+  assert.ok(JSON.parse(result.stdout.trim()).error.length > 0);
 });
 
 test("run gate refuses a bad --attempt and passes through a gate that could not start", async () => {
@@ -394,7 +432,7 @@ test("run trust reports untrusted commands, approves them, and then exits 0", as
   assert.equal(approved.approved, true);
   assert.equal(approved.trusted, true);
   assert.deepEqual(approved.newly_approved, before.untrusted);
-  assert.ok(gateDeps.files.has("/state/qac/trust.json"));
+  assert.ok(gateDeps.files.has(path.join("/state", "qac", "trust.json")));
 
   assert.equal(await run(["trust", "--cwd=/w"], { out, gateDeps }), EXIT.clean);
   assert.equal(JSON.parse(lines[3]).trusted, true);
@@ -406,7 +444,7 @@ test("run trust handles --accept, a missing config, and unknown actions", async 
   const { lines, out } = collect();
   const config = { version: 1, judges: [] };
   const gateDeps = gitDeps(config);
-  gateDeps.files.set("/w/acc.json", JSON.stringify([{ id: "build", argv: ["make", "check"] }]));
+  gateDeps.files.set(path.resolve("/w", "acc.json"), JSON.stringify([{ id: "build", argv: ["make", "check"] }]));
   assert.equal(await run(["trust", "--cwd=/w", "--accept", "acc.json"], { out, gateDeps }), EXIT.findings);
   assert.deepEqual(JSON.parse(lines[0]).untrusted, [{ source: "accept", argv: ["make", "check"] }]);
   assert.equal(await run(["trust", "approve", "--cwd=/w", "--accept=acc.json"], { out, gateDeps }), EXIT.clean);
@@ -472,6 +510,9 @@ test("run init writes through initConfig and reports what it wrote", async () =>
   assert.equal(lines[1], "qac init: wrote /w/.qac/judges.json (2 judges: qac, fmt); run qac trust approve to trust them");
 
   const outside = { ...gateDeps, gitCommonDir: () => { throw new Error("no repo"); } };
+  const nothing = { ...gateDeps, initConfig: () => ({ path: "/w/.qac/judges.json", created: false, reason: "no judges detected", config: { judges: [] } }) };
+  assert.equal(await run(["init", "--cwd=/w", "--pretty"], { out, gateDeps: nothing }), EXIT.clean);
+  assert.equal(lines.at(-1), "qac init: no judges detected; wrote nothing");
   assert.equal(await run(["init", "--cwd=/w"], { out, gateDeps: outside }), EXIT.notRepo);
   const broken = { ...gateDeps, initConfig: () => { throw new Error("cannot write"); } };
   assert.equal(await run(["init", "--cwd=/w"], { out, gateDeps: broken }), EXIT.usage);
@@ -546,6 +587,20 @@ test("run slip --fingerprint --added and --infeasible settle the existing entry 
 
   assert.equal(await run(["slip", "--fingerprint", "unknown", "--added", "--cwd=/rules"], { out, ledger }), EXIT.usage);
   assert.match(JSON.parse(lines.at(-1)).error, /no ledger entry for fingerprint unknown/);
+});
+
+test("run slip --entry settles exactly that entry when two repositories share a fingerprint", async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "qac-settle-"));
+  const ledger = { file: path.join(dir, "slips.jsonl"), now: () => "2026-10-31T00:00:00.000Z", hasQol: () => true };
+  const sighting = repoIdValue => ({ fingerprint: "fpx", judge: "clippy", rule: "r", message: "m", from: "a", loop: "a", repoId: repoIdValue });
+  recordFingerprint(sighting("aaaa"), ledger);
+  recordFingerprint(sighting("bbbb"), ledger);
+  const { lines, out } = collect();
+  assert.equal(await run(["slip", "--fingerprint", "fpx", "--entry", "fp-bbbb-fpx", "--added", "--cwd=/rules"], { out, ledger }), EXIT.clean);
+  assert.deepEqual(listSlips(ledger).map(entry => [entry.id, entry.status]), [["fp-aaaa-fpx", "open"], ["fp-bbbb-fpx", "rule added"]]);
+  assert.equal(await run(["slip", "--fingerprint", "fpx", "--entry", "fp-cccc-fpx", "--added", "--cwd=/rules"], { out, ledger }), EXIT.usage);
+  assert.match(JSON.parse(lines.at(-1)).error, /no ledger entry fp-cccc-fpx for fingerprint fpx/);
+  assert.equal(listSlips(ledger)[0].status, "open");
 });
 
 test("run slip --fingerprint --added forwards the entry's identity and the settle flags to recordFingerprint", async () => {

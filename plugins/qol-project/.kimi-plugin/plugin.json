@@ -45,6 +45,11 @@
       "command": "node bin/check-qol-logging.cjs"
     },
     {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "command": "node hooks/qac-trust-guard.mjs"
+    },
+    {
       "event": "SessionStart",
       "matcher": "startup|resume|clear",
       "command": "node bin/inject-qol-cli-context.cjs"

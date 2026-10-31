@@ -7,14 +7,20 @@ import test from "node:test";
 import {
   EXIT,
   LoopError,
+  SURFACES,
+  acquireLoopLock,
   assertKey,
   attemptDir,
   commonDir,
+  findOnPath,
+  isArmed,
   listAttempts,
   loopDir,
+  questionFile,
   readAttempts,
   readJson,
   readLoop,
+  readQuestions,
   worktreePath,
   writeJson,
   writeLoop,
@@ -39,8 +45,9 @@ test("commonDir resolves the git common dir against cwd", () => {
     calls.push({ argv, cwd: options.cwd });
     return { status: 0, stdout: "../.git\n", stderr: "" };
   };
-  assert.equal(commonDir("/work/main/sub", { exec }), "/work/main/.git");
-  assert.deepEqual(calls[0], { argv: ["git", "rev-parse", "--git-common-dir"], cwd: "/work/main/sub" });
+  const cwd = path.resolve("/work/main/sub");
+  assert.equal(commonDir(cwd, { exec }), path.resolve("/work/main/.git"));
+  assert.deepEqual(calls[0], { argv: ["git", "rev-parse", "--git-common-dir"], cwd });
 });
 
 test("commonDir rejects a directory outside a repository", () => {
@@ -49,18 +56,19 @@ test("commonDir rejects a directory outside a repository", () => {
 });
 
 test("loop and attempt paths follow the contract layout", () => {
-  const common = "/r/main/.git";
-  assert.equal(loopDir(common, "k1"), "/r/main/.git/qol-sessions/loops/k1");
-  assert.equal(attemptDir("/d", 2), "/d/attempt-2");
-  assert.equal(attemptDir("/d", 2, null), "/d/attempt-2");
-  assert.equal(attemptDir("/d", 2, 1), "/d/attempt-2-1");
+  const common = path.join("/r", "main", ".git");
+  assert.equal(loopDir(common, "k1"), path.join(common, "qol-sessions", "loops", "k1"));
+  assert.equal(attemptDir("/d", 2), path.join("/d", "attempt-2"));
+  assert.equal(attemptDir("/d", 2, null), path.join("/d", "attempt-2"));
+  assert.equal(attemptDir("/d", 2, 1), path.join("/d", "attempt-2-1"));
   assert.throws(() => loopDir(common, "../escape"), LoopError);
 });
 
 test("worktree paths sit beside the main clone under worktrees/loop-<key>", () => {
-  assert.equal(worktreePath("/r/main", "k1"), "/r/worktrees/loop-k1/main");
-  assert.equal(worktreePath("/r/main", "k1", 2), "/r/worktrees/loop-k1-2/main");
-  assert.equal(worktreePath("/r/main", "k1", "control"), "/r/worktrees/loop-k1-control/main");
+  const main = path.join("/r", "main");
+  assert.equal(worktreePath(main, "k1"), path.join("/r", "worktrees", "loop-k1", "main"));
+  assert.equal(worktreePath(main, "k1", 2), path.join("/r", "worktrees", "loop-k1-2", "main"));
+  assert.equal(worktreePath(main, "k1", "control"), path.join("/r", "worktrees", "loop-k1-control", "main"));
 });
 
 test("listAttempts sorts by round then implementer and ignores other entries", () => {
@@ -109,4 +117,91 @@ test("readAttempts joins gate, lane and verdict files", () => {
   assert.equal(first.lane.surface, "headless");
   assert.equal(first.verdict, null);
   assert.equal(second.gate, null);
+});
+
+test("findOnPath walks PATH in order and joins with the platform separator", () => {
+  const first = path.join("/a", "bin");
+  const second = path.join("/b", "bin");
+  const env = { PATH: [first, "", second].join(path.delimiter) };
+  assert.equal(findOnPath("qac", { env, platform: "linux", exists: (file) => file === path.join(second, "qac") }), path.join(second, "qac"));
+  assert.equal(findOnPath("qac", { env, platform: "linux", exists: () => true }), path.join(first, "qac"));
+  assert.equal(findOnPath("qac", { env, platform: "linux", exists: () => false }), null);
+  assert.equal(findOnPath("qac", { env: {}, platform: "linux", exists: () => true }), null);
+});
+
+test("findOnPath on win32 tries the PATHEXT extensions and ignores them elsewhere", () => {
+  const dir = path.join("/tools", "bin");
+  const env = { PATH: dir, PATHEXT: ".EXE;.CMD" };
+  const seen = [];
+  const exists = (file) => {
+    seen.push(file);
+    return file === path.join(dir, "claude.CMD");
+  };
+  assert.equal(findOnPath("claude", { env, platform: "win32", exists }), path.join(dir, "claude.CMD"));
+  assert.deepEqual(seen, [path.join(dir, "claude.EXE"), path.join(dir, "claude.CMD")]);
+  assert.equal(findOnPath("claude", { env, platform: "linux", exists }), null);
+  const defaults = [];
+  findOnPath("qol", { env: { PATH: dir }, platform: "win32", exists: (file) => defaults.push(file) && false });
+  assert.deepEqual(defaults, [".COM", ".EXE", ".BAT", ".CMD", ""].map((extension) => path.join(dir, `qol${extension}`)));
+  assert.equal(findOnPath("qol", { env: { Path: dir }, platform: "win32", exists: (file) => file === path.join(dir, "qol.EXE") }), path.join(dir, "qol.EXE"));
+});
+
+test("SURFACES names the three lane surfaces", () => {
+  assert.deepEqual([...SURFACES], ["kitty", "headless", "handover"]);
+});
+
+test("question files are per implementer slot and readQuestions returns the ones that exist", () => {
+  const dir = tmp();
+  assert.equal(questionFile(dir, null), path.join(dir, "question.json"));
+  assert.equal(questionFile(dir, 2), path.join(dir, "question-2.json"));
+  writeJson(questionFile(dir, 2), { question: "b?" });
+  assert.deepEqual(readQuestions(dir, [1, 2], {}), [{ question: "b?" }]);
+  assert.deepEqual(readQuestions(dir, [null], {}), []);
+});
+
+test("a loop is armed only once its baseline gate could judge", () => {
+  const dir = tmp();
+  assert.equal(isArmed(dir, {}), false);
+  writeJson(path.join(dir, "baseline", "gate.json"), { verdict: "could_not_judge" });
+  assert.equal(isArmed(dir, {}), false);
+  for (const verdict of ["clean", "findings", "flaky_only"]) {
+    writeJson(path.join(dir, "baseline", "gate.json"), { verdict });
+    assert.equal(isArmed(dir, {}), true, verdict);
+  }
+});
+
+test("the loop lock is exclusive, names the holder, is released, and is broken only for a dead pid", () => {
+  const dir = tmp();
+  const lock = path.join(dir, "run.lock");
+  const release = acquireLoopLock(dir, { pid: 111, pidAlive: () => true });
+  assert.equal(JSON.parse(fs.readFileSync(lock, "utf8")).pid, 111);
+  assert.throws(
+    () => acquireLoopLock(dir, { pid: 222, pidAlive: () => true }),
+    (error) => error instanceof LoopError && error.exit === EXIT.usage && error.message.includes("pid 111"),
+  );
+  assert.equal(JSON.parse(fs.readFileSync(lock, "utf8")).pid, 111);
+  release();
+  assert.equal(fs.existsSync(lock), false);
+  fs.writeFileSync(lock, JSON.stringify({ pid: 333 }));
+  const takeover = acquireLoopLock(dir, { pid: 444, pidAlive: (pid) => pid !== 333 });
+  assert.equal(JSON.parse(fs.readFileSync(lock, "utf8")).pid, 444);
+  takeover();
+  fs.writeFileSync(lock, "not json");
+  acquireLoopLock(dir, { pid: 555, pidAlive: () => true })();
+  assert.equal(fs.existsSync(lock), false);
+});
+
+test("a release never removes a lock another process took over", () => {
+  const dir = tmp();
+  const release = acquireLoopLock(dir, { pid: 1, pidAlive: () => true });
+  fs.writeFileSync(path.join(dir, "run.lock"), JSON.stringify({ pid: 2 }));
+  release();
+  assert.equal(JSON.parse(fs.readFileSync(path.join(dir, "run.lock"), "utf8")).pid, 2);
+});
+
+test("the real process check treats the current pid as alive", () => {
+  const dir = tmp();
+  const release = acquireLoopLock(dir, {});
+  assert.throws(() => acquireLoopLock(dir, {}), new RegExp(`pid ${process.pid}`));
+  release();
 });

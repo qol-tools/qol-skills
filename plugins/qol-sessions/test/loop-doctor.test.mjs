@@ -4,8 +4,11 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { chooseSurface, detectLanes, doctorLoop, pruneOrphans } from "../src/loop/doctor.mjs";
+import { doctorLoop, pruneOrphans } from "../src/loop/doctor.mjs";
+import { detectLanes, pickSurface } from "../src/loop/lanes/index.mjs";
+import { EXIT } from "../src/loop/paths.mjs";
 
+const BIN = path.join("/bin");
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = new Date("2026-10-31T12:00:00Z");
 
@@ -23,11 +26,11 @@ function pluginRoot({ band = true } = {}) {
 }
 
 function deps({ qol = true, receipt = true, headless = true, qac = true, root = pluginRoot() } = {}) {
-  const present = new Set([qol && "/bin/qol", headless && "/bin/claude", qac && "/bin/qac"].filter(Boolean));
+  const present = new Set([qol && path.join(BIN, "qol"), headless && path.join(BIN, "claude"), qac && path.join(BIN, "qac")].filter(Boolean));
   return {
     pluginRoot: root,
     nodeVersion: "22.1.0",
-    env: { PATH: "/bin", HOME: "/home/u", ...(headless ? { QOLS_HEADLESS_LANES: "1" } : {}) },
+    env: { PATH: BIN, HOME: "/home/u", ...(headless ? { QOLS_HEADLESS_LANES: "1" } : {}) },
     exists: (file) => present.has(file) || (file.startsWith(os.tmpdir()) && fs.existsSync(file)),
     readdir: (dir) => fs.readdirSync(dir),
     exec: (argv) => {
@@ -42,18 +45,18 @@ function byName(result) {
   return Object.fromEntries(result.checks.map((entry) => [entry.check, entry]));
 }
 
-test("detectLanes and chooseSurface follow the contract order", () => {
-  assert.deepEqual(detectLanes(deps()), { qol: "/bin/qol", kitty: true, claude: "/bin/claude", headless: true });
-  assert.equal(chooseSurface(detectLanes(deps())), "kitty");
-  assert.equal(chooseSurface(detectLanes(deps({ receipt: false }))), "headless");
-  assert.equal(chooseSurface(detectLanes(deps({ qol: false, headless: false }))), "handover");
-  assert.equal(chooseSurface({ kitty: true, headless: true }, "handover"), "handover");
+test("the one lane detector reports the facts and picks the contract order", () => {
+  assert.deepEqual(detectLanes(deps()), { qol: path.join(BIN, "qol"), kitty: true, claude: path.join(BIN, "claude"), headless: true });
+  assert.equal(pickSurface({}, deps()), "kitty");
+  assert.equal(pickSurface({}, deps({ receipt: false })), "headless");
+  assert.equal(pickSurface({}, deps({ qol: false, headless: false })), "handover");
+  assert.equal(pickSurface({ force: "handover" }, deps()), "handover");
 });
 
 test("headless lanes need both the env flag and claude on PATH", () => {
-  const flagOnly = { ...deps({ headless: false }), env: { PATH: "/bin", QOLS_HEADLESS_LANES: "1" } };
+  const flagOnly = { ...deps({ headless: false }), env: { PATH: BIN, QOLS_HEADLESS_LANES: "1" } };
   assert.equal(detectLanes(flagOnly).headless, false);
-  const claudeOnly = { ...deps({ headless: true }), env: { PATH: "/bin" } };
+  const claudeOnly = { ...deps({ headless: true }), env: { PATH: BIN } };
   assert.equal(detectLanes(claudeOnly).headless, false);
 });
 
@@ -61,6 +64,7 @@ test("doctor passes when everything is installed", () => {
   const result = doctorLoop({ cwd: "/repo" }, deps());
   const checks = byName(result);
   assert.equal(result.ok, true);
+  assert.equal(result.exit, EXIT.ok);
   for (const name of ["node", "qol", "kitty lanes", "headless lanes", "qac", "hooks module", "trust", "mcp", "script root"]) {
     assert.equal(checks[name].status, "pass", `${name}: ${checks[name].detail}`);
   }
@@ -70,7 +74,10 @@ test("missing lanes only warn because handover always works", () => {
   const result = doctorLoop({ cwd: "/repo" }, deps({ qol: false, headless: false }));
   const checks = byName(result);
   assert.equal(result.ok, true);
+  assert.equal(result.exit, EXIT.ok);
   assert.equal(checks.qol.status, "warn");
+  assert.equal(checks.mcp.status, "warn");
+  assert.match(checks.mcp.detail, /qol-sessions MCP will show failed/);
   assert.equal(checks["kitty lanes"].status, "warn");
   assert.equal(checks["headless lanes"].status, "warn");
   assert.ok(checks["kitty lanes"].fix);
@@ -79,10 +86,12 @@ test("missing lanes only warn because handover always works", () => {
 test("a missing qac, a missing hooks module or an old node fails the doctor", () => {
   const noQac = doctorLoop({ cwd: "/repo" }, deps({ qac: false }));
   assert.equal(noQac.ok, false);
+  assert.equal(noQac.exit, EXIT.infra);
   assert.equal(byName(noQac).qac.status, "fail");
   assert.equal(byName(noQac).trust.status, "warn");
   const noBand = doctorLoop({ cwd: "/repo" }, deps({ root: pluginRoot({ band: false }) }));
   assert.equal(noBand.ok, false);
+  assert.equal(noBand.exit, EXIT.infra);
   assert.equal(byName(noBand)["hooks module"].status, "fail");
   const oldNode = doctorLoop({ cwd: "/repo" }, { ...deps(), nodeVersion: "16.20.0" });
   assert.equal(byName(oldNode).node.status, "fail");
@@ -171,6 +180,15 @@ test("prune removes only orphaned loop worktrees older than three days", () => {
   for (const name of ["loop-new", "loop-live", "loop-done", "loop-gate"]) {
     assert.equal(ctx.calls.some((argv) => argv.includes(ctx.wt(name)) && argv[1] === "worktree" && argv[2] === "remove"), false, name);
   }
+});
+
+test("prune keeps every worktree a paused close kept", () => {
+  const ctx = pruneSetup();
+  const closed = path.join(path.dirname(ctx.repo), "main", ".git", "qol-sessions", "loops", "gone", "closed.json");
+  fs.writeFileSync(closed, JSON.stringify({ outcome: "paused", kept: { path: ctx.wt("loop-new") }, kept_all: [{ path: ctx.wt("loop-old") }, { path: ctx.wt("loop-new") }] }));
+  const result = pruneOrphans({ cwd: ctx.repo }, ctx.prune);
+  assert.deepEqual(result.pruned, []);
+  assert.equal(ctx.calls.some((argv) => argv.includes(ctx.wt("loop-old")) && argv[2] === "remove"), false);
 });
 
 test("prune never touches a worktree no loop recorded, even under worktrees/loop-*/ and long idle", () => {

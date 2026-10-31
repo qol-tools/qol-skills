@@ -5,7 +5,9 @@ import { spawnSync } from "node:child_process";
 
 export const EXIT = Object.freeze({ ok: 0, usage: 2, infra: 10, needsTrust: 11, escalation: 12, question: 13, handover: 14 });
 
-export const KEY_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
+export const SURFACES = Object.freeze(["kitty", "headless", "handover"]);
+
+export const KEY_PATTERN =/^[a-z0-9][a-z0-9-]{0,63}$/;
 
 const RESERVED_SUFFIX = /-(\d+|control)$/;
 
@@ -32,7 +34,7 @@ export function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
-export function defaultExec(argv, options = {}) {
+function defaultExec(argv, options = {}) {
   const result = spawnSync(argv[0], argv.slice(1), {
     cwd: options.cwd,
     env: options.env ?? process.env,
@@ -79,10 +81,15 @@ export function withDefaults(deps = {}) {
 
 export function findOnPath(name, deps) {
   const d = withDefaults(deps);
-  for (const dir of String(d.env.PATH ?? "").split(path.delimiter)) {
+  const extensions = (d.platform ?? process.platform) === "win32"
+    ? String(d.env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD").split(";").filter(Boolean)
+    : [];
+  for (const dir of String(d.env.PATH ?? d.env.Path ?? "").split(path.delimiter)) {
     if (!dir) continue;
-    const candidate = path.join(dir, name);
-    if (d.exists(candidate)) return candidate;
+    const base = path.join(dir, name);
+    for (const candidate of [...extensions.map((extension) => `${base}${extension}`), base]) {
+      if (d.exists(candidate)) return candidate;
+    }
   }
   return null;
 }
@@ -114,6 +121,59 @@ export function attemptDir(dir, n, index) {
 
 export function controlDir(dir) {
   return path.join(dir, "control");
+}
+
+export function questionFile(dir, slot) {
+  return path.join(dir, slot === undefined || slot === null ? "question.json" : `question-${slot}.json`);
+}
+
+export function readQuestions(dir, slots, deps) {
+  return slots
+    .map((slot) => readJson(questionFile(dir, slot), deps))
+    .filter(Boolean);
+}
+
+export function isArmed(dir, deps) {
+  const baseline = readJson(path.join(dir, "baseline", "gate.json"), deps);
+  return Boolean(baseline) && baseline.verdict !== "could_not_judge";
+}
+
+function processAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error.code === "EPERM";
+  }
+}
+
+function createExclusive(file, text) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, text, { flag: "wx" });
+}
+
+export function acquireLoopLock(dir, deps) {
+  const d = withDefaults(deps);
+  const file = path.join(dir, "run.lock");
+  const alive = d.pidAlive ?? processAlive;
+  const pid = d.pid ?? process.pid;
+  const body = `${JSON.stringify({ pid, at: d.now().toISOString() })}\n`;
+  for (let tries = 0; tries < 3; tries += 1) {
+    try {
+      (d.createExclusive ?? createExclusive)(file, body);
+      return () => {
+        if (readJson(file, d)?.pid === pid) d.remove(file);
+      };
+    } catch (error) {
+      if (error.code !== "EEXIST") throw error;
+    }
+    const holder = Number(readJson(file, d)?.pid);
+    if (Number.isInteger(holder) && holder > 0 && alive(holder)) {
+      throw new LoopError(`loop ${path.basename(dir)} is already being run or closed by pid ${holder}`);
+    }
+    d.remove(file);
+  }
+  throw new LoopError(`cannot take the lock ${file}`, EXIT.infra);
 }
 
 export function listAttempts(dir, deps) {

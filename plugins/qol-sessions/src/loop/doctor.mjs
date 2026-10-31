@@ -1,12 +1,12 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveQac, qacTrust } from "./gate.mjs";
+import { detectLanes } from "./lanes/index.mjs";
 import {
   EXIT,
   LoopError,
   commonDir,
   deleteBranch,
-  findOnPath,
   loopsRoot,
   mainClone,
   readJson,
@@ -17,27 +17,7 @@ import {
 
 const PRUNE_AGE_MS = 3 * 24 * 60 * 60 * 1000;
 
-export function detectLanes(deps) {
-  const d = withDefaults(deps);
-  const qol = findOnPath("qol", d);
-  let kitty = false;
-  if (qol) {
-    const help = d.exec([qol, "sessions", "spawn", "--help"], {});
-    kitty = /receipt_path/.test(`${help.stdout ?? ""}${help.stderr ?? ""}`);
-  }
-  const claude = findOnPath("claude", d);
-  const headless = d.env.QOLS_HEADLESS_LANES === "1" && claude !== null;
-  return { qol, kitty, claude, headless };
-}
-
-export function chooseSurface(lanes, forced) {
-  if (forced) return forced;
-  if (lanes.kitty) return "kitty";
-  if (lanes.headless) return "headless";
-  return "handover";
-}
-
-export function defaultPluginRoot() {
+function defaultPluginRoot() {
   return fileURLToPath(new URL("../../", import.meta.url));
 }
 
@@ -62,11 +42,14 @@ function hooksCheck(root, d) {
   return check("hooks module", "fail", "hooks/prompt-modules.json does not list ./answer-band.ts", "list ./answer-band.ts in hooks/prompt-modules.json");
 }
 
-function mcpCheck(root, d) {
+function mcpCheck(root, lanes, d) {
   const mcp = readJson(path.join(root, "mcp.json"), d);
-  return mcp?.mcpServers?.["qol-sessions"]
-    ? check("mcp", "pass", "mcp.json declares the qol-sessions server")
-    : check("mcp", "fail", "mcp.json does not declare the qol-sessions server", "reinstall the qol-sessions plugin");
+  if (!mcp?.mcpServers?.["qol-sessions"]) {
+    return check("mcp", "fail", "mcp.json does not declare the qol-sessions server", "reinstall the qol-sessions plugin");
+  }
+  return lanes.qol
+    ? check("mcp", "pass", "mcp.json declares the qol-sessions server and qol is on PATH")
+    : check("mcp", "warn", "mcp.json declares the qol-sessions server, but qol is not on PATH so the qol-sessions MCP will show failed", "install qol, or disable the qol-sessions server in /mcp");
 }
 
 function scriptRootCheck(root, d) {
@@ -120,6 +103,7 @@ function loopWorktrees(common, repoRoot, d) {
     for (const worktree of loop?.worktrees ?? []) recorded.set(worktree.path, worktree.branch ?? null);
     if (closed) {
       if (closed.kept?.path) live.add(closed.kept.path);
+      for (const kept of closed.kept_all ?? []) if (kept?.path) live.add(kept.path);
       continue;
     }
     if (!loop) continue;
@@ -183,10 +167,11 @@ export function doctorLoop(options = {}, deps) {
       : check("qac", "fail", "qac is not on PATH and no qol-project plugin cache holds scripts/qac.mjs", "install the qol-project plugin"),
     hooksCheck(root, d),
     trustCheck(cwd, qac, d),
-    mcpCheck(root, d),
+    mcpCheck(root, lanes, d),
     scriptRootCheck(root, d),
   ];
-  const result = { ok: !checks.some((entry) => entry.status === "fail"), checks, lanes };
+  const ok = !checks.some((entry) => entry.status === "fail");
+  const result = { exit: ok ? EXIT.ok : EXIT.infra, ok, checks, lanes };
   if (options.prune) result.prune = pruneOrphans({ cwd }, d);
   return result;
 }

@@ -67,15 +67,18 @@ it remains authorized, preserving any later user redirect.
    The exit notice of that command is the wake, and the exit code says what to do next.
    Review, adversarial and debug lanes still go through `session_spawn` with lanes.
 6. Act on the exit code:
-   - 0: the gate is green. Read every changed file in the attempt's `diff.patch` against the spec personally, because a green gate is not acceptance.
+   - 0: the gate is green for the tree the worktree holds now: `run` and `close --outcome accepted` compare `gate.json`'s loop, attempt, base and tree with the worktree and gate again on a mismatch. Read every changed file in the attempt's `diff.patch` against the spec personally, because a green gate is not acceptance.
      Run repository-owned deterministic formatters in-session per the verification policy instead of spending a lane turn to reproduce their output.
    - 10: read the output and repair the cause, then run again. The driver never reports a crash or an empty diff as a pass.
-   - 12: the gate was red twice. Read the spec, both `diff.patch` files and both `gate.json` files from the packet, then give the verdict with `qols loop verdict <key> --blame spec|impl|judge --finding <id> --hunk <path:line> --why <text>`.
+   - 2: bad arguments, another driver holding the loop (the output names its pid), or `state: spec_blamed`, which means a recorded `spec` verdict ended the loop: write the corrected spec and open `<key>-v2`.
+   - 12: the gate was red twice, or two implementers disagree (`ambiguous: true` with the reasons). For red gates read the spec, both `diff.patch` files and both `gate.json` files from the packet, then give the verdict with `qols loop verdict <key> --blame spec|impl|judge --finding <id> --hunk <path:line> --why <text>`.
      After `impl` or `judge`, run `qols loop run <key>` again. After `spec`, write the corrected spec and open `<key>-v2`.
-   - 13: a lane asked a question. Answer it from the spec, or ask the user when the spec does not decide it, then run `qols loop run <key> --answer <text>` in the background.
-   - 14: no lane surface is available. Give the user the brief path and worktree path from the output, and run `qols loop run <key> --gate-only` once they finish.
-7. Accept with `qols loop close <key> --outcome accepted`, or `--outcome paused --remaining <text>` for a redirect or blocker.
-   The driver writes the retro line, so the architect only runs the drift gate and any nudge pipeline that follows it.
+     For `ambiguous: true` read both diffs and either keep one with `qols loop close <key> --outcome accepted --keep <N>` or fix the spec and open `<key>-v2`.
+   - 13: a lane asked a question. Answer it from the spec, or ask the user when the spec does not decide it, then run `qols loop run <key> --answer <text>` in the background, adding `--index <N>` when the loop has two implementers (the output lists every open question with its index).
+   - 14: no lane surface is available, or a red `--gate-only` wrote the retry brief. Give the user the brief paths and worktree paths from the output, and run `qols loop run <key> --gate-only` once they finish.
+   - 11, 13 and 14 wait on the user or a second session, so the Stop guard lets the turn end on them; 12 keeps the block until the verdict is recorded.
+7. Accept with `qols loop close <key> --outcome accepted`, or `--outcome paused --remaining <text>` for a redirect or blocker; a paused close keeps every worktree, and a closed loop cannot be closed again with the other outcome.
+   The driver writes the retro line, so the architect only runs the drift gate and any nudge pipeline that follows it; pass `--skill-gap <text>` when the spec guidance or this skill fell short, and a `spec` verdict fills the gap by itself.
    Commit per git-trees, then push the branch and open its pull request per qol-monorepo-rules without asking: auto-merge armed, or a draft that waits for the user's approval when the change involves design (UI, or architecture such as a new command, a file format or a large refactor), with `Session: <key>` as the body's last line; never push `main` unless asked.
 
 ## Lane brief

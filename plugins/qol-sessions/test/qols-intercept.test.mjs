@@ -375,12 +375,20 @@ test("qols loop with nothing, a key, or doctor maps onto the loop driver", () =>
   assert.deepEqual(parsePrompt("qols loop DOCTOR"), { verb: "loop", args: ["doctor"] });
 });
 
+test("qols loop status is the bare form, qols loop status KEY is the keyed form, and doctor passes --prune", () => {
+  assert.deepEqual(parsePrompt("qols loop status"), { verb: "loop", args: ["status"] });
+  assert.deepEqual(parsePrompt("qols loop STATUS"), { verb: "loop", args: ["status"] });
+  assert.deepEqual(parsePrompt("qols loop status fix-cache"), { verb: "loop", args: ["status", "fix-cache"] });
+  assert.deepEqual(parsePrompt("qols loop doctor --prune"), { verb: "loop", args: ["doctor", "--prune"] });
+  assert.deepEqual(loopCommand(parsePrompt("qols loop doctor --prune"), "/repo", "/plugin")[1], ["doctor", "--prune", "--pretty", "--cwd", "/repo"]);
+});
+
 test("qols loop open, run, verdict and close answer with a usage line that sends them to the architect's Bash", () => {
   for (const verb of ["open", "run", "verdict", "close", "RUN"]) {
     for (const prompt of [`qols loop ${verb}`, `qols loop ${verb} k --spec s.md`]) {
       const { usage, args } = parsePrompt(prompt);
       assert.equal(args, undefined, prompt);
-      assert.match(usage, /^usage: qols loop \[key \| doctor\]; open, run, verdict, close run from the architect's Bash: node scripts\/loop\.mjs /, prompt);
+      assert.match(usage, /^usage: qols loop \[status \[key\] \| key \| doctor \[--prune\]\]; open, run, verdict, close run from the architect's Bash: qols loop /, prompt);
       assert.ok(usage.endsWith(`${verb.toLowerCase()} ...`), prompt);
     }
   }
@@ -392,7 +400,10 @@ test("qols loop open, run, verdict and close answer with a usage line that sends
 test("qols loop refuses extra words and flags with a diagnostic", () => {
   const cases = [
     ["qols loop key more", "more", "loop takes one key or doctor"],
-    ["qols loop doctor --prune", "--prune", "loop takes one key or doctor"],
+    ["qols loop doctor --bogus", "--bogus", "doctor takes only --prune"],
+    ["qols loop doctor --prune --prune", "--prune", "doctor takes only --prune"],
+    ["qols loop status a b", "b", "loop takes one key or doctor"],
+    ["qols loop status --x", "--x", "a loop key is a name, not a flag"],
     ["qols loop --help", "--help", "a loop key is a name, not a flag"],
   ];
   for (const [prompt, token, label] of cases) {
@@ -401,7 +412,7 @@ test("qols loop refuses extra words and flags with a diagnostic", () => {
     assert.equal(diagnostic.title, `\`qols loop\` does not take \`${token}\``, prompt);
     assert.equal(diagnostic.label, label, prompt);
     assert.equal(prompt.slice(diagnostic.start, diagnostic.end), token, prompt);
-    assert.match(renderDiagnostic(diagnostic), /usage: qols loop \[key \| doctor\]$/, prompt);
+    assert.match(renderDiagnostic(diagnostic), /usage: qols loop \[status \[key\] \| key \| doctor \[--prune\]\]$/, prompt);
   }
 });
 

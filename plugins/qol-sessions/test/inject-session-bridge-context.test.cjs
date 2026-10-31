@@ -25,23 +25,25 @@ const {
     shouldInjectTierRule,
 } = require('../bin/inject-session-bridge-context.cjs');
 
-function fakeQolDir(body) {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qol-fake-bin-'));
-    if (body !== null) {
-        const file = path.join(dir, 'qol');
-        fs.writeFileSync(file, `#!/bin/sh\n${body}\n`);
-        fs.chmodSync(file, 0o755);
-    }
-    return dir;
-}
+const PROBE_PRELOAD = `
+const childProcess = require('node:child_process');
+const probe = JSON.parse(process.env.QOL_TEST_PROBE);
+childProcess.spawnSync = () => (probe.missing
+    ? { error: new Error('ENOENT'), status: null, stdout: '', stderr: '' }
+    : { status: probe.status, stdout: probe.stdout, stderr: '' });
+`;
 
-function run(payload, qolBody = "printf '%s' '{\"lane_spawn\":true}'") {
-    const dir = fakeQolDir(qolBody);
+const LANES_READY = { status: 0, stdout: JSON.stringify({ lane_spawn: true }) };
+
+function run(payload, probe = LANES_READY) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qol-probe-'));
     try {
-        return spawnSync(process.execPath, [HOOK], {
+        const preload = path.join(dir, 'probe-preload.cjs');
+        fs.writeFileSync(preload, PROBE_PRELOAD);
+        return spawnSync(process.execPath, ['--require', preload, HOOK], {
             input: JSON.stringify(payload),
             encoding: 'utf8',
-            env: { ...process.env, PATH: dir },
+            env: { ...process.env, QOL_TEST_PROBE: JSON.stringify(probe) },
         });
     } finally {
         fs.rmSync(dir, { recursive: true });
@@ -150,8 +152,14 @@ test('the tier rule waits until a lane can actually spawn at the tier', () => {
 test('a failed capability probe is silent instead of an error', () => {
     const qolCwd = '/media/kmrh47/WD_SN850X/Git/qol-skills';
     const payload = { hook_event_name: 'UserPromptSubmit', prompt: 'fix padding', cwd: qolCwd };
-    for (const body of [null, 'exit 3', 'printf "%s" "not json"', "printf '%s' '{\"lane_spawn\":false}'"]) {
-        const result = run(payload, body);
+    const probes = [
+        { missing: true },
+        { status: 3, stdout: '' },
+        { status: 0, stdout: 'not json' },
+        { status: 0, stdout: JSON.stringify({ lane_spawn: false }) },
+    ];
+    for (const probe of probes) {
+        const result = run(payload, probe);
         assert.equal(result.status, 0);
         assert.equal(result.stdout, '');
         assert.equal(result.stderr, '');

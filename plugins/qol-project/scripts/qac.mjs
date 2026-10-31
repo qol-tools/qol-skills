@@ -3,25 +3,25 @@ import { fileURLToPath } from "node:url";
 import { HOOKS, fixBrief, lint, renderHelp } from "../src/qac.mjs";
 import { progressReporter } from "../src/progress.mjs";
 import { openReport, writeReport } from "../src/report.mjs";
-import { listSlips, recordFingerprint, recordSlip, renderSlip, renderSlips } from "../src/slips.mjs";
+import { ROUTES, listSlips, recordFingerprint, recordSlip, renderSlip, renderSlips } from "../src/slips.mjs";
 import { loadConfig, repoId } from "../src/gate/config.mjs";
-import { readAccept, renderGate, runGate } from "../src/gate/gate.mjs";
+import { GATE_EXIT, readAccept, renderGate, runGate } from "../src/gate/gate.mjs";
 import { findTraps, readGates } from "../src/gate/index.mjs";
 import { initConfig } from "../src/gate/init.mjs";
 import { gitCommonDir } from "../src/gate/tree.mjs";
 import { approveTrust, trustState } from "../src/gate/trust.mjs";
 
-export const EXIT = { clean: 0, findings: 1, usage: 2, notRepo: 3, forkFailed: 4, couldNotJudge: 5, flakyOnly: 6 };
+export const EXIT = { ...GATE_EXIT, forkFailed: 4 };
 
 export const VERBS = ["lint", "fix", "slip", "slips", "gate", "trust", "traps", "init"];
-export const ROUTES = ["qac-check", "repo-linter", "tamper", "agent-behaviour", "judge-revert"];
+export { ROUTES };
 
 const VALUE_FLAGS = [
   "prefix", "cwd", "base", "from", "infeasible", "rules-repo",
-  "out", "accept", "owned", "spec", "spec-sha", "baseline", "exclude-fingerprint",
-  "loop", "attempt", "min", "fingerprint", "judge", "rule", "message", "route",
+  "out", "accept", "owned", "spec", "spec-sha", "baseline", "exclude-finding",
+  "loop", "attempt", "min", "fingerprint", "entry", "judge", "rule", "message", "route",
 ];
-const REPEATABLE_FLAGS = ["exclude-fingerprint"];
+const REPEATABLE_FLAGS = ["exclude-finding"];
 const DEFAULT_MIN_LOOPS = 2;
 
 export function parseArgs(argv) {
@@ -62,11 +62,13 @@ export function parseArgs(argv) {
     spec: values.spec || null,
     specSha: values["spec-sha"] || null,
     baseline: values.baseline || null,
-    excludeFingerprints: lists["exclude-fingerprint"] ?? [],
+    excludeFindings: lists["exclude-finding"] ?? [],
+    removedExcludeFlag: flags.some(flag => flag.split("=")[0] === "--exclude-fingerprint"),
     loop: values.loop || null,
     attempt: values.attempt ?? null,
     min: values.min ?? null,
     fingerprint: values.fingerprint || null,
+    entry: values.entry || null,
     judge: values.judge || null,
     rule: values.rule || null,
     message: values.message || null,
@@ -94,9 +96,22 @@ function integerFlag(value, fallback) {
   return Number.isInteger(number) && number > 0 ? number : null;
 }
 
+function parseExcludeFindings(values) {
+  const rules = [];
+  for (const value of values) {
+    const at = value.indexOf("=");
+    if (at <= 0) return null;
+    rules.push({ fingerprint: value.slice(0, at), file: value.slice(at + 1) });
+  }
+  return rules;
+}
+
 async function gateVerb(args, out, gateDeps) {
+  if (args.removedExcludeFlag) return fail(out, args, "--exclude-fingerprint was removed; use --exclude-finding <fingerprint>=<repo-relative file>", EXIT.usage);
   const attempt = integerFlag(args.attempt, undefined);
   if (attempt === null) return fail(out, args, "--attempt must be a positive integer", EXIT.usage);
+  const excludeFindings = parseExcludeFindings(args.excludeFindings);
+  if (excludeFindings === null) return fail(out, args, "--exclude-finding must be <fingerprint>=<repo-relative file>", EXIT.usage);
   const result = await (gateDeps.runGate ?? runGate)({
     cwd: args.cwd,
     base: args.base || "HEAD",
@@ -106,13 +121,16 @@ async function gateVerb(args, out, gateDeps) {
     spec: args.spec,
     specSha: args.specSha,
     baseline: args.baseline,
-    excludeFingerprints: args.excludeFingerprints,
+    excludeFindings,
     loop: args.loop,
     attempt: attempt ?? null,
     keep: args.keep,
   }, gateDeps);
   if (result.gate === null) return fail(out, args, result.error, result.exit);
-  out(args.pretty ? `${renderGate(result.gate, args.prefix)}\ngate: ${result.path}` : JSON.stringify({ ...result.gate, path: result.path }));
+  const indexNote = result.indexError ? { index_error: result.indexError } : {};
+  out(args.pretty
+    ? `${renderGate(result.gate, args.prefix)}\ngate: ${result.path}${result.indexError ? `\nindex: ${result.indexError}` : ""}`
+    : JSON.stringify({ ...result.gate, path: result.path, ...indexNote }));
   return result.exit;
 }
 
@@ -188,23 +206,28 @@ function initVerb(args, out, gateDeps) {
     return fail(out, args, error.message, EXIT.usage);
   }
   const ids = (result.config?.judges ?? []).map(judge => judge.id);
+  if (result.reason && !result.created) {
+    out(args.pretty ? `${args.prefix} init: ${result.reason}; wrote nothing` : JSON.stringify(result));
+    return EXIT.clean;
+  }
   out(args.pretty
     ? `${args.prefix} init: ${result.created ? "wrote" : "kept"} ${result.path} (${ids.length} judges${ids.length ? `: ${ids.join(", ")}` : ""}); run ${args.prefix} trust approve to trust them`
     : JSON.stringify(result));
   return EXIT.clean;
 }
 
-function settleTarget(fingerprint, ledger) {
-  const matches = listSlips(ledger).filter(entry => entry.kind === "fingerprint" && entry.fingerprint === fingerprint);
-  return matches.find(entry => entry.status === "open") ?? matches[0] ?? null;
+function settleTarget({ fingerprint, entry }, ledger) {
+  const matches = listSlips(ledger).filter(item => item.kind === "fingerprint" && item.fingerprint === fingerprint);
+  if (entry) return matches.find(item => item.id === entry) ?? null;
+  return matches.find(item => item.status === "open") ?? matches[0] ?? null;
 }
 
 function fingerprintSlip(args, out, ledger) {
   const settling = Boolean(args.added || args.infeasible);
   if (!settling && !args.from) return fail(out, args, "--fingerprint needs --from <source>", EXIT.usage);
   if (args.route && !ROUTES.includes(args.route)) return fail(out, args, `--route must be one of ${ROUTES.join(", ")}`, EXIT.usage);
-  const known = settling ? settleTarget(args.fingerprint, ledger) : null;
-  if (settling && known === null) return fail(out, args, `no ledger entry for fingerprint ${args.fingerprint}`, EXIT.usage);
+  const known = settling ? settleTarget(args, ledger) : null;
+  if (settling && known === null) return fail(out, args, `no ledger entry${args.entry ? ` ${args.entry}` : ""} for fingerprint ${args.fingerprint}`, EXIT.usage);
   let repo = known ? known.repo_id : null;
   if (!known) {
     try {
@@ -309,5 +332,11 @@ export function run(argv, {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  Promise.resolve(run(process.argv.slice(2))).then(code => process.exit(code));
+  Promise.resolve()
+    .then(() => run(process.argv.slice(2)))
+    .then(code => process.exit(code))
+    .catch(error => {
+      process.stdout.write(`${JSON.stringify({ error: String(error?.message ?? error).split("\n")[0] })}\n`);
+      process.exit(EXIT.couldNotJudge);
+    });
 }

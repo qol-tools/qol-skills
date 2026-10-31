@@ -1,17 +1,13 @@
-import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { sha256 } from "./config.mjs";
 
-export const LOCKFILES = ["package-lock.json", "pnpm-lock.yaml", "yarn.lock", "Cargo.lock", "uv.lock", "poetry.lock", "go.sum"];
+const LOCKFILES = ["package-lock.json", "pnpm-lock.yaml", "yarn.lock", "Cargo.lock", "uv.lock", "poetry.lock", "go.sum"];
 const MARKER_LENGTH = 16;
 const DEFAULT_TIMEOUT_S = 600;
 const MAX_BUFFER = 64 * 1024 * 1024;
 const STDERR_TAIL = 400;
-
-function sha256(data) {
-  return createHash("sha256").update(data).digest("hex");
-}
 
 export function setupMarker({ cwd, commonDir }, deps = {}) {
   const exists = deps.exists ?? existsSync;

@@ -1,6 +1,6 @@
 import { readFileSync, rmSync } from "node:fs";
 import path from "node:path";
-import { loadConfig, normalizeConfig, normalizeJudge, sha256, writeText } from "./config.mjs";
+import { loadConfig, normalizeConfig, normalizeJudge, writeText } from "./config.mjs";
 import * as fingerprintModule from "./fingerprint.mjs";
 import * as indexModule from "./index.mjs";
 import { runJudge } from "./judges.mjs";
@@ -74,12 +74,35 @@ function readBaseline(file, cwd, deps) {
   if (!file) return [];
   const raw = readJson(file, cwd, "--baseline", deps);
   if (!isObject(raw) || !Array.isArray(raw.findings)) throw new Error(`--baseline ${file} is not a gate.json`);
-  return raw.findings.filter(finding => finding.fingerprint).map(finding => ({ fingerprint: finding.fingerprint, output_sha: finding.output_sha ?? null }));
+  const exits = new Map((Array.isArray(raw.judges) ? raw.judges : []).map(judge => [judge.id, judge.exit ?? null]));
+  return raw.findings
+    .filter(finding => finding.fingerprint)
+    .map(finding => ({ judge: finding.judge ?? null, fingerprint: finding.fingerprint, exit: exits.get(finding.judge) ?? null }));
 }
 
-function inBaseline(baseline, finding) {
-  return baseline.some(known => known.fingerprint === finding.fingerprint
-    && (finding.promotable || (finding.output_sha !== undefined && known.output_sha === finding.output_sha)));
+const baselineKey = (judge, fingerprint) => `${judge}\n${fingerprint}`;
+
+function baselinePool(baseline) {
+  const pool = new Map();
+  for (const known of baseline) {
+    const key = baselineKey(known.judge, known.fingerprint);
+    pool.set(key, [...(pool.get(key) ?? []), known.exit]);
+  }
+  return pool;
+}
+
+function absorbed(pool, judgeId, finding, exit) {
+  const exits = pool.get(baselineKey(judgeId, finding.fingerprint));
+  const at = exits ? exits.findIndex(known => finding.promotable || known === exit) : -1;
+  if (at < 0) return false;
+  exits.splice(at, 1);
+  return true;
+}
+
+const fileKey = file => String(file ?? "").replace(/\\/g, "/");
+
+function excluded(rules, finding) {
+  return rules.some(rule => rule.fingerprint === finding.fingerprint && fileKey(rule.file) === fileKey(finding.file));
 }
 
 function readInputs(options, cwd, deps) {
@@ -185,17 +208,16 @@ async function judgeAll(judges, context, deps, m, filters) {
         message: finding.message,
         fingerprint: m.fingerprint.fingerprint(judge.id, finding.rule, finding.message),
         promotable: canPromote,
-        ...(canPromote ? {} : { output_sha: sha256(fingerprintModule.normalizeMessage(result.output)) }),
       };
     });
     let kept = [];
     if (result.status === "flaky") flaky.push(...marked);
     else if (result.status === "error") errored.push(judge.id);
-    else kept = marked.filter(finding => !filters.exclude.has(finding.fingerprint));
+    else kept = marked.filter(finding => !excluded(filters.exclude, finding));
     const numbered = kept.map((finding, at) => ({
       id: `${judge.id}#${at + 1}`,
       ...finding,
-      baseline: inBaseline(filters.baseline, finding),
+      baseline: absorbed(filters.baseline, judge.id, finding, result.exit ?? null),
     }));
     findings.push(...numbered);
     entries.push({
@@ -218,6 +240,7 @@ async function judgeAll(judges, context, deps, m, filters) {
 function verdictOf({ findings, tamper, entries, errored }) {
   if (tamper.length > 0 || findings.some(finding => !finding.baseline)) return { verdict: "findings", reason: null };
   if (errored.length > 0) return { verdict: "could_not_judge", reason: `judge error: ${errored.join(", ")}` };
+  if (entries.every(entry => entry.status === "omitted")) return { verdict: "could_not_judge", reason: "no local judges" };
   const flaky = entries.filter(entry => entry.status === "flaky").map(entry => entry.id);
   if (flaky.length > 0) return { verdict: "flaky_only", reason: `flaky: ${flaky.join(", ")}` };
   return { verdict: "clean", reason: null };
@@ -260,21 +283,23 @@ function persist(gate, logs, out, options, deps) {
 
 export async function runGate(options, deps = {}) {
   const m = modulesOf(deps);
-  const cwd = path.resolve(options.cwd ?? process.cwd());
+  const invoked = path.resolve(options.cwd ?? process.cwd());
   const base = options.base || "HEAD";
   let commonDir;
+  let cwd;
   try {
-    commonDir = m.tree.gitCommonDir(cwd, deps);
+    commonDir = m.tree.gitCommonDir(invoked, deps);
+    cwd = m.tree.topLevel(invoked, deps);
   } catch (error) {
-    return { exit: GATE_EXIT.notRepo, gate: null, path: null, error: `${cwd} is not inside a git repository (${String(error.message).split("\n")[0]})` };
+    return { exit: GATE_EXIT.notRepo, gate: null, path: null, error: `${invoked} is not inside a git repository (${String(error.message).split("\n")[0]})` };
   }
   let inputs;
   try {
-    inputs = readInputs(options, cwd, deps);
+    inputs = readInputs(options, invoked, deps);
   } catch (error) {
     return { exit: GATE_EXIT.usage, gate: null, path: null, error: error.message };
   }
-  const out = path.resolve(cwd, options.out ?? path.join(commonDir, "qac", "last-gate"));
+  const out = path.resolve(invoked, options.out ?? path.join(commonDir, "qac", "last-gate"));
   const context = {
     cwd,
     base,
@@ -333,8 +358,8 @@ export async function runGate(options, deps = {}) {
 
   const judges = [...config.judges, ...acceptJudges(inputs.accept)].map(judge => normalizeJudge(judge, config.defaults));
   const judged = await judgeAll(judges, context, deps, m, {
-    exclude: new Set(options.excludeFingerprints ?? []),
-    baseline: inputs.baseline,
+    exclude: options.excludeFindings ?? [],
+    baseline: baselinePool(inputs.baseline),
   });
 
   let tamper;
@@ -346,6 +371,9 @@ export async function runGate(options, deps = {}) {
       owned: inputs.owned,
       specPath: options.spec ? path.resolve(cwd, options.spec) : null,
       specSha: options.specSha ?? null,
+      accept: inputs.accept,
+      tree: context.tree,
+      reports: judges.map(judge => judge.report).filter(Boolean),
     }, deps);
   } catch (error) {
     return finish(stopped(context, `tamper check failed: ${String(error.message).split("\n")[0]}`), judged.logs);

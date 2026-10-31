@@ -1,19 +1,23 @@
 import assert from "node:assert/strict";
+import path from "node:path";
 import test from "node:test";
 
-import { SURFACES, extractQuestion, headlessAvailable, kittyAvailable, pickSurface, runLane } from "../src/loop/lanes/index.mjs";
+import { detectLanes, extractQuestion, pickSurface, runLane } from "../src/loop/lanes/index.mjs";
+import { EXIT, LoopError, SURFACES } from "../src/loop/paths.mjs";
 import { headlessArgv } from "../src/loop/lanes/headless.mjs";
 import { spawnArgs } from "../src/loop/lanes/kitty.mjs";
 
 const HELP_WITH_RECEIPT = "qol sessions spawn [--tool TOOL] ... --silent-wake still writes a receipt json at receipt_path";
 const LANE = { tool: "claude", model: "claude-sonnet-5-5", effort: "high" };
 
+const BIN = path.join("/bin");
+
 function environment({ present = [], help = HELP_WITH_RECEIPT, env = {} } = {}) {
   const calls = [];
   return {
     calls,
-    env: { PATH: "/bin", ...env },
-    exists: (file) => present.includes(file),
+    env: { PATH: BIN, ...env },
+    exists: (file) => present.some((name) => file === path.join(BIN, name)),
     exec: (argv) => {
       calls.push(argv);
       return { status: 0, stdout: help, stderr: "" };
@@ -22,22 +26,22 @@ function environment({ present = [], help = HELP_WITH_RECEIPT, env = {} } = {}) 
 }
 
 test("kitty wins when qol is on PATH and spawn help names receipt_path", () => {
-  const deps = environment({ present: ["/bin/qol", "/bin/claude"], env: { QOLS_HEADLESS_LANES: "1" } });
+  const deps = environment({ present: ["qol", "claude"], env: { QOLS_HEADLESS_LANES: "1" } });
   assert.equal(pickSurface({}, deps), "kitty");
-  assert.deepEqual(deps.calls, [["/bin/qol", "sessions", "spawn", "--help"]]);
+  assert.deepEqual(deps.calls, [[path.join(BIN, "qol"), "sessions", "spawn", "--help"]]);
 });
 
 test("an older qol without receipt_path falls through to headless", () => {
-  const deps = environment({ present: ["/bin/qol", "/bin/claude"], help: "qol sessions spawn --background", env: { QOLS_HEADLESS_LANES: "1" } });
-  assert.equal(kittyAvailable(deps), false);
+  const deps = environment({ present: ["qol", "claude"], help: "qol sessions spawn --background", env: { QOLS_HEADLESS_LANES: "1" } });
+  assert.equal(detectLanes(deps).kitty, false);
   assert.equal(pickSurface({}, deps), "headless");
 });
 
 test("headless needs both the env flag and claude on PATH", () => {
-  assert.equal(headlessAvailable(environment({ present: ["/bin/claude"], env: { QOLS_HEADLESS_LANES: "1" } })), true);
-  assert.equal(headlessAvailable(environment({ present: ["/bin/claude"] })), false);
-  assert.equal(headlessAvailable(environment({ env: { QOLS_HEADLESS_LANES: "1" } })), false);
-  assert.equal(headlessAvailable(environment({ present: ["/bin/claude"], env: { QOLS_HEADLESS_LANES: "0" } })), false);
+  assert.equal(detectLanes(environment({ present: ["claude"], env: { QOLS_HEADLESS_LANES: "1" } })).headless, true);
+  assert.equal(detectLanes(environment({ present: ["claude"] })).headless, false);
+  assert.equal(detectLanes(environment({ env: { QOLS_HEADLESS_LANES: "1" } })).headless, false);
+  assert.equal(detectLanes(environment({ present: ["claude"], env: { QOLS_HEADLESS_LANES: "0" } })).headless, false);
 });
 
 test("with nothing available the surface is handover, and force wins over detection", () => {
@@ -45,7 +49,23 @@ test("with nothing available the surface is handover, and force wins over detect
   assert.equal(pickSurface({}, deps), "handover");
   assert.equal(deps.calls.length, 0);
   for (const surface of SURFACES) assert.equal(pickSurface({ force: surface }, deps), surface);
-  assert.throws(() => pickSurface({ force: "carrier-pigeon" }, deps), /unknown surface/);
+  assert.throws(
+    () => pickSurface({ force: "carrier-pigeon" }, deps),
+    (error) => error instanceof LoopError && error.exit === EXIT.usage && /unknown surface/.test(error.message),
+  );
+});
+
+test("detectLanes passes the environment to the spawn help probe and reports every fact", () => {
+  const seen = [];
+  const deps = {
+    ...environment({ present: ["qol", "claude"], env: { QOLS_HEADLESS_LANES: "1" } }),
+    exec: (argv, options) => {
+      seen.push(options);
+      return { status: 0, stdout: HELP_WITH_RECEIPT, stderr: "" };
+    },
+  };
+  assert.deepEqual(detectLanes(deps), { qol: path.join(BIN, "qol"), kitty: true, claude: path.join(BIN, "claude"), headless: true });
+  assert.deepEqual(seen, [{ env: deps.env }]);
 });
 
 test("extractQuestion reads a QUESTION: line and what follows", () => {
@@ -135,6 +155,44 @@ test("kitty gives up after the bounded wait and never reports success", async ()
   assert.equal(result.question, null);
 });
 
+function listing(deps, answer) {
+  const base = deps.exec;
+  const state = { lists: 0 };
+  deps.exec = (argv, options) => {
+    if (argv[0] === "qol" && argv[1] === "sessions" && argv[2] === "list") {
+      state.lists += 1;
+      deps.state.execs.push(argv);
+      return answer();
+    }
+    return base(argv, options);
+  };
+  return state;
+}
+
+test("kitty fails at once when the lane session is gone, checking every 15 polls", async () => {
+  const deps = kittyDeps({ appearsAfter: 100000, timeoutMs: 7200000 });
+  const state = listing(deps, () => ({ status: 0, stdout: JSON.stringify([{ session: "someone-else" }]), stderr: "" }));
+  const result = await runLane(KITTY, deps);
+  assert.notEqual(result.exit, 0);
+  assert.match(result.error, /the lane session sess-1 is gone and wrote no receipt at \/trace\/lanes\/rounds\/abc\/receipt\.json/);
+  assert.equal(result.session, "sess-1");
+  assert.equal(deps.state.sleeps, 14);
+  assert.equal(state.lists, 1);
+  assert.deepEqual(deps.state.execs.at(-1), ["qol", "sessions", "list", "--json"]);
+});
+
+test("kitty keeps waiting while the lane session is listed or the listing cannot be read", async () => {
+  const listed = kittyDeps({ appearsAfter: 40, timeoutMs: 7200000 });
+  const live = listing(listed, () => ({ status: 0, stdout: JSON.stringify([{ session: "sess-1" }]), stderr: "" }));
+  assert.equal((await runLane(KITTY, listed)).exit, 0);
+  assert.equal(live.lists, 2);
+  for (const answer of [{ status: 1, stdout: "", stderr: "boom" }, { status: 0, stdout: "not json", stderr: "" }, { status: 0, stdout: "{}", stderr: "" }]) {
+    const deps = kittyDeps({ appearsAfter: 20, timeoutMs: 7200000 });
+    listing(deps, () => answer);
+    assert.equal((await runLane(KITTY, deps)).exit, 0, JSON.stringify(answer));
+  }
+});
+
 test("kitty fails on a spawn error, a missing receipt_path, a missing report and an empty report", async () => {
   const failed = await runLane(KITTY, kittyDeps({ spawnOut: { status: 1, stdout: "", stderr: "no tab" } }));
   assert.notEqual(failed.exit, 0);
@@ -168,9 +226,14 @@ test("a receipt file that is not valid yet is polled past", async () => {
 test("the headless argv is exactly the contract argv", () => {
   assert.deepEqual(headlessArgv({ brief: "BRIEF", lane: LANE, budget: 5, sessionId: "uuid-1", resume: false }), [
     "claude", "-p", "BRIEF", "--output-format", "json", "--permission-mode", "acceptEdits",
-    "--allowedTools", "Read,Edit,Write,Glob,Grep", "--disallowedTools", "Bash",
+    "--allowedTools", "Read,Glob,Grep", "--disallowedTools", "Bash", "--setting-sources", "user",
     "--model", "claude-sonnet-5-5", "--max-budget-usd", "5", "--session-id", "uuid-1",
   ]);
+  const argv = headlessArgv({ brief: "BRIEF", lane: LANE, budget: 5, sessionId: "uuid-1", resume: false });
+  const allowed = argv[argv.indexOf("--allowedTools") + 1].split(",");
+  assert.equal(allowed.includes("Edit"), false);
+  assert.equal(allowed.includes("Write"), false);
+  assert.equal(argv[argv.indexOf("--setting-sources") + 1], "user");
   const resumed = headlessArgv({ brief: "B", lane: LANE, budget: 2.5, sessionId: "uuid-1", resume: true });
   assert.deepEqual(resumed.slice(-4), ["--max-budget-usd", "2.5", "--resume", "uuid-1"]);
   assert.ok(!resumed.includes("--session-id"));

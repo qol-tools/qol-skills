@@ -3,8 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { judgesSha, normalizeConfig, repoId as repoIdOf, sha256 } from "../src/gate/config.mjs";
-import { normalizeMessage } from "../src/gate/fingerprint.mjs";
+import { ALWAYS_PROTECTED, judgesSha, normalizeConfig, repoId as repoIdOf } from "../src/gate/config.mjs";
 import { readGates } from "../src/gate/index.mjs";
 import { GATE_EXIT, acceptJudges, readAccept, renderGate, runGate } from "../src/gate/gate.mjs";
 import { approveTrust } from "../src/gate/trust.mjs";
@@ -19,8 +18,10 @@ const CONFIG = {
   retention: { loops: 5 },
 };
 const ONE = { ...CONFIG, judges: [CONFIG.judges[0]] };
-const COMMON = "/repo/.git";
-const GATE_FILE = `${COMMON}/qac/last-gate/gate.json`;
+const W = path.resolve("/w");
+const COMMON = path.resolve("/repo/.git");
+const GATE_FILE = path.join(COMMON, "qac", "last-gate", "gate.json");
+const inW = (...parts) => path.join(W, ...parts);
 
 const ok = (stdout = "") => ({ exit: 0, stdout, stderr: "", ms: 10, error: null });
 const bad = (stdout = "", exit = 1) => ({ exit, stdout, stderr: "", ms: 10, error: null });
@@ -29,6 +30,7 @@ function harness({ config = CONFIG, changed = ["src/a.mjs"], results = [], tampe
   const store = new Map(Object.entries(files));
   const appended = [];
   const spawned = [];
+  const cwds = [];
   const removed = [];
   const tamperCalls = [];
   const queue = [...results];
@@ -52,12 +54,14 @@ function harness({ config = CONFIG, changed = ["src/a.mjs"], results = [], tampe
     now: () => "2026-10-31T00:00:00.000Z",
     exists: () => true,
     lint,
-    spawn: async argv => {
+    spawn: async (argv, options) => {
       spawned.push(argv);
+      cwds.push(options?.cwd);
       return queue.shift() ?? ok();
     },
     tree: {
       gitCommonDir: () => COMMON,
+      topLevel: () => W,
       changedFiles: () => changed,
       treeId: () => "tree1",
     },
@@ -74,7 +78,7 @@ function harness({ config = CONFIG, changed = ["src/a.mjs"], results = [], tampe
   if (trusted && config !== null && typeof config !== "string") {
     approveTrust({ config: normalizeConfig(config), accept: approveAccept, repoId: repoIdOf("/w", deps) }, deps);
   }
-  return { deps, store, appended, spawned, removed, tamperCalls, run: (options = {}) => runGate({ cwd: "/w", ...options }, deps) };
+  return { deps, store, appended, spawned, cwds, removed, tamperCalls, run: (options = {}) => runGate({ cwd: "/w", ...options }, deps) };
 }
 
 test("GATE_EXIT carries the documented codes", () => {
@@ -96,13 +100,13 @@ test("a clean gate writes gate.json, the judge logs and one index line", async (
   assert.deepEqual([gate.spec_sha, gate.loop, gate.attempt], [null, null, null]);
   assert.deepEqual(gate.changed, ["src/a.mjs"]);
   assert.deepEqual(gate.judges[0], {
-    id: "fmt", argv: ["cargo", "fmt", "--check"], cwd: "/w", exit: 0, duration_ms: 10, scope: "repo", kind: "lint", where: "local", status: "pass", runs: 1, findings: 0,
+    id: "fmt", argv: ["cargo", "fmt", "--check"], cwd: W, exit: 0, duration_ms: 10, scope: "repo", kind: "lint", where: "local", status: "pass", runs: 1, findings: 0,
   });
   assert.equal(gate.judges[1].kind, "test");
   assert.deepEqual([gate.findings, gate.tamper, gate.omitted], [[], [], []]);
   assert.equal(result.path, GATE_FILE);
   assert.equal(h.store.get(GATE_FILE), `${JSON.stringify(gate, null, 2)}\n`);
-  assert.equal(h.store.get(`${COMMON}/qac/last-gate/logs/fmt.log`), "fmt ok");
+  assert.equal(h.store.get(path.join(COMMON, "qac", "last-gate", "logs", "fmt.log")), "fmt ok");
   assert.equal(h.appended.length, 1);
   assert.equal(h.appended[0].dir, COMMON);
   assert.equal(h.appended[0].options.retentionLoops, 5);
@@ -133,7 +137,6 @@ test("a failing judge makes findings with ids, fingerprints and the index status
     fingerprint: "fmt:exit:exited 1\ndiff in a.rs",
     baseline: false,
     promotable: false,
-    output_sha: sha256(normalizeMessage("diff in a.rs")),
   }]);
   assert.equal(result.gate.judges[0].status, "fail");
   assert.equal(result.gate.judges[0].findings, 1);
@@ -158,9 +161,15 @@ test("findings from structured parsers and the qac builtin are promotable", asyn
   assert.equal(gate.findings[1].line, 2);
 });
 
+const eslintOutput = (...entries) => JSON.stringify(entries.map(([file, name]) => ({
+  filePath: file,
+  messages: [{ ruleId: "no-unused-vars", severity: 2, line: 1, message: `'${name}' is defined but never used.` }],
+})));
+const ESLINT = { version: 1, judges: [{ id: "lint", argv: ["eslint"], parser: "eslint-json" }] };
+
 test("a baseline gate turns its findings into baseline findings that do not block", async () => {
-  const baseline = JSON.stringify({ findings: [{ fingerprint: "fmt:exit:exited 1\ndiff in a.rs", output_sha: sha256(normalizeMessage("diff in a.rs")) }] });
-  const h = harness({ config: ONE, results: [bad("diff in a.rs")], files: { "/w/base.json": baseline } });
+  const baseline = JSON.stringify({ judges: [{ id: "fmt", exit: 1 }], findings: [{ judge: "fmt", fingerprint: "fmt:exit:exited 1\ndiff in a.rs" }] });
+  const h = harness({ config: ONE, results: [bad("diff in a.rs")], files: { [inW("base.json")]: baseline } });
   const result = await h.run({ baseline: "base.json" });
   assert.equal(result.exit, 0);
   assert.equal(result.gate.verdict, "clean");
@@ -168,35 +177,59 @@ test("a baseline gate turns its findings into baseline findings that do not bloc
   assert.equal(h.appended[0].line.findings[0].status, "baseline");
 });
 
-test("a new failure behind the same fingerprint is not masked by a baseline with another output", async () => {
-  const tailed = text => [text, ...Array.from({ length: 20 }, () => "zzz old fails")].join("\n");
-  const baseOutput = tailed("zzz old fails");
-  const newOutput = tailed("aaa NEW break");
-  const first = harness({ config: ONE, results: [bad(baseOutput)] });
+test("a baseline entry absorbs one finding: a second same-rule finding in another file stays new", async () => {
+  const first = harness({ config: ESLINT, results: [bad(eslintOutput(["a.js", "foo"]))] });
   delete first.deps.fingerprint;
   const base = (await first.run()).gate;
-  const second = harness({ config: ONE, results: [bad(newOutput)], files: { "/w/base.json": JSON.stringify(base) } });
-  delete second.deps.fingerprint;
-  const masked = await second.run({ baseline: "base.json" });
-  assert.equal(masked.gate.findings[0].fingerprint, base.findings[0].fingerprint);
-  assert.notEqual(masked.gate.findings[0].output_sha, base.findings[0].output_sha);
-  assert.equal(masked.gate.findings[0].baseline, false);
-  assert.equal(masked.gate.verdict, "findings");
-  assert.equal(masked.exit, 1);
+  assert.equal(base.findings.length, 1);
 
-  const same = harness({ config: ONE, results: [bad(baseOutput)], files: { "/w/base.json": JSON.stringify(base) } });
-  delete same.deps.fingerprint;
-  const unchanged = await same.run({ baseline: "base.json" });
-  assert.equal(unchanged.gate.findings[0].baseline, true);
-  assert.equal(unchanged.gate.verdict, "clean");
+  const second = harness({
+    config: ESLINT,
+    results: [bad(eslintOutput(["a.js", "foo"], ["b.js", "secretLeak"]))],
+    files: { [inW("base.json")]: JSON.stringify(base) },
+  });
+  delete second.deps.fingerprint;
+  const result = await second.run({ baseline: "base.json" });
+  assert.equal(result.gate.findings.length, 2);
+  assert.equal(result.gate.findings[0].fingerprint, result.gate.findings[1].fingerprint);
+  assert.deepEqual(result.gate.findings.map(finding => finding.baseline), [true, false]);
+  assert.equal(result.gate.verdict, "findings");
+  assert.equal(result.exit, 1);
 });
 
-test("a baseline written before output_sha existed never masks an exit-code finding", async () => {
-  const baseline = JSON.stringify({ findings: [{ fingerprint: "fmt:exit:exited 1\ndiff in a.rs" }] });
-  const h = harness({ config: ONE, results: [bad("diff in a.rs")], files: { "/w/base.json": baseline } });
+test("a baseline entry of another judge does not absorb a finding", async () => {
+  const baseline = JSON.stringify({ judges: [{ id: "other", exit: 1 }], findings: [{ judge: "other", fingerprint: "fmt:exit:exited 1\ndiff in a.rs" }] });
+  const h = harness({ config: ONE, results: [bad("diff in a.rs")], files: { [inW("base.json")]: baseline } });
   const result = await h.run({ baseline: "base.json" });
   assert.equal(result.gate.findings[0].baseline, false);
   assert.equal(result.gate.verdict, "findings");
+});
+
+test("a baseline entry with no judge never absorbs an exit-code finding", async () => {
+  const baseline = JSON.stringify({ findings: [{ fingerprint: "fmt:exit:exited 1\ndiff in a.rs" }] });
+  const h = harness({ config: ONE, results: [bad("diff in a.rs")], files: { [inW("base.json")]: baseline } });
+  const result = await h.run({ baseline: "base.json" });
+  assert.equal(result.gate.findings[0].baseline, false);
+  assert.equal(result.gate.verdict, "findings");
+});
+
+test("a pre-existing red exit-code judge still matches its baseline when earlier output lines change", async () => {
+  const tail = Array.from({ length: 25 }, (_, at) => `fail ${String.fromCharCode(97 + at)}`).join("\n");
+  const first = harness({ config: ONE, results: [bad(`test one ... ok\n${tail}`)] });
+  delete first.deps.fingerprint;
+  const base = (await first.run()).gate;
+
+  const grown = harness({ config: ONE, results: [bad(`test one ... ok\ntest two ... ok\n${tail}`)], files: { [inW("base.json")]: JSON.stringify(base) } });
+  delete grown.deps.fingerprint;
+  const same = await grown.run({ baseline: "base.json" });
+  assert.equal(same.gate.findings[0].baseline, true);
+  assert.equal(same.gate.verdict, "clean");
+
+  const otherExit = harness({ config: ONE, results: [bad(`test one ... ok\n${tail}`, 2)], files: { [inW("base.json")]: JSON.stringify(base) } });
+  delete otherExit.deps.fingerprint;
+  const changed = await otherExit.run({ baseline: "base.json" });
+  assert.equal(changed.gate.findings[0].baseline, false);
+  assert.equal(changed.gate.verdict, "findings");
 });
 
 test("config retention reaches the index so only that many loops are kept", async () => {
@@ -214,14 +247,28 @@ test("config retention reaches the index so only that many loops are kept", asyn
   assert.deepEqual([...kept].sort(), ["k2", "k3"]);
 });
 
-test("an excluded fingerprint is dropped from the findings and the index", async () => {
+test("an excluded finding is dropped from the findings and the index", async () => {
   const h = harness({ config: ONE, results: [bad("diff in a.rs")] });
-  const result = await h.run({ excludeFingerprints: ["fmt:exit:exited 1\ndiff in a.rs"] });
+  const result = await h.run({ excludeFindings: [{ fingerprint: "fmt:exit:exited 1\ndiff in a.rs", file: "" }] });
   assert.equal(result.exit, 0);
   assert.deepEqual(result.gate.findings, []);
   assert.equal(result.gate.judges[0].status, "fail");
   assert.equal(result.gate.judges[0].findings, 0);
   assert.deepEqual(h.appended[0].line.findings, []);
+});
+
+test("an excluded finding drops only the findings with that fingerprint in that file", async () => {
+  const output = eslintOutput(["a.js", "foo"], ["b.js", "secretLeak"]);
+  const all = harness({ config: ESLINT, results: [bad(output)] });
+  delete all.deps.fingerprint;
+  const [blamed, other] = (await all.run()).gate.findings;
+  assert.equal(other.fingerprint, blamed.fingerprint);
+  const h = harness({ config: ESLINT, results: [bad(output)] });
+  delete h.deps.fingerprint;
+  const result = await h.run({ excludeFindings: [{ fingerprint: blamed.fingerprint, file: "a.js" }] });
+  assert.deepEqual(result.gate.findings.map(finding => finding.file), ["b.js"]);
+  assert.equal(result.gate.verdict, "findings");
+  assert.equal(result.gate.judges[0].findings, 1);
 });
 
 test("a test judge that passes on a rerun is flaky: no findings, flaky_only, exit 6", async () => {
@@ -254,20 +301,31 @@ test("any tamper entry makes findings even when every judge passes", async () =>
   ]);
   assert.deepEqual(result.gate.findings, []);
   assert.equal(h.tamperCalls.length, 1);
-  assert.deepEqual(Object.keys(h.tamperCalls[0]).sort(), ["base", "config", "cwd", "owned", "specPath", "specSha"]);
-  assert.deepEqual([h.tamperCalls[0].cwd, h.tamperCalls[0].base, h.tamperCalls[0].owned, h.tamperCalls[0].specPath], ["/w", "HEAD", null, null]);
-  assert.deepEqual(h.tamperCalls[0].config.protected, [".qac/**"]);
+  assert.deepEqual(Object.keys(h.tamperCalls[0]).sort(), ["accept", "base", "config", "cwd", "owned", "reports", "specPath", "specSha", "tree"]);
+  assert.deepEqual([h.tamperCalls[0].tree, h.tamperCalls[0].accept, h.tamperCalls[0].reports], ["tree1", [], []]);
+  assert.deepEqual([h.tamperCalls[0].cwd, h.tamperCalls[0].base, h.tamperCalls[0].owned, h.tamperCalls[0].specPath], [W, "HEAD", null, null]);
+  assert.deepEqual(h.tamperCalls[0].config.protected, [...ALWAYS_PROTECTED]);
 });
 
 test("--owned and --spec reach the tamper checks and the gate records the loop tags", async () => {
-  const files = { "/w/owned.json": JSON.stringify(["src/**"]) };
+  const files = { [inW("owned.json")]: JSON.stringify(["src/**"]) };
   const h = harness({ files });
   const result = await h.run({ owned: "owned.json", spec: "spec.md", specSha: "abc123", loop: "k", attempt: 2, base: "main" });
   assert.deepEqual(h.tamperCalls[0].owned, ["src/**"]);
-  assert.equal(h.tamperCalls[0].specPath, "/w/spec.md");
+  assert.equal(h.tamperCalls[0].specPath, inW("spec.md"));
   assert.equal(h.tamperCalls[0].specSha, "abc123");
   assert.equal(h.tamperCalls[0].base, "main");
-  assert.deepEqual([result.gate.spec_sha, result.gate.loop, result.gate.attempt, result.gate.base], ["abc123", "k", 2, "main"]);
+  assert.deepEqual([result.gate.spec_sha, result.gate.loop, result.gate.attempt, result.gate.base, result.gate.tree], ["abc123", "k", 2, "main", "tree1"]);
+});
+
+test("tamper receives the pre-judge tree, the accept argvs and the declared judge reports", async () => {
+  const config = { ...CONFIG, judges: [{ id: "unit", argv: ["node", "--test"], kind: "test", report: "reports/junit.xml" }] };
+  const accept = [{ id: "u", argv: ["node", "--test", "test/a.test.mjs"] }];
+  const h = harness({ config, files: { [inW("acc.json")]: JSON.stringify(accept) } });
+  await h.run({ accept: "acc.json" });
+  assert.equal(h.tamperCalls[0].tree, "tree1");
+  assert.deepEqual(h.tamperCalls[0].reports, ["reports/junit.xml"]);
+  assert.deepEqual(h.tamperCalls[0].accept.map(item => item.argv), [["node", "--test", "test/a.test.mjs"]]);
 });
 
 test("no config is could_not_judge with the init hint, writes gate.json and does not append to the index", async () => {
@@ -329,6 +387,46 @@ test("a timeout is a fail with one timeout finding that cannot be promoted", asy
   assert.deepEqual(result.gate.findings.map(finding => [finding.rule, finding.promotable]), [["timeout", false]]);
 });
 
+test("a config that judges nothing locally is could_not_judge, never clean", async () => {
+  const none = harness({ config: { version: 1, judges: [] } });
+  const first = await none.run();
+  assert.equal(first.exit, 5);
+  assert.equal(first.gate.verdict, "could_not_judge");
+  assert.equal(first.gate.reason, "no local judges");
+  assert.equal(none.appended.length, 0);
+
+  const ci = harness({ config: { version: 1, judges: [{ id: "clippy", argv: ["cargo", "clippy"], where: "ci" }] } });
+  const second = await ci.run();
+  assert.equal(second.exit, 5);
+  assert.equal(second.gate.reason, "no local judges");
+  assert.deepEqual(second.gate.omitted, ["clippy"]);
+});
+
+test("a changed-scope judge with no changed files still counts as a pass", async () => {
+  const config = { version: 1, judges: [{ id: "chk", argv: ["chk"], scope: "changed" }] };
+  const h = harness({ config, changed: [] });
+  const result = await h.run();
+  assert.equal(result.exit, 0);
+  assert.equal(result.gate.judges[0].runs, 0);
+});
+
+test("run from a subfolder, the gate judges the repository root", async () => {
+  const config = { version: 1, judges: [{ id: "chk", argv: ["chk"], scope: "changed" }] };
+  const h = harness({ config, results: [bad("broken")] });
+  const checked = [];
+  h.deps.exists = file => {
+    checked.push(file);
+    return true;
+  };
+  const result = await h.run({ cwd: inW("sub"), out: "out" });
+  assert.equal(result.exit, 1);
+  assert.deepEqual(h.spawned, [["chk", "src/a.mjs"]]);
+  assert.deepEqual(h.cwds, [W]);
+  assert.deepEqual(checked, [inW("src", "a.mjs")]);
+  assert.equal(result.gate.judges[0].cwd, W);
+  assert.equal(result.path, inW("sub", "out", "gate.json"));
+});
+
 test("ci judges are omitted and listed, never run", async () => {
   const config = { version: 1, judges: [{ id: "fmt", argv: ["cargo", "fmt"] }, { id: "clippy", argv: ["cargo", "clippy"], where: "ci" }] };
   const h = harness({ config });
@@ -341,7 +439,7 @@ test("ci judges are omitted and listed, never run", async () => {
 
 test("accept commands run as test judges named accept:<id> with unpromotable findings", async () => {
   const accept = [{ id: "unit", argv: ["node", "--test", "x.test.mjs"] }];
-  const h = harness({ config: ONE, files: { "/w/acc.json": JSON.stringify(accept) }, results: [ok(), bad("not ok 1"), bad("not ok 1"), bad("not ok 1")] });
+  const h = harness({ config: ONE, files: { [inW("acc.json")]: JSON.stringify(accept) }, results: [ok(), bad("not ok 1"), bad("not ok 1"), bad("not ok 1")] });
   const result = await h.run({ accept: "acc.json" });
   assert.equal(result.exit, 1);
   const entry = result.gate.judges[1];
@@ -351,7 +449,7 @@ test("accept commands run as test judges named accept:<id> with unpromotable fin
 
 test("an accept command outside the prefixes needs approval first", async () => {
   const accept = [{ id: "build", argv: ["make", "check"] }];
-  const files = { "/w/acc.json": JSON.stringify(accept) };
+  const files = { [inW("acc.json")]: JSON.stringify(accept) };
   const denied = harness({ config: ONE, files });
   const first = await denied.run({ accept: "acc.json" });
   assert.equal(first.exit, 5);
@@ -380,7 +478,7 @@ test("bad inputs are usage errors and a missing repository is notRepo", async ()
     ["dup.json", JSON.stringify([{ id: "a", argv: ["x"] }, { id: "a", argv: ["y"] }])],
     ["noargv.json", JSON.stringify([{ id: "a" }])],
     ["owned-bad.json", "[1]"], ["base-bad.json", "[]"],
-  ]) h.store.set(`/w/${name}`, text);
+  ]) h.store.set(inW(name), text);
   for (const [options, expected] of cases) {
     const result = await h.run(options);
     assert.equal(result.exit, 2, JSON.stringify(options));
@@ -400,9 +498,10 @@ test("bad inputs are usage errors and a missing repository is notRepo", async ()
 
 test("--out redirects the files and --keep skips clearing the logs", async () => {
   const cleared = harness({ config: ONE });
+  const out = path.resolve("/tmp/out");
   const first = await cleared.run({ out: "/tmp/out" });
-  assert.equal(first.path, "/tmp/out/gate.json");
-  assert.deepEqual(cleared.removed, ["/tmp/out/logs"]);
+  assert.equal(first.path, path.join(out, "gate.json"));
+  assert.deepEqual(cleared.removed, [path.join(out, "logs")]);
 
   const kept = harness({ config: ONE });
   await kept.run({ out: "/tmp/out", keep: true });
@@ -422,9 +521,9 @@ test("an index failure never changes the verdict", async () => {
 test("log files are named safely and capped", async () => {
   const accept = [{ id: "unit", argv: ["node", "--test", "x.test.mjs"] }];
   const huge = "x".repeat(300 * 1024);
-  const h = harness({ config: ONE, files: { "/w/acc.json": JSON.stringify(accept) }, results: [ok(), ok(huge)] });
+  const h = harness({ config: ONE, files: { [inW("acc.json")]: JSON.stringify(accept) }, results: [ok(), ok(huge)] });
   await h.run({ accept: "acc.json" });
-  assert.equal(h.store.get(`${COMMON}/qac/last-gate/logs/accept_unit.log`).length, 200 * 1024);
+  assert.equal(h.store.get(path.join(COMMON, "qac", "last-gate", "logs", "accept_unit.log")).length, 200 * 1024);
 });
 
 test("readAccept and acceptJudges shape accept commands into judges", () => {

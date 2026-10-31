@@ -1,16 +1,25 @@
-import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import { PARSERS } from "./parsers/index.mjs";
+import { runGit } from "./tree.mjs";
 
 export const CONFIG_PATH = ".qac/judges.json";
-export const ALWAYS_PROTECTED = ".qac/**";
-export const BUILTINS = Object.freeze(["qac-lint"]);
-export const SCOPES = Object.freeze(["changed", "repo"]);
-export const WHERES = Object.freeze(["local", "ci"]);
-export const KINDS = Object.freeze(["lint", "test"]);
+export const ALWAYS_PROTECTED = Object.freeze([
+  ".qac/**",
+  "**/rustfmt.toml",
+  "**/.rustfmt.toml",
+  "**/clippy.toml",
+  "**/.clippy.toml",
+  "**/.cargo/**",
+  "**/.claude/**",
+  "**/.gitattributes",
+]);
+const BUILTINS = Object.freeze(["qac-lint"]);
+const SCOPES = Object.freeze(["changed", "repo"]);
+const WHERES = Object.freeze(["local", "ci"]);
+const KINDS = Object.freeze(["lint", "test"]);
 export const DEFAULTS = Object.freeze({ test_runs_on_red: 3, timeout_s: 600 });
 export const DEFAULT_RETENTION_LOOPS = 50;
 
@@ -41,15 +50,6 @@ export function setupSha(config) {
   return sha256(canonicalJson(config?.setup ?? []));
 }
 
-export function gitExec(command, args, options = {}) {
-  return execFileSync(command, args, {
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "ignore"],
-    maxBuffer: 64 * 1024 * 1024,
-    ...options,
-  });
-}
-
 export function writeText(file, text) {
   mkdirSync(path.dirname(file), { recursive: true });
   const temporary = `${file}.${process.pid}.tmp`;
@@ -69,15 +69,14 @@ export function normalizeRemote(url) {
 }
 
 export function repoId(cwd, deps = {}) {
-  const exec = deps.exec ?? gitExec;
   let remote = "";
   try {
-    remote = String(exec("git", ["remote", "get-url", "origin"], { cwd })).trim();
+    remote = runGit(cwd, ["remote", "get-url", "origin"], { exec: deps.exec }).trim();
   } catch {
     remote = "";
   }
   if (remote) return sha16(normalizeRemote(remote));
-  const common = String(exec("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], { cwd })).trim();
+  const common = runGit(cwd, ["rev-parse", "--path-format=absolute", "--git-common-dir"], { exec: deps.exec }).trim();
   return sha16(path.dirname(path.resolve(cwd, common)));
 }
 
@@ -150,7 +149,7 @@ export function normalizeConfig(raw) {
   return {
     ...raw,
     setup: raw.setup ?? [],
-    protected: [...new Set([ALWAYS_PROTECTED, ...(raw.protected ?? [])])],
+    protected: [...new Set([...ALWAYS_PROTECTED, ...(raw.protected ?? [])])],
     tests: raw.tests ?? [],
     accept_prefixes: raw.accept_prefixes ?? [],
     defaults: { ...DEFAULTS, ...raw.defaults },
@@ -171,9 +170,8 @@ export function normalizeJudge(judge, defaults = DEFAULTS) {
 }
 
 function readSource(base, cwd, id, deps) {
-  const exec = deps.exec ?? gitExec;
   try {
-    return { text: String(exec("git", ["show", `${base}:${CONFIG_PATH}`], { cwd })), source: "base", where: `${base}:${CONFIG_PATH}` };
+    return { text: runGit(cwd, ["show", `${base}:${CONFIG_PATH}`], { exec: deps.exec }), source: "base", where: `${base}:${CONFIG_PATH}` };
   } catch {
     const file = userConfigPath(id, deps.env ?? process.env);
     try {

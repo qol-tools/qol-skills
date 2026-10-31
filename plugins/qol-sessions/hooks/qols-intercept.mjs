@@ -22,7 +22,7 @@ const USAGE = [
   "qols park",
   "qols wake <key>",
   "qols status",
-  "qols loop [key | doctor]",
+  "qols loop [status [key] | key | doctor [--prune]]",
   "fork: detached architect that owns the problem; bridge: lane that reports back here;",
   "test: a fork whose prompt is typed but not submitted, so the launch costs no tokens",
   "new: a fork without the chat copy; with no prompt, a blank session you type into",
@@ -158,30 +158,39 @@ function parseWake(source, verbToken, tokens) {
   };
 }
 
+function loopRefusal(source, token, label) {
+  return {
+    verb: "help",
+    diagnostic: {
+      title: `\`qols loop\` does not take \`${token.text}\``,
+      source,
+      start: token.start,
+      end: token.end,
+      label,
+      notes: [`usage: ${usageFor("loop")}`],
+    },
+  };
+}
+
 function parseLoop(source, verbToken, tokens) {
   const [first, ...extra] = tokens;
   if (first === undefined) return { verb: "loop", args: ["status"] };
   const word = first.text.toLowerCase();
   if (ARCHITECT_LOOP_VERBS.includes(word)) return { verb: "loop", usage: loopArchitectUsage(word) };
-  const wrong = extra[0] ?? (first.text.startsWith("-") ? first : undefined);
-  if (wrong !== undefined) {
-    return {
-      verb: "help",
-      diagnostic: {
-        title: `\`qols loop\` does not take \`${wrong.text}\``,
-        source,
-        start: wrong.start,
-        end: wrong.end,
-        label: extra.length > 0 ? "loop takes one key or doctor" : "a loop key is a name, not a flag",
-        notes: [`usage: ${usageFor("loop")}`],
-      },
-    };
+  if (word === "doctor") {
+    const wrong = extra.find((token) => token.text !== "--prune") ?? extra[1];
+    if (wrong !== undefined) return loopRefusal(source, wrong, "doctor takes only --prune");
+    return { verb: "loop", args: extra.length === 0 ? ["doctor"] : ["doctor", "--prune"] };
   }
-  return { verb: "loop", args: word === "doctor" ? ["doctor"] : ["status", first.text] };
+  const [key, ...surplus] = word === "status" ? extra : tokens;
+  if (key === undefined) return { verb: "loop", args: ["status"] };
+  const wrong = surplus[0] ?? (key.text.startsWith("-") ? key : undefined);
+  if (wrong !== undefined) return loopRefusal(source, wrong, surplus.length > 0 ? "loop takes one key or doctor" : "a loop key is a name, not a flag");
+  return { verb: "loop", args: ["status", key.text] };
 }
 
 function loopArchitectUsage(word) {
-  return `usage: ${usageFor("loop")}; ${ARCHITECT_LOOP_VERBS.join(", ")} run from the architect's Bash: node scripts/loop.mjs ${word} ...`;
+  return `usage: ${usageFor("loop")}; ${ARCHITECT_LOOP_VERBS.join(", ")} run from the architect's Bash: qols loop ${word} ...`;
 }
 
 function parseTaskless(source, tokens, verb, flags) {

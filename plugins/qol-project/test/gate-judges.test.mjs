@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import path from "node:path";
 import { defaultSpawn, runJudge } from "../src/gate/judges.mjs";
 
 const ok = (stdout = "") => ({ exit: 0, stdout, stderr: "", ms: 10, error: null });
@@ -43,7 +44,7 @@ test("a failing exit-code judge reports the output tail once and is never rerun 
 
 test("changed scope appends the changed files that still exist", async () => {
   const run = spawner([ok()]);
-  const exists = file => file === "/w/a.rs";
+  const exists = file => file === path.resolve("/w", "a.rs");
   const result = await runJudge({ id: "fmt", argv: ["rustfmt", "--check"], scope: "changed" }, { cwd: "/w", changed: ["a.rs", "gone.rs"] }, { spawn: run.spawn, exists });
   assert.deepEqual(run.calls[0].argv, ["rustfmt", "--check", "a.rs"]);
   assert.deepEqual(result.argv, ["rustfmt", "--check", "a.rs"]);
@@ -133,7 +134,7 @@ test("a report file is read instead of stdout", async () => {
   };
   const judge = { id: "unit", argv: ["t"], parser: "junit", report: "out/r.xml" };
   const result = await runJudge(judge, CTX, { spawn: spawner([bad("ignored")]).spawn, read });
-  assert.deepEqual(reads, ["/w/out/r.xml"]);
+  assert.deepEqual(reads, [path.resolve("/w", "out", "r.xml")]);
   assert.deepEqual(result.findings, [{ rule: "bad", file: null, line: null, message: "nope" }]);
 });
 
@@ -160,7 +161,7 @@ test("the qac-lint builtin lints the changed files against the base", async () =
     calls.push({ cwd, paths, options });
     return LINT_RESULT;
   };
-  const result = await runJudge({ id: "qac", builtin: "qac-lint", scope: "changed" }, { cwd: "/w", changed: ["a.rs", "gone.rs"], base: "main" }, { lint, exists: file => file === "/w/a.rs" });
+  const result = await runJudge({ id: "qac", builtin: "qac-lint", scope: "changed" }, { cwd: "/w", changed: ["a.rs", "gone.rs"], base: "main" }, { lint, exists: file => file === path.resolve("/w", "a.rs") });
   assert.deepEqual(calls, [{ cwd: "/w", paths: ["a.rs"], options: { base: "main" } }]);
   assert.equal(result.status, "fail");
   assert.equal(result.exit, 1);

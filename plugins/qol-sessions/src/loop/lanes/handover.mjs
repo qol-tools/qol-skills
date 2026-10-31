@@ -1,5 +1,5 @@
-export const HANDOVER_EXIT = 14;
+import { EXIT } from "../paths.mjs";
 
 export function runHandover() {
-  return { exit: HANDOVER_EXIT, text: "", session: null, cost_usd: null };
+  return { exit: EXIT.handover, text: "", session: null, cost_usd: null };
 }

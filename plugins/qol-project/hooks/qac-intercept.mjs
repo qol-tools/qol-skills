@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { runCli, runPromptCommand } from "./_kit/prompt-command.mjs";
 
 export const CLI = fileURLToPath(new URL("../scripts/qac.mjs", import.meta.url));
-export const ANSWERED = [0, 1];
+export const ANSWERED = [0, 1, 5, 6];
 const TIMEOUT_MS = 110000;
 const VERBS = ["lint", "fix", "slip", "slips", "gate", "trust", "traps", "init", "help"];
 const FINDINGS = 1;
@@ -24,7 +24,7 @@ export function parsePrompt(prompt, cwd) {
   return [...args, ...flags];
 }
 
-export function runQac(argv, cwd) {
+function runQac(argv, cwd) {
   return runCli(CLI, argv, { cwd, answered: ANSWERED, timeoutMs: TIMEOUT_MS });
 }
 

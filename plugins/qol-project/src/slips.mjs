@@ -1,20 +1,20 @@
 import { execFileSync } from "node:child_process";
-import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { gitCommonDir } from "./gate/tree.mjs";
+import { withLock } from "./lock.mjs";
 
 export const LANE = { tool: "claude", model: "opus", effort: "high" };
 const KEY_SLUG_LIMIT = 40;
 const QAC_SOURCE = path.join("plugins", "qol-project", "src", "qac.mjs");
 const DEFAULT_CLI = fileURLToPath(new URL("../scripts/qac.mjs", import.meta.url));
-const LOCK_WAIT_MS = 2000;
-const LOCK_STALE_MS = 10000;
-const LOCK_POLL_MS = 25;
+const PENDING_LANE = "forking";
 const FINGERPRINT_LOOPS = 2;
 
 export const ROUTES = ["qac-check", "repo-linter", "tamper", "agent-behaviour", "judge-revert"];
-export const DEFAULT_ROUTE = "qac-check";
+const DEFAULT_ROUTE = "qac-check";
 const ROUTE_HOME = {
   "qac-check": "skills-clone",
   "repo-linter": "origin",
@@ -62,49 +62,7 @@ export function writeSlip(file, entry, append = appendFileSync) {
   append(file, `${JSON.stringify(entry)}\n`);
 }
 
-function sleepSync(ms) {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
-}
-
-function quietly(action) {
-  try {
-    action();
-  } catch {
-    return false;
-  }
-  return true;
-}
-
-export function withLock(file, fn, deps = {}) {
-  const lock = `${file}.lock`;
-  const nowMs = deps.nowMs ?? Date.now;
-  const sleep = deps.sleep ?? sleepSync;
-  const create = deps.createLock ?? (target => writeFileSync(target, String(process.pid), { flag: "wx" }));
-  const age = deps.lockAge ?? (target => nowMs() - statSync(target).mtimeMs);
-  const remove = deps.removeLock ?? unlinkSync;
-  mkdirSync(path.dirname(file), { recursive: true });
-  const deadline = nowMs() + LOCK_WAIT_MS;
-  for (;;) {
-    try {
-      create(lock);
-      break;
-    } catch (failure) {
-      if (failure.code !== "EEXIST") throw failure;
-    }
-    let stale = false;
-    const aged = quietly(() => {
-      stale = age(lock) > LOCK_STALE_MS;
-    });
-    if (aged && stale && quietly(() => remove(lock))) continue;
-    if (nowMs() >= deadline) throw Object.assign(new Error(`could not lock ${file}`), { code: "ELOCK" });
-    if (aged) sleep(LOCK_POLL_MS);
-  }
-  try {
-    return fn();
-  } finally {
-    quietly(() => remove(lock));
-  }
-}
+export { withLock };
 
 export function qolOnPath(env = process.env, exists = existsSync) {
   const names = process.platform === "win32" ? ["qol.exe", "qol.cmd", "qol"] : ["qol"];
@@ -113,12 +71,7 @@ export function qolOnPath(env = process.env, exists = existsSync) {
 
 function mainClone(cwd, exec) {
   try {
-    const common = exec("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], {
-      cwd,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    }).trim();
-    return path.dirname(path.resolve(common));
+    return path.dirname(gitCommonDir(cwd, { exec }));
   } catch {
     return null;
   }
@@ -147,7 +100,7 @@ function subject(entry) {
 }
 
 function settleCommand(entry, cli) {
-  const target = entry.kind === "fingerprint" ? `--fingerprint ${entry.fingerprint}` : JSON.stringify(entry.pattern);
+  const target = entry.kind === "fingerprint" ? `--fingerprint ${entry.fingerprint} --entry ${entry.id}` : JSON.stringify(entry.pattern);
   return `node ${JSON.stringify(cli)} slip ${target}`;
 }
 
@@ -238,12 +191,7 @@ function dispatch(entry, { cwd, explicit, cli }, deps) {
   if (repo === null) return { ...base, error: missingRepo(route, cwd, explicit) };
   const handover = !deps.fork && !(deps.hasQol ?? (() => qolOnPath(deps.env ?? process.env)))();
   if (handover) return { ...base, handover: true, brief: `Open a session in ${repo} and give it this brief:\n${laneBrief(entry, cli)}` };
-  try {
-    entry.lane = (deps.fork ?? forkLane)(entry, repo, { cli, exec: deps.exec });
-    return { ...base, forked: true };
-  } catch (failure) {
-    return { ...base, error: `qol sessions fork failed: ${String(failure.stderr || failure.message).trim().split("\n")[0]}` };
-  }
+  return { ...base, fork: { repo, cli } };
 }
 
 function sighted(entry, { from, loop }) {
@@ -253,12 +201,25 @@ function sighted(entry, { from, loop }) {
   if (token && !entry.loops.includes(token)) entry.loops = [...entry.loops, token];
 }
 
+function strip({ fork, ...outcome }) {
+  return outcome;
+}
+
+function startFork(entry, fork, deps) {
+  try {
+    return { lane: (deps.fork ?? forkLane)(entry, fork.repo, { cli: fork.cli, exec: deps.exec }), error: null };
+  } catch (failure) {
+    return { lane: null, error: `qol sessions fork failed: ${String(failure.stderr || failure.message).trim().split("\n")[0]}` };
+  }
+}
+
 function record({ id, pattern, extra, options }, deps) {
   const file = deps.file ?? ledgerFile(deps.env);
   const route = options.route || null;
   if (route !== null && !ROUTES.includes(route)) throw new Error(`unknown route ${route}; routes: ${ROUTES.join(", ")}`);
-  return withLock(file, () => {
-    const at = (deps.now ?? (() => new Date().toISOString()))();
+  const now = deps.now ?? (() => new Date().toISOString());
+  const decided = withLock(file, () => {
+    const at = now();
     const prior = readSlips(file, deps.read).get(id);
     const entry = { ...fresh(id, pattern, at, extra), ...(prior ?? {}), updated: at };
     if (route) entry.route = route;
@@ -267,13 +228,23 @@ function record({ id, pattern, extra, options }, deps) {
       entry.status = options.infeasible ? "infeasible" : "rule added";
       entry.reason = options.infeasible || null;
       writeSlip(file, entry, deps.append);
-      return { entry, ...noLane() };
+      return { entry, outcome: noLane() };
     }
     sighted(entry, options);
     const outcome = dispatch(entry, { cwd: options.cwd ?? process.cwd(), explicit: options.rulesRepo, cli: options.cli ?? DEFAULT_CLI }, deps);
+    if (outcome.fork) entry.lane = PENDING_LANE;
     writeSlip(file, entry, deps.append);
-    return { entry, ...outcome };
+    return { entry, outcome };
   }, deps);
+  if (!decided.outcome.fork) return { entry: decided.entry, ...strip(decided.outcome) };
+  const started = startFork({ ...decided.entry, lane: null }, decided.outcome.fork, deps);
+  const entry = withLock(file, () => {
+    const current = readSlips(file, deps.read).get(id) ?? decided.entry;
+    const settled = { ...current, lane: started.lane, updated: now() };
+    writeSlip(file, settled, deps.append);
+    return settled;
+  }, deps);
+  return { entry, ...strip(decided.outcome), forked: started.error === null, error: started.error };
 }
 
 export function recordSlip(pattern, options = {}, deps = {}) {

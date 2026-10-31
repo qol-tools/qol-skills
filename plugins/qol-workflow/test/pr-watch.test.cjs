@@ -2,8 +2,11 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { createHash } = require('node:crypto');
 
 const { classify, parseReview, parseArgs, parseTarget, attachLogs, cleanLogLine, render, watch, followUps, EXIT } = require('../bin/pr-watch.cjs');
+
+const fingerprintOf = (shape) => createHash('sha256').update(`review\n${shape}`).digest('hex').slice(0, 16);
 
 function pr({ state = 'OPEN', draft = false, checks = [], merge = 'BLOCKED', auto = true, armed = '2026-10-08T10:00:00Z', queued = false, events = [], committed = '2026-10-08T10:00:00Z', comments = [] } = {}) {
     return {
@@ -344,18 +347,28 @@ test('parseReview attaches a shape to the finding it sits in and leaves the othe
     ]);
 });
 
+test('followUps fingerprints are stable per shape and differ between shapes, so a rule lane forks only after two pull requests', () => {
+    const line = (shape, url) => followUps(EXIT.review, { url, review: { findings: [{ severity: 'high', title: 't', status: 'open', shape }] } })[0];
+    const fingerprint = (text) => /--fingerprint ([0-9a-f]{16}) /.exec(text)[1];
+    assert.equal(fingerprint(line('rail-rows', 'https://u/1')), fingerprint(line('rail-rows', 'https://u/2')));
+    assert.notEqual(fingerprint(line('rail-rows', 'https://u/1')), fingerprint(line('other-shape', 'https://u/1')));
+    assert.doesNotMatch(line('rail-rows', 'https://u/1'), /qac slip --from/);
+});
+
 test('followUps on a review prints one qac slip line per shaped finding and none for settled ones', () => {
     const verdict = classify(pr({ comments: [bot(REVIEW_SHAPES)] }), SINCE);
     const report = { pr: 7, url: 'https://github.com/o/r/pull/7', ...verdict };
     assert.equal(verdict.outcome, 'review');
     assert.deepEqual(followUps(EXIT.review, report), [
-        'qac slip --from https://github.com/o/r/pull/7 --route qac-check "unwrap-in-daemon-loop"',
+        `qac slip --fingerprint ${fingerprintOf('unwrap-in-daemon-loop')} --from https://github.com/o/r/pull/7 --route qac-check --judge review --rule "unwrap-in-daemon-loop" --message "unwrap-in-daemon-loop"`,
     ]);
 });
 
 test('followUps strips quoting characters from a shape and stays silent without shapes', () => {
     const review = { findings: [{ severity: 'high', title: 't', status: 'open', shape: 'a"b$(c)`d' }] };
-    assert.deepEqual(followUps(EXIT.review, { url: 'https://u', review }), ['qac slip --from https://u --route qac-check "ab(c)d"']);
+    assert.deepEqual(followUps(EXIT.review, { url: 'https://u', review }), [
+        `qac slip --fingerprint ${fingerprintOf('a"b$(c)`d')} --from https://u --route qac-check --judge review --rule "ab(c)d" --message "ab(c)d"`,
+    ]);
     assert.deepEqual(followUps(EXIT.review, { url: 'https://u', review: { findings: [{ severity: 'high', title: 't', status: 'open' }] } }), []);
     assert.deepEqual(followUps(EXIT.review, { url: 'https://u' }), []);
 });

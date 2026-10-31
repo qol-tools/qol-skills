@@ -58,7 +58,7 @@ test("a held lock is waited on and then reported busy after 2 seconds", () => {
   let clock = Date.now();
   const sleeps = [];
   const deps = { nowMs: () => clock, sleep: ms => { sleeps.push(ms); clock += 500; } };
-  assert.throws(() => appendGate(dir, line("a"), deps), /lock is busy/);
+  assert.throws(() => appendGate(dir, line("a"), deps), /could not lock/);
   assert.ok(sleeps.length >= 3);
   assert.equal(existsSync(`${file}.lock`), true);
   assert.deepEqual(readGates(dir), []);

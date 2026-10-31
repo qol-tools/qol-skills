@@ -209,11 +209,11 @@ Every verb prints JSON, takes `--pretty` for text, and returns a typed exit code
 | Verb | Effect |
 |---|---|
 | `open <key> --spec FILE [--base REV] [--cwd DIR]` | Validates the fence, freezes `spec.md` and its sha256, records the base, checks the judge and accept argv against `qac trust`, runs the baseline gate, and prints `{"loop_armed": true, "key", ...}` |
-| `run <key> [--answer TEXT] [--gate-only] [--surface kitty\|headless\|handover] [--cwd DIR]` | Runs attempt 1 and its gate, then on a red gate exactly one retry whose brief is the gate findings plus the original brief; `--answer` resumes a lane that asked a question; `--gate-only` judges whatever the worktree holds |
-| `verdict <key> --blame spec\|impl\|judge --finding ID --hunk PATH:LINE --why TEXT` | Records the architect's verdict after exit 12; it refuses a finding id that is not in `gate.json` and a hunk that is not in the diff |
-| `close <key> --outcome accepted\|paused [--keep N] [--remaining TEXT]` | Calls `session_loop_close` when engine lanes exist, writes the retro line, keeps one worktree (the accepted implementer's, default the latest green one) and removes the rest, and prints `{"loop_closed": true, "final_report": {...}}` |
-| `status [key]` | Prints the loop state from its folder |
-| `doctor [--prune]` | Reports which lane surfaces are available and prunes stale loop folders |
+| `run <key> [--answer TEXT [--index N]] [--gate-only] [--surface kitty\|headless\|handover] [--cwd DIR]` | Runs attempt 1 and its gate, then on a red gate exactly one retry whose brief is the gate findings plus the original brief; a green `gate.json` at rest counts only when its loop, attempt, base and tree match the worktree now, and otherwise `run` gates again; `--answer` resumes the lane that asked a question (`--index 1\|2` names the lane with two implementers); `--gate-only` judges whatever the worktree holds; `--surface` overrides the lane detection that `run` repeats every time; one driver per loop, a second `run` or `close` exits 2 naming the pid that holds the loop |
+| `verdict <key> --blame spec\|impl\|judge --finding ID --hunk PATH:LINE --why TEXT [--index N]` | Records the architect's verdict after exit 12; it refuses a finding id that is not in `gate.json` and a hunk that is not in the diff; `--index 1\|2` is required with two implementers |
+| `close <key> --outcome accepted\|paused [--keep N] [--remaining TEXT] [--skill-gap TEXT]` | Calls `session_loop_close` when engine lanes exist, writes the retro line, and prints `{"loop_closed": true, "final_report": {...}}`; `accepted` refuses a gate that no longer matches the worktree, keeps one worktree (the accepted implementer's, default the latest green one) and removes the rest, while `paused` keeps every worktree; closing a closed loop with the other outcome exits 2; `--skill-gap` fills the retro line's `skill_gap` |
+| `status [key] [--all]` | Prints the state of one loop, or of every open loop with its cost so far (`--all` adds closed loops) |
+| `doctor [--prune]` | Reports node, qol, lane surfaces, qac, trust, the hooks module, mcp and the script root, and exits 10 when a check fails; `--prune` removes leftover worktrees of closed loops that are older than three days and have no uncommitted changes, and leaves loop folders, the kept worktree and open loops alone |
 | `retro --normalize` | Rewrites the retro ledger lines to the current schema |
 
 The verdict is applied by the driver.
@@ -226,35 +226,41 @@ The verdict is applied by the driver.
 | Code | Name | Meaning |
 |---|---|---|
 | 0 | ok | The verb finished, and for `run` the gate is green |
-| 2 | usage | Bad arguments or a bad spec fence |
-| 10 | infra | A lane crash, a missing receipt or result, an empty diff, `could_not_judge`, `flaky_only` (reason `flaky judge`), or an infra-red baseline; never read as a pass |
+| 2 | usage | Bad arguments, a bad spec fence, a loop that is not armed, closed or held by another driver, or `state: spec_blamed` after a `spec` verdict (open `<key>-v2`) |
+| 10 | infra | A lane crash, a lane session that vanished without a receipt, a missing receipt or result, an empty diff, `could_not_judge`, `flaky_only` (reason `flaky judge`), an infra-red baseline, a failing `doctor` check, or a driver killed by a signal (`qols` maps that to 10); never read as a pass |
 | 11 | needsTrust | A judge or accept argv is not trusted yet; the user runs `qac trust approve` |
-| 12 | escalation | Two red gates; the JSON packet names the spec, both `diff.patch` paths and both `gate.json` paths, and the architect answers with `verdict` |
-| 13 | question | A lane ended with a line starting `QUESTION:`; the text is in `question.json` and the architect answers with `run --answer` |
-| 14 | handover | No lane surface is available; the output names the brief path and the worktree path |
+| 12 | escalation | Two red gates, or two implementers that disagree (`ambiguous: true` with `reasons`); the JSON packet names the spec, both `diff.patch` paths and both `gate.json` paths, and the architect answers with `verdict` |
+| 13 | question | A lane ended with a line starting `QUESTION:`; the text is in `question.json` (`question-<i>.json` with two implementers) and the architect answers with `run --answer` (plus `--index <i>` with two implementers) |
+| 14 | handover | No lane surface is available, or `run --gate-only` found a red first attempt and wrote the retry brief; the output names the brief paths and the worktree paths, and the user (or a second session) does the brief before `run --gate-only` runs again |
 
 ### Lanes and surfaces
 
-`run` picks the first available surface unless `--surface` forces one.
+`run` detects the surfaces every time and picks the first available one unless `--surface` forces one; the surface recorded in `loop.json` at `open` is information only, so exporting `QOLS_HEADLESS_LANES=1` after an exit 14 takes effect on the next `run`.
 
 1. `kitty`: the qol CLI is on PATH and `qol sessions spawn --help` mentions `receipt_path`. The driver spawns each lane with `--background --silent-wake` and waits for the receipt file.
-2. `headless`: `QOLS_HEADLESS_LANES=1` is set and `claude` is on PATH. The driver runs `claude -p` in the lane worktree with `--permission-mode acceptEdits`, the allowlist Read, Edit, Write, Glob and Grep, Bash disallowed, `--max-budget-usd` from the spec, `--output-format json`, and `--session-id` on attempt 1 or `--resume` on attempt 2 and on `--answer`.
+2. `headless`: `QOLS_HEADLESS_LANES=1` is set and `claude` is on PATH. The driver runs `claude -p` in the lane worktree with `--permission-mode acceptEdits` (which accepts edits only under the worktree, so Edit and Write are left off the allowlist, where an unscoped rule would match every path), the allowlist Read, Glob and Grep, Bash disallowed, `--setting-sources user` (a `.claude/settings.json` the lane wrote in the worktree never loads on resume), `--max-budget-usd` from the spec, `--output-format json`, and `--session-id` on attempt 1 or `--resume` on attempt 2 and on `--answer`.
 3. `handover`: exit 14. The user opens a second Claude Code session in the printed worktree, and `run <key> --gate-only` judges the result.
 
 A headless lane cannot ask the user, so it ends its final text with `QUESTION: <text>` instead.
-Every lane keeps the edit-only contract above, and a headless lane cannot break it because it has no Bash.
+Every lane keeps the edit-only contract above, and a headless lane has no Bash of its own.
+That is not a sandbox: `qac gate` runs the judges and the accept argv, including every test file the lane wrote, as the architect's user without a sandbox, so lane-authored code runs with the architect's rights at the gate.
+The architect reads the diff before trusting a green gate, and running judges in a sandbox is a tracked follow-up.
 Each attempt lives in `<git-common-dir>/qol-sessions/loops/<key>/attempt-<n>/` with `brief.md`, `diff.patch`, `gate.json`, `lane.json` and `verdict.json`.
 Worktrees are `<parent of main clone>/worktrees/loop-<key>[-<i>]/<repo name>`, and attempt 2 reuses the attempt 1 worktree and lane key.
+The attempt files are state, not proof: `run` and `close --outcome accepted` accept a clean `gate.json` only when its loop, attempt, base and tree match the worktree now.
+That stops a stale green and a hand edit after a green, but not a forgery: code the gate runs as the architect's user (the accept argv, the lane's test files) can still write a matching file, and only sandboxed judges would remove that residual.
 
 Roughly one loop in five (by a hash of the key, unless `QOLS_CONTROL=0`) also runs one headless Opus lane on the same brief in `loop-<key>-control`.
-Its gate lands in `control/`, it goes into the retro line as `control`, and it never changes the outcome.
+Its worktree is recorded in `control/lane.json` and its gate lands in `control/`.
+It goes into the retro line as `control` (`{verdict, cost_usd}`, or null without one), and it never changes the outcome.
+The control decision is made at `run` time from the key hash and the headless lane check.
 
 ### Work machine
 
 A machine with only Claude Code, git and Node runs `qols loop` with headless lanes, `qac gate`, the answer band and the retro lines.
 Headless lanes run only after the user sets `QOLS_HEADLESS_LANES=1`; without it `run` exits 14.
 Kitty lanes, keyed resume, silent-wake receipts, `session_loop_close` and the `session_*` tools need the qol CLI and kitty.
-`mcp.json` starts `qol sessions mcp`, so without the qol CLI the qol-sessions server shows as failed in `/mcp` until the user disables it, and `qols loop doctor` says so.
+`mcp.json` starts `qol sessions mcp`, so without the qol CLI the qol-sessions server shows as failed in `/mcp` until the user disables it, and `qols loop doctor` warns about it on the `mcp` line.
 Codex and pi have no background Bash wake, so the architect runs `node <root>/scripts/loop.mjs run <key>` in the foreground, with the root printed by `qols loop doctor`.
 
 ## Verification policy
@@ -276,9 +282,9 @@ Repo argv runs only after `qac trust`, and budget comes only from the spec.
 Every accepted `session_loop_close` is followed by one retrospective pass, run by the architect without waiting for a user prompt.
 The instrument is a ledger line plus, only when a skill gap is named, a three-lane validation pipeline that may nudge this skill.
 
-1. The driver writes exactly one JSON line to `~/.config/qol-tray/sessions-retro.jsonl` (override `QOL_SESSIONS_RETRO`) when `qols loop close` runs, and nobody else writes that file:
+1. The driver writes exactly one JSON line to `~/.config/qol-tray/sessions-retro.jsonl` (override `QOL_SESSIONS_RETRO`) when `qols loop close` runs, and nobody else writes that file, except that steps 2 and 5 rewrite the `nudge` field of an existing line:
    `{"schema":2,"date","loop_key","tool","model","rounds","correction_rounds","review_caught_defects","lane_deviations","verdict","skill_gap","nudge","gate_attempts","blame","slips","cost_usd","control"}`.
-   The counts are typed numbers from the loop just closed; `verdict` is one sentence on lane performance; `skill_gap` names where this skill or the spec guidance gave insufficient direction, or is null; `nudge` starts null.
+   The counts are typed numbers from the loop just closed; `verdict` is one sentence on lane performance; `skill_gap` names where this skill or the spec guidance gave insufficient direction and comes from `qols loop close --skill-gap TEXT`, or from a `spec` verdict, or is null; `slips` lists the fingerprints of judge-blamed findings; `nudge` starts null and only the pipeline below sets it.
 2. Drift gate, mechanical before cognitive: read the last five ledger lines first.
    If a prior line carries a non-null `nudge` and the lines after it show `rounds` or `review_caught_defects` trending up, revert that nudge's commit, set its line's `nudge` to `"reverted"`, and stop; a worsening trend outranks any argument the pipeline can write.
 3. `skill_gap` null: the retrospective is the ledger line alone; stop.
@@ -323,6 +329,11 @@ The CLI-session integration installs the continuation hooks. Agents never create
 - Delivering a round (`session_spawn` with `task`, or `session_submit`) arms the feature loop; collecting with `session_bridge` keeps it armed.
 - `qols loop open` arms the feature loop too: the guard reads the `loop_armed` receipt in the Bash result.
   A backgrounded `qols loop run` lets the turn end like a watcher-owned round, and its exit notice makes the loop count as unreviewed again.
+  A foreground `qols loop run` that exits 11, 13 or 14 (trust, a lane question, a handover) is a user boundary and lets the turn end; any later `run` blocks the stop again.
+  Exit 12 keeps the block, and the block text names `qols loop verdict`.
+  The guard tracks every opened key: closing one of two loops keeps the stop blocked until the other closes, and a `--pretty` close line counts as a receipt like the JSON one.
+  A driver loop never consults the pending-bridge store, so another session's checkpoint can neither release nor close it.
+  Residual: the exit of a backgrounded `run` is read only from its notice text, so a backgrounded run that ends in 11, 13 or 14 blocks the stop until the architect acts on it.
 - A pending round lives in the lane and its watcher, never in an open architect tool call; the architect turn ends after delivery. A pending, watcher-owned round does not block the Stop guard: the reasoning loop ends and the watcher's wake is the only resume signal.
 - A completed round keeps the loop armed through personal review. A lifecycle-capable host queues another architect turn after the agent settles; a Stop-capable host blocks the round-boundary response because a completed round may not have been collected or reviewed yet.
 - A timeout or bridge error pauses automatic continuation because replay could duplicate work; the round is delivered but no longer watcher-pending, so the Stop guard still blocks until the architect drives the deterministic recovery.

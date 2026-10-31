@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
-import { repoId } from "./config.mjs";
+import { ALWAYS_PROTECTED, repoId } from "./config.mjs";
 import { topLevel } from "./tree.mjs";
 
 const PYTHON = process.platform === "win32" ? "python" : "python3";
@@ -128,7 +128,7 @@ export function detectConfig(cwd, deps = {}) {
   return {
     version: 1,
     setup: uniqueArgv(parts.flatMap(part => part.setup)),
-    protected: [".qac/**"],
+    protected: [...ALWAYS_PROTECTED],
     tests: TEST_GLOBS,
     accept_prefixes: uniqueArgv(parts.flatMap(part => part.accept)),
     defaults: { test_runs_on_red: 3, timeout_s: 600 },

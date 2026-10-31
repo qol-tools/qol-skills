@@ -34,23 +34,27 @@ function setup({ implementers = 1, attempts = [] } = {}) {
     worktrees,
     control: false,
   });
+  const ctx = { tree: "tree0" };
   for (const attempt of attempts) {
     const folder = path.join(dir, attempt.name);
-    if (attempt.gate) writeJson(path.join(folder, "gate.json"), attempt.gate);
+    const n = Number(/^attempt-(\d+)/.exec(attempt.name)[1]);
+    if (attempt.gate) writeJson(path.join(folder, "gate.json"), attempt.gate.verdict === "clean" && !("tree" in attempt.gate) ? { ...attempt.gate, loop: "k1", attempt: n, base: "a".repeat(40), tree: "tree0" } : attempt.gate);
     if (attempt.lane) writeJson(path.join(folder, "lane.json"), attempt.lane);
+    if (attempt.verdict) writeJson(path.join(folder, "verdict.json"), attempt.verdict);
   }
   const retro = path.join(root, "retro.jsonl");
   const calls = [];
   const deps = {
     env: { PATH: "", QOL_SESSIONS_RETRO: retro },
     now: () => new Date("2026-10-31T12:00:00Z"),
+    worktreeTree: () => ctx.tree,
     exec: (argv) => {
       calls.push(argv);
       if (argv[0] === "git" && argv[2] === "--git-common-dir") return { status: 0, stdout: `${common}\n`, stderr: "" };
       return { status: 0, stdout: "", stderr: "" };
     },
   };
-  return { root, repo, dir, worktrees, retro, calls, deps };
+  return Object.assign(ctx, { root, repo, dir, worktrees, retro, calls, deps });
 }
 
 const RED = { verdict: "findings", changed: ["a.js"], findings: [{ id: "x#1" }], tamper: [] };
@@ -126,6 +130,106 @@ test("pausing a red loop is allowed and keeps the worktree", () => {
   assert.equal(receipt.removed.length, 0);
 });
 
+test("pausing keeps every worktree and branch, including the second implementer's and the control's", () => {
+  const ctx = setup({
+    implementers: 2,
+    attempts: [
+      { name: "attempt-1-1", gate: GREEN },
+      { name: "attempt-1-2", gate: RED },
+    ],
+  });
+  const control = recordControl(ctx);
+  const receipt = closeLoop("k1", { cwd: ctx.repo, outcome: "paused" }, ctx.deps);
+  assert.deepEqual(receipt.removed, []);
+  assert.equal(ctx.calls.some((argv) => argv[1] === "worktree" || argv[1] === "branch"), false);
+  const closed = JSON.parse(fs.readFileSync(path.join(ctx.dir, "closed.json"), "utf8"));
+  assert.deepEqual(closed.kept_all.map((entry) => entry.path), [ctx.worktrees[0].path, ctx.worktrees[1].path, control]);
+});
+
+test("a closed loop closes again only with the same outcome", () => {
+  const ctx = setup({ attempts: [{ name: "attempt-1", gate: GREEN, lane: KITTY }] });
+  closeLoop("k1", { cwd: ctx.repo, outcome: "paused" }, ctx.deps);
+  assert.throws(
+    () => closeLoop("k1", { cwd: ctx.repo, outcome: "accepted" }, ctx.deps),
+    (error) => error instanceof LoopError && error.exit === EXIT.usage && /already closed as paused/.test(error.message),
+  );
+  assert.equal(closeLoop("k1", { cwd: ctx.repo, outcome: "paused" }, ctx.deps).final_report.outcome, "paused");
+  assert.equal(fs.readFileSync(ctx.retro, "utf8").trim().split("\n").length, 1);
+});
+
+const STALE = [
+  ["a worktree edited after the gate", (ctx) => { ctx.tree = "edited"; }, /changed since the gate judged it/],
+  ["a gate for another attempt", (ctx, dir) => writeJson(path.join(dir, "attempt-1", "gate.json"), { ...GREEN, loop: "k1", attempt: 4, base: "a".repeat(40), tree: "tree0" }), /gate\.json attempt is 4, not 1/],
+  ["a gate for another base", (ctx, dir) => writeJson(path.join(dir, "attempt-1", "gate.json"), { ...GREEN, loop: "k1", attempt: 1, base: "b".repeat(40), tree: "tree0" }), /gate\.json base is/],
+  ["a gate for another loop", (ctx, dir) => writeJson(path.join(dir, "attempt-1", "gate.json"), { ...GREEN, loop: "other", attempt: 1, base: "a".repeat(40), tree: "tree0" }), /gate\.json loop is "other"/],
+  ["a gate with no tree", (ctx, dir) => writeJson(path.join(dir, "attempt-1", "gate.json"), { ...GREEN, loop: "k1", attempt: 1, base: "a".repeat(40) }), /records no tree/],
+];
+
+for (const [name, mutate, message] of STALE) {
+  test(`accepting refuses ${name}, and pausing still works`, () => {
+    const ctx = setup({ attempts: [{ name: "attempt-1", gate: GREEN, lane: KITTY }] });
+    mutate(ctx, ctx.dir);
+    assert.throws(
+      () => closeLoop("k1", { cwd: ctx.repo, outcome: "accepted" }, ctx.deps),
+      (error) => error instanceof LoopError && error.exit === EXIT.usage && message.test(error.message) && /qols loop run k1/.test(error.message),
+    );
+    assert.equal(fs.existsSync(path.join(ctx.dir, "closed.json")), false);
+    assert.equal(ctx.calls.some((argv) => argv[1] === "sessions"), false);
+    assert.equal(closeLoop("k1", { cwd: ctx.repo, outcome: "paused" }, ctx.deps).final_report.outcome, "paused");
+  });
+}
+
+test("a second driver holding the loop makes close exit 2 naming the pid, and nothing is written", () => {
+  const ctx = setup({ attempts: [{ name: "attempt-1", gate: GREEN, lane: KITTY }] });
+  fs.writeFileSync(path.join(ctx.dir, "run.lock"), JSON.stringify({ pid: process.pid }));
+  assert.throws(
+    () => closeLoop("k1", { cwd: ctx.repo, outcome: "accepted" }, ctx.deps),
+    (error) => error instanceof LoopError && error.exit === EXIT.usage && error.message.includes(`pid ${process.pid}`),
+  );
+  assert.equal(fs.existsSync(path.join(ctx.dir, "closed.json")), false);
+});
+
+test("the lock is released after a close, so a later close is not refused", () => {
+  const ctx = setup({ attempts: [{ name: "attempt-1", gate: GREEN, lane: KITTY }] });
+  closeLoop("k1", { cwd: ctx.repo, outcome: "accepted" }, ctx.deps);
+  assert.equal(fs.existsSync(path.join(ctx.dir, "run.lock")), false);
+});
+
+test("--skill-gap lands in the retro line and a blank one is refused", () => {
+  const ctx = setup({ attempts: [{ name: "attempt-1", gate: GREEN, lane: KITTY }] });
+  assert.throws(() => closeLoop("k1", { cwd: ctx.repo, outcome: "accepted", skillGap: "  " }, ctx.deps), /--skill-gap needs text/);
+  closeLoop("k1", { cwd: ctx.repo, outcome: "accepted", skillGap: "the spec never named the owned test folder" }, ctx.deps);
+  assert.equal(JSON.parse(fs.readFileSync(ctx.retro, "utf8")).skill_gap, "the spec never named the owned test folder");
+});
+
+test("a spec verdict becomes the skill gap candidate and judge verdicts list their fingerprints in slips", () => {
+  const ctx = setup({
+    attempts: [
+      { name: "attempt-1", gate: RED, lane: KITTY, verdict: { blame: "judge", finding: "x#1", fingerprint: "fp9", file: "a.js" } },
+      { name: "attempt-2", gate: GREEN, lane: KITTY, verdict: { blame: "spec", finding: "x#2", why: "two readings of the owned paths" } },
+    ],
+  });
+  closeLoop("k1", { cwd: ctx.repo, outcome: "accepted" }, ctx.deps);
+  const line = JSON.parse(fs.readFileSync(ctx.retro, "utf8"));
+  assert.equal(line.skill_gap, "the spec was blamed for x#2: two readings of the owned paths");
+  assert.deepEqual(line.slips, ["fp9"]);
+  assert.equal(line.nudge, null);
+});
+
+test("the control lane's verdict and cost go into the retro line", () => {
+  const ctx = setup({ attempts: [{ name: "attempt-1", gate: GREEN, lane: KITTY }] });
+  writeJson(path.join(ctx.dir, "control", "lane.json"), { surface: "headless", exit: 0, cost_usd: 1.25, worktree: { path: path.join(ctx.root, "ctl"), branch: "loop-k1-control" } });
+  writeJson(path.join(ctx.dir, "control", "gate.json"), { verdict: "findings" });
+  closeLoop("k1", { cwd: ctx.repo, outcome: "accepted" }, ctx.deps);
+  assert.deepEqual(JSON.parse(fs.readFileSync(ctx.retro, "utf8")).control, { verdict: "findings", cost_usd: 1.25 });
+});
+
+test("a loop with no control lane writes control null", () => {
+  const ctx = setup({ attempts: [{ name: "attempt-1", gate: GREEN, lane: KITTY }] });
+  closeLoop("k1", { cwd: ctx.repo, outcome: "accepted" }, ctx.deps);
+  assert.equal(JSON.parse(fs.readFileSync(ctx.retro, "utf8")).control, null);
+});
+
 test("two implementers: the green one is kept and the other worktree and branch are removed", () => {
   const ctx = setup({
     implementers: 2,
@@ -161,13 +265,11 @@ test("--keep chooses the implementer whose worktree survives", () => {
 function recordControl(ctx) {
   const control = path.join(ctx.root, "worktrees", "loop-k1-control", "main");
   fs.mkdirSync(control, { recursive: true });
-  const file = path.join(ctx.dir, "loop.json");
-  const loop = JSON.parse(fs.readFileSync(file, "utf8"));
-  writeJson(file, { ...loop, worktrees: [...loop.worktrees, { index: "control", path: control, branch: "loop-k1-control" }] });
+  writeJson(path.join(ctx.dir, "control", "lane.json"), { surface: "headless", exit: 0, cost_usd: 0.5, worktree: { path: control, branch: "loop-k1-control" } });
   return control;
 }
 
-test("the control worktree is removed when loop.json lists it", () => {
+test("the control worktree recorded in control/lane.json is removed on an accepted close", () => {
   const ctx = setup({ attempts: [{ name: "attempt-1", gate: GREEN }] });
   const control = recordControl(ctx);
   const receipt = closeLoop("k1", { cwd: ctx.repo, outcome: "accepted" }, ctx.deps);
@@ -175,7 +277,7 @@ test("the control worktree is removed when loop.json lists it", () => {
   assert.equal(receipt.final_report.worktree, ctx.worktrees[0].path);
 });
 
-test("a loop-<key>-control folder that loop.json does not list is never removed", () => {
+test("a loop-<key>-control folder that control/lane.json does not record is never removed", () => {
   const ctx = setup({ attempts: [{ name: "attempt-1", gate: GREEN }] });
   const stray = path.join(ctx.root, "worktrees", "loop-k1-control", "main");
   fs.mkdirSync(stray, { recursive: true });
@@ -193,15 +295,16 @@ test("after a real kitty lane run, close calls qol sessions loop-close with the 
   const receiptFile = path.join(ctx.root, "receipt.json");
   fs.writeFileSync(report, "changed src/x.mjs");
   fs.writeFileSync(receiptFile, JSON.stringify({ session: "kitty:7", completion_marker: "DONE_7", report }));
+  writeJson(path.join(ctx.dir, "baseline", "gate.json"), { verdict: "clean" });
   const gate = { schema: 1, verdict: "clean", changed: ["src/x.mjs"], findings: [], tamper: [] };
   const exec = ctx.deps.exec;
   const deps = {
     ...ctx.deps,
     pickSurface: () => "kitty",
-    headlessAvailable: () => false,
+    detectLanes: () => ({ headless: false }),
     fetchTraps: async () => [],
     captureDiff: async () => "diff --git a/src/x.mjs b/src/x.mjs\n--- a/src/x.mjs\n+++ b/src/x.mjs\n@@ -1 +1 @@\n-a\n+b\n",
-    runGate: async () => ({ exit: 0, gate, stderr: "" }),
+    runGate: async (options) => ({ exit: 0, gate: { ...gate, loop: options.loop, attempt: options.attempt, base: options.base, tree: "tree0" }, stderr: "" }),
     exec: (argv, options) => {
       if (argv[1] === "sessions" && argv[2] === "spawn") {
         ctx.calls.push(argv);

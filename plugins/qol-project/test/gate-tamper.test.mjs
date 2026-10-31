@@ -6,6 +6,7 @@ import { appendFileSync, mkdirSync, mkdtempSync, realpathSync, renameSync, rmSyn
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { addedLines, tamperChecks } from "../src/gate/tamper.mjs";
+import { treeId } from "../src/gate/tree.mjs";
 
 function git(cwd, ...args) {
   return execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
@@ -75,6 +76,10 @@ const SUPPRESSION_CASES = [
   "it.skip('a', () => {});",
   "xit('a', () => {});",
   "@pytest.mark.skip",
+  "#![allow(dead_code)]",
+  '#[ignore = "flaky"]',
+  "test('a', { skip: true }, () => {});",
+  "test('a', { todo: true }, () => {});",
 ];
 
 for (const snippet of SUPPRESSION_CASES) {
@@ -222,17 +227,17 @@ test("entries come out grouped in contract order", () => {
 test("injected exec and read replace git and the filesystem", () => {
   const calls = [];
   const exec = (command, args) => {
-    calls.push(args[0]);
+    calls.push(args.join(" "));
     return "";
   };
   const read = () => "spec text";
   const entries = tamperChecks(
-    { cwd: "/nowhere", base: "HEAD", config: {}, specPath: "spec.md", specSha: "0".repeat(64) },
-    { exec, read, tree: "deadbeef" },
+    { cwd: "/nowhere", base: "HEAD", config: {}, specPath: "spec.md", specSha: "0".repeat(64), tree: "deadbeef" },
+    { exec, read },
   );
   assert.deepEqual(entries.map(entry => entry.kind), ["spec-sha"]);
-  assert.ok(calls.includes("diff-tree"));
-  assert.ok(calls.includes("ls-files"));
+  assert.ok(calls.some(call => call.includes("diff-tree")));
+  assert.ok(calls.some(call => call.startsWith("ls-files")));
 });
 
 test("addedLines tracks new-file line numbers across hunks and files", () => {
@@ -265,4 +270,170 @@ test("addedLines tracks new-file line numbers across hunks and files", () => {
     { file: "x.txt", line: 12, text: "twelve" },
     { file: "y.txt", line: 1, text: "++ looks like a header but is content" },
   ]);
+});
+
+const SKIPPED = 'test.skip("a", () => {});\n';
+
+test("suppression: a lane-added .gitattributes with -diff does not hide an added skip", () => {
+  const { repo } = makeRepo();
+  put(repo, ".gitattributes", "* -diff\n");
+  appendFileSync(path.join(repo, "test/a.test.mjs"), SKIPPED);
+  const found = ofKind(checks(repo), "suppression");
+  assert.deepEqual(found.map(entry => entry.file), ["test/a.test.mjs"]);
+  assert.match(found[0].detail, /^line 21: /);
+});
+
+test("suppression: info/attributes with -diff does not hide an added skip", () => {
+  const { repo } = makeRepo();
+  mkdirSync(path.join(repo, ".git", "info"), { recursive: true });
+  writeFileSync(path.join(repo, ".git", "info", "attributes"), "* -diff\n");
+  appendFileSync(path.join(repo, "test/a.test.mjs"), SKIPPED);
+  assert.deepEqual(ofKind(checks(repo), "suppression").map(entry => entry.file), ["test/a.test.mjs"]);
+});
+
+test("suppression: one NUL byte in a test file does not hide an added skip", () => {
+  const { repo } = makeRepo();
+  appendFileSync(path.join(repo, "test/a.test.mjs"), `// \0\n${SKIPPED}`);
+  const found = ofKind(checks(repo), "suppression");
+  assert.deepEqual(found.map(entry => entry.file), ["test/a.test.mjs"]);
+});
+
+test("suppression: a file name git would quote is still scanned", () => {
+  const { repo } = makeRepo();
+  put(repo, "test/é.test.mjs", SKIPPED);
+  put(repo, "test/plain.test.mjs", SKIPPED);
+  const files = ofKind(checks(repo), "suppression").map(entry => entry.file).sort();
+  assert.deepEqual(files, ["test/plain.test.mjs", "test/é.test.mjs"]);
+});
+
+test("suppression: quote and backslash in a file name are decoded", { skip: process.platform === "win32" }, () => {
+  const { repo } = makeRepo();
+  put(repo, 'test/q"b\\c.test.mjs', SKIPPED);
+  assert.deepEqual(ofKind(checks(repo), "suppression").map(entry => entry.file), ['test/q"b\\c.test.mjs']);
+});
+
+test("addedLines decodes git's C escapes in quoted headers", () => {
+  const patch = [
+    'diff --git "a/d/\\303\\251\\"x\\\\y\\t.txt" "b/d/\\303\\251\\"x\\\\y\\t.txt"',
+    '--- /dev/null',
+    '+++ "b/d/\\303\\251\\"x\\\\y\\t.txt"',
+    "@@ -0,0 +1 @@",
+    "+hello",
+  ].join("\n");
+  assert.deepEqual(addedLines(patch), [{ file: 'd/é"x\\y\t.txt', line: 1, text: "hello" }]);
+});
+
+test("untracked: a lane-added .gitignore that hides a new file is reported", () => {
+  const { repo } = makeRepo();
+  put(repo, "test/.gitignore", "helper.mjs\n");
+  put(repo, "test/helper.mjs", SKIPPED);
+  put(repo, "test/visible.mjs", "export {};\n");
+  const found = ofKind(checks(repo), "untracked");
+  assert.deepEqual(found.map(entry => entry.file), ["test/helper.mjs"]);
+  assert.match(found[0].detail, /\.gitignore/);
+});
+
+test("untracked: files already ignored at the base are not reported when a .gitignore changes", () => {
+  const { repo } = makeRepo();
+  put(repo, ".gitignore", "ignored.log\nextra.log\n");
+  put(repo, "ignored.log", "noise\n");
+  put(repo, "extra.log", "new\n");
+  assert.deepEqual(ofKind(checks(repo), "untracked").map(entry => entry.file), ["extra.log"]);
+});
+
+test("untracked: ignored files with an untouched .gitignore are not reported", () => {
+  const { repo } = makeRepo();
+  put(repo, "ignored.log", "noise\n");
+  assert.deepEqual(ofKind(checks(repo), "untracked"), []);
+});
+
+test("protected: formatter, lint, cargo, claude and attribute config are always protected", () => {
+  const { repo } = makeRepo();
+  const files = [
+    "rustfmt.toml",
+    "crates/x/.rustfmt.toml",
+    "clippy.toml",
+    ".clippy.toml",
+    ".cargo/config.toml",
+    "crates/x/.cargo/config.toml",
+    ".claude/settings.json",
+    "crates/x/.gitattributes",
+  ];
+  for (const file of files) put(repo, file, "x\n");
+  const found = ofKind(checks(repo, { config: {} }), "protected").map(entry => entry.file).sort();
+  assert.deepEqual(found, [...files].sort());
+});
+
+test("accept-edit: a base file named in an accept argv that changed is reported", () => {
+  const { repo } = makeRepo();
+  appendFileSync(path.join(repo, "test/a.test.mjs"), "more\n");
+  const accept = [{ id: "a", argv: ["node", "--test", "test/a.test.mjs"] }];
+  const found = ofKind(checks(repo, { accept }), "accept-edit");
+  assert.deepEqual(found.map(entry => entry.file), ["test/a.test.mjs"]);
+});
+
+test("accept-edit: absolute and directory argv tokens match, flags and bare words do not", () => {
+  const { repo } = makeRepo();
+  appendFileSync(path.join(repo, "test/a.test.mjs"), "more\n");
+  appendFileSync(path.join(repo, "src/lib.mjs"), "more\n");
+  const absolute = [{ id: "a", argv: ["node", "--test", path.join(repo, "test", "a.test.mjs")] }];
+  assert.deepEqual(ofKind(checks(repo, { accept: absolute }), "accept-edit").map(entry => entry.file), ["test/a.test.mjs"]);
+  const directory = [{ id: "a", argv: ["node", "--test", "test/"] }];
+  assert.deepEqual(ofKind(checks(repo, { accept: directory }), "accept-edit").map(entry => entry.file), ["test/a.test.mjs"]);
+  const bare = [{ id: "a", argv: ["node", "--test"] }, { id: "b", argv: ["cargo", "test"] }];
+  assert.deepEqual(ofKind(checks(repo, { accept: bare }), "accept-edit"), []);
+});
+
+test("accept-edit: a new file named in an accept argv is the architect's and is not reported", () => {
+  const { repo } = makeRepo();
+  put(repo, "test/new.test.mjs", "export {};\n");
+  const accept = [{ id: "a", argv: ["node", "--test", "test/new.test.mjs"] }];
+  assert.deepEqual(ofKind(checks(repo, { accept }), "accept-edit"), []);
+});
+
+test("accept-edit: deleting or renaming a named base file is reported under its base path", () => {
+  const { repo } = makeRepo();
+  git(repo, "mv", "test/a.test.mjs", "test/b.test.mjs");
+  const accept = [{ id: "a", argv: ["node", "--test", "test/a.test.mjs"] }];
+  assert.deepEqual(ofKind(checks(repo, { accept }), "accept-edit").map(entry => entry.file), ["test/a.test.mjs"]);
+});
+
+test("mutated: a file rewritten after the judged tree is reported and the judged tree is what is scanned", () => {
+  const { repo } = makeRepo();
+  put(repo, "src/clean.mjs", "export {};\n");
+  const tree = treeId(repo);
+  put(repo, "src/clean.mjs", `${SKIPPED}`);
+  const found = checks(repo, { tree });
+  assert.deepEqual(ofKind(found, "suppression"), []);
+  assert.deepEqual(ofKind(found, "mutated").map(entry => entry.file), ["src/clean.mjs"]);
+});
+
+test("mutated: a judge undoing the lane's skip is still reported", () => {
+  const { repo } = makeRepo();
+  appendFileSync(path.join(repo, "test/a.test.mjs"), SKIPPED);
+  const tree = treeId(repo);
+  git(repo, "checkout", "--", "test/a.test.mjs");
+  const found = checks(repo, { tree });
+  assert.deepEqual(ofKind(found, "suppression").map(entry => entry.file), ["test/a.test.mjs"]);
+  assert.deepEqual(ofKind(found, "mutated").map(entry => entry.file), ["test/a.test.mjs"]);
+});
+
+test("mutated: a report a judge declared is not a change, relative or absolute", () => {
+  const { repo } = makeRepo();
+  const tree = treeId(repo);
+  put(repo, "reports/junit.xml", "<testsuite/>\n");
+  put(repo, "reports/other.xml", "<x/>\n");
+  const options = { tree, owned: ["src/**"] };
+  const relative = checks(repo, { ...options, reports: ["reports/junit.xml"] });
+  assert.deepEqual(ofKind(relative, "mutated").map(entry => entry.file), ["reports/other.xml"]);
+  assert.deepEqual(ofKind(relative, "owner"), []);
+  const absolute = checks(repo, { ...options, reports: [path.join(repo, "reports", "junit.xml")] });
+  assert.deepEqual(ofKind(absolute, "mutated").map(entry => entry.file), ["reports/other.xml"]);
+  assert.deepEqual(ofKind(checks(repo, { tree }), "mutated").map(entry => entry.file), ["reports/junit.xml", "reports/other.xml"]);
+});
+
+test("mutated: an unchanged worktree reports nothing", () => {
+  const { repo } = makeRepo();
+  appendFileSync(path.join(repo, "README.md"), "more\n");
+  assert.deepEqual(ofKind(checks(repo, { tree: treeId(repo) }), "mutated"), []);
 });

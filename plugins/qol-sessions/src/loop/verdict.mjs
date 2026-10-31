@@ -14,14 +14,39 @@ import {
   writeJson,
 } from "./paths.mjs";
 
-export const BLAMES = Object.freeze(["spec", "impl", "judge"]);
+const BLAMES = Object.freeze(["spec", "impl", "judge"]);
 
 const HUNK_HEADER = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
+
+const C_ESCAPES = { a: 7, b: 8, t: 9, n: 10, v: 11, f: 12, r: 13, '"': 34, "\\": 92 };
+
+function isOctal(char) {
+  return typeof char === "string" && char >= "0" && char <= "7";
+}
+
+function decodeQuoted(value) {
+  const chars = Array.from(value.length > 1 && value.endsWith('"') ? value.slice(1, -1) : value.slice(1));
+  const bytes = [];
+  for (let i = 0; i < chars.length; i++) {
+    if (chars[i] !== "\\") {
+      bytes.push(...Buffer.from(chars[i]));
+    } else if (isOctal(chars[i + 1])) {
+      let digits = "";
+      while (digits.length < 3 && isOctal(chars[i + 1])) digits += chars[++i];
+      bytes.push(parseInt(digits, 8) & 255);
+    } else if (Object.hasOwn(C_ESCAPES, chars[i + 1])) {
+      bytes.push(C_ESCAPES[chars[++i]]);
+    } else {
+      bytes.push(92);
+    }
+  }
+  return Buffer.from(bytes).toString("utf8");
+}
 
 function diffPath(raw) {
   const value = raw.split("\t")[0].trim();
   if (value === "/dev/null") return null;
-  return value.replace(/^[ab]\//, "");
+  return (value.startsWith('"') ? decodeQuoted(value) : value).replace(/^[ab]\//, "");
 }
 
 export function diffHunks(patch) {
@@ -79,7 +104,7 @@ export function hunkContains(hunks, file, line) {
   });
 }
 
-export function findFinding(gate, id) {
+function findFinding(gate, id) {
   const finding = (gate?.findings ?? []).find((entry) => entry.id === id);
   if (finding) return { kind: "finding", entry: finding };
   const tamper = (gate?.tamper ?? []).find((entry) => entry.id === id);
@@ -183,12 +208,16 @@ export function recordVerdict(key, input, options = {}, deps) {
   if (input.blame === "judge" && !found.entry.fingerprint) {
     throw new LoopError(`verdict rejected: ${input.finding} has no fingerprint, so it cannot be blamed on a judge`);
   }
+  if (input.blame === "judge" && !found.entry.file) {
+    throw new LoopError(`verdict rejected: ${input.finding} names no file, so the re-gate cannot exclude exactly that finding`);
+  }
   const record = {
     schema: 1,
     key,
     blame: input.blame,
     finding: input.finding,
     fingerprint: found.entry.fingerprint ?? null,
+    file: found.entry.file ?? null,
     hunk: input.hunk,
     why: input.why,
     attempt: location.attempt.n,

@@ -1,5 +1,6 @@
 import os from "node:os";
 import path from "node:path";
+import { mkdtempSync, rmSync } from "node:fs";
 import { EXIT, LoopError, findOnPath, readJson, withDefaults } from "./paths.mjs";
 
 export const QAC_EXIT = Object.freeze({ clean: 0, findings: 1, usage: 2, notRepo: 3, forkFailed: 4, couldNotJudge: 5, flakyOnly: 6 });
@@ -59,7 +60,7 @@ export function gateArgs(qac, options) {
   for (const [flag, value] of pairs) {
     if (value !== undefined && value !== null && value !== "") args.push(flag, String(value));
   }
-  for (const fingerprint of options.excludeFingerprints ?? []) args.push("--exclude-fingerprint", fingerprint);
+  for (const entry of options.excludeFindings ?? []) args.push("--exclude-finding", `${entry.fingerprint}=${entry.file}`);
   if (options.attempt !== undefined && options.attempt !== null) args.push("--attempt", String(options.attempt));
   if (options.keep) args.push("--keep");
   return args;
@@ -77,6 +78,41 @@ export function runGate(options, deps) {
     stderr: String(result.stderr ?? ""),
     error: result.error ?? null,
   };
+}
+
+function treeFail(cwd, args, result) {
+  const detail = String(result.stderr ?? "").trim() || result.error || `exit ${result.status}`;
+  return new Error(`git ${args[0]} failed in ${cwd}: ${detail}`);
+}
+
+export function worktreeTree(cwd, deps) {
+  const d = withDefaults(deps);
+  const temp = (d.mkdtemp ?? mkdtempSync)(path.join(os.tmpdir(), "qols-tree-"));
+  const env = { ...d.env, GIT_INDEX_FILE: path.join(temp, "index") };
+  try {
+    for (const args of [["read-tree", "HEAD"], ["add", "-A"]]) {
+      const result = d.exec(["git", ...args], { cwd, env });
+      if (result.status !== 0) throw treeFail(cwd, args, result);
+    }
+    const written = d.exec(["git", "write-tree"], { cwd, env });
+    if (written.status !== 0) throw treeFail(cwd, ["write-tree"], written);
+    return String(written.stdout ?? "").trim();
+  } finally {
+    (d.rmdir ?? ((dir) => rmSync(dir, { recursive: true, force: true })))(temp);
+  }
+}
+
+export function gateStale(gate, expected, deps) {
+  const d = withDefaults(deps);
+  const mismatched = [
+    ["loop", expected.loop],
+    ["attempt", expected.attempt],
+    ["base", expected.base],
+  ].find(([field, value]) => String(gate?.[field] ?? "") !== String(value ?? ""));
+  if (mismatched) return `gate.json ${mismatched[0]} is ${JSON.stringify(gate?.[mismatched[0]] ?? null)}, not ${JSON.stringify(mismatched[1])}`;
+  if (typeof gate.tree !== "string" || gate.tree === "") return "gate.json records no tree";
+  const fresh = (d.worktreeTree ?? worktreeTree)(expected.cwd, d);
+  return fresh === gate.tree ? null : `the worktree changed since the gate judged it (tree ${gate.tree.slice(0, 12)} then, ${String(fresh).slice(0, 12)} now)`;
 }
 
 export function gateFailure(run) {

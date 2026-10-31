@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { closeLoop } from "../src/loop/close.mjs";
 import { doctorLoop } from "../src/loop/doctor.mjs";
 import { openLoop } from "../src/loop/open.mjs";
-import { EXIT, LoopError } from "../src/loop/paths.mjs";
+import { EXIT, LoopError, SURFACES } from "../src/loop/paths.mjs";
 import { normalizeRetro } from "../src/loop/retro.mjs";
 import { statusLoop } from "../src/loop/status.mjs";
 import { recordVerdict } from "../src/loop/verdict.mjs";
@@ -12,18 +12,18 @@ export { EXIT };
 
 const VERBS = {
   open: { usage: "open <key> --spec FILE [--base REV] [--cwd DIR]", about: "freeze the spec, check trust, create worktrees, run the baseline gate", positional: 1, strings: ["spec", "base", "cwd"], bools: [] },
-  run: { usage: "run <key> [--answer TEXT] [--gate-only] [--surface kitty|headless|handover] [--cwd DIR]", about: "run attempt 1 and at most one retry, then gate; a red --gate-only after attempt 1 writes the retry brief and exits 14", positional: 1, strings: ["answer", "surface", "cwd"], bools: ["gate-only"] },
+  run: { usage: "run <key> [--answer TEXT [--index N]] [--gate-only] [--surface kitty|headless|handover] [--cwd DIR]", about: "run attempt 1 and at most one retry, then gate; --surface overrides lane detection; --answer needs --index 1|2 with 2 implementers; a red --gate-only after attempt 1 writes the retry brief and exits 14", positional: 1, strings: ["answer", "index", "surface", "cwd"], bools: ["gate-only"] },
   verdict: { usage: "verdict <key> --blame spec|impl|judge --finding ID --hunk PATH:LINE --why TEXT [--index N] [--cwd DIR]", about: "record who is at fault for a red gate; --index 1|2 is required with 2 implementers", positional: 1, strings: ["blame", "finding", "hunk", "why", "index", "cwd"], bools: [] },
-  close: { usage: "close <key> --outcome accepted|paused [--keep N] [--remaining TEXT] [--cwd DIR]", about: "close lanes, write the retro line, keep one worktree, print the receipt", positional: 1, strings: ["outcome", "keep", "remaining", "cwd"], bools: [] },
-  status: { usage: "status [key] [--cwd DIR]", about: "show one loop or every loop of this repository", positional: 1, optional: true, strings: ["cwd"], bools: [] },
+  close: { usage: "close <key> --outcome accepted|paused [--keep N] [--remaining TEXT] [--skill-gap TEXT] [--cwd DIR]", about: "close lanes, write the retro line, print the receipt; accepted keeps one worktree and needs a gate that matches the worktree, paused keeps every worktree; --skill-gap names where the skill or spec guidance fell short", positional: 1, strings: ["outcome", "keep", "remaining", "skill-gap", "cwd"], bools: [] },
+  status: { usage: "status [key] [--all] [--cwd DIR]", about: "show one loop, or every open loop of this repository (--all adds closed loops), with the cost so far", positional: 1, optional: true, strings: ["cwd"], bools: ["all"] },
   doctor: { usage: "doctor [--prune] [--cwd DIR]", about: "check node, qol, lanes, qac, hooks, trust, mcp and the script root", positional: 0, strings: ["cwd"], bools: ["prune"] },
   retro: { usage: "retro --normalize", about: "one-time: back up the retro ledger, type its numbers, add schema 1", positional: 0, strings: [], bools: ["normalize"] },
 };
 
 const EXIT_ABOUT = [
   [EXIT.ok, "ok"],
-  [EXIT.usage, "usage error"],
-  [EXIT.infra, "infrastructure failure or could not judge"],
+  [EXIT.usage, "usage error, a bad spec fence, or a run whose verdict blamed the spec (state spec_blamed: open <key>-v2)"],
+  [EXIT.infra, "infrastructure failure, could not judge, or a failing doctor check"],
   [EXIT.needsTrust, "accept commands need qac trust approve"],
   [EXIT.escalation, "two red attempts, escalation packet printed"],
   [EXIT.question, "the lane asked a question"],
@@ -90,6 +90,7 @@ export function parseArgs(argv) {
     } else if (spec.strings.includes(name)) {
       const value = eq === -1 ? rest.shift() : token.slice(eq + 1);
       if (value === undefined) parsed.errors.push(`--${name} needs a value`);
+      else if (name === "surface" && !SURFACES.includes(value)) parsed.errors.push(`--surface must be one of ${SURFACES.join(", ")}`);
       else parsed.flags[name] = value;
     } else {
       parsed.errors.push(`unknown flag --${name} for ${verb}`);
@@ -130,16 +131,25 @@ async function dispatch(parsed, deps) {
       return openLoop(key, { cwd: flags.cwd, spec: flags.spec, base: flags.base }, loopDeps);
     case "run": {
       const runLoop = await loadRun(deps);
-      return runLoop(key, { cwd: flags.cwd, answer: flags.answer, gateOnly: Boolean(flags["gate-only"]), surface: flags.surface }, loopDeps);
+      const { exit, result } = await runLoop(
+        key,
+        { cwd: flags.cwd, answer: flags.answer, index: parsePositive("index", flags.index), gateOnly: Boolean(flags["gate-only"]), surface: flags.surface },
+        loopDeps,
+      );
+      return { exit, ...result };
     }
     case "verdict":
       requireFlags(parsed, ["blame", "finding", "hunk", "why"]);
       return recordVerdict(key, { blame: flags.blame, finding: flags.finding, hunk: flags.hunk, why: flags.why }, { cwd: flags.cwd, index: parsePositive("index", flags.index) }, loopDeps);
     case "close":
       requireFlags(parsed, ["outcome"]);
-      return closeLoop(key, { cwd: flags.cwd, outcome: flags.outcome, keep: parsePositive("keep", flags.keep), remaining: flags.remaining }, loopDeps);
+      return closeLoop(
+        key,
+        { cwd: flags.cwd, outcome: flags.outcome, keep: parsePositive("keep", flags.keep), remaining: flags.remaining, skillGap: flags["skill-gap"] },
+        loopDeps,
+      );
     case "status":
-      return statusLoop(key, { cwd: flags.cwd }, loopDeps);
+      return statusLoop(key, { cwd: flags.cwd, all: Boolean(flags.all) }, loopDeps);
     case "doctor":
       return doctorLoop({ cwd: flags.cwd, prune: Boolean(flags.prune) }, loopDeps);
     case "retro":
@@ -154,7 +164,7 @@ function renderOpen(result) {
   if (result.needs_trust) {
     const lines = ["accept commands need approval before the loop can arm:"];
     for (const entry of result.untrusted) lines.push(`  ${entry.id ?? "?"}: ${(entry.argv ?? [entry]).join(" ")}`);
-    lines.push(`approve with: ${result.approve}`);
+    lines.push(`the user approves by typing (an agent never runs it): ${result.approve}`);
     return lines.join("\n");
   }
   const lines = [`loop ${result.key} armed on ${String(result.base).slice(0, 12)} via ${result.surface}${result.control ? " (opus control on)" : ""}`];
@@ -181,11 +191,27 @@ function renderClose(result) {
 }
 
 function renderLoop(loop) {
-  const lines = [`${loop.key}  ${loop.phase}  ${loop.surface}  ${loop.attempts.length} attempts${loop.outcome ? `  ${loop.outcome}` : ""}`];
+  const lines = [`${loop.key}  ${loop.phase}  ${loop.surface}  ${loop.attempts.length} attempts  $${loop.cost_usd}${loop.outcome ? `  ${loop.outcome}` : ""}`];
   for (const attempt of loop.attempts) {
     lines.push(`  ${attempt.name}  gate ${attempt.gate ?? "-"}  ${attempt.findings} findings  ${attempt.tamper} tamper${attempt.blame ? `  blame ${attempt.blame}` : ""}`);
   }
-  if (loop.question) lines.push(`  open question: ${loop.question.text ?? JSON.stringify(loop.question)}`);
+  for (const question of loop.questions ?? []) lines.push(`  open question${question.slot === null ? "" : ` (implementer ${question.slot})`}: ${question.question}`);
+  return lines.join("\n");
+}
+
+function renderRun(result) {
+  const lines = [`loop ${result.key ?? "?"}: ${result.state}${result.attempt ? ` (attempt ${result.attempt})` : ""}`];
+  if (result.error) lines.push(`error: ${result.error}`);
+  if (result.reason) lines.push(`reason: ${result.reason}`);
+  if (result.question) lines.push(`question: ${result.question}`);
+  for (const slot of result.slots ?? []) lines.push(`  implementer ${slot.index}: ${slot.state} (attempt ${slot.attempt}, gate ${slot.verdict ?? "-"}) ${slot.worktree}`);
+  if (result.ambiguous) for (const reason of result.reasons ?? []) lines.push(`  ambiguous: ${reason}`);
+  if (result.spec) lines.push(`spec: ${result.spec}`);
+  for (const file of result.diffs ?? []) lines.push(`  diff: ${file}`);
+  for (const file of result.gates ?? []) lines.push(`  gate: ${file}`);
+  for (const file of result.briefs ?? []) lines.push(`  brief: ${file}`);
+  if (result.control) lines.push(`control: ${result.control.state}${result.control.verdict ? ` (gate ${result.control.verdict})` : ""}`);
+  if (result.next) lines.push(`next: ${result.next}`);
   return lines.join("\n");
 }
 
@@ -211,7 +237,7 @@ function renderRetro(result) {
   return `retro: ${result.changed} of ${result.lines} lines normalized${result.backed_up ? `, backup ${result.backup}` : ""}`;
 }
 
-const RENDERERS = { open: renderOpen, verdict: renderVerdict, close: renderClose, status: renderStatus, doctor: renderDoctor, retro: renderRetro };
+const RENDERERS = { open: renderOpen, run: renderRun, verdict: renderVerdict, close: renderClose, status: renderStatus, doctor: renderDoctor, retro: renderRetro };
 
 export function renderPretty(verb, result) {
   if (result.error) return [`error: ${result.error}`, ...(result.needs_trust ? [renderOpen(result)] : [])].join("\n");

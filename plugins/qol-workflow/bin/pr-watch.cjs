@@ -2,6 +2,7 @@
 'use strict';
 
 const { spawnSync } = require('node:child_process');
+const { createHash } = require('node:crypto');
 
 const EXIT = { merged: 0, failed: 1, usage: 2, missing: 3, gh: 4, timeout: 5, idle: 6, review: 7 };
 const FAILED_CONCLUSIONS = new Set(['FAILURE', 'CANCELLED', 'TIMED_OUT', 'ACTION_REQUIRED', 'STARTUP_FAILURE']);
@@ -251,12 +252,16 @@ function slipArgument(text) {
     return `"${String(text).replace(/["\\$`]/g, '').trim()}"`;
 }
 
+function shapeFingerprint(shape) {
+    return createHash('sha256').update(`review\n${shape}`).digest('hex').slice(0, 16);
+}
+
 function followUps(code, report) {
     if (code === EXIT.review) {
         const from = report.url ?? report.review?.url;
         return (report.review?.findings ?? [])
             .filter((finding) => finding.shape && finding.severity !== 'settled')
-            .map((finding) => `qac slip --from ${from} --route qac-check ${slipArgument(finding.shape)}`);
+            .map((finding) => `qac slip --fingerprint ${shapeFingerprint(finding.shape)} --from ${from} --route qac-check --judge review --rule ${slipArgument(finding.shape)} --message ${slipArgument(finding.shape)}`);
     }
     if (code === EXIT.failed) {
         const failures = (report.failures ?? []).filter((failure) => failure.url);

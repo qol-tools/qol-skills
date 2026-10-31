@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { ALWAYS_PROTECTED } from "../src/gate/config.mjs";
 import { detectConfig, initConfig } from "../src/gate/init.mjs";
 
 function scratch(files = {}) {
@@ -27,7 +28,7 @@ test("an empty directory detects a valid config with no judges", () => {
   assert.equal(config.version, 1);
   assert.deepEqual(config.judges, []);
   assert.deepEqual(config.setup, []);
-  assert.deepEqual(config.protected, [".qac/**"]);
+  assert.deepEqual(config.protected, [...ALWAYS_PROTECTED]);
   assert.deepEqual(config.defaults, { test_runs_on_red: 3, timeout_s: 600 });
   assert.deepEqual(config.retention, { loops: 50 });
   assert.ok(config.tests.includes("**/test/**"));

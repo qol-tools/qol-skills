@@ -1,11 +1,12 @@
 import path from "node:path";
-import { chooseSurface, detectLanes } from "./doctor.mjs";
+import { isControlLoop } from "./control.mjs";
 import { gateFailure, qacTrust, runGate } from "./gate.mjs";
 import {
   EXIT,
   LoopError,
   assertKey,
   commonDir,
+  isArmed,
   loopDir,
   mainClone,
   sha256,
@@ -15,13 +16,9 @@ import {
   writeJson,
   writeLoop,
 } from "./paths.mjs";
+import { detectLanes, pickSurface } from "./lanes/index.mjs";
 import { parseSpec, validateFront } from "./spec.mjs";
 import { addWorktree } from "./worktree.mjs";
-
-export function controlApplies(key, env, headless) {
-  if (!headless || env.QOLS_CONTROL === "0") return false;
-  return parseInt(sha256(key).slice(0, 8), 16) % 5 === 0;
-}
 
 function errorList(result) {
   if (Array.isArray(result)) return result.map(String);
@@ -77,15 +74,15 @@ export function openLoop(key, options, deps) {
   const common = commonDir(cwd, d);
   const repoRoot = mainClone(common);
   const dir = loopDir(common, key);
-  if (d.exists(path.join(dir, "baseline", "gate.json"))) throw new LoopError(`loop ${key} is already armed at ${dir}`);
+  if (isArmed(dir, d)) throw new LoopError(`loop ${key} is already armed at ${dir}`);
   const base = resolveBase(cwd, options.base ?? "HEAD", d);
   const specSha = sha256(specText);
-  const lanes = detectLanes(d);
-  const surface = chooseSurface(lanes);
+  const lanes = (d.detectLanes ?? detectLanes)(d);
+  const surface = (d.pickSurface ?? pickSurface)({}, d);
   const accept = front.accept ?? [];
   const owned = front.owned ?? [];
   const implementers = front.implementers ?? 1;
-  const control = controlApplies(key, d.env, lanes.headless);
+  const control = isControlLoop(key, d.env) && Boolean(lanes.headless);
   d.write(path.join(dir, "spec.md"), specText);
   const acceptFile = writeJson(path.join(dir, "accept.json"), accept, d);
   const ownedFile = writeJson(path.join(dir, "owned.json"), owned, d);
@@ -121,12 +118,13 @@ export function openLoop(key, options, deps) {
       key,
       untrusted,
       approve: `qac trust approve --cwd ${cwd} --accept ${acceptFile}`,
+      approve_note: "for the user to type at the keyboard; an agent never runs it",
     };
   }
   for (const worktree of worktrees) {
     if (d.exists(worktree.path)) continue;
     try {
-      (d.addWorktree ?? addWorktree)(repoRoot, worktree.path, base, worktree.branch);
+      (d.addWorktree ?? addWorktree)({ repoRoot, key, index: implementers === 1 ? null : worktree.index, base }, d);
     } catch (error) {
       throw new LoopError(`cannot create worktree ${worktree.path}: ${error.message}`, EXIT.infra);
     }

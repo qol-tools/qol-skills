@@ -6,15 +6,16 @@ import path from "node:path";
 const MAX_BUFFER = 256 * 1024 * 1024;
 const EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 
-export function runGit(cwd, args, deps = {}, env = {}) {
+export function runGit(cwd, args, deps = {}, env = {}, input = undefined) {
   const exec = deps.exec ?? execFileSync;
   try {
     return String(exec("git", args, {
       cwd,
       encoding: "utf8",
       env: { ...(deps.env ?? process.env), ...env },
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: [input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
       maxBuffer: MAX_BUFFER,
+      ...(input === undefined ? {} : { input }),
     }) ?? "");
   } catch (error) {
     const stderr = String(error?.stderr ?? "").trim();
@@ -57,7 +58,7 @@ export function treeId(cwd, deps = {}) {
   }
 }
 
-function baseRev(cwd, base, deps) {
+export function baseRev(cwd, base, deps) {
   return base === "HEAD" && !hasHead(cwd, deps) ? EMPTY_TREE : base;
 }
 
@@ -81,7 +82,8 @@ export function changeEntries(cwd, base = "HEAD", deps = {}) {
 export function diffPatch(cwd, base = "HEAD", deps = {}) {
   const tree = deps.tree ?? treeId(cwd, deps);
   return runGit(cwd, [
-    "diff-tree", "-p", "-r", "-M", "-U0", "--no-color", "--no-ext-diff", "--no-textconv",
+    "-c", "core.quotePath=false",
+    "diff-tree", "-p", "-r", "-M", "-U0", "--text", "--no-color", "--no-ext-diff", "--no-textconv",
     "--src-prefix=a/", "--dst-prefix=b/", baseRev(cwd, base, deps), tree,
   ], deps);
 }

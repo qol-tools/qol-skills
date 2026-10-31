@@ -33,7 +33,7 @@ Never let a test-storm broaden access to production data, destructive operations
 12. **Record a repeated shape.** When the same code shape breaks twice in one storm or across two storms (the same missing guard, the same unchecked call, the same ordering mistake), record it as a miss: `qac slip --from <report path or run url> --route qac-check "<shape slug>"`. One break is a bug to fix; the second sighting is what makes it a rule candidate. A failure with no code shape stays a regression test only.
 13. **Verify in layers.** Run the regression, focused suite, static/lint/build gates, the original literal reproduction, the full storm, restart/persistence checks, and fresh isolated fanout. Default to three independent lanes when economical. When fanout is irrelevant or unavailable, record why.
 14. **Restore exact state.** Delete storm-created records, close spawned apps, stop environments, and compare final state to the captured baseline. Cleanup failure makes the run fail.
-15. **Productize stable work.** Extend the repository's native orchestrator before creating a parallel runner. Make one human command reproduce the storm and emit a machine-readable report. Apply the `workflow-nodes` skill when available.
+15. **Productize stable work.** Extend the repository's native orchestrator before creating a parallel runner. Make one human command reproduce the storm and emit a machine-readable report.
 
 ## Failure discipline
 

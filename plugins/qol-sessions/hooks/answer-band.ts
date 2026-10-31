@@ -1,5 +1,6 @@
 import type { Register } from 'claude-code'
 
+const BLOCKED = 'UserPromptSubmit operation blocked by hook:'
 const SCROLL_HINT = '↓ ctrl+x tab, then page down or ↓ to read on · esc goes back to the prompt'
 
 export function wrapToRows(line: string, columns: number): string[] {
@@ -26,6 +27,7 @@ export function hintRow(rowCount: number, offset: number, bodyRows: number, maxR
 
 export const register: Register = on => {
   let consumed: string | undefined
+  let typed: string | undefined
   let answer: string | null = null
 
   on('prompt.submit', async ($, e, next) => {
@@ -40,12 +42,22 @@ export const register: Register = on => {
     const result = await next(e)
     if (result.block !== undefined && result.suppressOriginalPrompt === true) {
       consumed = e.prompt
+      typed = e.prompt.trim()
       answer = result.block.trimEnd()
       $.ui.invalidate('ui.render')
     } else {
       consumed = undefined
+      typed = undefined
     }
     return result
+  })
+
+  on('session.append', { door: 'notice' }, async ($, e, next) => {
+    const [block] = e.message.content
+    if (typed === undefined || block?.type !== 'text' || !block.text.startsWith(BLOCKED)) return next(e)
+    const line = typed
+    typed = undefined
+    return next({ ...e, message: { ...e.message, content: [{ type: 'text', text: line }] } })
   })
 
   on('prompt.change', { origin: { kind: 'engine' } }, async ($, e, next) => {

@@ -28,12 +28,24 @@ function costOf(attempts) {
   return Math.round(total * 10000) / 10000;
 }
 
-export function retroLine({ loop, attempts, outcome, now }) {
+function skillGapOf(attempts, skillGap) {
+  if (typeof skillGap === "string" && skillGap.trim() !== "") return skillGap.trim();
+  const spec = attempts.map((attempt) => attempt.verdict).filter((verdict) => verdict?.blame === "spec").at(-1);
+  return spec ? `the spec was blamed for ${spec.finding}: ${spec.why}` : null;
+}
+
+function slipsOf(attempts) {
+  return attempts
+    .map((attempt) => attempt.verdict)
+    .filter((verdict) => verdict?.blame === "judge" && verdict.fingerprint)
+    .map((verdict) => verdict.fingerprint);
+}
+
+export function retroLine({ loop, attempts, outcome, now, skillGap = null, control = null }) {
   const rounds = new Set(attempts.map((attempt) => attempt.n)).size;
   const gated = attempts.filter((attempt) => attempt.gate);
   const redGates = gated.filter((attempt) => attempt.gate.verdict === "findings").length;
   const tamper = gated.reduce((sum, attempt) => sum + countOf(attempt.gate.tamper), 0);
-  const slips = attempts.filter((attempt) => attempt.verdict?.blame === "judge").length;
   const latest = gated.at(-1)?.gate?.verdict ?? "none";
   return {
     date: now.toISOString().slice(0, 10),
@@ -45,14 +57,14 @@ export function retroLine({ loop, attempts, outcome, now }) {
     review_caught_defects: redGates,
     lane_deviations: tamper,
     verdict: `${outcome}: ${rounds} attempt${rounds === 1 ? "" : "s"}, ${redGates} red gate${redGates === 1 ? "" : "s"}, latest gate ${latest}.`,
-    skill_gap: null,
+    skill_gap: skillGapOf(attempts, skillGap),
     nudge: null,
     schema: 2,
     gate_attempts: gated.length,
     blame: lastBlame(attempts),
-    slips,
+    slips: slipsOf(attempts),
     cost_usd: costOf(attempts),
-    control: Boolean(loop.control),
+    control,
   };
 }
 

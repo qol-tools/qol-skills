@@ -4,7 +4,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { ANSWERED, CLI, decide, parsePrompt } from "../hooks/qac-intercept.mjs";
-import { decidePrompt } from "../hooks/_kit/prompt-command.mjs";
+import { decidePrompt, runCli } from "../hooks/_kit/prompt-command.mjs";
 
 const HOOK = fileURLToPath(new URL("../hooks/qac-intercept.mjs", import.meta.url));
 const CLAUDE = { CLAUDECODE: "1" };
@@ -94,6 +94,15 @@ test("an answered lint, gate, trust or traps run drops the typed line, and exit 
   }
 });
 
+test("a gate that could not judge or found only flaky judges is an answered run", () => {
+  for (const status of [5, 6]) {
+    const run = runCli(CLI, ["gate"], { answered: ANSWERED, exec: () => ({ status, stdout: "qac gate: could_not_judge\n", stderr: "" }) });
+    assert.deepEqual(run, { kind: "answered", status, text: "qac gate: could_not_judge" });
+  }
+  const crashed = runCli(CLI, ["gate"], { answered: ANSWERED, exec: () => ({ status: 4, stdout: "", stderr: "" }) });
+  assert.equal(crashed.kind, "failed");
+});
+
 test("a usage, failed or timed-out run keeps the typed line in the box", () => {
   for (const kind of ["usage", "failed"]) {
     const { out } = pipeline("qac gate", () => result(kind, 2, "usage: qac gate [--cwd DIR]"));
@@ -109,7 +118,7 @@ test("the shared runner is told the answered exits and the cwd for every verb", 
   const [cli, argv, options] = calls[0];
   assert.equal(cli, CLI);
   assert.deepEqual(argv, ["gate", "--base", "main", "--prefix=qac", "--pretty", "--cwd=/w"]);
-  assert.deepEqual(options, { cwd: "/w", answered: [0, 1] });
+  assert.deepEqual(options, { cwd: "/w", answered: [0, 1, 5, 6] });
 });
 
 test("the prompt stays visible outside Claude Code and for a Codex turn", () => {

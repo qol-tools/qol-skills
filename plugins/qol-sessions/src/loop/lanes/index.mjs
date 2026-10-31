@@ -1,30 +1,29 @@
-import { findOnPath, withDefaults } from "../paths.mjs";
+import { LoopError, SURFACES, findOnPath, withDefaults } from "../paths.mjs";
 import { runHandover } from "./handover.mjs";
 import { runHeadless } from "./headless.mjs";
 import { runKitty } from "./kitty.mjs";
 
-export const SURFACES = Object.freeze(["kitty", "headless", "handover"]);
-
-export function kittyAvailable(deps) {
+export function detectLanes(deps) {
   const d = withDefaults(deps);
   const qol = findOnPath("qol", d);
-  if (!qol) return false;
-  const help = d.exec([qol, "sessions", "spawn", "--help"], { env: d.env });
-  return /receipt_path/.test(`${help.stdout ?? ""}${help.stderr ?? ""}`);
-}
-
-export function headlessAvailable(deps) {
-  const d = withDefaults(deps);
-  return d.env.QOLS_HEADLESS_LANES === "1" && findOnPath("claude", d) !== null;
+  let kitty = false;
+  if (qol) {
+    const help = d.exec([qol, "sessions", "spawn", "--help"], { env: d.env });
+    kitty = /receipt_path/.test(`${help.stdout ?? ""}${help.stderr ?? ""}`);
+  }
+  const claude = findOnPath("claude", d);
+  const headless = d.env.QOLS_HEADLESS_LANES === "1" && claude !== null;
+  return { qol, kitty, claude, headless };
 }
 
 export function pickSurface({ force } = {}, deps) {
   if (force) {
-    if (!SURFACES.includes(force)) throw new Error(`unknown surface ${force}: use ${SURFACES.join(", ")}`);
+    if (!SURFACES.includes(force)) throw new LoopError(`unknown surface ${force}: use ${SURFACES.join(", ")}`);
     return force;
   }
-  if (kittyAvailable(deps)) return "kitty";
-  if (headlessAvailable(deps)) return "headless";
+  const lanes = detectLanes(deps);
+  if (lanes.kitty) return "kitty";
+  if (lanes.headless) return "headless";
   return "handover";
 }
 

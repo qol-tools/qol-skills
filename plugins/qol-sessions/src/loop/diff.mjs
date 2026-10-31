@@ -19,7 +19,7 @@ export function captureDiff(cwd, base, deps) {
   try {
     git(d, ["read-tree", base], cwd, env);
     git(d, ["add", "-A"], cwd, env);
-    return git(d, ["diff", "--cached", "--binary", "--no-color", "--no-ext-diff", base], cwd, env);
+    return git(d, ["diff", "--cached", "--text", "--no-color", "--no-ext-diff", base], cwd, env);
   } finally {
     (d.rmdir ?? ((dir) => rmSync(dir, { recursive: true, force: true })))(temp);
   }

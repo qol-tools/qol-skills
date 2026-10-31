@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
 import { captureDiff, changedPaths } from "../src/loop/diff.mjs";
-import { addWorktree, removeWorktree } from "../src/loop/worktree.mjs";
+import { deleteBranch, removeWorktree } from "../src/loop/paths.mjs";
+import { addWorktree } from "../src/loop/worktree.mjs";
 
 function cleanEnv() {
   const env = { ...process.env };
@@ -51,6 +52,15 @@ test("captureDiff includes edits and untracked files, skips ignored ones, and le
   assert.deepEqual(changedPaths(patch), ["a.txt", "b.txt"]);
 });
 
+test("captureDiff keeps added lines of a file git would treat as binary", () => {
+  const dir = repo();
+  writeFileSync(path.join(dir, ".gitattributes"), "* -diff\n");
+  writeFileSync(path.join(dir, "nul.txt"), "a\0\ntest.skip('x')\n");
+  const patch = captureDiff(dir, "HEAD", { env: cleanEnv() });
+  assert.doesNotMatch(patch, /Binary files|GIT binary patch/);
+  assert.match(patch, /^\+test\.skip\('x'\)$/m);
+});
+
 test("captureDiff of an untouched tree is empty", () => {
   const dir = repo();
   assert.equal(captureDiff(dir, "HEAD", { env: cleanEnv() }), "");
@@ -74,10 +84,10 @@ test("captureDiff runs read-tree, add -A and diff --cached on a temporary index,
     [
       ["git", "read-tree", "abc123"],
       ["git", "add", "-A"],
-      ["git", "diff", "--cached", "--binary", "--no-color", "--no-ext-diff", "abc123"],
+      ["git", "diff", "--cached", "--text", "--no-color", "--no-ext-diff", "abc123"],
     ],
   );
-  assert.ok(calls.every((call) => call.cwd === "/wt" && call.index === "/tmp/qols-diff-x/index"));
+  assert.ok(calls.every((call) => call.cwd === "/wt" && call.index === path.join("/tmp/qols-diff-x", "index")));
   assert.deepEqual(removed, ["/tmp/qols-diff-x"]);
 });
 
@@ -99,6 +109,10 @@ test("changedPaths lists each file of a patch once", () => {
   assert.deepEqual(changedPaths(""), []);
 });
 
+const repoApp = path.join("/r", "app");
+const loopHolder = (name) => path.join("/r", "worktrees", name);
+const loopTree = (name) => path.join(loopHolder(name), "app");
+
 function recorder(responses = {}) {
   const calls = [];
   return {
@@ -114,32 +128,28 @@ function recorder(responses = {}) {
 test("addWorktree creates the contract path and branch from the base", () => {
   const made = [];
   const rec = recorder({ "rev-parse --verify": { status: 1, stdout: "", stderr: "" } });
-  const result = addWorktree({ repoRoot: "/r/app", key: "demo", index: null, base: "abc" }, { ...rec, exists: () => false, mkdir: (dir) => made.push(dir) });
-  assert.deepEqual(result, { path: "/r/worktrees/loop-demo/app", branch: "loop-demo" });
-  assert.deepEqual(made, ["/r/worktrees/loop-demo"]);
-  assert.deepEqual(rec.calls.at(-1).argv, ["git", "worktree", "add", "-b", "loop-demo", "/r/worktrees/loop-demo/app", "abc"]);
-  assert.equal(rec.calls.at(-1).cwd, "/r/app");
+  const result = addWorktree({ repoRoot: repoApp, key: "demo", index: null, base: "abc" }, { ...rec, exists: () => false, mkdir: (dir) => made.push(dir) });
+  assert.deepEqual(result, { path: loopTree("loop-demo"), branch: "loop-demo" });
+  assert.deepEqual(made, [loopHolder("loop-demo")]);
+  assert.deepEqual(rec.calls.at(-1).argv, ["git", "worktree", "add", "-b", "loop-demo", loopTree("loop-demo"), "abc"]);
+  assert.equal(rec.calls.at(-1).cwd, repoApp);
 });
 
 test("addWorktree suffixes the implementer index and reuses an existing branch", () => {
   const rec = recorder();
-  const result = addWorktree({ repoRoot: "/r/app", key: "demo", index: 2, base: "abc" }, { ...rec, exists: () => false, mkdir: () => {} });
-  assert.deepEqual(result, { path: "/r/worktrees/loop-demo-2/app", branch: "loop-demo-2" });
-  assert.deepEqual(rec.calls.at(-1).argv, ["git", "worktree", "add", "/r/worktrees/loop-demo-2/app", "loop-demo-2"]);
+  const result = addWorktree({ repoRoot: repoApp, key: "demo", index: 2, base: "abc" }, { ...rec, exists: () => false, mkdir: () => {} });
+  assert.deepEqual(result, { path: loopTree("loop-demo-2"), branch: "loop-demo-2" });
+  assert.deepEqual(rec.calls.at(-1).argv, ["git", "worktree", "add", loopTree("loop-demo-2"), "loop-demo-2"]);
 });
 
 test("addWorktree is a no-op when the worktree already exists", () => {
   const rec = recorder();
-  const result = addWorktree({ repoRoot: "/r/app", key: "demo", index: null, base: "abc" }, { ...rec, exists: (file) => file === "/r/worktrees/loop-demo/app/.git" });
-  assert.equal(result.path, "/r/worktrees/loop-demo/app");
+  const result = addWorktree({ repoRoot: repoApp, key: "demo", index: null, base: "abc" }, { ...rec, exists: (file) => file === path.join(loopTree("loop-demo"), ".git") });
+  assert.equal(result.path, loopTree("loop-demo"));
   assert.equal(rec.calls.length, 0);
 });
 
-test("addWorktree accepts the positional form the open verb uses and throws on failure", () => {
-  const ok = recorder({ "rev-parse --verify": { status: 1, stdout: "", stderr: "" } });
-  const result = addWorktree("/r/app", "/r/wt/x", "abc", "loop-x", { ...ok, exists: () => false, mkdir: () => {} });
-  assert.deepEqual(result, { path: "/r/wt/x", branch: "loop-x" });
-  assert.deepEqual(ok.calls.at(-1).argv, ["git", "worktree", "add", "-b", "loop-x", "/r/wt/x", "abc"]);
+test("addWorktree throws when git worktree add fails", () => {
   const bad = recorder({
     "rev-parse --verify": { status: 1, stdout: "", stderr: "" },
     "worktree add": { status: 128, stdout: "", stderr: "fatal: exists" },
@@ -150,44 +160,33 @@ test("addWorktree accepts the positional form the open verb uses and throws on f
   );
 });
 
-test("removeWorktree removes through the main clone and deletes the loop branch", () => {
-  const rec = recorder({
-    "rev-parse --path-format=absolute": { status: 0, stdout: "/r/app/.git\n", stderr: "" },
-    "rev-parse --abbrev-ref": { status: 0, stdout: "loop-demo-2\n", stderr: "" },
-  });
-  const result = removeWorktree("/r/worktrees/loop-demo-2/app", { ...rec, exists: () => true });
-  assert.deepEqual(result, { removed: true, branch: "loop-demo-2" });
-  const argvs = rec.calls.map((call) => call.argv);
-  assert.deepEqual(argvs.at(-2), ["git", "worktree", "remove", "--force", "--force", "/r/worktrees/loop-demo-2/app"]);
-  assert.deepEqual(argvs.at(-1), ["git", "branch", "-D", "loop-demo-2"]);
-  assert.equal(rec.calls.at(-1).cwd, "/r/app");
-});
-
-test("removeWorktree keeps a branch the loop does not own and tolerates a missing directory", () => {
-  const rec = recorder({
-    "rev-parse --path-format=absolute": { status: 0, stdout: "/r/app/.git\n", stderr: "" },
-    "rev-parse --abbrev-ref": { status: 0, stdout: "feature\n", stderr: "" },
-  });
-  assert.deepEqual(removeWorktree("/wt", { ...rec, exists: () => true }), { removed: true, branch: null });
-  assert.ok(!rec.calls.some((call) => call.argv[1] === "branch"));
-  const none = recorder();
-  assert.deepEqual(removeWorktree("/gone", { ...none, exists: () => false }), { removed: false, branch: null });
-  assert.equal(none.calls.length, 0);
+test("addWorktree passes the injected env and exec to every git call", () => {
+  const rec = recorder({ "rev-parse --verify": { status: 1, stdout: "", stderr: "" } });
+  const seen = [];
+  const exec = (argv, options) => {
+    seen.push(options.env);
+    return rec.exec(argv, options);
+  };
+  addWorktree({ repoRoot: repoApp, key: "demo", index: null, base: "abc" }, { exec, env: { MARK: "1" }, exists: () => false, mkdir: () => {} });
+  assert.equal(seen.length, 2);
+  assert.ok(seen.every((env) => env.MARK === "1"));
 });
 
 test("a real worktree is added, reused and removed", () => {
   const main = repo();
-  const holder = mkdtempSync(path.join(os.tmpdir(), "qols-wt-"));
-  const dir = path.join(holder, "wt");
   const head = git(main, "rev-parse", "HEAD");
-  const env = cleanEnv();
-  const deps = { env };
-  const first = addWorktree(main, dir, head, "loop-real", deps);
-  assert.deepEqual(first, { path: dir, branch: "loop-real" });
-  mkdirSync(path.join(dir, "sub"), { recursive: true });
-  assert.equal(git(dir, "rev-parse", "--abbrev-ref", "HEAD"), "loop-real");
-  assert.deepEqual(addWorktree(main, dir, head, "loop-real", deps), first);
-  const removed = removeWorktree(dir, deps);
-  assert.deepEqual(removed, { removed: true, branch: "loop-real" });
-  assert.throws(() => git(main, "rev-parse", "--verify", "refs/heads/loop-real"));
+  const deps = { env: cleanEnv() };
+  const request = { repoRoot: main, key: "real", index: null, base: head };
+  const first = addWorktree(request, deps);
+  try {
+    assert.deepEqual(first, { path: path.join(path.dirname(main), "worktrees", "loop-real", path.basename(main)), branch: "loop-real" });
+    mkdirSync(path.join(first.path, "sub"), { recursive: true });
+    assert.equal(git(first.path, "rev-parse", "--abbrev-ref", "HEAD"), "loop-real");
+    assert.deepEqual(addWorktree(request, deps), first);
+    assert.equal(removeWorktree(main, first.path, deps), true);
+    assert.equal(deleteBranch(main, first.branch, deps), true);
+    assert.throws(() => git(main, "rev-parse", "--verify", "refs/heads/loop-real"));
+  } finally {
+    rmSync(path.dirname(first.path), { recursive: true, force: true });
+  }
 });

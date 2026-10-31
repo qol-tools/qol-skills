@@ -906,7 +906,9 @@ When one turns up in a pull request review, a merge-gate failure, or from the us
 The ledger is `$XDG_DATA_HOME/qac-ledger/slips.jsonl` (default `~/.local/share/qac-ledger/`, beside the mistake ledger's data; `QAC_LEDGER_DATA` moves it), one entry per pattern keyed by its wording, append only like the mistake ledger.
 A pattern's first sight forks a claude lane with `qol sessions fork` (the `opus` alias, effort high) in the qol-skills clone, briefed to add the rule with fixtures and tests in this plugin, and the entry records the lane key.
 Later sightings only count, so one pattern never gets two lanes; a fork that failed is retried on the next sighting.
+The ledger lock is held only to read, decide and append (the entry carries `lane: "forking"` meanwhile) and again to record the lane key; `qol sessions fork` runs outside it, so a concurrent recorder is never blocked on a slow fork.
 The lane ends with `qac slip <pattern> --added`, or with `--infeasible <reason>` when no deterministic rule can see the pattern, and an infeasible pattern is never forked for again.
+A fingerprint entry's brief settles it with `qac slip --fingerprint <fp> --entry <id> --added`: the entry id names the repository, because two repositories can share a fingerprint.
 `qac slips` lists every pattern with its status. Help and exit codes: `qac help`.
 
 ### Gate: `qac gate`
@@ -917,20 +919,25 @@ The judges come from `.qac/judges.json` as committed at `--base` (default `HEAD`
 Run `qac init` once per repo to write a starter config, and `qac init --exclude` to keep it out of the repository.
 
 Trust comes before execution: a judge, setup or `--accept` command runs only after a person ran `qac trust approve`, which records the config's hash in `$XDG_STATE_HOME/qac/trust.json` (default `~/.local/state`).
-`--accept` commands that start with one of the config's `accept_prefixes` need no approval.
+`--accept` commands that start with one of the config's `accept_prefixes` need no approval, but only once the repo's config was approved: a repo with no approval entry, or an entry for an older config, honours no prefix.
 An agent never runs `qac trust approve` for itself; `qac trust` alone reports what is still untrusted and exits 1.
+A PreToolUse hook (`hooks/qac-trust-guard.mjs`) denies an agent-run `qac trust approve` in the spellings it can parse: bare `qac`, a `bin/qac` path, `node .../qac.mjs`, behind `VAR=x`, `sudo`, `&&`, `;`, `|` and `sh -c`. The typed prompt `qac trust approve` goes through the prompt hook, not Bash, and stays the user's path.
+Residual: the hook reads the command text, it is not a sandbox. An agent that writes `trust.json` itself, builds the command from a variable, or runs it through another interpreter is not stopped; same-uid code can always approve.
 
 Read the verdict, not the exit code alone:
-- `findings`: a judge failed on something that was not already in the `--baseline`, or a tamper entry exists (a suppression added, a test deleted or moved out of the test globs, a file hidden by a local exclude, a protected file or file outside `--owned` changed, a spec whose hash moved). Fix the code; never the check.
+- `findings`: a judge failed on something that was not already in the `--baseline`, or a tamper entry exists (a suppression added, a test deleted or moved out of the test globs, a file named in an `--accept` command that existed at the base and changed (`accept-edit`), a file hidden by a local exclude or by a `.gitignore` the lane added or changed (`untracked`), a protected file or file outside `--owned` changed, a file changed while the judges ran outside the judges' declared `report` paths (`mutated`; keep a `report` under an ignored path, because gate.json records the tree before the judges ran and a loop refuses a green whose worktree no longer matches it), a spec whose hash moved). Suppressions cover `#[allow(`, `#![allow(`, `#[ignore`, `{ skip: true }` and `{ todo: true }` besides the lint and test-skip markers; the scan reads every added line as text, so a `-diff` attribute or a NUL byte hides nothing. Protected by default: `.qac/**`, `**/rustfmt.toml`, `**/.rustfmt.toml`, `**/clippy.toml`, `**/.clippy.toml`, `**/.cargo/**`, `**/.claude/**`, `**/.gitattributes`. Fix the code; never the check.
 - `flaky_only`: a test judge failed and then passed on a rerun, so it proves nothing either way. Treat it as infrastructure, not as green.
-- `could_not_judge`: setup failed, a command is untrusted, a judge could not start, or there is no config. The code was not judged at all.
+- `could_not_judge`: setup failed, a command is untrusted, a judge could not start, there is no config, or no judge runs locally (an empty `judges` list, or only `where: "ci"` judges). The code was not judged at all.
 - `clean`: every judge that ran passed. Judges marked `where: "ci"` are listed in `omitted` and did not run.
 
 Findings carry a `fingerprint` that stays the same across line moves and renamed values.
-`--exclude-fingerprint` drops one finding when the judge, not the code, is wrong.
+`--exclude-finding <fingerprint>=<file>` drops the findings with that fingerprint in that repo-relative file when the judge, not the code, is wrong; the same fingerprint in another file still counts.
+`--baseline` works the same way: each baseline entry absorbs one finding of the same judge and fingerprint (a finding from an exit-code judge also needs the same exit code), so one old warning never hides a new one of the same rule.
 When the same fingerprint is caught on the first attempt in several separate loops, `qac traps` lists it: the agents keep walking into it, so `qac slip --fingerprint <fp> --from <source>` records it and a rule lane is forked once it was seen in two loops.
 Findings from judges that only report an exit code are not promotable to a rule.
-Flags, defaults and exit codes: `qac help --pretty`.
+`qac gate` run from a subfolder judges the whole worktree.
+The typed `qac gate` prompt gives up after 110 seconds, but judges it already started keep running to their own timeout; run long judge sets from a terminal.
+A throw inside qac exits 5 with a JSON error, never Node's exit 1 (findings). Flags, defaults and exit codes: `qac help --pretty`.
 
 ## Sibling skills
 

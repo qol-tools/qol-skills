@@ -43,7 +43,7 @@ export function trustState({ cwd, config, accept = [], repoId }, deps = {}) {
       for (const argv of config.setup) untrusted.push({ source: "judges", argv });
     }
   }
-  const prefixes = entry !== undefined && entry.judges_sha !== sha ? [] : (config?.accept_prefixes ?? []);
+  const prefixes = entry?.judges_sha === sha ? (config?.accept_prefixes ?? []) : [];
   const approved = new Set(entry?.accept ?? []);
   for (const item of accept) {
     const known = prefixes.some(prefix => hasPrefix(item.argv, prefix)) || approved.has(argvSha(item.argv));

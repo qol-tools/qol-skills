@@ -55,7 +55,7 @@ test("parseArgs reports usage problems", () => {
 test("help lists every verb, the shared flags and every exit code", () => {
   const text = helpText();
   for (const verb of ["open", "run", "verdict", "close", "status", "doctor", "retro"]) assert.match(text, new RegExp(`^  ${verb} `, "m"), verb);
-  for (const flag of ["--spec", "--base", "--cwd", "--answer", "--gate-only", "--surface", "--blame", "--finding", "--hunk", "--why", "--index", "--outcome", "--keep", "--remaining", "--prune", "--normalize", "--pretty"]) {
+  for (const flag of ["--spec", "--base", "--cwd", "--answer", "--gate-only", "--surface", "--blame", "--finding", "--hunk", "--why", "--index", "--outcome", "--keep", "--remaining", "--skill-gap", "--all", "--prune", "--normalize", "--pretty"]) {
     assert.ok(text.includes(flag), flag);
   }
   for (const code of [0, 2, 10, 11, 12, 13, 14]) assert.match(text, new RegExp(`^  ${code} `, "m"), String(code));
@@ -125,17 +125,17 @@ test("run dispatches to runLoop and passes its exit code and packet through", as
   const seen = [];
   const runLoop = async (key, options, deps) => {
     seen.push({ key, options, deps });
-    return { exit: EXIT.escalation, escalation: { spec: "/s.md", diffs: ["/a", "/b"] } };
+    return { exit: EXIT.escalation, result: { state: "escalation", spec: "/s.md", diffs: ["/a", "/b"] } };
   };
   const loopDeps = { marker: true };
   const result = await main(["run", "k1", "--gate-only", "--surface", "handover", "--cwd", "/r"], { runLoop, loop: loopDeps });
   assert.equal(result.exit, EXIT.escalation);
-  assert.deepEqual(JSON.parse(result.stdout), { escalation: { spec: "/s.md", diffs: ["/a", "/b"] } });
-  assert.deepEqual(seen, [{ key: "k1", options: { cwd: "/r", answer: undefined, gateOnly: true, surface: "handover" }, deps: loopDeps }]);
+  assert.deepEqual(JSON.parse(result.stdout), { state: "escalation", spec: "/s.md", diffs: ["/a", "/b"] });
+  assert.deepEqual(seen, [{ key: "k1", options: { cwd: "/r", answer: undefined, index: undefined, gateOnly: true, surface: "handover" }, deps: loopDeps }]);
 });
 
 test("run exits 0 when runLoop returns no exit code", async () => {
-  const result = await main(["run", "k1"], { runLoop: async () => ({ green: true }) });
+  const result = await main(["run", "k1"], { runLoop: async () => ({ result: { green: true } }) });
   assert.equal(result.exit, 0);
   assert.deepEqual(JSON.parse(result.stdout), { green: true });
 });
@@ -173,7 +173,10 @@ test("retro --normalize runs against the configured ledger", async () => {
 
 test("pretty rendering of the typed results", () => {
   const trust = renderPretty("open", { needs_trust: true, untrusted: [{ id: "unit", argv: ["make", "test"] }], approve: "qac trust approve --cwd /r --accept /a.json" });
-  assert.equal(trust, "accept commands need approval before the loop can arm:\n  unit: make test\napprove with: qac trust approve --cwd /r --accept /a.json");
+  assert.equal(
+    trust,
+    "accept commands need approval before the loop can arm:\n  unit: make test\nthe user approves by typing (an agent never runs it): qac trust approve --cwd /r --accept /a.json",
+  );
   const armed = renderPretty("open", {
     key: "k1",
     base: "a".repeat(40),
@@ -225,4 +228,85 @@ test("qols forwards loop verbs to scripts/loop.mjs and refuses typed verbs", () 
   const unknown = spawnSync(process.execPath, [QOLS, "loop", "frobnicate"], { encoding: "utf8" });
   assert.equal(unknown.status, 2);
   assert.equal(JSON.parse(unknown.stdout).exit, 2);
+});
+
+test("run prints the packet flat: a real usage error carries top-level error and exit, never a nested result", async () => {
+  const repo = emptyRepo();
+  const result = await main(["run", "k1", "--cwd", repo.root], { loop: repo.loop });
+  assert.equal(result.exit, EXIT.usage);
+  const body = JSON.parse(result.stdout);
+  assert.equal(body.exit, 2);
+  assert.equal(body.state, "usage");
+  assert.match(body.error, /no loop k1/);
+  assert.equal("result" in body, false);
+});
+
+test("run --index reaches the loop as a number and a bad one is a usage error", async () => {
+  const seen = [];
+  const runLoop = async (key, options) => {
+    seen.push(options);
+    return { exit: 0, result: { state: "green" } };
+  };
+  await main(["run", "k1", "--answer", "yes", "--index", "2"], { runLoop, loop: {} });
+  assert.equal(seen[0].index, 2);
+  assert.equal(seen[0].answer, "yes");
+  const bad = await main(["run", "k1", "--answer", "yes", "--index", "x"], { runLoop, loop: {} });
+  assert.equal(bad.exit, EXIT.usage);
+  assert.match(JSON.parse(bad.stdout).error, /--index must be a positive integer/);
+  assert.equal(seen.length, 1);
+});
+
+test("--surface is validated as a usage error before any verb runs", async () => {
+  let called = false;
+  for (const surface of ["tmux", "", "Kitty"]) {
+    const result = await main(["run", "k1", "--surface", surface], { runLoop: async () => { called = true; return { exit: 0, result: {} }; }, loop: {} });
+    assert.equal(result.exit, EXIT.usage, surface);
+    assert.match(JSON.parse(result.stdout).error, /--surface must be one of kitty, headless, handover/);
+  }
+  assert.equal(called, false);
+  for (const surface of ["kitty", "headless", "handover"]) assert.deepEqual(parseArgs(["run", "k1", "--surface", surface]).errors, []);
+});
+
+test("close passes --skill-gap through and status passes --all", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "loop-cli-close-"));
+  const refused = await main(["close", "nope", "--outcome", "paused", "--skill-gap", "  "], { loop: { exec: () => ({ status: 0, stdout: `${path.join(root, ".git")}\n`, stderr: "" }) } });
+  assert.equal(refused.exit, EXIT.usage);
+  assert.match(JSON.parse(refused.stdout).error, /--skill-gap needs text/);
+  assert.deepEqual(parseArgs(["close", "k1", "--outcome", "accepted", "--skill-gap", "gap"]).flags, { outcome: "accepted", "skill-gap": "gap" });
+  assert.equal(parseArgs(["status", "--all"]).flags.all, true);
+});
+
+test("run --pretty renders the state, the slots, the packet paths and the next command", () => {
+  const text = renderPretty("run", {
+    key: "k1",
+    state: "escalation",
+    slots: [{ index: 1, state: "red", attempt: 2, verdict: "findings", worktree: "/w" }],
+    spec: "/s.md",
+    diffs: ["/d1", "/d2"],
+    gates: ["/g1"],
+    ambiguous: true,
+    reasons: ["implementer 1 vs 2: gate verdicts differ (clean vs findings)"],
+    next: "qols loop verdict k1",
+  });
+  assert.equal(
+    text,
+    [
+      "loop k1: escalation",
+      "  implementer 1: red (attempt 2, gate findings) /w",
+      "  ambiguous: implementer 1 vs 2: gate verdicts differ (clean vs findings)",
+      "spec: /s.md",
+      "  diff: /d1",
+      "  diff: /d2",
+      "  gate: /g1",
+      "next: qols loop verdict k1",
+    ].join("\n"),
+  );
+  assert.equal(renderPretty("run", { key: "k1", state: "question", attempt: 1, question: "which port?" }), "loop k1: question (attempt 1)\nquestion: which port?");
+});
+
+test("status --pretty shows the cost and open questions", () => {
+  const text = renderPretty("status", {
+    loop: { key: "k1", phase: "question", surface: "kitty", attempts: [], cost_usd: 0.75, outcome: null, questions: [{ slot: 2, question: "which port?" }] },
+  });
+  assert.equal(text, "k1  question  kitty  0 attempts  $0.75\n  open question (implementer 2): which port?");
 });

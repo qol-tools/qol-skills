@@ -19,7 +19,7 @@ const RED = () =>
     findings: [{ id: "qac#1", judge: "qac", rule: "no-comments", file: "src/x.mjs", line: 1, message: "bad thing", fingerprint: "fp1", baseline: false }],
   });
 
-function harness({ key = "demo", implementers = 1, surface = "kitty", control = false, budget = 5, env = {}, headless = false } = {}) {
+function harness({ key = "demo", implementers = 1, surface = "kitty", control = false, budget = 5, env = {}, headless = false, armed = true } = {}) {
   const root = mkdtempSync(path.join(os.tmpdir(), "qols-run-"));
   const common = path.join(root, ".git");
   const dir = path.join(common, "qol-sessions", "loops", key);
@@ -47,6 +47,10 @@ function harness({ key = "demo", implementers = 1, surface = "kitty", control = 
     created_at: "2026-01-01T00:00:00.000Z",
   };
   writeFileSync(path.join(dir, "loop.json"), JSON.stringify(loop));
+  if (armed) {
+    mkdirSync(path.join(dir, "baseline"));
+    writeFileSync(path.join(dir, "baseline", "gate.json"), JSON.stringify({ verdict: "clean" }));
+  }
   writeFileSync(path.join(dir, "spec.md"), '# Spec\n\nDo it.\n\n```json loop\n{"lane":{"tool":"claude","model":"claude-sonnet-5-5"},"owned":["src/**"]}\n```\n');
   const controlPath = path.join(root, "ctl");
   const h = {
@@ -61,6 +65,8 @@ function harness({ key = "demo", implementers = 1, surface = "kitty", control = 
     diff: PATCH,
     gates: [],
     gateQueues: new Map(),
+    trees: new Map(),
+    treeCalls: [],
     laneQueue: [],
     laneCalls: [],
     gateCalls: [],
@@ -80,7 +86,11 @@ function harness({ key = "demo", implementers = 1, surface = "kitty", control = 
       argv[0] === "git" && argv.includes("--git-common-dir") ? { status: 0, stdout: `${common}\n`, stderr: "" } : { status: 1, stdout: "", stderr: "unexpected exec" },
     uuid: () => `uuid-${(uuids += 1)}`,
     pickSurface: () => h.surface,
-    headlessAvailable: () => h.headless,
+    detectLanes: () => ({ qol: null, kitty: false, claude: null, headless: h.headless }),
+    worktreeTree: (cwd) => {
+      h.treeCalls.push(cwd);
+      return h.trees.get(cwd) ?? "tree0";
+    },
     fetchTraps: async () => h.traps,
     captureDiff: async (cwd) => (typeof h.diff === "function" ? h.diff(cwd) : h.diff),
     addWorktree: async (options) => {
@@ -98,7 +108,9 @@ function harness({ key = "demo", implementers = 1, surface = "kitty", control = 
       const queue = h.gateQueues.get(options.cwd) ?? h.gates;
       const next = queue.shift();
       if (!next) throw new Error(`no scripted gate for ${options.cwd}`);
-      return "exit" in next ? next : { exit: QAC_EXIT[next.verdict], gate: next, stderr: "" };
+      const res = "exit" in next ? next : { exit: QAC_EXIT[next.verdict], gate: next, stderr: "" };
+      if (!res.gate) return res;
+      return { ...res, gate: { loop: options.loop, attempt: options.attempt, base: options.base, tree: h.trees.get(options.cwd) ?? "tree0", ...res.gate } };
     },
   };
   h.run = (opts = {}) => runLoop(key, { cwd: root, ...opts }, h.deps);
@@ -344,7 +356,7 @@ test("--gate-only on a first red exits 14 with the retry brief, and only the sec
   assert.equal(first.result.state, "red");
   assert.equal(first.result.attempt, 2);
   assert.deepEqual(first.result.briefs, [path.join(red.att(2), "brief.md")]);
-  assert.equal(first.result.next, path.join(red.att(2), "brief.md"));
+  assert.equal(first.result.next, "qols loop run demo --gate-only");
   const brief = readFileSync(path.join(red.att(2), "brief.md"), "utf8");
   assert.match(brief, /## Gate findings[\s\S]*qac#1 qac \/ no-comments at src\/x\.mjs:1: bad thing/);
   assert.match(brief, /## Owned paths/);
@@ -407,16 +419,17 @@ test("a judge verdict re-gates with the excluded fingerprint, calls no lane, and
     "gate.json": RED(),
     "lane.json": FIXTURE_LANE,
     "diff.patch": PATCH,
-    "verdict.json": { blame: "judge", finding: "qac#1", fingerprint: "fp1", hunk: "src/x.mjs:1", why: "false positive" },
+    "verdict.json": { blame: "judge", finding: "qac#1", fingerprint: "fp1", file: "src/x.mjs", hunk: "src/x.mjs:1", why: "false positive" },
   });
   h.gates.push(CLEAN());
   const { exit, result } = await h.run({ gateOnly: true });
   assert.equal(exit, 0);
   assert.equal(result.state, "green");
   assert.equal(h.laneCalls.length, 0);
-  assert.deepEqual(h.gateCalls[0].excludeFingerprints, ["fp1"]);
+  assert.deepEqual(h.gateCalls[0].excludeFindings, [{ fingerprint: "fp1", file: "src/x.mjs" }]);
   assert.equal(h.gateCalls[0].attempt, 1);
-  assert.ok(existsSync(path.join(h.att(1), "regate.json")));
+  assert.deepEqual(h.json(h.att(1), "regate.json").fingerprint, "fp1");
+  assert.deepEqual(h.json(h.att(1), "regate.json").file, "src/x.mjs");
   assert.equal(h.json(h.att(1), "gate.json").verdict, "clean");
 });
 
@@ -426,7 +439,7 @@ test("a plain run re-gates after a judge verdict too, and a still-red re-gate mo
     "gate.json": RED(),
     "lane.json": FIXTURE_LANE,
     "diff.patch": PATCH,
-    "verdict.json": { blame: "judge", finding: "qac#1", fingerprint: "fp1", hunk: "src/x.mjs:1", why: "false positive" },
+    "verdict.json": { blame: "judge", finding: "qac#1", fingerprint: "fp1", file: "src/x.mjs", hunk: "src/x.mjs:1", why: "false positive" },
   });
   const other = gate("findings", {
     findings: [
@@ -437,7 +450,7 @@ test("a plain run re-gates after a judge verdict too, and a still-red re-gate mo
   h.gates.push(other, CLEAN());
   const { exit } = await h.run();
   assert.equal(exit, 0);
-  assert.deepEqual(h.gateCalls[0].excludeFingerprints, ["fp1"]);
+  assert.deepEqual(h.gateCalls[0].excludeFindings, [{ fingerprint: "fp1", file: "src/x.mjs" }]);
   assert.equal(h.laneCalls.length, 1);
   assert.equal(h.laneCalls[0].attempt, 2);
   assert.match(h.laneCalls[0].brief, /unformatted/);
@@ -460,16 +473,17 @@ test("a spec verdict ends the loop with a pointer to the v2 key", async () => {
   assert.equal(h.gateCalls.length, 0);
 });
 
-test("two implementers run in attempt-<n>-<i> folders, retry independently, and the probe flags disagreement", async () => {
+test("two implementers run in attempt-<n>-<i> folders, retry independently, and a disagreement exits 12 as ambiguous", async () => {
   const h = harness({ implementers: 2 });
   h.diff = (cwd) => (cwd === h.worktrees[1].path ? `${PATCH}+extra\n` : PATCH);
   h.gateQueues.set(h.worktrees[0].path, [CLEAN()]);
   h.gateQueues.set(h.worktrees[1].path, [RED(), RED()]);
   const { exit, result } = await h.run();
-  assert.equal(exit, 0);
-  assert.deepEqual(result.green, [1]);
+  assert.equal(exit, 12);
+  assert.equal(result.state, "escalation");
   assert.equal(result.ambiguous, true);
   assert.ok(result.reasons.some((reason) => /verdicts differ/.test(reason)));
+  assert.equal(result.diffs.length, 3);
   for (const folder of [h.att(1, 1), h.att(1, 2), h.att(2, 2)]) assert.ok(existsSync(folder), folder);
   assert.ok(!existsSync(h.att(2, 1)));
   const calls = h.laneCalls.map((call) => `${call.index}:${call.attempt}`).sort();
@@ -507,6 +521,11 @@ function controlKey() {
   throw new Error("no control key found");
 }
 
+function plainKey() {
+  for (let i = 0; i < 500; i += 1) if (!isControlLoop(`plain${i}`, {})) return `plain${i}`;
+  throw new Error("no plain key found");
+}
+
 test("the opus control runs headless in its own worktree, is gated into control/, and never changes the outcome", async () => {
   const h = harness({ key: controlKey(), control: true, headless: true });
   h.gates.push(CLEAN());
@@ -527,7 +546,8 @@ test("the opus control runs headless in its own worktree, is gated into control/
   for (const name of ["brief.md", "diff.patch", "gate.json", "lane.json"]) assert.ok(existsSync(path.join(folder, name)), name);
   assert.equal(h.json(folder, "gate.json").verdict, "findings");
   const loop = h.json(h.dir, "loop.json");
-  assert.deepEqual(loop.worktrees.at(-1), { index: "control", path: h.controlPath, branch: `loop-${h.key}-control` });
+  assert.deepEqual(loop.worktrees.map((entry) => entry.index), [1]);
+  assert.deepEqual(h.json(folder, "lane.json").worktree, { path: h.controlPath, branch: `loop-${h.key}-control` });
   const again = await h.run();
   assert.equal(again.exit, 0);
   assert.equal(h.laneCalls.length, 2);
@@ -545,7 +565,7 @@ test("a failed control lane is reported but the main outcome still wins", async 
   assert.equal(result.control.state, "lane_failed");
 });
 
-test("no control run when it is switched off, headless is unavailable, or the loop did not select it", async () => {
+test("no control run when it is switched off, headless is unavailable, or the key did not select it", async () => {
   const off = harness({ key: controlKey(), control: true, headless: true, env: { QOLS_CONTROL: "0" } });
   off.gates.push(CLEAN());
   const offResult = await off.run();
@@ -555,7 +575,7 @@ test("no control run when it is switched off, headless is unavailable, or the lo
   noHeadless.gates.push(CLEAN());
   await noHeadless.run();
   assert.equal(noHeadless.laneCalls.length, 1);
-  const unselected = harness({ key: controlKey(), control: false, headless: true });
+  const unselected = harness({ key: plainKey(), control: true, headless: true });
   unselected.gates.push(CLEAN());
   await unselected.run();
   assert.equal(unselected.laneCalls.length, 1);
@@ -580,7 +600,7 @@ test("unknown, closed and badly named loops are usage errors", async () => {
   assert.match(closed.result.error, /closed/);
 });
 
-test("the surface comes from --surface, then loop.json, then detection", async () => {
+test("the surface is detected on every run and only --surface forces it", async () => {
   const seen = [];
   const h = harness();
   h.deps.pickSurface = ({ force }) => {
@@ -589,15 +609,239 @@ test("the surface comes from --surface, then loop.json, then detection", async (
   };
   h.gates.push(CLEAN());
   await h.run({ surface: "headless" });
-  assert.deepEqual(seen, ["headless"]);
   const stored = harness();
   const loop = stored.json(stored.dir, "loop.json");
   writeFileSync(path.join(stored.dir, "loop.json"), JSON.stringify({ ...loop, surface: "handover" }));
-  const seenStored = [];
   stored.deps.pickSurface = ({ force }) => {
-    seenStored.push(force);
-    return "handover";
+    seen.push(force);
+    return "kitty";
   };
+  stored.gates.push(CLEAN());
   await stored.run();
-  assert.deepEqual(seenStored, ["handover"]);
+  assert.deepEqual(seen, ["headless", null]);
+});
+
+test("a handover surface recorded at open does not pin the run once headless lanes appear", async () => {
+  const h = harness({ surface: null, headless: true });
+  const loop = h.json(h.dir, "loop.json");
+  writeFileSync(path.join(h.dir, "loop.json"), JSON.stringify({ ...loop, surface: "handover", control: false }));
+  h.deps.pickSurface = (options, deps) => (options.force ?? (deps.detectLanes(deps).headless ? "headless" : "handover"));
+  h.gates.push(CLEAN());
+  const { exit } = await h.run();
+  assert.equal(exit, 0);
+  assert.equal(h.laneCalls[0].surface, "headless");
+});
+
+test("the control decision follows the key and the headless check at run time, not the flag frozen at open", async () => {
+  const h = harness({ key: controlKey(), control: false, headless: true });
+  h.gates.push(CLEAN());
+  h.gateQueues.set(h.controlPath, [CLEAN()]);
+  const { result } = await h.run();
+  assert.equal(result.control.state, "gated");
+});
+
+test("an unknown surface is a usage error before any loop file is read", async () => {
+  const h = harness();
+  const { exit, result } = await h.run({ surface: "tmux" });
+  assert.equal(exit, 2);
+  assert.match(result.error, /unknown surface tmux/);
+  assert.equal(h.laneCalls.length, 0);
+});
+
+test("a clean gate.json at rest counts only while its tree equals the worktree, otherwise run gates again", async () => {
+  const h = harness();
+  h.gates.push(CLEAN(), CLEAN());
+  await h.run();
+  assert.equal(h.gateCalls.length, 1);
+  h.trees.set(h.worktrees[0].path, "tree-after-a-hand-edit");
+  const again = await h.run();
+  assert.equal(again.exit, 0);
+  assert.equal(h.gateCalls.length, 2);
+  assert.equal(h.laneCalls.length, 1);
+  assert.equal(h.json(h.att(1), "gate.json").tree, "tree-after-a-hand-edit");
+  const third = await h.run();
+  assert.equal(third.exit, 0);
+  assert.equal(h.gateCalls.length, 2);
+});
+
+test("a hand edit after a green that breaks the gate moves on to the retry instead of reporting green", async () => {
+  const h = harness();
+  h.gates.push(CLEAN(), RED(), CLEAN());
+  await h.run();
+  h.trees.set(h.worktrees[0].path, "edited");
+  const { exit } = await h.run();
+  assert.equal(exit, 0);
+  assert.equal(h.laneCalls.length, 2);
+  assert.equal(h.laneCalls[1].attempt, 2);
+});
+
+const FORGED = [
+  ["another loop", { loop: "other" }],
+  ["another attempt", { attempt: 7 }],
+  ["another base", { base: "base-else" }],
+  ["no tree", { tree: undefined }],
+  ["another tree", { tree: "forged" }],
+];
+
+for (const [name, patch] of FORGED) {
+  test(`a clean gate.json for ${name} is not accepted at rest and run gates again`, async () => {
+    const h = harness();
+    h.seed(1, null, { "lane.json": FIXTURE_LANE, "diff.patch": PATCH, "gate.json": { ...CLEAN(), loop: "demo", attempt: 1, base: "base0", tree: "tree0", ...patch } });
+    h.gates.push(CLEAN());
+    const { exit, result } = await h.run();
+    assert.equal(exit, 0);
+    assert.equal(result.state, "green");
+    assert.equal(h.gateCalls.length, 1);
+    assert.equal(h.laneCalls.length, 0);
+    assert.equal(h.json(h.att(1), "gate.json").tree, "tree0");
+  });
+}
+
+test("a forged clean gate in a later attempt folder cannot skip the red attempt before it", async () => {
+  const h = harness();
+  h.seed(1, null, { "gate.json": RED(), "lane.json": FIXTURE_LANE, "diff.patch": PATCH });
+  h.seed(2, null, { "gate.json": { ...CLEAN(), loop: "demo", attempt: 2, base: "base0", tree: "forged" } });
+  h.gates.push(RED());
+  const { exit } = await h.run();
+  assert.equal(exit, 12);
+  assert.equal(h.laneCalls.length, 1);
+  assert.equal(h.gateCalls.length, 1);
+});
+
+test("a loop without a judged baseline is not armed: run exits 2 and starts nothing", async () => {
+  const h = harness({ armed: false });
+  const { exit, result } = await h.run();
+  assert.equal(exit, 2);
+  assert.match(result.error, /not armed/);
+  assert.equal(h.laneCalls.length, 0);
+  mkdirSync(path.join(h.dir, "baseline"));
+  writeFileSync(path.join(h.dir, "baseline", "gate.json"), JSON.stringify({ verdict: "could_not_judge" }));
+  assert.equal((await h.run()).exit, 2);
+  assert.equal(h.laneCalls.length, 0);
+});
+
+test("a second driver on the same loop exits 2 naming the pid and changes nothing", async () => {
+  const h = harness();
+  writeFileSync(path.join(h.dir, "run.lock"), JSON.stringify({ pid: process.pid }));
+  const { exit, result } = await h.run();
+  assert.equal(exit, 2);
+  assert.match(result.error, new RegExp(`pid ${process.pid}`));
+  assert.equal(h.laneCalls.length, 0);
+  assert.ok(existsSync(path.join(h.dir, "run.lock")));
+});
+
+test("a lock whose pid is dead is broken, and the lock is gone after the run", async () => {
+  const h = harness();
+  writeFileSync(path.join(h.dir, "run.lock"), JSON.stringify({ pid: 4242 }));
+  h.deps.pidAlive = (pid) => pid !== 4242;
+  h.gates.push(CLEAN());
+  const { exit } = await h.run();
+  assert.equal(exit, 0);
+  assert.ok(!existsSync(path.join(h.dir, "run.lock")));
+});
+
+test("the lock is released when the run fails", async () => {
+  const h = harness();
+  const { exit } = await h.run();
+  assert.equal(exit, 10);
+  assert.ok(!existsSync(path.join(h.dir, "run.lock")));
+});
+
+test("the lock stays held while a lane runs", async () => {
+  const h = harness();
+  let during = null;
+  h.deps.runLane = async () => {
+    during = existsSync(path.join(h.dir, "run.lock"));
+    return OK_LANE;
+  };
+  h.gates.push(CLEAN());
+  await h.run();
+  assert.equal(during, true);
+});
+
+test("a judge verdict excludes only the blamed file, so the same rule in another file still reaches the retry brief", async () => {
+  const h = harness();
+  const verdict = { blame: "judge", finding: "qac#1", fingerprint: "fp1", file: "src/x.mjs", hunk: "src/x.mjs:1", why: "false positive" };
+  const both = gate("findings", {
+    findings: [
+      { id: "qac#1", judge: "qac", rule: "no-comments", file: "src/x.mjs", line: 1, message: "bad thing", fingerprint: "fp1", baseline: false },
+      { id: "qac#2", judge: "qac", rule: "no-comments", file: "src/y.mjs", line: 4, message: "worse thing", fingerprint: "fp1", baseline: false },
+    ],
+  });
+  h.seed(1, null, { "gate.json": both, "lane.json": FIXTURE_LANE, "diff.patch": PATCH, "verdict.json": verdict });
+  h.gates.push(both, CLEAN());
+  const { exit } = await h.run();
+  assert.equal(exit, 0);
+  assert.deepEqual(h.gateCalls[0].excludeFindings, [{ fingerprint: "fp1", file: "src/x.mjs" }]);
+  const brief = h.laneCalls[0].brief.split("## Spec\n")[0];
+  assert.match(brief, /worse thing/);
+  assert.ok(!/bad thing/.test(brief));
+});
+
+function questionLanes(h) {
+  h.deps.runLane = async (opts) => {
+    h.laneCalls.push(opts);
+    if (opts.answer) return OK_LANE;
+    return { exit: 0, text: `stopped\nQUESTION: q${opts.index}?`, session: `s${opts.index}`, cost_usd: 0, question: `q${opts.index}?` };
+  };
+}
+
+test("two implementers keep one question file each and report every open question", async () => {
+  const h = harness({ implementers: 2 });
+  questionLanes(h);
+  const first = await h.run();
+  assert.equal(first.exit, 13);
+  assert.equal(first.result.questions.length, 2);
+  assert.equal(h.json(h.dir, "question-1.json").question, "q1?");
+  assert.equal(h.json(h.dir, "question-2.json").question, "q2?");
+  assert.ok(!existsSync(path.join(h.dir, "question.json")));
+  const waiting = await h.run();
+  assert.equal(waiting.exit, 13);
+  assert.deepEqual(waiting.result.questions.map((question) => question.slot), [1, 2]);
+  assert.equal(h.laneCalls.length, 2);
+});
+
+test("an answer with two implementers needs --index and reaches only that lane", async () => {
+  const h = harness({ implementers: 2 });
+  questionLanes(h);
+  await h.run();
+  const missing = await h.run({ answer: "yes" });
+  assert.equal(missing.exit, 2);
+  assert.match(missing.result.error, /--index/);
+  h.gateQueues.set(h.worktrees[1].path, [CLEAN()]);
+  const answered = await h.run({ answer: "answer-for-q2", index: 2 });
+  assert.equal(answered.exit, 13);
+  const calls = h.laneCalls.slice(2);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].index, 2);
+  assert.equal(calls[0].answer, "answer-for-q2");
+  assert.ok(!existsSync(path.join(h.dir, "question-2.json")));
+  assert.ok(existsSync(path.join(h.dir, "question-1.json")));
+  assert.equal(answered.result.question, "q1?");
+});
+
+test("an answer for an implementer with no open question is a usage error", async () => {
+  const h = harness({ implementers: 2 });
+  h.laneQueue.push({ exit: 0, text: "QUESTION: only 1", session: "s1", cost_usd: 0, question: "only 1" }, OK_LANE);
+  h.gateQueues.set(h.worktrees[1].path, [CLEAN()]);
+  await h.run();
+  const { exit, result } = await h.run({ answer: "x", index: 2 });
+  assert.equal(exit, 2);
+  assert.match(result.error, /no open question for implementer 2/);
+});
+
+test("a judge verdict without a recorded file cannot loop: it is treated as an ordinary red and moves on to the retry", async () => {
+  const h = harness();
+  h.seed(1, null, {
+    "gate.json": RED(),
+    "lane.json": FIXTURE_LANE,
+    "diff.patch": PATCH,
+    "verdict.json": { blame: "judge", finding: "qac#1", fingerprint: "fp1", hunk: "src/x.mjs:1", why: "false positive" },
+  });
+  h.gates.push(CLEAN());
+  const { exit } = await h.run();
+  assert.equal(exit, 0);
+  assert.equal(h.gateCalls.length, 1);
+  assert.deepEqual(h.gateCalls[0].excludeFindings, []);
+  assert.equal(h.laneCalls[0].attempt, 2);
 });
