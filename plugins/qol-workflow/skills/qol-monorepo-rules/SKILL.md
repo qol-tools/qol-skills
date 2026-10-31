@@ -61,6 +61,10 @@ that parent; a switchboard fork is a subagent and follows "Switchboard forks" be
   comes back as a message. `AskUserQuestion` is refused in a lane.
 - When a check fails and you cannot fix it, report the pull request and what
   broke to your parent.
+- Work only on the task you were given. Never report on, relay or chase other
+  forks, lanes or sessions, their questions or their pull requests, unless your
+  task is about them. A problem you notice outside your task gets at most one
+  line in your report, never work of yours.
 
 ## Switchboard forks
 
