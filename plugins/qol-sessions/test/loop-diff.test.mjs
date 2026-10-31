@@ -55,7 +55,7 @@ test("captureDiff includes edits and untracked files, skips ignored ones, and le
 test("captureDiff keeps added lines of a file git would treat as binary", () => {
   const dir = repo();
   writeFileSync(path.join(dir, ".gitattributes"), "* -diff\n");
-  writeFileSync(path.join(dir, "nul.txt"), "a\0\ntest.skip('x')\n");
+  writeFileSync(path.join(dir, "zero-byte.txt"), "a\0\ntest.skip('x')\n");
   const patch = captureDiff(dir, "HEAD", { env: cleanEnv() });
   assert.doesNotMatch(patch, /Binary files|GIT binary patch/);
   assert.match(patch, /^\+test\.skip\('x'\)$/m);
