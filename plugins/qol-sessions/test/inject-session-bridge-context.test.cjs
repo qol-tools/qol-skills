@@ -73,7 +73,7 @@ test('the tier rule fires on any prompt inside a qol workspace', () => {
     const qolCwd = '/media/kmrh47/WD_SN850X/Git/qol-skills';
     assert.ok(QOL_WORKSPACE_PATTERN.test(qolCwd));
     assert.ok(!QOL_WORKSPACE_PATTERN.test('/tmp/elsewhere'));
-    assert.ok(shouldInjectTierRule({ hook_event_name: 'UserPromptSubmit', prompt: 'fix padding', cwd: qolCwd }));
+    assert.ok(shouldInjectTierRule({ hook_event_name: 'UserPromptSubmit', prompt: 'fix padding', cwd: qolCwd }, () => true));
     assert.ok(!shouldInjectTierRule({ hook_event_name: 'PreToolUse', prompt: 'fix padding', cwd: qolCwd }));
     assert.ok(!shouldInjectTierRule({ prompt: '[qol session bridge]\nact as the implementer', cwd: qolCwd }));
     assert.doesNotMatch(TIER_RULE, /gpt|codex|kimi|fable|deepseek|glm/i);
@@ -109,12 +109,12 @@ test('the tier rule is repeated only when the live context has lost it', () => {
 
     const carried = write([plain, ruled, plain]);
     assert.ok(alreadyInContext(carried, TIER_RULE_MARKER));
-    assert.ok(!shouldInjectTierRule({ hook_event_name: 'UserPromptSubmit', prompt: 'fix padding', cwd: qolCwd, transcript_path: carried }));
+    assert.ok(!shouldInjectTierRule({ hook_event_name: 'UserPromptSubmit', prompt: 'fix padding', cwd: qolCwd, transcript_path: carried }, () => true));
     assert.equal(run({ hook_event_name: 'UserPromptSubmit', prompt: 'fix padding', cwd: qolCwd, transcript_path: carried }).stdout, '');
 
     const dropped = write([ruled, compacted, plain]);
     assert.ok(!alreadyInContext(dropped, TIER_RULE_MARKER));
-    assert.ok(shouldInjectTierRule({ hook_event_name: 'UserPromptSubmit', prompt: 'fix padding', cwd: qolCwd, transcript_path: dropped }));
+    assert.ok(shouldInjectTierRule({ hook_event_name: 'UserPromptSubmit', prompt: 'fix padding', cwd: qolCwd, transcript_path: dropped }, () => true));
 
     const reinjected = write([plain, compacted, ruled, plain]);
     assert.ok(alreadyInContext(reinjected, TIER_RULE_MARKER));
