@@ -172,6 +172,17 @@ test("addWorktree passes the injected env and exec to every git call", () => {
   assert.ok(seen.every((env) => env.MARK === "1"));
 });
 
+test("removeWorktree never deletes a folder outside the worktrees holder when git refuses it", () => {
+  const removed = [];
+  const deps = { exec: () => ({ status: 1, stdout: "", stderr: "not a worktree" }), remove: (dir) => removed.push(dir) };
+  const repoRoot = path.join(path.sep, "src", "main");
+  assert.equal(removeWorktree(repoRoot, path.join(path.sep, "home", "me"), deps), false);
+  assert.equal(removeWorktree(repoRoot, path.join(path.sep, "src", "worktrees", "..", "main"), deps), false);
+  assert.deepEqual(removed, []);
+  assert.equal(removeWorktree(repoRoot, path.join(path.sep, "src", "worktrees", "loop-k", "main"), deps), false);
+  assert.deepEqual(removed, [path.join(path.sep, "src", "worktrees", "loop-k", "main")]);
+});
+
 test("a real worktree is added, reused and removed", () => {
   const main = repo();
   const head = git(main, "rev-parse", "HEAD");

@@ -16,8 +16,11 @@ import {
   readLoop,
   removeWorktree,
   withDefaults,
+  worktreeBranch,
+  worktreePath,
   writeJson,
 } from "./paths.mjs";
+import { CONTROL_INDEX } from "./control.mjs";
 
 const OUTCOMES = ["accepted", "paused"];
 
@@ -105,12 +108,12 @@ function closeLanes(loop, attempts, kept, outcome, text, d) {
   });
 }
 
-function controlOf(dir, d) {
+function controlOf(dir, loop, key, d) {
   const lane = readJson(path.join(controlDir(dir), "lane.json"), d);
   if (!lane) return { worktree: null, retro: null };
   const gate = readJson(path.join(controlDir(dir), "gate.json"), d);
   return {
-    worktree: lane.worktree ?? null,
+    worktree: lane.worktree ? { path: worktreePath(loop.repo_root, key, CONTROL_INDEX), branch: worktreeBranch(key, CONTROL_INDEX) } : null,
     retro: { verdict: gate?.verdict ?? null, cost_usd: lane.cost_usd ?? null },
   };
 }
@@ -155,7 +158,7 @@ function closeLocked(key, options, dir, loop, d) {
   const text = narrative(loop, kept, gate, rounds, remaining);
   const laneCloses = closeLanes(loop, attempts, kept, options.outcome, text, d);
   const now = d.now();
-  const control = controlOf(dir, d);
+  const control = controlOf(dir, loop, key, d);
   let retro;
   try {
     retro = { file: appendRetro(retroLine({ loop, attempts, outcome: options.outcome, now, skillGap: options.skillGap, control: control.retro }), d) };

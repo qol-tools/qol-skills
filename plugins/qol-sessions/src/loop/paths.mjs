@@ -241,6 +241,9 @@ export function removeWorktree(repoRoot, dir, deps) {
   const d = withDefaults(deps);
   const removed = d.exec(["git", "worktree", "remove", "--force", "--force", dir], { cwd: repoRoot });
   if (removed.status !== 0) {
+    const holder = path.join(path.dirname(repoRoot), "worktrees");
+    const relative = path.relative(holder, path.resolve(dir));
+    if (relative === "" || relative.startsWith("..") || path.isAbsolute(relative)) return false;
     d.remove(dir);
     d.exec(["git", "worktree", "prune"], { cwd: repoRoot });
   }

@@ -277,6 +277,17 @@ test("the control worktree recorded in control/lane.json is removed on an accept
   assert.equal(receipt.final_report.worktree, ctx.worktrees[0].path);
 });
 
+test("close removes the control worktree at its derived path, never the path control/lane.json names", () => {
+  const ctx = setup({ attempts: [{ name: "attempt-1", gate: GREEN }] });
+  const control = path.join(ctx.root, "worktrees", "loop-k1-control", "main");
+  const elsewhere = path.join(ctx.root, "home");
+  writeJson(path.join(ctx.dir, "control", "lane.json"), { surface: "headless", exit: 0, worktree: { path: elsewhere, branch: "main" } });
+  const receipt = closeLoop("k1", { cwd: ctx.repo, outcome: "accepted" }, ctx.deps);
+  assert.deepEqual(receipt.removed, [{ path: control, branch: "loop-k1-control" }]);
+  assert.equal(ctx.calls.some((argv) => argv.includes(elsewhere)), false);
+  assert.equal(ctx.calls.some((argv) => argv.join(" ") === "git branch -D main"), false);
+});
+
 test("a loop-<key>-control folder that control/lane.json does not record is never removed", () => {
   const ctx = setup({ attempts: [{ name: "attempt-1", gate: GREEN }] });
   const stray = path.join(ctx.root, "worktrees", "loop-k1-control", "main");
