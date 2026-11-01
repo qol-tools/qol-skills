@@ -14,6 +14,7 @@ const ADD_VALUE_FLAGS = new Set(['--reason']);
 const REVISION = /[~^@:]|^HEAD$|^refs\//;
 const SHA = /^[0-9a-f]{7,40}$/i;
 const UNRESOLVED = 'cannot be resolved before it runs; spell it out';
+const SHOWN = /^[A-Za-z0-9._\/\\@+:~^-]{1,200}$/;
 
 function readStdin() {
     try {
@@ -40,8 +41,7 @@ function stripHeredocs(command) {
 
 function lookup(name, vars) {
     if (Object.prototype.hasOwnProperty.call(vars, name)) return vars[name];
-    if (name === 'HOME') return os.homedir();
-    return Object.prototype.hasOwnProperty.call(process.env, name) ? process.env[name] : null;
+    return name === 'HOME' ? os.homedir() : null;
 }
 
 function closingParen(text, start) {
@@ -279,15 +279,34 @@ function localBranch(repo, name) {
 
 function slug(name) {
     const last = String(name || '').split('/').filter(Boolean).pop() || '';
-    return last.replace(/[^A-Za-z0-9._-]/g, '-') || '<feature>';
+    const clean = last.replace(/[^A-Za-z0-9._-]/g, '-').slice(0, 64);
+    return clean && !/^\.+$/.test(clean) ? clean : '<feature>';
+}
+
+function shown(value, placeholder) {
+    return typeof value === 'string' && SHOWN.test(value) ? value : placeholder;
+}
+
+function showPath(value) {
+    return shown(value, '<path>');
+}
+
+function showBranch(value) {
+    return shown(value, '<branch>');
+}
+
+function showFeature(value) {
+    return shown(value, '<feature>');
 }
 
 function layoutPath(repo, feature) {
-    return path.join(repo.root, feature, MAIN_NAME);
+    const folder = showFeature(feature);
+    return folder === '<feature>' ? `${showPath(repo.root)}/<feature>/${MAIN_NAME}` : showPath(path.join(repo.root, folder, MAIN_NAME));
 }
 
 function addHint(repo, feature, base = '') {
-    return `run \`git -C ${repo.main} worktree add ${layoutPath(repo, feature)} -b ${feature}${base}\``;
+    const from = base ? ` ${showBranch(base)}` : '';
+    return `run \`git -C ${showPath(repo.main)} worktree add ${layoutPath(repo, feature)} -b ${showFeature(feature)}${from}\``;
 }
 
 function deny(problem, hint) {
@@ -348,8 +367,8 @@ function checkAdd(repo, cwd, args) {
     const { branch, detach, positional } = parseAdd(args);
     const [where, commitish] = positional;
     if (!where) return null;
-    const base = !branch && commitish && !commitish.unresolved ? ` ${commitish.value}` : '';
-    const guess = slug(branch ? branch.value : base.trim());
+    const base = !branch && commitish && !commitish.unresolved ? commitish.value : '';
+    const guess = slug(branch ? branch.value : base);
     if (where.unresolved) return deny(`its path ${UNRESOLVED}`, addHint(repo, guess));
     const target = path.resolve(cwd, where.value);
     const feature = layoutFeature(repo, target);
@@ -358,19 +377,19 @@ function checkAdd(repo, cwd, args) {
     if (!feature) {
         const fallback = path.basename(target) === MAIN_NAME ? path.dirname(target) : target;
         const pick = name && name !== MAIN_NAME ? slug(name) : slug(fallback);
-        return deny(`it would sit at ${target}, outside ${repo.root}/<feature>/${MAIN_NAME}`, addHint(repo, pick, base));
+        return deny(`it would sit at ${showPath(target)}, outside ${layoutPath(repo, null)}`, addHint(repo, pick, base));
     }
     if (name === null || name === feature) return null;
     const why = branch || commitish
-        ? `its branch would be \`${name}\`, not the folder name \`${feature}\``
-        : `with no \`-b\` git names its branch \`${name}\`, not the folder name \`${feature}\``;
+        ? `its branch would be \`${showBranch(name)}\`, not the folder name \`${showFeature(feature)}\``
+        : `with no \`-b\` git names its branch \`${showBranch(name)}\`, not the folder name \`${showFeature(feature)}\``;
     return deny(why, addHint(repo, feature, base));
 }
 
 function moveHint(repo, source, branch, feature) {
-    const move = `\`git -C ${repo.main} worktree move ${source} ${layoutPath(repo, feature)}\``;
+    const move = `\`git -C ${showPath(repo.main)} worktree move ${showPath(source)} ${layoutPath(repo, feature)}\``;
     if (!branch || branch === feature) return `run ${move}`;
-    return `run \`git -C ${repo.main} branch -m ${branch} ${feature}\` and ${move}`;
+    return `run \`git -C ${showPath(repo.main)} branch -m ${showBranch(branch)} ${showFeature(feature)}\` and ${move}`;
 }
 
 function checkMove(repo, cwd, args) {
@@ -388,14 +407,14 @@ function checkMove(repo, cwd, args) {
     const feature = layoutFeature(repo, target);
     if (!feature) {
         const pick = slug(branch || path.basename(path.dirname(target)));
-        return deny(`it would move to ${target}, outside ${repo.root}/<feature>/${MAIN_NAME}`, moveHint(repo, source, branch, pick));
+        return deny(`it would move to ${showPath(target)}, outside ${layoutPath(repo, null)}`, moveHint(repo, source, branch, pick));
     }
     if (!branch || branch === feature) return null;
-    return deny(`it would put branch \`${branch}\` in the folder \`${feature}\``, moveHint(repo, source, branch, slug(branch)));
+    return deny(`it would put branch \`${showBranch(branch)}\` in the folder \`${showFeature(feature)}\``, moveHint(repo, source, branch, slug(branch)));
 }
 
 function keepHint(feature) {
-    return `keep the branch named \`${feature}\``;
+    return `keep the branch named \`${showFeature(feature)}\``;
 }
 
 function checkBranch(repo, args) {
@@ -418,7 +437,7 @@ function checkBranch(repo, args) {
     if (!feature) return null;
     if (next.unresolved) return deny(`its new branch name ${UNRESOLVED}`, keepHint(feature));
     if (next.value === feature) return null;
-    return deny(`it would rename the branch of ${top} to \`${next.value}\`, not its folder name \`${feature}\``, keepHint(feature));
+    return deny(`it would rename the branch of ${showPath(top)} to \`${showBranch(next.value)}\`, not its folder name \`${showFeature(feature)}\``, keepHint(feature));
 }
 
 function createdBranch(verb, args) {
@@ -443,7 +462,7 @@ function checkCreate(repo, verb, args) {
     if (!name) return null;
     if (name.unresolved) return deny(`its new branch name ${UNRESOLVED}`, keepHint(feature));
     if (name.value === feature) return null;
-    return deny(`it would put ${repo.top} on branch \`${name.value}\`, not its folder name \`${feature}\``, keepHint(feature));
+    return deny(`it would put ${showPath(repo.top)} on branch \`${showBranch(name.value)}\`, not its folder name \`${showFeature(feature)}\``, keepHint(feature));
 }
 
 function gitTarget(words, cwd) {
