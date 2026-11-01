@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { join } from "node:path";
 import { test } from "node:test";
 import { LENS_NAMES } from "../src/lenses.mjs";
 import { digestOf, mergeCandidates, similarTitles, verifierDescriptor } from "../src/merge.mjs";
@@ -172,7 +173,7 @@ test("verifierDescriptor points at the verifier prompt and the group's claim", (
   const descriptor = verifierDescriptor(group, { scope, paths, references: "/refs", rubric: "/skill/SKILL.md" });
   assert.deepEqual(
     { id: descriptor.id, kind: descriptor.kind, group: descriptor.group, instructions: descriptor.instructions, lens_guide: descriptor.lens_guide, output: descriptor.output, head: descriptor.head, rubric: descriptor.rubric, base_tree: descriptor.base_tree, rules: descriptor.inputs.rules, ledger: descriptor.inputs.ledger, shallow: descriptor.inputs.shallow_wrappers },
-    { id: "verify-G01", kind: "verifier", group: "G01", instructions: "/refs/engine-verifier-prompt.md", lens_guide: "/refs/engine-lenses.md", output: "/run/verify/G01.result.json", head: { ref: "f", sha: "h" }, rubric: "/skill/SKILL.md", base_tree: "/bt", rules: null, ledger: null, shallow: null },
+    { id: "verify-G01", kind: "verifier", group: "G01", instructions: join("/refs", "engine-verifier-prompt.md"), lens_guide: join("/refs", "engine-lenses.md"), output: join("/run/verify", "G01.result.json"), head: { ref: "f", sha: "h" }, rubric: "/skill/SKILL.md", base_tree: "/bt", rules: null, ledger: null, shallow: null },
   );
   assert.equal(descriptor.claim.candidates.length, 1);
 });
