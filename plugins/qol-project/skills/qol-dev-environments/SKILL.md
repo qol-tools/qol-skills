@@ -18,6 +18,8 @@ Do not use this skill as a command database.
 
 Treat the CLI output, environment definitions, implementation source, and run reports as authoritative. Treat prose examples as shapes only.
 
+A development guest (`qol dev`, `qol env up --dev-worktree`) runs artifacts built on the host, so it is a local build: in qol-monorepo start one only once the user approved it, and live test a pull request with `qol pr try <number>` instead (qol-workflow:qol-monorepo-rules, "CI builds and tests"). A generic guest without `--dev-worktree` compiles nothing.
+
 ## Choose the correct surface
 
 | Need | Surface |
