@@ -295,15 +295,18 @@ serde alias); key/modifier names are defined in
 `src/hotkeys/types.rs`. To replace an OS shortcut: disable it in System Settings,
 add the binding, restart so qol-tray grabs the key exclusively.
 
-A binding may also carry `hold_ms` (100 to 10000, omitted when unset). A chord
+A binding may also carry `hold_ms` (50 to 3000, omitted when unset). A chord
 with no hold binding fires on press as before. A chord with a hold binding is
 resolved in `src/hotkeys/hold_resolver.rs` above every backend: release before
 `hold_ms` runs the tap binding on that chord (if any), still held at `hold_ms`
 runs the hold binding at once and the later release does nothing; a reload
 cancels a pending press. One chord holds at most one tap and one hold binding
 (`hotkeys::hold::duplicate_slot`); two taps or two holds are refused, and so is a
-hold time on a `continuous = true` action. The settings editor shows it as the
-"Hold to run" row (starts at 1000 ms) and the list row adds " · hold 1000 ms".
+hold time on a `continuous = true` action. The settings editor sets it on the
+"Hold to run" row with the compact settings slider (`qol_gpui::settings_panel::
+number_slider`, the one plugin `variant = "slider"` numbers use): 0 to 3000 ms in
+steps of 50, new bindings start at 0, 0 stores no `hold_ms`, and the list row
+adds " · hold N ms" only above 0.
 
 ## Cross-platform tray
 
