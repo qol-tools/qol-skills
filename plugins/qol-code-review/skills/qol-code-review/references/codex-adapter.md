@@ -17,6 +17,17 @@ Use this when the `qol-code-review` skill runs in Codex and the user explicitly 
 - Close agents after synthesizing results.
 - Include a visible `agent_board` section in the final answer with reviewer name, agent id, and completion status.
 
+## Engine lanes
+
+A review of a git change runs through the review engine, and every job it lists is one lane.
+
+1. Run `next <run-dir>` and read `jobs` from its JSON.
+2. Spawn every job before you wait on any: one `spawn_agent` call per job, with `agent_type` set to `explorer`, `fork_context` set to `false`, and the job's `prompt` as the message. A lane replies with one JSON object and writes nothing.
+3. Call `wait_agent` until every lane has replied.
+4. Pipe each reply, with only a surrounding code fence removed, to `submit <run-dir> <job-id> --agent-id <the agent id spawn_agent returned>`.
+5. Run `next <run-dir>` again. A reply that `submit` rejected is a lane to spawn again.
+6. After the review is saved, call `close_agent` for every lane.
+
 ## Sequence
 
 1. Capture the review scope with the smallest useful read-only command.

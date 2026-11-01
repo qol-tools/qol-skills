@@ -28,6 +28,24 @@ Review code like an owner. Produce findings first with file/line evidence, sever
 
 Claude Code plugin subagents can be distributed through a plugin `agents/` directory, but plugin subagents do not support every frontmatter field. Do not depend on plugin-level `hooks`, `mcpServers`, or `permissionMode` for reviewer correctness. If those are required, the agent belongs in `.claude/agents/` or `~/.claude/agents/`.
 
+## Engine lanes
+
+A review of a git change runs through the review engine, and every job it lists is one lane.
+
+| Agent | Runs |
+|---|---|
+| `qol-code-review:review-finder` | finder, ledger and hunt jobs |
+| `qol-code-review:review-verifier` | verifier jobs |
+
+Both start in fresh context with Read, Glob and Grep only, and use the session's model. They read a diff that its author controls, so they have no shell and no write tool, and they write nothing: each replies with one JSON object.
+
+1. Run `next <run-dir>` and read `jobs` from its JSON.
+2. In one message, call the Agent tool once per job: `subagent_type` from the table, `description` set to the job `id`, and `prompt` set to the job's `prompt` exactly as printed. Batches of ten when a stage lists more jobs.
+3. For each finished lane, pipe its reply unchanged to `submit <run-dir> <job-id> --agent-id <the agent id the Agent tool returned>`.
+4. Run `next <run-dir>` again. A reply that `submit` rejected is a lane to spawn again with the same prompt.
+
+When the plugin agents are unavailable, use a built-in read-only subagent such as `Explore`, and never `general-purpose`, whose shell and write tools an attacker-controlled diff could steer. Never fork the session into a lane, because a lane must not see the conversation.
+
 ## Sequence
 
 1. Capture the review scope.

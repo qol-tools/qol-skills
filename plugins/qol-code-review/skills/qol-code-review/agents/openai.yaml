@@ -2,7 +2,8 @@ interface:
   display_name: "Code Review"
   short_description: "Review code with focused agents."
   default_prompt: |
-    Use code-review to run a read-only code review, then fix the findings of a
+    Use code-review to run a read-only code review, driving the review engine
+    for a git change, then fix the findings of a
     conditional or block verdict when the change is one this session delivers
     and the user did not ask for review only. If the user invokes
     $qol-code-review or asks for the qol-code-review skill without requesting solo mode,
