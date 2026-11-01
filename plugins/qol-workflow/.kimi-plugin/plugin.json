@@ -37,6 +37,11 @@
     {
       "event": "PreToolUse",
       "matcher": "Bash",
+      "command": "node bin/worktree-deny-divergent-layout.cjs"
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
       "command": "node bin/pr-deny-unconventional-title.cjs"
     },
     {
@@ -53,6 +58,11 @@
       "event": "PreToolUse",
       "matcher": "^(?![Bb]ash$)",
       "command": "node bin/pr-watch-park-guard.cjs"
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Agent|Task|EnterWorktree",
+      "command": "node bin/worktree-deny-divergent-layout.cjs"
     },
     {
       "event": "UserPromptSubmit",

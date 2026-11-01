@@ -187,6 +187,11 @@
     {
       "event": "PreToolUse",
       "matcher": "Bash",
+      "command": "node plugins/qol-workflow/bin/worktree-deny-divergent-layout.cjs"
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
       "command": "node plugins/qol-workflow/bin/pr-deny-unconventional-title.cjs"
     },
     {
@@ -203,6 +208,11 @@
       "event": "PreToolUse",
       "matcher": "^(?![Bb]ash$)",
       "command": "node plugins/qol-workflow/bin/pr-watch-park-guard.cjs"
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Agent|Task|EnterWorktree",
+      "command": "node plugins/qol-workflow/bin/worktree-deny-divergent-layout.cjs"
     },
     {
       "event": "UserPromptSubmit",

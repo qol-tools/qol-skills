@@ -10,10 +10,12 @@ const PRE_TOOL_USE_HOOKS = [
     { matcher: "Bash", script: "bin/branch-deny-agent-checkout.cjs" },
     { matcher: "Bash", script: "bin/branch-deny-pid-branch-name.cjs" },
     { matcher: "Bash", script: "bin/build-deny-local.cjs" },
+    { matcher: "Bash", script: "bin/worktree-deny-divergent-layout.cjs" },
     { matcher: "Bash", script: "bin/pr-deny-unconventional-title.cjs" },
     { matcher: "Bash", script: "bin/pr-watch-context.cjs" },
     { matcher: "Bash", script: "bin/pr-watch-park-guard.cjs" },
     { matcher: "^(?![Bb]ash$)", script: "bin/pr-watch-park-guard.cjs" },
+    { matcher: "Agent|Task|EnterWorktree", script: "bin/worktree-deny-divergent-layout.cjs" },
 ];
 
 const USER_PROMPT_SUBMIT_HOOKS = [

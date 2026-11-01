@@ -117,7 +117,19 @@ Worktrees live in a `worktrees/` directory next to the main clone, one feature d
 <parent>/worktrees/<feature>/qol-monorepo/      # worktree on branch <feature>
 ```
 
-`<feature>` matches the branch name.
+`<feature>` matches the branch name exactly, with no `fix/`, `test/` or other prefix.
+`qol dev <feature>` finds the worktree to build by its branch name, in qol-tray and every sibling repo, so a worktree whose folder or branch differs is one it cannot find.
+
+`worktree-deny-divergent-layout` enforces this layout in qol-monorepo. Before a Bash call it denies:
+
+- `git worktree add` whose path is not `<parent of the main clone>/worktrees/<feature>/qol-monorepo`, or whose branch is not `<feature>`: a `-b`/`-B` name that differs, an existing branch named as the commit-ish that differs, and an add with no branch and no `--detach`, since git then names the branch after the folder, `qol-monorepo`
+- `git worktree move` to a path outside the layout, or into a folder that does not match the worktree's branch
+- `git branch -m`/`-M`, `git checkout -b`/`-B` and `git switch -c`/`-C` that put a layout worktree on a branch other than its folder name
+- the `EnterWorktree` tool creating a worktree from a qol-monorepo session (it puts it in `.claude/worktrees/<name>`; passing `path` to enter an existing worktree is allowed), and the Agent tool with `isolation: "worktree"` from one
+
+It follows `cd` prefixes and `git -C`, reads quotes, skips comments and heredoc bodies, and expands variables assigned earlier in the same command. A path it cannot resolve, such as one built from `$(...)`, is denied: spell it out. A detached worktree (`--detach`, or a SHA or `origin/<branch>` as the commit-ish) only has to be at a layout path. A command ending in ` # intentional` passes, for a layout the user asked for.
+Incident (2026-11-01): a switchboard fork created worktrees under `Git/qol-monorepo-worktrees/<name>` on branches `fix/pr-try-keeps-tray-path` and `test/pr-try-tray-live`, and `qol dev pr-try-tray-live` then failed with "no worktree for `pr-try-tray-live` in qol-tray or any sibling repo".
+Residual: a worktree made by a script, an editor or a Bash call whose cwd and `-C` are both outside qol-monorepo is not seen, a plain `git checkout <existing-branch>` inside a layout worktree is not checked, and an Agent with `isolation: "worktree"` launched from a session outside qol-monorepo is not held.
 
 ## Branch naming
 
@@ -127,12 +139,12 @@ Worktrees live in a `worktrees/` directory next to the main clone, one feature d
 ## Creation flow, concretely
 
 ```bash
-FEAT=sync-v2
-ROOT=$(git rev-parse --show-toplevel)
-git worktree add $ROOT/../worktrees/$FEAT/qol-monorepo -b $FEAT
-cd $ROOT/../worktrees/$FEAT/qol-monorepo
+git -C /path/to/qol-monorepo worktree add ../worktrees/sync-v2/qol-monorepo -b sync-v2
+cd /path/to/worktrees/sync-v2/qol-monorepo
 # ... edit and commit freely while iterating ...
 ```
+
+A relative path after `git -C <main clone>` resolves against the main clone, so `../worktrees/<feature>/qol-monorepo` lands next to it.
 
 Delivery through a pull request (the default):
 
