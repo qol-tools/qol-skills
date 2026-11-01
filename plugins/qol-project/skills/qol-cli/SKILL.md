@@ -171,5 +171,8 @@ buffer.
 
 ## Behavioral notes
 
+- `qol pr try <number>` is how a live test runs a pull request without compiling: it installs the plugin builds the live test workflow uploaded for the pull request into the tray, and `--off` puts the previous builds back. The flags and checks are in `qol pr try --help`.
+- No release ships the `qol` binary: it is still a local `cargo build -p qol` copied to `~/.cargo/bin/qol`, so a change to `tools/cli` reaches the user only once they rebuild it.
+
 - Unknown command shape returns a usage error and appended help text.
 - `qol emu` prints its own subcommand help on missing or `help` argument.
