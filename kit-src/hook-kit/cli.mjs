@@ -359,6 +359,9 @@ function unknownCommand(env, node, word) {
 }
 
 function helpMisplaced(env, words) {
+  if (words.length === 0) {
+    return new UsageError(`\`help\` takes a command name, not another \`help\`: run \`${env.name} help <command>\`, or \`${env.name} help\` for the commands`);
+  }
   const joined = words.join(" ");
   return new UsageError(`\`help\` goes first or last, never in the middle: run \`${env.name} help ${joined}\` or \`${env.name} ${joined} help\``);
 }

@@ -140,6 +140,15 @@ test("help in the middle exits 2 and names the right forms", async () => {
   assert.match((await run(spec, ["autoinject", "help", "add"])).err, /`demo help autoinject add` or `demo autoinject add help`/);
 });
 
+test("help help says that help takes a command name", async () => {
+  const { code, out, err } = await run(makeSpec(), ["help", "help"]);
+  assert.equal(code, 2);
+  assert.equal(out, "");
+  assert.match(err, /^demo: `help` takes a command name, not another `help`: run `demo help <command>`, or `demo help` for the commands\n/);
+  assert.doesNotMatch(err, /goes first or last/);
+  assert.match((await run(makeSpec(), ["--prefix=de", "help", "help", "--pretty"])).err, /run `de help <command>`/);
+});
+
 test("a literal help word follows --", async () => {
   const { code, out } = await run(makeSpec(), ["note", "--", "help"]);
   assert.equal(code, 0);
