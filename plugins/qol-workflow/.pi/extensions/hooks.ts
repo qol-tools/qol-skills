@@ -9,6 +9,7 @@ const PRE_TOOL_USE_HOOKS = [
     { matcher: "Bash", script: "bin/branch-deny-checkout-in-main-clone.cjs" },
     { matcher: "Bash", script: "bin/branch-deny-agent-checkout.cjs" },
     { matcher: "Bash", script: "bin/branch-deny-pid-branch-name.cjs" },
+    { matcher: "Bash", script: "bin/build-deny-local.cjs" },
     { matcher: "Bash", script: "bin/pr-deny-unconventional-title.cjs" },
     { matcher: "Bash", script: "bin/pr-watch-context.cjs" },
     { matcher: "Bash", script: "bin/pr-watch-park-guard.cjs" },

@@ -32,6 +32,11 @@
     {
       "event": "PreToolUse",
       "matcher": "Bash",
+      "command": "node bin/build-deny-local.cjs"
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
       "command": "node bin/pr-deny-unconventional-title.cjs"
     },
     {

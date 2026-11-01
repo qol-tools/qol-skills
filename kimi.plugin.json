@@ -182,6 +182,11 @@
     {
       "event": "PreToolUse",
       "matcher": "Bash",
+      "command": "node plugins/qol-workflow/bin/build-deny-local.cjs"
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
       "command": "node plugins/qol-workflow/bin/pr-deny-unconventional-title.cjs"
     },
     {
