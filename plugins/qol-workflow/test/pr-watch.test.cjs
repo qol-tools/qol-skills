@@ -88,7 +88,7 @@ test('classify reads the live test check on a green draft', () => {
     assert.match(plain.reasons[0], /mark it ready with gh pr ready/);
     const ui = draft([lint, liveTest('Live test needed')]);
     assert.equal(ui.live_test, 'needed');
-    assert.match(ui.reasons[0], /test the change end to end in a guest/);
+    assert.match(ui.reasons[0], /qol pr try <number>/);
     assert.equal(draft([lint, liveTest('No live test needed'), liveTest('Live test needed')]).live_test, 'needed');
     assert.equal(draft([lint, liveTest('Something else')]).live_test, null);
     assert.equal(draft([lint, liveTest('Live test needed', 'IN_PROGRESS')]).outcome, 'pending');

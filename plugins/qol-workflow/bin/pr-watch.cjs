@@ -25,7 +25,7 @@ const LIVE_TEST_CHECK = 'live test';
 const LIVE_TEST_TITLES = { 'Live test needed': 'needed', 'No live test needed': 'not needed' };
 const DRAFT_REASONS = {
     'not needed': 'checks and review pass on a draft and the live test check found nothing to test by hand: mark it ready with gh pr ready, then watch it again',
-    needed: 'checks and review pass on a draft and the live test check lists files a person must see working: test the change end to end in a guest (qol-project:qol-dev-environments); when it works, mark it ready with gh pr ready and watch it again; when it does not, fix it, push and watch again',
+    needed: 'checks and review pass on a draft and the live test check lists files a person must see working: run qol pr try <number> to install the CI build of the pull request into the tray, and ask the user to look at the change; when they confirm it works, mark it ready with gh pr ready and watch it again; when it does not, run qol pr try --off, fix it, push and watch again',
     unknown: 'checks are green on a draft with no live test check: design work waiting for the user\'s approval; leave auto-merge off, report it to your parent, then park again with --until-ready',
 };
 
