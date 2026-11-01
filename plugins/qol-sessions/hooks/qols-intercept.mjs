@@ -22,6 +22,7 @@ const USAGE = [
   "qols park",
   "qols wake <key>",
   "qols status",
+  "qols board",
   "qols loop [status [key] | key | doctor [--prune]]",
   "fork: detached architect that owns the problem; bridge: lane that reports back here;",
   "test: a fork whose prompt is typed but not submitted, so the launch costs no tokens",
@@ -33,16 +34,19 @@ const USAGE = [
   "park: toggle parking for this terminal; on, a park closes it and reopens the conversation later",
   "wake: make a session read its waiting messages now, even while parked; reopens a closed park",
   "status: one line per lane with its attention, remote control, pull requests and last message",
+  "board: in the switchboard, open or close the fork board, the same as /board",
   "loop: the loop-gate runs of this repo, or one run by key, or the driver doctor; open, run, verdict and close run from the architect's Bash",
   "values may be [aliases] from sessions.toml; left out, sessions.toml defaults apply",
 ].join("\n");
 
-const VERBS = ["fork", "bridge", "test", "new", "switchboard", "park", "wake", "status", "loop"];
+const VERBS = ["fork", "bridge", "test", "new", "switchboard", "park", "wake", "status", "board", "loop"];
 
 const ARCHITECT_LOOP_VERBS = ["open", "run", "verdict", "close"];
 const PLUGIN_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const QOL_TIMEOUT_MS = 100000;
 
+const BOARD_ELSEWHERE = "qols board: the fork board is the switchboard's; type qols board there to open or close it";
+const BOARD_STALE = "qols board: this switchboard's board plugin predates qols board; update qol and restart the switchboard, or use /board";
 const STALE_QOL = "qols status: this qol has no `qol sessions status`; update qol";
 
 const SWITCHBOARD_KEY = "switchboard";
@@ -85,6 +89,7 @@ export function parsePrompt(prompt) {
   }
   if (verb === "park") return parseBare(source, tokens, verb, "qols park only toggles");
   if (verb === "status") return parseBare(source, tokens, verb, "qols status takes nothing");
+  if (verb === "board") return parseBare(source, tokens, verb, "qols board only toggles");
   if (verb === "wake") return parseWake(source, verbToken, tokens);
   if (verb === "loop") return parseLoop(source, verbToken, tokens);
   const flags = [];
@@ -265,6 +270,10 @@ export function forkedBySwitchboard({ verb }, inSwitchboard = isSwitchboard) {
   return Object.hasOwn(SWITCHBOARD_ASKS, verb) && inSwitchboard();
 }
 
+export function boardReply(inSwitchboard = isSwitchboard) {
+  return { reason: inSwitchboard() ? BOARD_STALE : BOARD_ELSEWHERE };
+}
+
 export function switchboardContext({ verb, message, flags }) {
   const ask = verb === "new" && message === undefined ? "a new empty session" : SWITCHBOARD_ASKS[verb];
   const note = `[qols] \`qols ${verb}\` reached you because the switchboard starts sessions as forks, not terminals: treat it as the user asking for ${ask}, and start it as your role describes.`;
@@ -311,6 +320,7 @@ function reply(parsed, cwd) {
   if (parsed.verb === "help") return { reason: parsed.diagnostic ? renderDiagnostic(parsed.diagnostic) : USAGE };
   if (parsed.verb === "park") return park();
   if (parsed.verb === "status") return status();
+  if (parsed.verb === "board") return boardReply();
   if (parsed.verb === "wake") return wake(parsed.key);
   if (parsed.verb === "loop") return loopReply(parsed, cwd);
   if (forkedBySwitchboard(parsed)) return { context: switchboardContext(parsed) };

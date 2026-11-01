@@ -3,6 +3,7 @@ import test from "node:test";
 import { join } from "node:path";
 
 import {
+  boardReply,
   cliSessionsBinary,
   commandFor,
   forkedBySwitchboard,
@@ -262,6 +263,17 @@ test("the switchboard note names what to start and sends terminal flags to sessi
   );
 });
 
+test("qols board toggles the switchboard's board and takes nothing else", () => {
+  assert.deepEqual(parsePrompt("qols board"), { verb: "board" });
+  assert.deepEqual(parsePrompt("QOLS Board"), { verb: "board" });
+  assert.match(renderDiagnostic(parsePrompt("qols board now").diagnostic), /qols board only toggles/);
+});
+
+test("qols board reaching the hook points outside the switchboard there, and inside it to an update", () => {
+  assert.match(boardReply(() => false).reason, /the fork board is the switchboard's/);
+  assert.match(boardReply(() => true).reason, /update qol and restart the switchboard, or use \/board/);
+});
+
 test("qols status takes nothing else", () => {
   assert.deepEqual(parsePrompt("qols status"), { verb: "status" });
   assert.deepEqual(parsePrompt("QOLS Status"), { verb: "status" });
@@ -442,6 +454,6 @@ test("qols loop with no output, a failure or a usage error leaves the box alone"
 
 test("an unknown command lists loop among the commands", () => {
   const reason = renderDiagnostic(parsePrompt("qols brige x").diagnostic);
-  assert.match(reason, /commands are fork, bridge, test, new, switchboard, park, wake, status, loop/);
+  assert.match(reason, /commands are fork, bridge, test, new, switchboard, park, wake, status, board, loop/);
 });
 
