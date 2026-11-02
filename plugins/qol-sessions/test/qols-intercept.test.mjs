@@ -13,6 +13,7 @@ import {
   loopReply,
   park,
   parsePrompt,
+  prTry,
   renderDiagnostic,
   status,
   summarize,
@@ -331,6 +332,41 @@ test("qols wake runs the CLI Sessions wake command and reports its line or error
   assert.match(wake("lane", null).reason, /not installed/);
 });
 
+test("qols pr try takes one pull request number or --off", () => {
+  assert.deepEqual(parsePrompt("qols pr try 412"), { verb: "pr", args: ["try", "412"] });
+  assert.deepEqual(parsePrompt("QOLS PR Try #412"), { verb: "pr", args: ["try", "412"] });
+  assert.deepEqual(parsePrompt("qols pr try --off"), { verb: "pr", args: ["try", "--off"] });
+  const cases = [
+    ["qols pr", /^`qols pr` needs `try`$/],
+    ["qols pr off", /^`qols pr` has no `off`$/],
+    ["qols pr try", /^`qols pr try` needs a pull request number or --off$/],
+    ["qols pr try 412 now", /^`qols pr try` does not take `now`$/],
+    ["qols pr try abc", /^`abc` is not a pull request number$/],
+    ["qols pr try --of", /^`--of` is not a pull request number$/],
+  ];
+  for (const [prompt, title] of cases) {
+    const { verb, diagnostic } = parsePrompt(prompt);
+    assert.equal(verb, "help", prompt);
+    assert.match(diagnostic.title, title, prompt);
+    assert.match(renderDiagnostic(diagnostic), /usage: qols pr try <number> \| qols pr try --off$/, prompt);
+  }
+});
+
+test("qols pr try runs qol pr try and answers with its output", () => {
+  const calls = [];
+  const lines = "pull request #412 at 1a2b3c4\n  qol-launcher 1.2.3: restarted";
+  const run = (argv) => {
+    calls.push(argv);
+    return answered(lines);
+  };
+  assert.deepEqual(prTry({ args: ["try", "412"] }, run), { reason: lines, sent: true });
+  assert.deepEqual(prTry({ args: ["try", "--off"] }, run), { reason: lines, sent: true });
+  assert.deepEqual(calls, [["pr", "try", "412"], ["pr", "try", "--off"]]);
+  assert.deepEqual(prTry({ args: ["try", "412"] }, () => failedRun("Error: the live test build is still running")), {
+    reason: "qols pr try 412: Error: the live test build is still running",
+  });
+});
+
 test("qols park toggles through the CLI Sessions binary and reports the new state", () => {
   const calls = [];
   const run = (bin, argv) => {
@@ -454,6 +490,6 @@ test("qols loop with no output, a failure or a usage error leaves the box alone"
 
 test("an unknown command lists loop among the commands", () => {
   const reason = renderDiagnostic(parsePrompt("qols brige x").diagnostic);
-  assert.match(reason, /commands are fork, bridge, test, new, switchboard, park, wake, status, board, loop/);
+  assert.match(reason, /commands are fork, bridge, test, new, switchboard, park, wake, status, board, pr, loop/);
 });
 

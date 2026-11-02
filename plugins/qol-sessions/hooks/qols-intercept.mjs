@@ -23,6 +23,7 @@ const USAGE = [
   "qols wake <key>",
   "qols status",
   "qols board",
+  "qols pr try <number> | qols pr try --off",
   "qols loop [status [key] | key | doctor [--prune]]",
   "fork: detached architect that owns the problem; bridge: lane that reports back here;",
   "test: a fork whose prompt is typed but not submitted, so the launch costs no tokens",
@@ -33,17 +34,19 @@ const USAGE = [
   "a fork given a problem or prompt also closes once its turn ends",
   "park: toggle parking for this terminal; on, a park closes it and reopens the conversation later",
   "wake: make a session read its waiting messages now, even while parked; reopens a closed park",
+  "pr try: run qol pr try here: put the pull request's CI build in place of the installed tray and plugins, or with --off put them back",
   "status: one line per lane with its attention, remote control, pull requests and last message",
   "board: in the switchboard, open or close the fork board, the same as /board",
   "loop: the loop-gate runs of this repo, or one run by key, or the driver doctor; open, run, verdict and close run from the architect's Bash",
   "values may be [aliases] from sessions.toml; left out, sessions.toml defaults apply",
 ].join("\n");
 
-const VERBS = ["fork", "bridge", "test", "new", "switchboard", "park", "wake", "status", "board", "loop"];
+const VERBS = ["fork", "bridge", "test", "new", "switchboard", "park", "wake", "status", "board", "pr", "loop"];
 
 const ARCHITECT_LOOP_VERBS = ["open", "run", "verdict", "close"];
 const PLUGIN_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const QOL_TIMEOUT_MS = 100000;
+const PR_TRY_TIMEOUT_MS = 570000;
 
 const BOARD_ELSEWHERE = "qols board: the fork board is the switchboard's; type qols board there to open or close it";
 const BOARD_STALE = "qols board: this switchboard's board plugin predates qols board; update qol and restart the switchboard, or use /board";
@@ -92,6 +95,7 @@ export function parsePrompt(prompt) {
   if (verb === "board") return parseBare(source, tokens, verb, "qols board only toggles");
   if (verb === "wake") return parseWake(source, verbToken, tokens);
   if (verb === "loop") return parseLoop(source, verbToken, tokens);
+  if (verb === "pr") return parsePr(source, verbToken, tokens);
   const flags = [];
   while (tokens.length >= 1) {
     const last = tokens.at(-1).text;
@@ -161,6 +165,29 @@ function parseWake(source, verbToken, tokens) {
       notes: [`usage: ${usageFor("wake")}`],
     },
   };
+}
+
+function prRefusal(source, at, title, label) {
+  return {
+    verb: "help",
+    diagnostic: { title, source, start: at.start, end: at.end, label, notes: [`usage: ${usageFor("pr")}`] },
+  };
+}
+
+function parsePr(source, verbToken, tokens) {
+  const [sub, target, ...extra] = tokens;
+  if (sub === undefined) {
+    return prRefusal(source, { start: verbToken.end, end: verbToken.end + 1 }, "`qols pr` needs `try`", "expected `try` here");
+  }
+  if (sub.text.toLowerCase() !== "try") return prRefusal(source, sub, `\`qols pr\` has no \`${sub.text}\``, "the only pr command is try");
+  if (target === undefined) {
+    return prRefusal(source, { start: sub.end, end: sub.end + 1 }, "`qols pr try` needs a pull request number or --off", "expected a number or --off here");
+  }
+  if (extra.length > 0) return prRefusal(source, extra[0], `\`qols pr try\` does not take \`${extra[0].text}\``, "try takes one number or --off");
+  if (target.text === "--off") return { verb: "pr", args: ["try", "--off"] };
+  const number = /^#?(\d+)$/.exec(target.text);
+  if (number === null) return prRefusal(source, target, `\`${target.text}\` is not a pull request number`, "expected a number such as 412 or #412, or --off");
+  return { verb: "pr", args: ["try", number[1]] };
 }
 
 function loopRefusal(source, token, label) {
@@ -323,6 +350,7 @@ function reply(parsed, cwd) {
   if (parsed.verb === "board") return boardReply();
   if (parsed.verb === "wake") return wake(parsed.key);
   if (parsed.verb === "loop") return loopReply(parsed, cwd);
+  if (parsed.verb === "pr") return prTry(parsed);
   if (forkedBySwitchboard(parsed)) return { context: switchboardContext(parsed) };
   return launch(parsed, cwd);
 }
@@ -356,6 +384,12 @@ export function status(run = (argv) => runBinary("qol", argv)) {
   if (result.kind === "answered") return { reason: result.text || "qols status: no lanes", sent: true };
   if (result.text.startsWith("unknown qol sessions subcommand `status`")) return { reason: STALE_QOL };
   return { reason: `qols status: ${result.text}` };
+}
+
+export function prTry({ args }, run = (argv) => runCli(argv[0], argv.slice(1), { bin: "qol", timeoutMs: PR_TRY_TIMEOUT_MS })) {
+  const result = run(["pr", ...args]);
+  if (result.kind !== "answered") return { reason: `qols pr ${args.join(" ")}: ${result.text}` };
+  return { reason: result.text || `qols pr ${args.join(" ")}: done`, sent: true };
 }
 
 export function park(binary = cliSessionsBinary(), run = runBinary) {
