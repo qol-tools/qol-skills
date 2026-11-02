@@ -305,8 +305,9 @@ cancels a pending press. One chord holds at most one tap and one hold binding
 hold time on a `continuous = true` action. The settings editor sets it on the
 "Hold to run" row with the compact settings slider (`qol_gpui::settings_panel::
 number_slider`, the one plugin `variant = "slider"` numbers use): 0 to 3000 ms in
-steps of 50, new bindings start at 0, 0 stores no `hold_ms`, and the list row
-adds " · hold N ms" only above 0.
+steps of 50, new bindings start at 0, 0 stores no `hold_ms` and reads "Off" with
+no unit (the slider's `zero` word) until you type, and the list row adds
+" · hold N ms" only above 0.
 
 ## Cross-platform tray
 
