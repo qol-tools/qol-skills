@@ -757,6 +757,7 @@ Native gpui surfaces (`libs/gpui/src`, `apps/tray/src`, `plugins/*/src`):
 - Heights of 28 px or more, radii and (in settings scope) spacing sit on the ladders read from `libs/theme/src/lib.rs`; settings scope also bans rem helpers such as `.gap_2()` and local spacing constants.
 - Depth comes from the theme: no hand alpha, `BoxShadow`, line width or literal opacity. Chips are `kit.chip`, windows are `kit.window()` and square, every scrolling list ends in `kit.scroll_cue` and tracks a `SelectionScroll` handle, a full-height column of rows scrolls, a running phrase never ends in an ellipsis, and no surface draws a coloured side line.
 - Settings scope composes recipes: no leaf `.bg`, `.text_color`, `.border`, `.rounded` outside the recipe owners, no raw `kit.palette.<field>` beyond the semantic hues, one focus owner, spinners only through the components.
+- A row that opens shows it (rule `opening`, "Rows that open" in `qol-gpui-theme`): a settings file outside the components that names ↵ `open` (`Key::ENTER, "open"`, `.verb("open")`, `Some("open")`, `=> "open"`, `.enter(.., "open")`) must call `.opens(` itself when it builds `SettingsRow`s, else a file beside it must; and only the components call `pictures::chevron`. Residual: it checks a file, not each row, so a second opening row in a file that already calls `.opens(` passes, and a verb spelled another way is not seen.
 
 The settings page shape, derived from the core tool pages (Hotkeys, Shortcuts and
 Updates all have it; the pre-redesign Linked computers page had none of it). A file
@@ -774,7 +775,9 @@ must:
 Only violations the edit introduces are reported, counted per rule, so an unrelated
 edit to a file with existing debt passes and a second copy of that debt does not.
 Tests, examples, `*_tests.rs`, `*.test.js`, `generated-*` files and `vendor/` are
-skipped.
+skipped. Inside a file the guard stops at the inline `#[cfg(test)] mod … {` module;
+an out-of-line `#[cfg(test)] mod tests;` declaration does not hide the code after
+it (it used to, which left the Linked devices row model unread).
 
 To audit a tree, run the guard directly. It exits 1 if any file is flagged:
 

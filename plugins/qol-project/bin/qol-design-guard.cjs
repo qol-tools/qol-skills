@@ -57,6 +57,10 @@ const DEPTH_NEEDLES = [
     ['.border_4()', 'a 4 px line', 'px(qol_theme::LINE)'],
     ['.border_8()', 'an 8 px line', 'px(qol_theme::LINE)'],
 ];
+const OPENING_VERB = /(,\s*|Some\(\s*|\.verb\(\s*|=>\s*)"open"/;
+const OPENING_PART = '.opens(';
+const OPENING_USE = 'SettingsRow::opens(true) on the row that enter opens (or settings_block_header(.., opens, ..) on a block row): the kit then draws the open part, the chevron, as its last part';
+const TEST_MODULE = /#\[cfg\(test\)\]\s*(?:#\[[^\]]*\]\s*)*(?:pub(?:\([^)]*\))?\s+)?mod\s+\w+\s*\{/;
 const LINE_COMMENT = '/'.repeat(2);
 const TRANSPARENT = /^rgba\(\s*0(x0+)?\s*\)$/;
 
@@ -88,7 +92,8 @@ function isCommentLine(line) {
 }
 
 function beforeTests(content) {
-    return content.split('#[cfg(test)]')[0];
+    const tests = TEST_MODULE.exec(content);
+    return tests ? content.slice(0, tests.index) : content;
 }
 
 function lineOf(content, index) {
@@ -487,6 +492,41 @@ function unscrolledColumns(body, add) {
     });
 }
 
+function siblingsDrawOpening(root, relative) {
+    if (!root) return false;
+    const dir = path.join(root, path.dirname(relative));
+    let names = [];
+    try {
+        names = fs.readdirSync(dir);
+    } catch {
+        return false;
+    }
+    return names
+        .filter(name => name.endsWith('.rs') && name !== path.basename(relative))
+        .filter(name => !isTestFile(`${path.dirname(relative)}/${name}`))
+        .some(name => {
+            try {
+                return beforeTests(fs.readFileSync(path.join(dir, name), 'utf8')).includes(OPENING_PART);
+            } catch {
+                return false;
+            }
+        });
+}
+
+function openingRules(relative, body, root, add) {
+    if (!inSettingsScope(relative) || relative.startsWith(COMPONENTS)) return;
+    const lines = body.split('\n');
+    lines.forEach((line, index) => {
+        if (!isCommentLine(line) && line.includes('pictures::chevron(')) {
+            add('opening', index + 1, 'draws the open part by hand', OPENING_USE);
+        }
+    });
+    const first = lines.findIndex(line => !isCommentLine(line) && OPENING_VERB.test(line));
+    if (first < 0 || body.includes(OPENING_PART)) return;
+    if (!body.includes('SettingsRow::') && siblingsDrawOpening(root, relative)) return;
+    add('opening', first + 1, 'names enter "open" but no row it opens ends in the open part', OPENING_USE);
+}
+
 function settingsPageRules(relative, body, add) {
     if (!relative.startsWith(SETTINGS_PAGES) || !/impl CustomSettingsBreadcrumbs for/.test(body)) return;
     const page = (what, use) => add('settings-page', 0, what, use);
@@ -555,6 +595,7 @@ function rustViolations(relative, content, root) {
     glyphRules(content, body, root, add);
     depthRules(relative, body, add);
     partRules(relative, content, body, add);
+    openingRules(relative, body, root, add);
     settingsPageRules(relative, body, add);
     return found;
 }

@@ -49,7 +49,7 @@ impl PeersView {
         let range = self.list.visible_range(3);
         settings_list()
             .child(SettingsGroupHeader::new("peers", Some("computers you linked".into()), kit()))
-            .child(settings_value_group())
+            .child(SettingsRow::setting("peer", kit()).opens(true).child(settings_value_group()))
             .child(kit().scroll_cue(ScrollSource::Window { first: range.start, shown: range.len(), total: 3 }, kit().grounds.pane))
             .into_any_element()
     }
@@ -290,6 +290,55 @@ test('passes a core settings page whose breadcrumbs stay empty without a deck', 
         'impl CustomSettingsBreadcrumbs for PeersView {\n    fn settings_breadcrumbs(&self) -> Vec<SettingsDestination> {\n        Vec::new()\n    }\n',
     ));
     assert.strictEqual(r.exitCode, 0, r.stderr);
+});
+
+test('blocks a core settings page that hints enter "open" while no row ends in the open part', () => {
+    const root = workspace();
+    const r = write(root, SETTINGS, COMPLIANT_PAGE.replace('.opens(true)', ''));
+    assert.strictEqual(r.exitCode, 2, r.stderr);
+    assert.match(r.stderr, /names enter "open" but no row it opens ends in the open part/);
+    assert.match(r.stderr, /SettingsRow::opens\(true\)/);
+});
+
+const OPENING_MODEL = 'apps/tray/src/settings_surface/platform/native_tools/peers/model.rs';
+const PEER_ROWS = `pub(super) fn rows() -> Vec<Row> {
+    vec![Row::new("macbook", "linked").verb("open")]
+}
+`;
+
+test('passes a row model that names enter "open" when its view gives the row the open part', () => {
+    const root = workspace();
+    place(root, SETTINGS, 'fn render(row: &Row) -> SettingsRow {\n    SettingsRow::setting("peer", kit()).opens(row.opens)\n}\n');
+    const r = write(root, OPENING_MODEL, PEER_ROWS);
+    assert.strictEqual(r.exitCode, 0, r.stderr);
+});
+
+test('blocks a row model that names enter "open" when no file beside it draws the open part', () => {
+    const root = workspace();
+    place(root, SETTINGS, 'fn render() -> SettingsRow {\n    SettingsRow::setting("peer", kit())\n}\n');
+    const r = write(root, OPENING_MODEL, PEER_ROWS);
+    assert.strictEqual(r.exitCode, 2, r.stderr);
+    assert.match(r.stderr, /model\.rs:2 names enter "open"/);
+});
+
+test('blocks a settings file that draws the chevron by hand', () => {
+    const root = workspace();
+    const r = write(root, SETTINGS, 'fn arrow() -> Option<Image> {\n    pictures::chevron(ink, 8, 14)\n}\n');
+    assert.strictEqual(r.exitCode, 2, r.stderr);
+    assert.match(r.stderr, /draws the open part by hand/);
+});
+
+test('lets the components own the open part', () => {
+    const root = workspace();
+    const r = write(root, 'libs/gpui/src/settings_panel/components/row.rs', 'fn hint() -> SettingsHint {\n    SettingsHint::new(Key::ENTER, "open")\n}\nfn arrow() {\n    pictures::chevron(ink, 8, 14);\n}\n');
+    assert.strictEqual(r.exitCode, 0, r.stderr);
+});
+
+test('reads the code after an out-of-line test module declaration', () => {
+    const root = workspace();
+    const r = write(root, SETTINGS, '#[cfg(test)]\nmod tests;\n\nfn hint() -> SettingsHint {\n    SettingsHint::new(Key::ENTER, "open")\n}\n');
+    assert.strictEqual(r.exitCode, 2, r.stderr);
+    assert.match(r.stderr, /names enter "open"/);
 });
 
 test('does not block an unrelated edit to a file with existing design debt', () => {

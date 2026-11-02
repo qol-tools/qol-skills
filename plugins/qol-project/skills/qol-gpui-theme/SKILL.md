@@ -317,13 +317,14 @@ same `tile_arts`, `choose_step` and `choose_hints`.
 | Group header | `SettingsGroupHeader` | `kit.heading_title(Heading, …, current)` with its activity spinner, pt `SPACE_PAD`, pb `SPACE_SNUG`, closed by the masthead rule |
 | Rail masthead | `components::rail_caption` | h `HEIGHT_BAND`, px `SPACE_CELL`, `kit.heading_title(Masthead, …, focused)` |
 | Crumb trail | `components::settings_crumb_trail` | the Heading style, separator `/` at px `SPACE_TIGHT` |
-| Setting row | `SettingsRow::setting` | h `HEIGHT_SETTING_ROW`, px `SPACE_INSET`, py `SPACE_TIGHT`, gap `SPACE_CELL`; `.separated(true)` draws the top hairline |
+| Setting row | `SettingsRow::setting` | h `HEIGHT_SETTING_ROW`, px `SPACE_INSET`, py `SPACE_TIGHT`, gap `SPACE_CELL`; `.separated(true)` draws the top hairline; `.opens(true)` ends it in the open part (see "Rows that open") |
+| Open part | `SettingsRow::opens(true)`, `settings_block_header(.., opens, ..)` | the 8 x 14 arrow drawn by `pictures::chevron`, last in the row, `SPACE_CELL` after the value; only these two draw it |
 | Rule / add row | `SettingsRow::rule` / `::add` | h `HEIGHT_RULE_ROW`, same insets, rounded `RADIUS_CONTROL` |
 | Carried row | `SettingsRow::lifted(lift)` over `settings_row_shade(lift, kit)` | a reorder card's picked-up entry: as `lift` runs from 0 to 1 the row rises `SPACE_INSET`, moves right by `SPACE_CELL` and takes the float shadow, over a shade on the pane well ground that fills the slot it will land in |
 | Label group | `components::settings_label_group(label, Option<description>, row, kit)` | `flex_1 min_w_0 flex flex_col`, gap `SPACE_STACK`; `settings_label` + optional `settings_description` |
 | Value group | `settings_value_group()` | gap `SPACE_INSET` |
 | Toggle | `SettingsToggle` | 40 x 24 track (`HEIGHT_INLINE - 4`), knob inset `SPACE_STACK` |
-| Choice value | `SettingsChoiceValue` with `ChoiceArt` | every select row, single or multi, and the display mode row: word `TEXT_BODY` truncated at `CHOICE_WORD_MAX_WIDTH` 180, art box `CHOICE_PICTURE_WIDTH` x `CHOICE_PICTURE_HEIGHT` 56 x 35 drawn by `pictures::fitted_image`, or by `pictures::stacked_image` for two chosen pictures, arrow 8 x 14 drawn by `pictures::chevron`, gap `SPACE_CELL`; no fill, border or chip |
+| Choice value | `SettingsChoiceValue` with `ChoiceArt` | every select row, single or multi, and the display mode row: word `TEXT_BODY` truncated at `CHOICE_WORD_MAX_WIDTH` 180, art box `CHOICE_PICTURE_WIDTH` x `CHOICE_PICTURE_HEIGHT` 56 x 35 drawn by `pictures::fitted_image`, or by `pictures::stacked_image` for two chosen pictures, gap `SPACE_CELL`; no fill, border or chip. Its arrow is the row's open part |
 | Text field | `SettingsTextField`, and `SettingsTextField::live(field, row, palette)` for the field being typed into | h `HEIGHT_CONTROL`, px `SPACE_CELL`, rounded `RADIUS_CONTROL`, min `TEXT_FIELD_MIN_WIDTH` 220, max `FIELD_MAX_WIDTH` 320; the live field is focused, grows with its text between the two widths and draws its caret, and every key reaches it through `text_edit::apply_edit_key`, which answers `EditKey::Changed`, `Handled` or `Ignored` |
 | Key combination | `SettingsKeyCombination` | h `HEIGHT_INLINE`, px `SPACE_INSET`, rounded `RADIUS_CONTROL` |
 | Modifier chip | `SettingsModifierChip` | `kit.chip(Chip::KeyText)` on its row ground: on is a `well` fill with `ink` text, off has no fill and `faint` text; the border is `ink` at the cursor, `soft` when on, else `edge` |
@@ -616,6 +617,43 @@ The pixel reference is the design lock snapshot at
 `341b3b614b116ff0b8c95ec4469546a4be67fa64fa4c97b84822a9ad6e1bd345`), and the
 goldens in `libs/gpui/tests/fixtures/pictures` hold it in the repo.
 
+### Rows that open
+
+A row whose ↵ goes one level deeper (a page, a card, a picture card, an
+editor or a device) ends in the open part, the 8 x 14 arrow, every time. The
+row owns it, not its value: the row says `SettingsRow::opens(true)` and the kit
+draws the arrow as its last part, after any value, chip or control, so a row's
+parts read left to right and the arrow is always the step in. A block row (a
+list or entry array drawn as a card) gets it from
+`settings_block_header(.., opens, ..)`. Nothing else draws the arrow:
+`SettingsChevron` is private to `settings_panel/components/`.
+
+- The arrow and the ↵ verb come from one fact. A row model that names ↵
+  `open` sets the row's `opens` in the same builder (`Row::opens()` on the
+  core tool pages), the contract panel reads both from `row_opens(control)`,
+  and a pages row opens when `enter_verb` is `open`.
+- Opening rows: page rows and search hits on a page, select and multi-select
+  rows, placement, display layout, QR code, gamepad and text list rows, lists
+  with items or a finder, entry arrays, list card items, entries (not the add
+  row and not while reordering), the Resolution and refresh row while modes are
+  available, the Shortcuts and Hotkeys rows and their select fields, Linked
+  devices peers and link requests, Plugins sources, and the Profile and
+  Backups rows.
+- An add row reads ↵ `add` and draws no arrow; it starts something rather than
+  going into it.
+- At rest the arrow is `faint` at 40 percent on the pane and wakes to full on
+  hover, stepping `CHOICE_CHEVRON_HOVER_STEP` right; on the band it is band
+  `faint`.
+- Enforced by the design guard rule `opening` (`qac lint`): a settings file
+  that names ↵ `open` must give the row it opens `.opens(..)`, in the file
+  itself when it builds `SettingsRow`s, else in a file beside it; and nothing
+  outside the components calls `pictures::chevron`.
+
+Incident (2026-11-02): Notifications > Position, the Hotkeys entries and
+Linked devices > a linked computer all hinted ↵ open with no arrow, because
+the arrow belonged to `SettingsChoiceValue` and each page drew it by hand or
+not at all.
+
 ### Choice values
 
 Locked 2026-09-14 as design G1, snapshotted in
@@ -624,9 +662,10 @@ with `png/RowsG1.png` as the reference. A select row whose value opens a
 picture card never draws a chip, because a boxed value with an arrow reads as
 a dropdown.
 
-- `SettingsChoiceValue` shows the value word, the chosen option's art in a
-  56 x 35 box and an 8 x 14 arrow, `SPACE_CELL` apart. The word is
-  `TEXT_BODY` and truncates at 180; the box and the arrow never change size.
+- `SettingsChoiceValue` shows the value word and the chosen option's art in a
+  56 x 35 box, `SPACE_CELL` apart, and the row ends in the 8 x 14 open part.
+  The word is `TEXT_BODY` and truncates at 180; the box and the arrow never
+  change size.
 - The art is the option's tile art from its card: its valid picture, else its
   letters.
 - `pictures::fitted_image` draws a picture whole. Its stroke bounds are
