@@ -23,7 +23,8 @@ Key Remap converts declarative config rules into native input-event transformati
 | `src/platform/engine/` | Shared macOS/Windows engine: contract-backed config, rule resolution (`remap`), and the reload/swap daemon loop (`serve`, `Remapper`). |
 | `src/platform/macos/app/` | macOS process wiring that plugs the tap, input backends, and layout store into the engine. |
 | `src/platform/macos/app_tracker.rs` | Live frontmost-application tracking. |
-| `src/platform/macos/tap.rs`, `src/platform/macos/input/` | CGEventTap ownership, the event-tap and virtual HID input backends, and native event transformation. |
+| `src/platform/macos/tap.rs`, `src/platform/macos/input/` | CGEventTap ownership, native event transformation, `BackendId`/`BackendCell`, `selection` (which backend a Key backend choice gets), and `backends/hid_helper/` (the helper session). |
+| `src/platform/macos/karabiner/` | Karabiner-Elements backend: `compile` (rules to manipulators), `document`/`store` (karabiner.json sync with a sidecar record), `service` (probe and the `qol_keyremap_active` variable), `backend` (daemon state machine). |
 | `src/platform/macos/hid_helper/`, `src/platform/macos/virtual_hid/` | Privileged HID helper install/protocol/watchdog and the Karabiner VirtualHIDDevice client. |
 | `src/platform/macos/layout/`, `src/platform/macos/secure_input/` | Keyboard layout snapshots and Secure Input detection and warning. |
 | `src/platform/windows/` | Windows adapter: low-level hooks, foreground tracking, key translation, profile, and the engine-backed service. |
@@ -47,6 +48,16 @@ Keep native callbacks allocation-light and independent of TOML/UI shapes. Resolv
 4. On kill, error, or shutdown, disable interception and release native resources before removing the socket.
 
 An existing daemon may accept a reload from a second process, but process ownership and cleanup remain single-owner.
+
+## Key backends (macOS)
+
+The `key_backend` setting picks what remaps keys: `auto`, `event_tap`, `hid_helper` or `karabiner_elements`.
+
+- `auto` is the helper when it holds the keyboards, else the event tap. It never picks Karabiner-Elements; installing Karabiner-Elements must not change behavior.
+- A chosen backend that is not ready falls back to the event tap, and doctor's `key_backend` check names what is missing and the fix.
+- The helper seizes keyboards only under `auto` or `hid_helper` (`InputState::helper_allowed`); it never overwrites a `KarabinerElements` cell.
+- Karabiner-Elements order: switch the cell first, then set the variable to 1. Leaving: variable 0, cell back to the tap, then remove the block. A core-service pid change re-sets the variable; a layout change recompiles.
+- The block is identified by its description and gated by `variable_if qol_keyremap_active == 1`; `karabiner-sync`, `karabiner-remove` and doctor's `karabiner_rules` (a dry run) share `Store`.
 
 ## Common changes
 
