@@ -58,6 +58,7 @@ The `key_backend` setting picks what remaps keys: `auto`, `event_tap`, `hid_help
 - The helper seizes keyboards only under `auto` or `hid_helper` (`InputState::helper_allowed`); it never overwrites a `KarabinerElements` cell.
 - Karabiner-Elements order: switch the cell first, then set the variable to 1. Leaving: variable 0, cell back to the tap, then remove the block. A core-service pid change re-sets the variable; a layout change recompiles.
 - The block is identified by its description and gated by `variable_if qol_keyremap_active == 1`; `karabiner-sync`, `karabiner-remove` and doctor's `karabiner_rules` (a dry run) share `Store`.
+- qol hotkeys ride the same block, so they survive Secure Input: the tray publishes `HotkeysChanged { hotkeys, relay }` (replayed on subscribe) and listens on the `relay` datagram socket. `karabiner/hotkeys.rs` appends one manipulator per combo after the remap rules, a `send_user_command` with `HotkeyPress { pressed: true }` and another in `to_after_key_up`. The tray feeds them to the tap's own `KeyMatcher` and beats held continuous hotkeys itself, since Karabiner-Elements sends no repeats. No `relay` means no hotkey manipulators. Key Remap toggled off sets the variable to 0, so hotkeys fall back to the tap.
 
 ## Common changes
 
