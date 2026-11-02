@@ -60,6 +60,9 @@ const DEPTH_NEEDLES = [
 const OPENING_VERB = /(,\s*|Some\(\s*|\.verb\(\s*|=>\s*)"open"|\b(Action|Enter|RowAction)::Open[A-Z(]/;
 const OPENING_PART = '.opens(';
 const OPENING_USE = 'SettingsRow::opens(true) on the row that enter opens (or settings_block_header(.., opens, ..) on a block row): the kit then draws the open part, the chevron, as its last part';
+const LAUNCHING_ACTION = /\b(Action|Enter|RowAction)::(Launch|Visit)[A-Z(]/;
+const LAUNCHING_PART = '.launches(';
+const LAUNCHING_USE = 'SettingsRow::launches(Some(Launch::file(name, app))) on a row whose enter opens a file in another app, or Launch::link(host) for a web page: the kit then draws the launch part, the file tag, the app and the open-outside mark, never the chevron';
 const TEST_MODULE = /#\[cfg\(test\)\]\s*(?:#\[[^\]]*\]\s*)*(?:pub(?:\([^)]*\))?\s+)?mod\s+\w+\s*\{/;
 const LINE_COMMENT = '/'.repeat(2);
 const TRANSPARENT = /^rgba\(\s*0(x0+)?\s*\)$/;
@@ -492,7 +495,7 @@ function unscrolledColumns(body, add) {
     });
 }
 
-function siblingsDrawOpening(root, relative) {
+function siblingsDraw(root, relative, part) {
     if (!root) return false;
     const dir = path.join(root, path.dirname(relative));
     let names = [];
@@ -506,7 +509,7 @@ function siblingsDrawOpening(root, relative) {
         .filter(name => !isTestFile(`${path.dirname(relative)}/${name}`))
         .some(name => {
             try {
-                return beforeTests(fs.readFileSync(path.join(dir, name), 'utf8')).includes(OPENING_PART);
+                return beforeTests(fs.readFileSync(path.join(dir, name), 'utf8')).includes(part);
             } catch {
                 return false;
             }
@@ -523,8 +526,22 @@ function openingRules(relative, body, root, add) {
     });
     const first = lines.findIndex(line => !isCommentLine(line) && OPENING_VERB.test(line));
     if (first < 0 || body.includes(OPENING_PART)) return;
-    if (!body.includes('SettingsRow::') && siblingsDrawOpening(root, relative)) return;
+    if (!body.includes('SettingsRow::') && siblingsDraw(root, relative, OPENING_PART)) return;
     add('opening', first + 1, 'names enter "open" or an Open action but no row it opens ends in the open part', OPENING_USE);
+}
+
+function launchingRules(relative, body, root, add) {
+    if (!inSettingsScope(relative) || relative.startsWith(COMPONENTS)) return;
+    const lines = body.split('\n');
+    lines.forEach((line, index) => {
+        if (!isCommentLine(line) && line.includes('pictures::open_outside(')) {
+            add('launching', index + 1, 'draws the open-outside mark by hand', LAUNCHING_USE);
+        }
+    });
+    const first = lines.findIndex(line => !isCommentLine(line) && LAUNCHING_ACTION.test(line));
+    if (first < 0 || body.includes(LAUNCHING_PART)) return;
+    if (!body.includes('SettingsRow::') && siblingsDraw(root, relative, LAUNCHING_PART)) return;
+    add('launching', first + 1, 'names a Launch or Visit action but no row it launches ends in the launch part', LAUNCHING_USE);
 }
 
 function settingsPageRules(relative, body, add) {
@@ -596,6 +613,7 @@ function rustViolations(relative, content, root) {
     depthRules(relative, body, add);
     partRules(relative, content, body, add);
     openingRules(relative, body, root, add);
+    launchingRules(relative, body, root, add);
     settingsPageRules(relative, body, add);
     return found;
 }

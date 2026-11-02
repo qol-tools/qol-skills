@@ -342,6 +342,48 @@ test('lets the components own the open part', () => {
     assert.strictEqual(r.exitCode, 0, r.stderr);
 });
 
+const LAUNCHING_MODEL = 'apps/tray/src/settings_surface/platform/native_tools/peers/backups.rs';
+const BACKUP_ROWS = `pub(super) fn rows() -> Vec<Row> {
+    vec![Row::new("2 Nov 2026", "", Some(Action::LaunchBackup(name)))]
+}
+`;
+
+test('blocks a row model whose Launch action row never draws the launch part', () => {
+    const root = workspace();
+    place(root, SETTINGS, 'fn render() -> SettingsRow {\n    SettingsRow::setting("backup", kit())\n}\n');
+    const r = write(root, LAUNCHING_MODEL, BACKUP_ROWS);
+    assert.strictEqual(r.exitCode, 2, r.stderr);
+    assert.match(r.stderr, /backups\.rs:2 names a Launch or Visit action but no row it launches ends in the launch part/);
+    assert.match(r.stderr, /SettingsRow::launches/);
+});
+
+test('passes a row model whose view gives the Launch row the launch part', () => {
+    const root = workspace();
+    place(root, SETTINGS, 'fn render(row: &Row) -> SettingsRow {\n    SettingsRow::setting("backup", kit()).launches(row.launch.clone())\n}\n');
+    const r = write(root, LAUNCHING_MODEL, BACKUP_ROWS);
+    assert.strictEqual(r.exitCode, 0, r.stderr);
+});
+
+test('blocks a Visit action in a view that draws no launch part', () => {
+    const root = workspace();
+    const r = write(root, SETTINGS, 'fn render() -> SettingsRow {\n    SettingsRow::setting("github", kit()).on_click(|_| go(Action::VisitGitHub))\n}\n');
+    assert.strictEqual(r.exitCode, 2, r.stderr);
+    assert.match(r.stderr, /names a Launch or Visit action/);
+});
+
+test('blocks a settings file that draws the open-outside mark by hand', () => {
+    const root = workspace();
+    const r = write(root, SETTINGS, 'fn mark() -> Option<Image> {\n    pictures::open_outside(ink, 14)\n}\n');
+    assert.strictEqual(r.exitCode, 2, r.stderr);
+    assert.match(r.stderr, /draws the open-outside mark by hand/);
+});
+
+test('lets the components own the launch part', () => {
+    const root = workspace();
+    const r = write(root, 'libs/gpui/src/settings_panel/components/launch.rs', 'fn mark() {\n    pictures::open_outside(ink, 14);\n}\n');
+    assert.strictEqual(r.exitCode, 0, r.stderr);
+});
+
 test('reads the code after an out-of-line test module declaration', () => {
     const root = workspace();
     const r = write(root, SETTINGS, '#[cfg(test)]\nmod tests;\n\nfn hint() -> SettingsHint {\n    SettingsHint::new(Key::ENTER, "open")\n}\n');

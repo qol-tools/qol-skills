@@ -319,6 +319,7 @@ same `tile_arts`, `choose_step` and `choose_hints`.
 | Crumb trail | `components::settings_crumb_trail` | the Heading style, separator `/` at px `SPACE_TIGHT` |
 | Setting row | `SettingsRow::setting` | h `HEIGHT_SETTING_ROW`, px `SPACE_INSET`, py `SPACE_TIGHT`, gap `SPACE_CELL`; `.separated(true)` draws the top hairline; `.opens(true)` ends it in the open part (see "Rows that open") |
 | Open part | `SettingsRow::opens(true)`, `settings_block_header(.., opens, ..)` | the 8 x 14 arrow drawn by `pictures::chevron`, last in the row, `SPACE_CELL` after the value; only these two draw it |
+| Launch part | `SettingsRow::launches(Some(Launch::file(name, app)))`, `Launch::link(host)` | one well, h `HEIGHT_INLINE`, px `SPACE_INSET`, gap `SPACE_INSET`, rounded `RADIUS_CONTROL`, on the row ground's `well`: the file tag (its extension upper-cased, `Key` style), the app or host (`Value` style) and the 14 x 14 open-outside mark drawn by `pictures::open_outside`, last in the row; only `SettingsRow::launches` draws it (see "Rows that launch") |
 | Rule / add row | `SettingsRow::rule` / `::add` | h `HEIGHT_RULE_ROW`, same insets, rounded `RADIUS_CONTROL` |
 | Carried row | `SettingsRow::lifted(lift)` over `settings_row_shade(lift, kit)` | a reorder card's picked-up entry: as `lift` runs from 0 to 1 the row rises `SPACE_INSET`, moves right by `SPACE_CELL` and takes the float shadow, over a shade on the pane well ground that fills the slot it will land in |
 | Label group | `components::settings_label_group(label, Option<description>, row, kit)` | `flex_1 min_w_0 flex flex_col`, gap `SPACE_STACK`; `settings_label` + optional `settings_description` |
@@ -645,8 +646,9 @@ list or entry array drawn as a card) gets it from
 - An add row reads ↵ `add` and draws no arrow; it starts something rather than
   going into it.
 - A row that opens something outside qol (a file in its default app, a web
-  page) draws no arrow: it does not go deeper. Its action is named `Launch…`
-  or `Visit…`, never `Open…`, because the guard reads `Open…` as going deeper
+  page) draws no arrow: it does not go deeper. It ends in the launch part
+  instead (see "Rows that launch"). Its action is named `Launch…` or
+  `Visit…`, never `Open…`, because the guard reads `Open…` as going deeper
   (the Profiles backup files are `LaunchBackup`, the GitHub sign-in row is
   `VisitGitHub`).
 - At rest the arrow is `faint` at 40 percent on the pane and wakes to full on
@@ -661,6 +663,35 @@ Incident (2026-11-02): Notifications > Position, the Hotkeys entries and
 Linked devices > a linked computer all hinted ↵ open with no arrow, because
 the arrow belonged to `SettingsChoiceValue` and each page drew it by hand or
 not at all.
+
+### Rows that launch
+
+Picked 2026-11-02 in round 195, "Opens outside, with its file tag", variation
+2 "One well". A row whose ↵ opens something outside qol ends in the launch
+part, never the arrow: the arrow means a page in qol, the open-outside mark (a
+box with an arrow leaving its corner) means another app. The row says
+`SettingsRow::launches(Some(launch))` and the kit draws one well holding the
+parts the launch has, left to right: the file tag, the app, the mark.
+
+- A file: `Launch::file(file_name, app)`. The tag is the extension
+  upper-cased (`JSON`); `app` is the name of the app the system opens it
+  with, from `qol_apps::desktop_integration::default_app_name(path)` (Linux
+  reads `xdg-mime` and the desktop entry's name, macOS asks Launch Services
+  through `osascript`, Windows reads the file association's friendly app
+  name), or `None` when the system cannot tell. Look the app up off the UI
+  thread, once per extension: the Profiles backups route adds `opens_with` to
+  each backup it lists.
+- A web page: `Launch::link(host)`, the host as its label (`github.com`).
+- The file row still shows its name with the extension in its description
+  (`20261102-152119-conflict.json · Saved when both sides had changes`), and
+  the ↵ hint names the app: `open in Visual Studio Code`.
+- On the pane the tag is `faint` and the app and mark `soft`; on the band the
+  tag is band `soft` and the app and mark band `ink`.
+- Launching rows: Profiles backup files and the GitHub sign-in row.
+- Enforced by the design guard rule `launching` (`qac lint`): a settings file
+  that names a `Launch…` or `Visit…` action must give the row `.launches(..)`,
+  in the file itself when it builds `SettingsRow`s, else in a file beside it;
+  and nothing outside the components calls `pictures::open_outside`.
 
 ### Choice values
 
