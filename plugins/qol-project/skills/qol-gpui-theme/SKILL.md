@@ -631,14 +631,17 @@ list or entry array drawn as a card) gets it from
 - The arrow and the ↵ verb come from one fact. A row model that names ↵
   `open` sets the row's `opens` in the same builder (`Row::opens()` on the
   core tool pages), the contract panel reads both from `row_opens(control)`,
-  and a pages row opens when `enter_verb` is `open`.
+  and a pages row opens when `enter_verb` is `open`. A row whose verb is a
+  chip word (`review`, `backups`) but whose action goes deeper opens too: the
+  Profiles row model sets `opens` from `Action::opens_a_level`, and opening
+  actions are named `Open…` so the guard sees them.
 - Opening rows: page rows and search hits on a page, select and multi-select
   rows, placement, display layout, QR code, gamepad and text list rows, lists
   with items or a finder, entry arrays, list card items, entries (not the add
   row and not while reordering), the Resolution and refresh row while modes are
   available, the Shortcuts and Hotkeys rows and their select fields, Linked
-  devices peers and link requests, Plugins sources, and the Profile and
-  Backups rows.
+  devices peers and link requests, Plugins sources, and the Profile,
+  Backups, conflict review and sync attention rows.
 - An add row reads ↵ `add` and draws no arrow; it starts something rather than
   going into it.
 - At rest the arrow is `faint` at 40 percent on the pane and wakes to full on

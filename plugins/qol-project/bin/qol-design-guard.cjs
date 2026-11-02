@@ -57,7 +57,7 @@ const DEPTH_NEEDLES = [
     ['.border_4()', 'a 4 px line', 'px(qol_theme::LINE)'],
     ['.border_8()', 'an 8 px line', 'px(qol_theme::LINE)'],
 ];
-const OPENING_VERB = /(,\s*|Some\(\s*|\.verb\(\s*|=>\s*)"open"/;
+const OPENING_VERB = /(,\s*|Some\(\s*|\.verb\(\s*|=>\s*)"open"|\b(Action|Enter|RowAction)::Open[A-Z(]/;
 const OPENING_PART = '.opens(';
 const OPENING_USE = 'SettingsRow::opens(true) on the row that enter opens (or settings_block_header(.., opens, ..) on a block row): the kit then draws the open part, the chevron, as its last part';
 const TEST_MODULE = /#\[cfg\(test\)\]\s*(?:#\[[^\]]*\]\s*)*(?:pub(?:\([^)]*\))?\s+)?mod\s+\w+\s*\{/;
@@ -524,7 +524,7 @@ function openingRules(relative, body, root, add) {
     const first = lines.findIndex(line => !isCommentLine(line) && OPENING_VERB.test(line));
     if (first < 0 || body.includes(OPENING_PART)) return;
     if (!body.includes('SettingsRow::') && siblingsDrawOpening(root, relative)) return;
-    add('opening', first + 1, 'names enter "open" but no row it opens ends in the open part', OPENING_USE);
+    add('opening', first + 1, 'names enter "open" or an Open action but no row it opens ends in the open part', OPENING_USE);
 }
 
 function settingsPageRules(relative, body, add) {

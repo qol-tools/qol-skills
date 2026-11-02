@@ -296,7 +296,7 @@ test('blocks a core settings page that hints enter "open" while no row ends in t
     const root = workspace();
     const r = write(root, SETTINGS, COMPLIANT_PAGE.replace('.opens(true)', ''));
     assert.strictEqual(r.exitCode, 2, r.stderr);
-    assert.match(r.stderr, /names enter "open" but no row it opens ends in the open part/);
+    assert.match(r.stderr, /names enter "open" or an Open action but no row it opens ends in the open part/);
     assert.match(r.stderr, /SettingsRow::opens\(true\)/);
 });
 
@@ -305,6 +305,14 @@ const PEER_ROWS = `pub(super) fn rows() -> Vec<Row> {
     vec![Row::new("macbook", "linked").verb("open")]
 }
 `;
+
+test('blocks a row model whose Open action row never draws the open part', () => {
+    const root = workspace();
+    place(root, SETTINGS, 'fn render() -> SettingsRow {\n    SettingsRow::setting("peer", kit())\n}\n');
+    const r = write(root, OPENING_MODEL, 'fn rows() -> Vec<Row> {\n    vec![Row::new("Backups", "", Some(Action::OpenBackups)).chip("backups")]\n}\n');
+    assert.strictEqual(r.exitCode, 2, r.stderr);
+    assert.match(r.stderr, /an Open action/);
+});
 
 test('passes a row model that names enter "open" when its view gives the row the open part', () => {
     const root = workspace();
