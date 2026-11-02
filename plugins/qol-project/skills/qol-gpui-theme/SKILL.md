@@ -644,6 +644,11 @@ list or entry array drawn as a card) gets it from
   Backups, conflict review and sync attention rows.
 - An add row reads ↵ `add` and draws no arrow; it starts something rather than
   going into it.
+- A row that opens something outside qol (a file in its default app, a web
+  page) draws no arrow: it does not go deeper. Its action is named `Launch…`
+  or `Visit…`, never `Open…`, because the guard reads `Open…` as going deeper
+  (the Profiles backup files are `LaunchBackup`, the GitHub sign-in row is
+  `VisitGitHub`).
 - At rest the arrow is `faint` at 40 percent on the pane and wakes to full on
   hover, stepping `CHOICE_CHEVRON_HOVER_STEP` right; on the band it is band
   `faint`.
