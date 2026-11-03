@@ -42,7 +42,8 @@ merge queue yourself:
 4. Nothing to test by hand: mark it ready with `gh pr ready`. That arms
    auto-merge and the merge queue lands it.
 5. Live test needed: test the build CI made for the pull request, never a
-   local compile. The `Build for the live test` job uploads it, and
+   local compile. The `Build for the live test` jobs upload it for Linux
+   x86_64 and macOS arm64, and
    `qol pr try <number>` installs it into the tray (`qol pr try --off` puts
    the previous builds back). Ask the user to look at the change. When they
    confirm it works, mark it ready. When it does not, run `qol pr try --off`,
