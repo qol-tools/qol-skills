@@ -64,6 +64,17 @@ user sizes it, and never while it is maximized or fullscreen. Incident: until
 2026-10-29 only drags counted, so the page fit undid window-actions' centre,
 maximize and snaps on Settings, and centre left it off centre at its old size.
 
+A panel built with `WindowMemory::reopened_by_action` or
+`reopened_by_settings` comes back after a tray restart or update: before it,
+the tray (`apps/tray/src/window_reopen`) lists each remembered window that is
+open and whose owner runs, and after it, it runs that window's open action or
+settings page again, but only once the old owner is gone. It waits up to 5 s
+for owners that are still exiting and skips a window whose owner still runs,
+such as an Explorer that a desktop file started outside the tray. Both checks
+use `qol_process::is_pid_gone`, because after an exec the previous tray image's
+daemons stay zombies of the same pid. Incident: until qol-tools/qol#465 every
+update opened a second Explorer window next to the one that was still open.
+
 `SurfaceKind::OverlayPanel` is the same window contract plus the shared overlay
 configuration, applied by the reveal path while the window is still hidden
 (`configure_overlay_window`: `_NET_WM_STATE_ABOVE`, `SKIP_TASKBAR`,
