@@ -318,6 +318,18 @@ Condvar blocking). The **one hard host-app invariant**: the macOS tray icon and
 background thread. Broader Rust platform gotchas → `qol-tray-rust`; the
 strategy-pattern methodology that replaces scattered `#[cfg]` → `qol-arch-code`.
 
+## Restarting in place
+
+A self-update on Linux and macOS execs the new tray in place, so the pid stays
+and every child of the old image becomes a child of the new one, with no
+`Child` handle behind it. `inherited_children::reap_in_background` runs right
+after the logger starts, before the tray spawns anything: it lists the
+processes whose parent is the tray and reaps each one as it exits. Code that
+asks whether a process still runs uses `qol_process::is_pid_gone`, never
+`is_pid_alive` alone, which counts a zombie as running. Incident: until
+qol-tools/qol#465 each update left one zombie per plugin daemon (34 after two
+updates), and remembered windows were reopened next to ones still open.
+
 ## Running without a desktop
 
 - **No icon**: when the tray icon cannot be created (on Linux, no appindicator
