@@ -36,7 +36,7 @@
       "name": "qol-plugin-keyremap",
       "description": "Skills for the qol-tray key remap plugin (macOS and Windows): the event-tap daemon, rule kinds, and per-app exclusions.",
       "source": "./plugins/qol-plugin-keyremap",
-      "version": "0.1.4",
+      "version": "0.1.5",
       "author": {
         "name": "KMRH47"
       }
@@ -180,7 +180,7 @@
       "name": "qol-sessions",
       "description": "Architect-to-implementer feature loop for independent terminals with event-signalled rounds, explicit closure, and a canonical final report.",
       "source": "./plugins/qol-sessions",
-      "version": "0.8.34",
+      "version": "0.8.35",
       "author": {
         "name": "KMRH47"
       }
