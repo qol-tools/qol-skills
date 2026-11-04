@@ -69,7 +69,7 @@ export const register: Register = on => {
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    if (answer === null || e.props.hasSurvey) return next(e)
+    if (answer === null || e.props.hasSurvey || e.props.view.agentId !== undefined) return next(e)
     const { Box, Text } = $.ui.resolve(e)
     const rows = answer.split('\n').flatMap(line => wrapToRows(line, e.props.bodyColumns))
     const { offset, bodyRows } = e.props.scroll

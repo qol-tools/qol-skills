@@ -132,6 +132,15 @@ test('the band yields to a survey', async ($, on) => {
   expect(await band($, { hasSurvey: true })).toEqual(['engine'])
 })
 
+test("the answer stays in the main conversation's band and never shows above an agent's view", async ($, on) => {
+  engine(on, answered('2 runs'))
+
+  await $.classic.UserPromptSubmit({ ...fields, prompt: 'qols loop' })
+
+  expect(await band($, { view: { agentId: 'a1' } })).toEqual(['engine'])
+  expect(await band($)).toEqual(['2 runs'])
+})
+
 test('a long answer wraps to the band width and shows the scroll hint on the last visible row', async ($, on) => {
   engine(on, answered(Array.from({ length: 12 }, (_, index) => `line ${index}`).join('\n')))
 
