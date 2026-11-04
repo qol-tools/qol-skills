@@ -298,7 +298,7 @@ export function forkedBySwitchboard({ verb }, inSwitchboard = isSwitchboard) {
 }
 
 export function boardReply(inSwitchboard = isSwitchboard) {
-  return { reason: inSwitchboard() ? BOARD_STALE : BOARD_ELSEWHERE };
+  return { reason: inSwitchboard() ? BOARD_STALE : BOARD_ELSEWHERE, sent: true };
 }
 
 export function switchboardContext({ verb, message, flags }) {
@@ -344,7 +344,7 @@ function watchSession(session) {
 
 function reply(parsed, cwd) {
   if (parsed === null) return null;
-  if (parsed.verb === "help") return { reason: parsed.diagnostic ? renderDiagnostic(parsed.diagnostic) : USAGE };
+  if (parsed.verb === "help") return { reason: parsed.diagnostic ? renderDiagnostic(parsed.diagnostic) : USAGE, sent: true };
   if (parsed.verb === "park") return park();
   if (parsed.verb === "status") return status();
   if (parsed.verb === "board") return boardReply();
@@ -372,7 +372,7 @@ export function loopCommand({ args }, cwd, root = PLUGIN_ROOT) {
 }
 
 export function loopReply(parsed, cwd, run = runCli, root = PLUGIN_ROOT) {
-  if (parsed.usage !== undefined) return { reason: parsed.usage };
+  if (parsed.usage !== undefined) return { reason: parsed.usage, sent: true };
   const [cli, argv] = loopCommand(parsed, cwd, root);
   const result = run(cli, argv, { cwd, timeoutMs: QOL_TIMEOUT_MS });
   if (result.kind !== "answered") return { reason: `qols loop: ${result.text}` };

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 
 import {
@@ -442,6 +443,7 @@ test("qols loop open, run, verdict and close answer with a usage line that sends
   }
   assert.deepEqual(loopReply(parsePrompt("qols loop run k"), "/repo", () => assert.fail("never runs")), {
     reason: parsePrompt("qols loop run k").usage,
+    sent: true,
   });
 });
 
@@ -493,3 +495,17 @@ test("an unknown command lists loop among the commands", () => {
   assert.match(reason, /commands are fork, bridge, test, new, switchboard, park, wake, status, board, pr, loop/);
 });
 
+
+test("help and diagnostics hide the typed prompt like any other answer", () => {
+  const hook = new URL("../hooks/qols-intercept.mjs", import.meta.url).pathname;
+  for (const prompt of ["qols", "qols help", "qols brige x"]) {
+    const run = spawnSync(process.execPath, [hook], {
+      input: JSON.stringify({ prompt, cwd: "/tmp", hook_event_name: "UserPromptSubmit" }),
+      encoding: "utf8",
+      env: { ...process.env, CLAUDECODE: "1" },
+    });
+    const out = JSON.parse(run.stdout);
+    assert.equal(out.decision, "block", prompt);
+    assert.equal(out.hookSpecificOutput?.suppressOriginalPrompt, true, prompt);
+  }
+});
