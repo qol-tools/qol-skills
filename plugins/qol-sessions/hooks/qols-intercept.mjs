@@ -13,32 +13,32 @@ export { renderDiagnostic };
 const FLAGS = { harness: "--tool", model: "--model", effort: "--effort", surface: "--surface" };
 const SWITCHES = { park: "--park" };
 
+const LAUNCH = "[--harness H] [--model M] [--effort E] [--surface S]";
+
+const COMMANDS = [
+  [`fork <problem> ${LAUNCH} [--park]`, "detached architect that owns the problem"],
+  [`bridge <task> ${LAUNCH}`, "lane that reports back here"],
+  [`test <problem> ${LAUNCH}`, "fork with its prompt typed, not sent; costs no tokens"],
+  [`new [prompt] ${LAUNCH} [--park]`, "fork without the chat copy; no prompt opens a blank session"],
+  ["switchboard [--model M] [--effort E] [--surface S]", "your one control chat, always claude"],
+  ["park", "toggle parking: a parked terminal closes and reopens later"],
+  ["wake <key>", "make a session read its waiting messages now"],
+  ["status", "one line per lane"],
+  ["board", "open or close the fork board in the switchboard"],
+  ["pr try <number> | --off", "install a pull request's CI build, or put the installed one back"],
+  ["loop [status [key] | key | doctor [--prune]]", "loop-gate runs, one run by key, or the driver doctor"],
+];
+
+const USAGE_LINES = COMMANDS.map(([usage]) => `qols ${usage}`);
+
+const HELP_LINES = COMMANDS.map(([usage, about]) => [`qols ${usage.replace(LAUNCH, "[launch]").replace(/\[--model M\] \[--effort E\] \[--surface S\]/, "[launch]")}`, about]);
+
+const HELP_WIDTH = Math.max(...HELP_LINES.map(([usage]) => usage.length));
+
 const USAGE = [
-  "qols fork <problem> [--harness H] [--model M] [--effort E] [--surface S] [--park]",
-  "qols bridge <task> [--harness H] [--model M] [--effort E] [--surface S]",
-  "qols test <problem> [--harness H] [--model M] [--effort E] [--surface S]",
-  "qols new [prompt] [--harness H] [--model M] [--effort E] [--surface S] [--park]",
-  "qols switchboard [--model M] [--effort E] [--surface S]",
-  "qols park",
-  "qols wake <key>",
-  "qols status",
-  "qols board",
-  "qols pr try <number> | qols pr try --off",
-  "qols loop [status [key] | key | doctor [--prune]]",
-  "fork: detached architect that owns the problem; bridge: lane that reports back here;",
-  "test: a fork whose prompt is typed but not submitted, so the launch costs no tokens",
-  "new: a fork without the chat copy; with no prompt, a blank session you type into",
-  "in the switchboard, fork, bridge and new reach it as your request, and it starts a fork for them",
-  "switchboard: your one control chat; always claude, effort low unless --effort says otherwise",
-  "--park lets a fork close its terminal while it waits on a long command and reopen when it ends;",
-  "a fork given a problem or prompt also closes once its turn ends",
-  "park: toggle parking for this terminal; on, a park closes it and reopens the conversation later",
-  "wake: make a session read its waiting messages now, even while parked; reopens a closed park",
-  "pr try: run qol pr try here: put the pull request's CI build in place of the installed tray and plugins, or with --off put them back",
-  "status: one line per lane with its attention, remote control, pull requests and last message",
-  "board: in the switchboard, open or close the fork board, the same as /board",
-  "loop: the loop-gate runs of this repo, or one run by key, or the driver doctor; open, run, verdict and close run from the architect's Bash",
-  "values may be [aliases] from sessions.toml; left out, sessions.toml defaults apply",
+  ...HELP_LINES.map(([usage, about]) => `${usage.padEnd(HELP_WIDTH)}  ${about}`),
+  "[launch] is --harness, --model, --effort, --surface: values or [aliases] from sessions.toml, defaults from there",
+  "--park lets the fork close its terminal while it waits and reopen when the wait ends",
 ].join("\n");
 
 const VERBS = ["fork", "bridge", "test", "new", "switchboard", "park", "wake", "status", "board", "pr", "loop"];
@@ -61,7 +61,7 @@ const SWITCHBOARD_ASKS = {
 };
 
 function usageFor(verb) {
-  return USAGE.split("\n").find((line) => line === `qols ${verb}` || line.startsWith(`qols ${verb} `));
+  return USAGE_LINES.find((line) => line === `qols ${verb}` || line.startsWith(`qols ${verb} `));
 }
 
 export function parsePrompt(prompt) {

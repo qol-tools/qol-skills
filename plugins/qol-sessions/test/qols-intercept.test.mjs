@@ -348,7 +348,7 @@ test("qols pr try takes one pull request number or --off", () => {
     const { verb, diagnostic } = parsePrompt(prompt);
     assert.equal(verb, "help", prompt);
     assert.match(diagnostic.title, title, prompt);
-    assert.match(renderDiagnostic(diagnostic), /usage: qols pr try <number> \| qols pr try --off$/, prompt);
+    assert.match(renderDiagnostic(diagnostic), /usage: qols pr try <number> \| --off$/, prompt);
   }
 });
 
