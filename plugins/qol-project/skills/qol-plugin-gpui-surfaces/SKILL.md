@@ -63,6 +63,12 @@ reads as the user's. The settings panel fits its height to the page until the
 user sizes it, and never while it is maximized or fullscreen. Incident: until
 2026-10-29 only drags counted, so the page fit undid window-actions' centre,
 maximize and snaps on Settings, and centre left it off centre at its old size.
+The settings panel's minimum width is the compact page plus the rail; the
+240-wide device column adds its width to the minimum only while a page shows
+it, and the panel grows to that width when it opens such a page narrower.
+Incident: until 2026-11-04 the device column counted on every page, so the
+minimum was 856 pt, wider than half a 1512 pt laptop screen, and a half-screen
+snap left Settings 100 pt off the right edge.
 
 A panel built with `WindowMemory::reopened_by_action` or
 `reopened_by_settings` comes back after a tray restart or update: before it,
