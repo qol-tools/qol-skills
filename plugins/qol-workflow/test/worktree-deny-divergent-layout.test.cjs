@@ -20,6 +20,10 @@ const BAR = path.join(GIT, 'qol-wt-bar');
 const EVIL = path.join(GIT, 'qol-wt-evil');
 const OTHER = path.join(GIT, 'Economy');
 
+function sh(file) {
+    return file.split(path.sep).join('/');
+}
+
 function write(file, text) {
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, text);
@@ -73,7 +77,7 @@ function addHint(feature, base = '') {
 
 test('the incident commands are denied and the hint names the layout command', () => {
     assertDenied(
-        bash(`git worktree add ${GIT}/qol-monorepo-worktrees/pr-try-tray-live -b test/pr-try-tray-live`),
+        bash(`git worktree add ${sh(GIT)}/qol-monorepo-worktrees/pr-try-tray-live -b test/pr-try-tray-live`),
         addHint('pr-try-tray-live'),
         'incident path and prefixed branch',
     );
@@ -87,8 +91,8 @@ test('the incident commands are denied and the hint names the layout command', (
 test('layout worktrees pass', () => {
     const cases = [
         'git worktree add ../worktrees/sync-v2/qol-monorepo -b sync-v2',
-        `git worktree add ${ROOT}/sync-v2/qol-monorepo -B sync-v2`,
-        `git worktree add "${ROOT}/sync-v2/qol-monorepo" -b 'sync-v2'`,
+        `git worktree add ${sh(ROOT)}/sync-v2/qol-monorepo -B sync-v2`,
+        `git worktree add "${sh(ROOT)}/sync-v2/qol-monorepo" -b 'sync-v2'`,
         'git worktree add -b sync-v2 ../worktrees/sync-v2/qol-monorepo origin/main',
         'git worktree add -q --lock --reason "a b" ../worktrees/sync-v2/qol-monorepo -bsync-v2',
         'git worktree add --detach ../worktrees/look/qol-monorepo',
@@ -107,12 +111,12 @@ test('layout worktrees pass', () => {
 });
 
 test('a worktree add from outside the main clone resolves through -C, cd and the worktree it runs in', () => {
-    assert.equal(bash(`git -C ${MAIN} worktree add ../worktrees/sync-v2/qol-monorepo -b sync-v2`, OTHER), null);
-    assert.equal(bash(`cd ${MAIN} && git worktree add ../worktrees/sync-v2/qol-monorepo -b sync-v2`, OTHER), null);
+    assert.equal(bash(`git -C ${sh(MAIN)} worktree add ../worktrees/sync-v2/qol-monorepo -b sync-v2`, OTHER), null);
+    assert.equal(bash(`cd ${sh(MAIN)} && git worktree add ../worktrees/sync-v2/qol-monorepo -b sync-v2`, OTHER), null);
     assert.equal(bash('git worktree add ../../sync-v2/qol-monorepo -b sync-v2', FOO), null);
-    assertDenied(bash(`git -C ${MAIN} worktree add ../qol-wt-x -b x`, OTHER), addHint('x'), '-C main clone');
-    assertDenied(bash(`cd ${MAIN} && git worktree add ../qol-wt-x -b x`, OTHER), addHint('x'), 'cd main clone');
-    assertDenied(bash(`cd "${MAIN}"; env GIT_TRACE=0 git worktree add ../qol-wt-x -b x`, OTHER), addHint('x'), 'quoted cd with env');
+    assertDenied(bash(`git -C ${sh(MAIN)} worktree add ../qol-wt-x -b x`, OTHER), addHint('x'), '-C main clone');
+    assertDenied(bash(`cd ${sh(MAIN)} && git worktree add ../qol-wt-x -b x`, OTHER), addHint('x'), 'cd main clone');
+    assertDenied(bash(`cd "${sh(MAIN)}"; env GIT_TRACE=0 git worktree add ../qol-wt-x -b x`, OTHER), addHint('x'), 'quoted cd with env');
     assertDenied(bash('git worktree add ../x -b x', FOO), addHint('x'), 'from a worktree');
     assertDenied(bash('git worktree add ../x -b x', STRAY), addHint('x'), 'from a divergent worktree');
 });
@@ -173,7 +177,7 @@ test('names the deny echoes are shown only when they hold no shell or prompt tex
     const renamed = bash("git branch -m 'x`whoami`'", FOO);
     assertDenied(renamed, 'keep the branch named `foo`', 'branch -m');
     assert.doesNotMatch(renamed, /`whoami`/);
-    const moved = bash(`git worktree move ${EVIL} ${GIT}/elsewhere`);
+    const moved = bash(`git worktree move ${sh(EVIL)} ${sh(GIT)}/elsewhere`);
     assertDenied(moved, '<branch>', 'move of a worktree on an odd branch');
     assert.doesNotMatch(moved, /`whoami`/);
 });
@@ -210,18 +214,18 @@ test('a command ending in # intentional passes', () => {
 test('other repositories and non-monorepo qol repos stay silent', () => {
     assert.equal(bash('git worktree add /tmp/x -b fix/x', OTHER), null);
     assert.equal(bash('git worktree add /tmp/x -b fix/x', BASE), null);
-    assert.equal(bash(`git -C ${OTHER} worktree add /tmp/x -b fix/x`), null);
+    assert.equal(bash(`git -C ${sh(OTHER)} worktree add /tmp/x -b fix/x`), null);
     assert.equal(bash('cd $UNSET_WT_DIR_9 && git worktree add /tmp/x -b fix/x', OTHER), null);
 });
 
 test('git worktree move must land in the layout under the branch name', () => {
     const fixStray = `branch -m fix/stray stray\` and \`git -C ${MAIN} worktree move ${STRAY} ${path.join(ROOT, 'stray', 'qol-monorepo')}\``;
-    assertDenied(bash(`git worktree move ${STRAY} ${GIT}/elsewhere/stray`), fixStray, 'out of layout');
-    assertDenied(bash(`git worktree move ${STRAY} ${ROOT}/other/qol-monorepo`), fixStray, 'wrong folder');
-    assertDenied(bash(`git worktree move ${STRAY} ${ROOT}/stray/qol-monorepo`), fixStray, 'prefixed branch');
-    assertDenied(bash(`git worktree move ${BAR} ${GIT}/elsewhere`), `run \`git -C ${MAIN} worktree move ${BAR} ${path.join(ROOT, 'bar', 'qol-monorepo')}\``, 'plain branch');
-    assertDenied(bash(`git worktree move ${FOO} ${ROOT}`), `worktree move ${FOO} ${FOO}`, 'into an existing directory');
-    assert.equal(bash(`git worktree move ${BAR} ${ROOT}/bar/qol-monorepo`), null);
+    assertDenied(bash(`git worktree move ${sh(STRAY)} ${sh(GIT)}/elsewhere/stray`), fixStray, 'out of layout');
+    assertDenied(bash(`git worktree move ${sh(STRAY)} ${sh(ROOT)}/other/qol-monorepo`), fixStray, 'wrong folder');
+    assertDenied(bash(`git worktree move ${sh(STRAY)} ${sh(ROOT)}/stray/qol-monorepo`), fixStray, 'prefixed branch');
+    assertDenied(bash(`git worktree move ${sh(BAR)} ${sh(GIT)}/elsewhere`), `run \`git -C ${MAIN} worktree move ${BAR} ${path.join(ROOT, 'bar', 'qol-monorepo')}\``, 'plain branch');
+    assertDenied(bash(`git worktree move ${sh(FOO)} ${sh(ROOT)}`), `worktree move ${FOO} ${FOO}`, 'into an existing directory');
+    assert.equal(bash(`git worktree move ${sh(BAR)} ${sh(ROOT)}/bar/qol-monorepo`), null);
     assert.equal(bash('git worktree move -f ../qol-wt-bar ../worktrees/bar/qol-monorepo'), null);
 });
 
