@@ -25,7 +25,7 @@ const COMMANDS = [
   ["wake <key>", "make a session read its waiting messages now"],
   ["status", "one line per lane"],
   ["board", "open or close the fork board in the switchboard"],
-  ["pr try <number> | --off", "install a pull request's CI build, or put the installed one back"],
+  ["pr try <number> | pr off", "install a pull request's CI build in place of any other; off puts yours back"],
   ["loop [status [key] | key | doctor [--prune]]", "loop-gate runs, one run by key, or the driver doctor"],
 ];
 
@@ -177,9 +177,14 @@ function prRefusal(source, at, title, label) {
 function parsePr(source, verbToken, tokens) {
   const [sub, target, ...extra] = tokens;
   if (sub === undefined) {
-    return prRefusal(source, { start: verbToken.end, end: verbToken.end + 1 }, "`qols pr` needs `try`", "expected `try` here");
+    return prRefusal(source, { start: verbToken.end, end: verbToken.end + 1 }, "`qols pr` needs `try` or `off`", "expected `try` or `off` here");
   }
-  if (sub.text.toLowerCase() !== "try") return prRefusal(source, sub, `\`qols pr\` has no \`${sub.text}\``, "the only pr command is try");
+  const command = sub.text.toLowerCase();
+  if (command === "off") {
+    if (target !== undefined) return prRefusal(source, target, `\`qols pr off\` does not take \`${target.text}\``, "off takes nothing");
+    return { verb: "pr", args: ["try", "--off"] };
+  }
+  if (command !== "try") return prRefusal(source, sub, `\`qols pr\` has no \`${sub.text}\``, "pr commands are try and off");
   if (target === undefined) {
     return prRefusal(source, { start: sub.end, end: sub.end + 1 }, "`qols pr try` needs a pull request number or --off", "expected a number or --off here");
   }
@@ -389,7 +394,11 @@ export function status(run = (argv) => runBinary("qol", argv)) {
 export function prTry({ args }, run = (argv) => runCli(argv[0], argv.slice(1), { bin: "qol", timeoutMs: PR_TRY_TIMEOUT_MS })) {
   const result = run(["pr", ...args]);
   if (result.kind !== "answered") return { reason: `qols pr ${args.join(" ")}: ${result.text}` };
-  return { reason: result.text || `qols pr ${args.join(" ")}: done`, sent: true };
+  return { reason: asQols(result.text) || `qols pr ${args.join(" ")}: done`, sent: true };
+}
+
+function asQols(text) {
+  return text.replaceAll("`qol pr try --off`", "`qols pr off`").replaceAll("`qol pr ", "`qols pr ");
 }
 
 export function park(binary = cliSessionsBinary(), run = runBinary) {

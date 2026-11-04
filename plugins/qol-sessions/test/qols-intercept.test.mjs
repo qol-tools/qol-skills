@@ -334,13 +334,16 @@ test("qols wake runs the CLI Sessions wake command and reports its line or error
   assert.match(wake("lane", null).reason, /not installed/);
 });
 
-test("qols pr try takes one pull request number or --off", () => {
+test("qols pr try takes one pull request number, and qols pr off or try --off puts builds back", () => {
   assert.deepEqual(parsePrompt("qols pr try 412"), { verb: "pr", args: ["try", "412"] });
   assert.deepEqual(parsePrompt("QOLS PR Try #412"), { verb: "pr", args: ["try", "412"] });
   assert.deepEqual(parsePrompt("qols pr try --off"), { verb: "pr", args: ["try", "--off"] });
+  assert.deepEqual(parsePrompt("qols pr off"), { verb: "pr", args: ["try", "--off"] });
+  assert.deepEqual(parsePrompt("QOLS PR OFF"), { verb: "pr", args: ["try", "--off"] });
   const cases = [
-    ["qols pr", /^`qols pr` needs `try`$/],
-    ["qols pr off", /^`qols pr` has no `off`$/],
+    ["qols pr", /^`qols pr` needs `try` or `off`$/],
+    ["qols pr on", /^`qols pr` has no `on`$/],
+    ["qols pr off 412", /^`qols pr off` does not take `412`$/],
     ["qols pr try", /^`qols pr try` needs a pull request number or --off$/],
     ["qols pr try 412 now", /^`qols pr try` does not take `now`$/],
     ["qols pr try abc", /^`abc` is not a pull request number$/],
@@ -350,7 +353,7 @@ test("qols pr try takes one pull request number or --off", () => {
     const { verb, diagnostic } = parsePrompt(prompt);
     assert.equal(verb, "help", prompt);
     assert.match(diagnostic.title, title, prompt);
-    assert.match(renderDiagnostic(diagnostic), /usage: qols pr try <number> \| --off$/, prompt);
+    assert.match(renderDiagnostic(diagnostic), /usage: qols pr try <number> \| pr off$/, prompt);
   }
 });
 
@@ -364,6 +367,9 @@ test("qols pr try runs qol pr try and answers with its output", () => {
   assert.deepEqual(prTry({ args: ["try", "412"] }, run), { reason: lines, sent: true });
   assert.deepEqual(prTry({ args: ["try", "--off"] }, run), { reason: lines, sent: true });
   assert.deepEqual(calls, [["pr", "try", "412"], ["pr", "try", "--off"]]);
+  for (const hint of ["`qol pr off` puts the replaced builds back", "`qol pr try --off` puts the replaced builds back"]) {
+    assert.deepEqual(prTry({ args: ["try", "412"] }, () => answered(hint)), { reason: "`qols pr off` puts the replaced builds back", sent: true });
+  }
   assert.deepEqual(prTry({ args: ["try", "412"] }, () => failedRun("Error: the live test build is still running")), {
     reason: "qols pr try 412: Error: the live test build is still running",
   });
