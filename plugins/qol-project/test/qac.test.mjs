@@ -36,9 +36,9 @@ const PLUGIN = {
 
 test("parsePrompt routes the qac verbs and passes other prompts through", () => {
   assert.deepEqual(parsePrompt("qac", "/w"), ["help", "--prefix=qac", "--pretty", "--cwd=/w"]);
-  assert.deepEqual(parsePrompt("qac lint", ""), ["lint", "--prefix=qac", "--pretty", "--open"]);
-  assert.deepEqual(parsePrompt("QAC lint plugins/launcher", ""), ["lint", "plugins/launcher", "--prefix=qac", "--pretty", "--open"]);
-  assert.deepEqual(parsePrompt("qac plugins/shot", ""), ["lint", "plugins/shot", "--prefix=qac", "--pretty", "--open"]);
+  assert.deepEqual(parsePrompt("qac lint", ""), ["lint", "--prefix=qac", "--pretty"]);
+  assert.deepEqual(parsePrompt("QAC lint plugins/launcher", ""), ["lint", "plugins/launcher", "--prefix=qac", "--pretty"]);
+  assert.deepEqual(parsePrompt("qac plugins/shot", ""), ["lint", "plugins/shot", "--prefix=qac", "--pretty"]);
   assert.equal(parsePrompt("qacx lint", ""), null);
   assert.equal(parsePrompt("please run qac lint", ""), null);
 });

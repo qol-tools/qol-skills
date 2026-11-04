@@ -2,9 +2,9 @@
 description: Run the qol-arch-code, cross-platform, cicd, logging, plugin data and plugin-contract hooks over whole files in the current repo
 ---
 
-!`node "${CLAUDE_PLUGIN_ROOT}/scripts/qac.mjs" lint --pretty --open $ARGUMENTS`
+!`node "${CLAUDE_PLUGIN_ROOT}/scripts/qac.mjs" lint --pretty $ARGUMENTS`
 
-Print the output above verbatim. `/qac [path ...]` lints those paths, or the whole repo with none. The `qac` typed-verb prompt hook runs the same CLI with no model turn: `qac lint`, `qac lint plugins/launcher`, `qac fix <path>` (hands the findings to the session to fix), `qac slip <pattern> --from <url>` (records a pattern qac missed and forks a lane to add its rule), `qac slips` (lists them).
+Print the output above verbatim. `/qac [path ...]` lints those paths, or the whole repo with none, and prints the report's path; add `--open` (`/qac --open [path ...]`, `qac lint --open`) to also open the report in the browser. The `qac` typed-verb prompt hook runs the same CLI with no model turn: `qac lint`, `qac lint plugins/launcher`, `qac fix <path>` (hands the findings to the session to fix), `qac slip <pattern> --from <url>` (records a pattern qac missed and forks a lane to add its rule), `qac slips` (lists them).
 
 The judge verbs run from the terminal as `qac <verb>` (the `bin/qac` launcher) or `node "${CLAUDE_PLUGIN_ROOT}/scripts/qac.mjs" <verb>`; all print JSON, or text with `--pretty`:
 

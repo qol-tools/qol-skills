@@ -232,7 +232,7 @@ test("the typed verb routes slip and slips and keeps quoted arguments whole", ()
     ["slip", "dbg! in tests", "--infeasible", "needs types", "--prefix=qac", "--pretty", "--cwd=/w"],
   );
   assert.deepEqual(parsePrompt("qac slips", ""), ["slips", "--prefix=qac", "--pretty"]);
-  assert.deepEqual(parsePrompt("qac  lint   a", ""), ["lint", "a", "--prefix=qac", "--pretty", "--open"]);
+  assert.deepEqual(parsePrompt("qac  lint   a", ""), ["lint", "a", "--prefix=qac", "--pretty"]);
 });
 
 test("help lists the slip verbs", () => {

@@ -30,8 +30,9 @@ function pipeline(prompt, handle, input = {}, env = CLAUDE) {
 
 test("parsePrompt routes every verb and sends a bare path to lint", () => {
   assert.deepEqual(parsePrompt("qac", "/w"), ["help", "--prefix=qac", "--pretty", "--cwd=/w"]);
-  assert.deepEqual(parsePrompt("qac lint", ""), ["lint", "--prefix=qac", "--pretty", "--open"]);
-  assert.deepEqual(parsePrompt("qac plugins/shot", ""), ["lint", "plugins/shot", "--prefix=qac", "--pretty", "--open"]);
+  assert.deepEqual(parsePrompt("qac lint", ""), ["lint", "--prefix=qac", "--pretty"]);
+  assert.deepEqual(parsePrompt("qac plugins/shot", ""), ["lint", "plugins/shot", "--prefix=qac", "--pretty"]);
+  assert.deepEqual(parsePrompt("qac lint --open plugins/shot", ""), ["lint", "--open", "plugins/shot", "--prefix=qac", "--pretty"]);
   assert.deepEqual(parsePrompt("qac fix plugins/shot", "/w"), ["fix", "plugins/shot", "--prefix=qac", "--pretty", "--cwd=/w"]);
   assert.deepEqual(parsePrompt("qac slips", ""), ["slips", "--prefix=qac", "--pretty"]);
   assert.deepEqual(parsePrompt('qac slip "dbg! in tests" --from url', "/w"), [
