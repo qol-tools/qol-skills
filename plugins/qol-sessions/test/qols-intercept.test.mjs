@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 
 import {
@@ -497,7 +498,7 @@ test("an unknown command lists loop among the commands", () => {
 
 
 test("help and diagnostics hide the typed prompt like any other answer", () => {
-  const hook = new URL("../hooks/qols-intercept.mjs", import.meta.url).pathname;
+  const hook = fileURLToPath(new URL("../hooks/qols-intercept.mjs", import.meta.url));
   for (const prompt of ["qols", "qols help", "qols brige x"]) {
     const run = spawnSync(process.execPath, [hook], {
       input: JSON.stringify({ prompt, cwd: "/tmp", hook_event_name: "UserPromptSubmit" }),
