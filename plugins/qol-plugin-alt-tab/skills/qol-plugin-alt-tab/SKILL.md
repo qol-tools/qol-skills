@@ -68,19 +68,22 @@ Follow `qol-project:qol-plugin-gpui-surfaces` and `qol-langs:gpui-conventions` f
 3. **AX calls can stall.** Always keep a messaging timeout, parallel AX prefetch
    so one slow PID caps `max` not `sum`, and a short-TTL slow-PID-aware cache so
    repeated opens skip known-slow PIDs.
-4. **The show path never captures; previews are warmed in the background.**
-   Opening is a pure, instant reveal of the cached previews. Never trigger a
-   screenshot on show and never block the show on capture: a macOS window
-   screenshot is ~30-90ms and WindowServer-serialized, so capturing-on-open *is*
-   the lag. Keep previews current by usage instead of by opening. A hidden,
-   idle-gated warmer re-shoots only the active window (idx 0) on a ~250ms timer
-   while the picker is hidden and there has been recent HID input; every other
-   window is captured the instant focus leaves it (`FocusChanged` -> capture the
-   just-defocused window). A window's content only changes while it is frontmost,
-   so its last-focused capture stays accurate until it is refocused, which is why
-   re-shooting backgrounded windows is wasted work. The cache is the source of
-   truth at show time. The warmer and the focus-leave fill use separate in-flight
-   guards so neither blocks the other. The icon cache is per-app and long-lived.
+4. **A card shows only a shot taken during this open.** Opening never waits on
+   capture: the picker reveals at once, and every non-minimized card shows its
+   app icon on a placeholder until a shot requested during this open replies,
+   then fades in on its own. No deadline decides when a card fades. Each open is
+   numbered (`begin_open`), every capture carries the number it was requested
+   under, and only a reply from the current open lifts a placeholder; a failed
+   shot keeps the placeholder and is retried. The current window's shot starts
+   as soon as the window list is read; the rest follow in card order, and the
+   selected card is recaptured only after every card has had its first shot.
+   On macOS 27 a ScreenCaptureKit window shot takes about 250 ms whatever the
+   size or configuration, and shots, stream starts and shots from a second
+   process all run one at a time, so a card's fade time is the OS's, not ours.
+   Previews fit the whole window inside the card (`fit_within`, `Contain`),
+   never crop it, and app icons are rendered at 256 px. Background lanes still
+   warm the cache while the picker is hidden, but their frames never replace a
+   card that already landed this open. The icon cache is per-app and long-lived.
 5. **Daemon-backed picker.** Cold GPUI startup is too slow for Alt+Tab, so the
    daemon stays resident: the picker window is created once and reused across
    opens, never destroyed between opens on macOS. A hidden keepalive PopUp stops
