@@ -219,7 +219,8 @@ drops findings a decision of the author or the owner settles, and lists them
 under Settled. The tests and CodeQL runs never wait for the verdict: they run
 beside the review, and the merge queue admits the pull request only once both
 required checks pass. When the finished review of the head commit still
-blocks, the owner can comment `/review-override <sha>` naming that commit: it
+blocks, the owner can comment `/review-override <sha>` with that commit's full
+40-character SHA: it
 records the override in a pull request comment and in the claude review check
 and passes that check for that commit only. An override that names another
 commit or comes while the review runs is refused, and a new push is reviewed
