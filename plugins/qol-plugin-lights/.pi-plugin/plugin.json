@@ -1,7 +1,7 @@
 {
   "name": "qol-plugin-lights",
   "description": "Specialist agent and skills for the qol-tray lights plugin: backend adapters, the ZNP serial stack in libs/zigbee, the daemon/runtime split, native settings, and a SubagentStop hook that auto-curates agent MEMORY.md.",
-  "version": "0.2.13",
+  "version": "0.2.14",
   "author": {
     "name": "KMRH47"
   }
