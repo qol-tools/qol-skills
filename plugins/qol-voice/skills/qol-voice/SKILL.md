@@ -63,7 +63,7 @@ Local and remote providers are not interchangeable in privacy terms. A remote pr
 - Observations are validated against session and sequence before they touch state.
 - Providers are selected through the registry by capability, never named directly by consumers.
 - Audio leaves the machine only through an explicitly configured remote provider.
-- Device- and routing-scoped settings stay device-scoped so a synced profile cannot retarget another machine.
+- Device- and routing-scoped settings stay device-scoped so a synced profile cannot retarget another machine; `recognition.provider` and `recognition.websocket_endpoint` are among them, so a synced profile cannot send dictation audio elsewhere, and a websocket endpoint outside this machine must be `wss://` (`ws://` is accepted for 127.0.0.1, ::1 and localhost only).
 - Failures are typed and actionable - a missing microphone, an unavailable model, and an unreachable service are distinguishable.
 - Doctor is read-only: it reports capability and probes only what is configured, and never captures or transmits audio.
 - CLI Sessions owns terminal dashboard and attention policy; neither plugin becomes the other's runtime broker.

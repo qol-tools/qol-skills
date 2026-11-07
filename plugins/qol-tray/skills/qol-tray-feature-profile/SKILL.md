@@ -36,6 +36,7 @@ A plugin's persisted config is split across three scope-aware locations under `<
 core/plugin-configs/<uid>.json         # shared across machines, synced
 os/<bucket>/plugin-configs/<uid>.json  # OS-specific, synced cross-machine
 device/plugin-configs/<uid>.json       # local-only, gitignored (*/device/)
+device/task-runner.json                # local-only: shell scripts never sync
 ```
 
 Two declarations in `plugin.toml` drive routing:
@@ -90,6 +91,8 @@ The promote contract has two halves:
 - **Default-skip for unknown staging files**: anything the staging clone carries that does NOT match the allowlist is silently dropped, not promoted. Defense in depth - a remote that somehow contains `malicious.sh`, `.bashrc`, a stray `device/` subtree, or a stale `sync/state.json` cannot reach the live profile.
 
 When you extend sync to new file kinds, add them to the allowlist explicitly. Treat any "all unknown files copied through" change as a regression of the wipe-then-clone disaster this section was added to prevent.
+
+The same allowlist bounds every push and pull, not only the first clone: `commit_all` stages only allowlisted paths, `qol_profile_sync::ensure_gitignore` rewrites the fixed `.gitignore` before each commit (a `.gitignore` edited in the repo never widens what is pushed), and a remote commit that tracks a device-local path (`active`, `sync.json`, or anything under `<profile>/device/`) is refused before it is checked out, with the offending path in the error, so a sync repo writer cannot plant task-runner scripts or device plugin slices. The profile bundle carries no task-runner either.
 
 ## Migration collision policy: same-content drop, different-content `.legacy`
 
