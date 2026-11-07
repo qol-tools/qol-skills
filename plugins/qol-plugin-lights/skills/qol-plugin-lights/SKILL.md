@@ -41,6 +41,15 @@ For an action referenced by `qol-config.toml`, require a matching runnable decla
 
 The live color boundary is owned by `src/daemon/` and the corresponding runtime stream. Keep throttling, latest-value coalescing, inherited-listener adoption, and daemon handoff behavior together. The websocket admits only a client that sends, in `x-qol-token`, the credential `qol_runtime::local_http::stream_token(tray token, port)` derives from the tray HTTP token and the port (the daemon reads the token from `QOL_TRAY_HTTP_TOKEN`, the settings panel sends the derived value, never the token, so a squatter on the port learns nothing that reaches the tray) and no Origin header, within a five second total handshake deadline, four clients at most; without the token in its environment the daemon refuses every client.
 
+## Settings page
+
+The page follows the Bluetooth plugin's layout and uses only kit parts that page already uses; treat Bluetooth's `qol-config.toml` as the model when changing it. Sections, in order: Lights (the `lights` list, then `find_lights`, a list led by a search row), Main light (light picker, power, color, brightness, color temperature), Dongle (the `dongle` list's lead row, then port and channel), and the presets.
+
+- `lights` marks the main light with a badge; an empty main target means the sole paired light.
+- `find_lights` reads the daemon's pairing session (`src/daemon/pairing.rs`): `pair` and `stop_pair` start and end it, and only a light the config did not know, joining while the window is open, is counted and closes permit-join. A known light rejoining after a power cycle sends the same announce and must not end a search.
+- `dongle` and the find lead offer `reload` (Find dongle) only while the coordinator is missing or offline; once ready, `reload` only rereads config.
+- Payload builders live in `src/daemon/payloads.rs` as pure functions with table tests; the daemon dispatch only gathers state. A list `card_description` is capped at 36 characters by contract validation.
+
 ## Common changes
 
 **Add a backend:** implement `LightBackend` under `src/backend/`, add explicit configuration and selection, preserve transport-independent domain commands, and test backend errors without hardware where possible.
