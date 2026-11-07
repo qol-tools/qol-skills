@@ -357,6 +357,12 @@ updates), and remembered windows were reopened next to ones still open.
 - macOS and Windows headless skip their platform event loop, so a signal is
   the only way to stop qol-tray there.
 
+## Linked devices
+
+- **Listeners are off until needed.** The peer listener and the mDNS advertisement run only while at least one peer is linked, or while the Linked Devices nearby page holds its 10 s lease (`NetworkControl::open_to_nearby`, refreshed by the page's list poll), so a peerless machine is discoverable only while someone is on that page. The enrollment listener runs only while an invitation is reserved (`invitation_endpoints` reserves the port 30 s ahead of `create_invitation`) or open, a nearby offer is pending, or an exchange is in flight (`libs/peers/src/service/network/enrollment/gate.rs`). `ListenerStatus::Idle { reason }` tells idle (`no_linked_peers`, `nothing_open`) from failed.
+- **Nearby links are confirmed on both sides.** The initiator's completed offer waits in Ready, with the grants chosen in the Link request, until the user presses Link or Decline or the window passes; nothing is redeemed or granted on the initiator before the code comparison.
+- **PointZ sockets** start only for a plugin whose manifest daemon is enabled, never for a merely installed plugin.
+
 ## Icon
 
 The tray icon is embedded at compile time from `assets/icon.rgba` (raw RGBA,
