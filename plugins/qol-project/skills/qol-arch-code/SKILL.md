@@ -527,7 +527,7 @@ Every line a qol process writes belongs to exactly one of three categories. Each
 | Category | Write it with | Lands in | In `qol dev` |
 |---|---|---|---|
 | **Log** | `log::error!`, `log::warn!`, `log::info!`, `log::debug!` | qol-tray: its tracing subscriber, which writes stderr and the log file in `qol_log::log_dir()`. Every other process: stderr through `qol_log::init_stderr()`, which the tray relays into its daemon log for plugins. | Logs view, filterable by level and target (the module path). |
-| **Trace** | `qol_runtime::probe!` | The trace file (`qol_conventions::TRACE_LOG_PATH`), debug builds only. See `qol-trace-discipline`. | Trace view, and `qol trace <target>`. |
+| **Trace** | `qol_runtime::probe!` | The trace file (`qol_conventions::TRACE_LOG_PATH`), debug builds only, opened owner-only without following a symlink and left alone when another user owns it; key probes never name the key. See `qol-trace-discipline`. | Trace view, and `qol trace <target>`. |
 | **Command output** | `println!`, `eprintln!`, or `qol_headless` `PlainTextOutput` | The terminal of the person who ran the command. | Nowhere. Commands do not run under `qol dev`. |
 
 The `qol dev` Logs view is a raw capture of the tray's stdout and stderr, with every plugin's stdout and stderr relayed into it. Anything a daemon or plugin prints lands there whether it is a log or not. That is why a daemon never prints: a print carries no level and no target, so it cannot be filtered.
