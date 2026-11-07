@@ -81,7 +81,7 @@
       "name": "qol-tray",
       "description": "Host-app plugin for qol-tray: a backend specialist agent plus deep skills for core architecture (qol-tray-core), Rust internals, data migrations, the Profile feature, dev recompile, release flow, and apps-testing. Includes hooks for dev-recompile context, uncited architecture claims, and reflecting agent learnings.",
       "source": "./plugins/qol-tray",
-      "version": "0.6.36",
+      "version": "0.6.37",
       "author": {
         "name": "KMRH47"
       }
@@ -162,7 +162,7 @@
       "name": "qol-voice",
       "description": "Skills for the qol-voice plugin: speech capture, engine-neutral transcription, turn coordination, and routing to terminal sessions.",
       "source": "./plugins/qol-voice",
-      "version": "0.1.2",
+      "version": "0.1.3",
       "author": {
         "name": "KMRH47"
       }
