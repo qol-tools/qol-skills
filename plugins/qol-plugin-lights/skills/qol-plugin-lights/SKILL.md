@@ -39,7 +39,7 @@ Every action ID declared by `plugin.toml` is an external contract consumed by ho
 
 For an action referenced by `qol-config.toml`, require a matching runnable declaration and dispatcher. For a query or stream, require both the runtime declaration and a daemon response path. Payload-carrying actions must use the daemon transport rather than smuggling values through action names.
 
-The live color boundary is owned by `src/daemon/` and the corresponding runtime stream. Keep throttling, latest-value coalescing, inherited-listener adoption, and daemon handoff behavior together. The websocket admits only a client that sends the tray HTTP token in `x-qol-token` (the daemon reads it from `QOL_TRAY_HTTP_TOKEN`, the settings panel sends it) and no Origin header, within a five second handshake, four clients at most; without the token in its environment the daemon refuses every client.
+The live color boundary is owned by `src/daemon/` and the corresponding runtime stream. Keep throttling, latest-value coalescing, inherited-listener adoption, and daemon handoff behavior together. The websocket admits only a client that sends, in `x-qol-token`, the credential `qol_runtime::local_http::stream_token(tray token, port)` derives from the tray HTTP token and the port (the daemon reads the token from `QOL_TRAY_HTTP_TOKEN`, the settings panel sends the derived value, never the token, so a squatter on the port learns nothing that reaches the tray) and no Origin header, within a five second total handshake deadline, four clients at most; without the token in its environment the daemon refuses every client.
 
 ## Common changes
 
