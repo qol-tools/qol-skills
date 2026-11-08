@@ -95,12 +95,13 @@ the user by ending its turn with the question and a recommended answer.
 Claude Code drops a subagent from the agent list 30 seconds after its turn ends
 unless a background command of its own still runs, and the user can then no
 longer select it or type to it, so a fork that seems dead is only idle. Before a
-fork ends a turn that leaves anything for the user (a question, a draft waiting
-for approval, a report the user may answer, or Ready), it starts its hold once:
-Bash `sleep infinity` with `run_in_background: true`, which costs nothing and
-never wakes it. Once nothing is left for anyone to do, such as after its pull
-request merged, it stops the hold with TaskStop before its final message, and
-then leaves the list; SendMessage still resumes it.
+fork ends any turn, it starts its hold once: Bash `sleep infinity` with
+`run_in_background: true`, which costs nothing and never wakes it. Only the user
+ends a fork, by closing it with ctrl+x ctrl+x in the switchboard, so a fork never
+stops its hold or marks itself done, even after its pull request merged.
+Incident (2026-11-08): a fork marked itself done after its merge and again after
+answering a follow-up, dropped out of the agent list each time, and the user said
+"agents do not mark sessions as done; I do".
 
 ## A review of your own change ends in fixes
 
