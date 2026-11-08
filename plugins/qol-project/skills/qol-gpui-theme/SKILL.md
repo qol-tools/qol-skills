@@ -698,6 +698,51 @@ the launch has one, then the mark.
   in the file itself when it builds `SettingsRow`s, else in a file beside it;
   and nothing outside the components calls `pictures::open_outside`.
 
+### Action marks
+
+Picked 2026-11-08 in round 203, "One mark per action, everywhere in qol". Every
+row, card, menu and window in qol says what ↵ does with one mark at its right
+end, and a mark means one thing in every window. Nothing on a row is a button:
+the row button (`settings_action_affordance`) is retired, and a row whose ↵
+does something right here ends in the run mark instead.
+
+| Action | Mark | `ActionMark` |
+|---|---|---|
+| Goes into a page in qol | › | `Page` |
+| Leaves qol (another app, a web page) | box with an arrow leaving its corner | `Leave` |
+| Does it now, right here | ↵ | `Run` |
+| Destroys something | red ×, name in red, red hairline on the highlight, never a red fill; ↵ asks once in the hint bar | `Destroy` |
+| Adds one | + | `Add` |
+| More it can do (opens the kit menu) | ⋯ | `More` |
+| Working on it (replaces the row's mark while it works) | the 8-dot spinner | `Busy` |
+| The one in use (the saved choice only) | tick | `Chosen` |
+| Closes or dismisses | × in ink | `Close` |
+
+A switch, a value well and a word are controls, not marks: they come before
+the mark, and the mark is always the last part. A row that only shows a value
+has no mark and no highlight. A pick row may show a small picture of the
+current choice beside its word, then the ›.
+
+- `qol_gpui::action_mark::ActionMark` is the vocabulary: `ActionMark::ALL`,
+  each mark's name, and `drawn_by()`, the drawing calls that make its mark.
+- Only the shared kit (`libs/gpui/`, its tests included) draws a mark. A plugin or the tray
+  that needs one asks the kit for a part, so a new mark joins the pool instead
+  of a local copy.
+- Enforced by the owner guard entry `action marks` in the monorepo's
+  `.qac/owners.json` (`qac lint`, see "Enforcement: owner guard" in
+  `qol-arch-code`): outside `libs/gpui/` an edit may not add any path that
+  draws a mark (`Icon::Close`, `Icon::Tick`, `Icon::More`, `Icon::Enter`,
+  `Icon::Add`, `Icon::Reveal`, `pictures::chevron`, `pictures::open_outside`,
+  `pictures::tick`, `Busy::ring`, `Busy::new`), and no edit anywhere may add a
+  call to `settings_action_affordance`. The lock test in
+  `libs/gpui/tests/owners.rs` fails when the entry's paths differ from what
+  `ActionMark::ALL` draws with, so the rule is derived from the vocabulary.
+
+Incident (2026-11-08): a survey found 47 button rows on the core pages and in
+Update Manager, five spinner styles, four hint words for the ›, the ↗ meaning
+four different things, the tick meaning four, × drawn three ways, and red used
+only on five Linked devices words.
+
 ### Choice values
 
 Locked 2026-09-14 as design G1, snapshotted in

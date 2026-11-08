@@ -501,3 +501,47 @@ test('an entry without calls, texts or paths guards nothing', () => {
     place(root, '.qac/owners.json', JSON.stringify({ 'desktop settings': { ...OWNERS['desktop settings'], texts: [] } }));
     assert.equal(write(place(root, 'plugins/demo/src/tone.rs'), RUN).exitCode, 0);
 });
+
+const MARKS = {
+    'action marks': {
+        owner: 'libs/gpui/src/',
+        use: 'a kit part in libs/gpui that draws the action mark',
+        paths: ['Icon::Tick', 'Icon::Close', 'pictures::chevron', 'Busy::ring'],
+        calls: ['settings_action_affordance'],
+        entry_points: [],
+        allow: [],
+    },
+};
+const marksRepo = () => {
+    const root = repo({ rulebook: false });
+    place(root, '.qac/owners.json', JSON.stringify(MARKS));
+    return root;
+};
+const TICK = 'fn chosen(ink: u32) -> IconView {\n    icon(Icon::Tick, 12.0, ink)\n}\n';
+const BUTTON = 'fn row(kit: Kit) -> Div {\n    settings_action_affordance("pair", "Pair", kit)\n}\n';
+const DEFINED = 'pub fn settings_action_affordance(id: &str, label: &str, kit: Kit) -> Div {\n    div()\n}\n';
+
+test('action marks: a plugin may not draw a mark itself', () => {
+    const root = marksRepo();
+    assert.equal(write(place(root, 'plugins/demo/src/menu.rs'), TICK).exitCode, 2);
+    assert.equal(write(place(root, 'apps/tray/src/view.rs'), 'use qol_gpui::pictures::{chevron, image};\n').exitCode, 2);
+});
+
+test('action marks: the kit draws marks', () => {
+    const root = marksRepo();
+    assert.equal(write(place(root, 'libs/gpui/src/kit.rs'), TICK).exitCode, 0);
+});
+
+test('action marks: the retired row button is refused in the kit too', () => {
+    const root = marksRepo();
+    assert.equal(write(place(root, 'libs/gpui/src/settings_panel/pages/mod.rs'), BUTTON).exitCode, 2);
+    assert.equal(write(place(root, 'apps/tray/src/view.rs'), BUTTON).exitCode, 2);
+});
+
+test('action marks: the retired definition and its existing callers pass', () => {
+    const root = marksRepo();
+    assert.equal(write(place(root, 'libs/gpui/src/settings_panel/components/mod.rs'), DEFINED).exitCode, 0);
+    const file = place(root, 'apps/tray/src/view.rs', BUTTON);
+    assert.equal(write(file, BUTTON + 'fn other() {}\n').exitCode, 0);
+    assert.equal(write(file, BUTTON + BUTTON.replace('fn row', 'fn second')).exitCode, 2);
+});

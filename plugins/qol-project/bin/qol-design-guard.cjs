@@ -554,7 +554,7 @@ function settingsPageRules(relative, body, add) {
         page('has no group headers', 'SettingsGroupHeader::new(title, Some(colophon), kit).current(..) over each group of rows (R8: the masthead and its colophon)');
     }
     if (!body.includes('settings_value_group()')) {
-        page('puts no value or action at the right of its rows', 'settings_value_group() holding settings_value_text(value, tone, ground, kit) and settings_action_affordance(id, label, ..)');
+        page('puts no value or action at the right of its rows', 'settings_value_group() holding settings_value_text(value, tone, ground, kit), with the row ending in its action mark, never a button (settings_action_affordance is retired; see "Action marks" in qol-gpui-theme)');
     }
     if (!/fn settings_hints\s*\(/.test(body)) {
         page('names no keys in the hint bar', 'CustomSettingsBreadcrumbs::settings_hints returning CustomHints with SettingsHint::new(Key::ENTER, action) and SettingsHint::new(Key::UP_DOWN, "move")');
