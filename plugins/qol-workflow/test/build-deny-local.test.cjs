@@ -73,6 +73,7 @@ test('lets through commands that compile nothing', () => {
         'qac lint',
         'qol pr try 412',
         'qol pr try --off',
+        'qol pr off',
         'qol env up ubuntu',
         'qol doctor',
         'qol help build',
