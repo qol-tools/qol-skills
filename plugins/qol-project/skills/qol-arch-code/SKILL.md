@@ -840,6 +840,16 @@ It denies an edit that raises the count of such matches in a file above the coun
 
 Residual: the guard sees the token shape only. A chain of `if tool == ..` comparisons, a `matches!(tool, ..)`, a `match` on a binding that was copied out of the tool (`let kind = session.tool; match kind {`), a table keyed by tool outside `session/tool.rs`, and code outside the two scoped roots pass. Review catches those.
 
+### Enforcement: quoted line guard
+
+A file a Rust test reads through `include_str!` and checks with `CONST.contains("...")` changes together with those quotes: edit the quotes in the test first, then the file. The tests only run in CI, so a quote left behind fails minutes later instead of at the edit.
+
+PR #522 (2026-11-09, run 42692615267) rewrote lines of `libs/sessions-engine/src/switchboard/plugin/register.tsx` that three tests in its `mod.rs` quote verbatim, and all three failed on every OS.
+
+`bin/check-qol-arch-code.cjs` enforces this at edit time through `bin/qol-quote-guard.cjs`. For an edited file that is not `.rs`, it reads every `.rs` file of the nearest package crate (not nested crates, `target/` or `vendor/`), finds each `const` or `static` `&str` set by `include_str!("<path>")` that resolves to the edited file, and collects its quotes: a string literal (plain, escaped or raw) passed straight to `NAME.contains(..)`, and each literal of a `for needle in [..]` array whose loop body calls `NAME.contains(needle)`. It denies an edit after which the file lacks a quote it held before, with the message "quoted line violation" naming each quote as `file:line NAME.contains("...")`. A negated `!NAME.contains(..)` is a retired text, not a quote. An edit whose old text is not in the file fails open. `qac lint` without `--base` reports every quote the file lacks; with `--base` only the ones the change removed. Bypass one edit with `touch .claude/bypass-qol-arch-code`.
+
+Residual: a quote built at run time (`format!`, `concat!`, a constant, a needle array that holds anything but literals), an include path through `concat!(env!(..))`, an included `.rs` file, and a test that adds a quote the file never had all pass; the CI test run catches them.
+
 ### Enforcement: owner guard
 
 A concept with one owner is named only through that owner. The repo declares its owners in `.qac/owners.json` at its root; each entry names the owner folder, what to use instead, and the exceptions. A test in the owning crate fails when the entry disagrees with the owner's own definition, so the rule is derived from the code it protects, not from a list typed into this hook. With no `.qac/owners.json`, the guard does nothing.

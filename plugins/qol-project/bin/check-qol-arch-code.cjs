@@ -51,6 +51,7 @@ const design = require('./qol-design-guard.cjs');
 const lintMode = require('./hook-lint-mode.cjs');
 const owners = require('./qol-owner-guard.cjs');
 const events = require('./qol-event-guard.cjs');
+const quotes = require('./qol-quote-guard.cjs');
 const { inQolRepo } = require('./qol-repo.cjs');
 
 const INSPECTED_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
@@ -1543,6 +1544,43 @@ function findNewEventViolations(filePath, newContent) {
     return events.newViolations(filePath, readBaseline(filePath), newContent);
 }
 
+function blockQuotes(filePath, broken) {
+    lintMode.report(process.stderr, `qol-arch-code quoted line violation in ${filePath}.
+
+This edit changes text that Rust tests quote verbatim from this file, so they fail in CI:
+
+${quotes.formatQuotes(broken)}
+
+The test reads this file through include_str! and asserts that it contains each
+quote. Update the quotes in the test to the new text first, then this edit
+passes; or keep the quoted text.
+
+Reference: qol-project:qol-arch-code skill, "Enforcement: quoted line guard".
+
+Bypass for this edit only:
+  touch .claude/bypass-qol-arch-code
+`);
+}
+
+function editedContent(tool, input, filePath) {
+    if (tool === 'Write') return input.content ?? null;
+    if (tool !== 'Edit' && tool !== 'MultiEdit') return null;
+    let content = readExistingFile(filePath);
+    for (const edit of tool === 'Edit' ? [input] : input.edits || []) {
+        if (content === null || !edit.old_string || !content.includes(edit.old_string)) return null;
+        content = edit.replace_all
+            ? content.split(edit.old_string).join(edit.new_string || '')
+            : replaceFirst(content, edit.old_string, edit.new_string || '');
+    }
+    return content;
+}
+
+function findBrokenQuotes(tool, input, filePath) {
+    if (filePath.endsWith('.rs')) return [];
+    const content = editedContent(tool, input, filePath);
+    return content === null ? [] : quotes.brokenQuotes(filePath, readBaseline(filePath), content);
+}
+
 function main() {
     const raw = readStdin().trim();
     if (!raw) return 0;
@@ -1581,6 +1619,12 @@ function evaluate(payload) {
     const designViolation = findNewDesignViolations(tool, input, filePath);
     if (designViolation && !consumeBypass(cwd, filePath, basename, 'bypass-qol-design')) {
         blockDesign(filePath, designViolation.relative, designViolation.violations);
+        return 2;
+    }
+
+    const brokenQuotes = findBrokenQuotes(tool, input, filePath);
+    if (brokenQuotes.length > 0 && !consumeBypass(cwd, filePath, basename)) {
+        blockQuotes(filePath, brokenQuotes);
         return 2;
     }
 
