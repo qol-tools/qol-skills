@@ -121,9 +121,18 @@ pushes do the full `cargo build --release`, so a release-only link error sends
 the PR back instead of landing, unless the queue trusts the entry (below), and
 main keeps the release cache warm for the queue. A push that lands a commit the queue already passed skips lint, test and
 build, so it saves no cache; only a direct push runs the full workflow on main. Org and repo admins bypass the queue for direct pushes. The Versioning
-prepare job pushes its bump commit with the `VERSIONING_DEPLOY_KEY` deploy key,
-because the Actions token cannot bypass a ruleset; tags stay on the Actions
-token so tag pushes never trigger the release workflows beside the dispatch.
+prepare job pushes its bump commit with a one-hour token of the
+`qol-tools-versioning` GitHub App (Contents write, installed on this repository
+alone, on the ruleset's bypass list), because the Actions token cannot bypass a
+ruleset; tags stay on the Actions token so tag pushes never trigger the release
+workflows beside the dispatch. The job mints the token with
+`actions/create-github-app-token` from `VERSIONING_APP_PRIVATE_KEY` and
+`VERSIONING_APP_CLIENT_ID`, which live only in the `versioning` environment, so
+only a run on `main` can read them. No copy of the private key is kept anywhere
+else: a lost key is replaced with "New key" on the app's page and set again in
+that environment. The repository has no deploy key (qol-tools/qol#538, which
+replaced the key the 2026-11 security review found readable by every branch
+workflow).
 
 A pull request run uploads the base it tested as a `tested-base` artifact.
 The `merge_group` plan runs `.github/scripts/queue_trust.py` instead of planning afresh: when the pull request run of the entry's head passed the merge gate and nothing that landed since its tested base reaches a crate it tested, the entry is trusted.
