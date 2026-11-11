@@ -78,16 +78,16 @@ is released as one "release unit" alongside the bundled `plugins/*`.
 
 ## 4. Release trigger and exact-SHA gate
 
-- A tag pushed with the default `GITHUB_TOKEN` does not trigger another
-  workflow, except through explicit `workflow_dispatch` or
-  `repository_dispatch`. This is the documented
-  [GitHub token recursion contract](https://docs.github.com/en/actions/concepts/security/github_token).
-  The versioner explicitly dispatches the matching release workflow per tag:
+- The release workflows start only from a dispatch; neither has a tag trigger
+  (qol-tools/qol#541). The versioner pushes the tags with a token of the
+  `qol-tools-versioning` app and then dispatches the matching release workflow
+  per tag:
   - `qol-tray-v*` -> `qol-tray-release.yml` (host release)
-  - every other `*-v*` -> `release.yml` (plugin release; its tag-push trigger
-    explicitly excludes `qol-tray-v*`)
-- Both release workflows also accept a `workflow_dispatch` `tag` input and check
-  out `refs/tags/<tag>`; that is the path the dispatch uses.
+  - every other `*-v*` -> `release.yml` (plugin release)
+- Both release workflows take a `workflow_dispatch` `tag` input and check out
+  `refs/tags/<tag>`. Pushing a tag by hand starts nothing; a manual release is
+  `gh workflow run release.yml --ref <tag> -f tag=<tag>` or
+  `gh workflow run qol-tray-release.yml --ref main -f tag=<tag>`.
 - Both workflows first require the intended tag's successful
   `qol/release-candidate/<tag>` status on the exact checked-out commit, posted
   by `github-actions[bot]` and pointing at a Versioning run on `main`. A green
