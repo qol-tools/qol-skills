@@ -62,7 +62,9 @@ const OPENING_PART = '.opens(';
 const OPENING_USE = 'SettingsRow::opens(true) on the row that enter opens (or settings_block_header(.., opens, ..) on a block row): the kit then draws the open part, the chevron, as its last part';
 const LAUNCHING_ACTION = /\b(Action|Enter|RowAction)::(Launch|Visit)[A-Z(]/;
 const LAUNCHING_PART = '.launches(';
-const LAUNCHING_USE = 'SettingsRow::launches(Some(Launch::file(name, app))) on a row whose enter opens a file in another app, or Launch::link(host) for a web page: the kit then draws the launch part, the file tag, the app and the open-outside mark, never the chevron';
+const LAUNCHING_USE = 'SettingsRow::launches(Some(Launch::file(name, app))) on a row whose enter opens a file in another app, or Launch::link(host) for a web page: the kit then draws the launch part, the file tag and the chevron';
+const ROW_MARKS = ['Icon::Enter', 'Icon::Copy', 'Icon::Reveal', 'pictures::open_outside(', 'settings_action_mark(', 'settings_copy_mark('];
+const ENDING_USE = 'nothing: the chevron is the only mark a settings row ends in, drawn by SettingsRow::opens(true) or SettingsRow::launches(..) when enter opens a page, a list or another app; a row that acts right here ends in nothing and the hint bar names what enter does';
 const TEST_MODULE = /#\[cfg\(test\)\]\s*(?:#\[[^\]]*\]\s*)*(?:pub(?:\([^)]*\))?\s+)?mod\s+\w+\s*\{/;
 const LINE_COMMENT = '/'.repeat(2);
 const TRANSPARENT = /^rgba\(\s*0(x0+)?\s*\)$/;
@@ -533,15 +535,19 @@ function openingRules(relative, body, root, add) {
 function launchingRules(relative, body, root, add) {
     if (!inSettingsScope(relative) || relative.startsWith(COMPONENTS)) return;
     const lines = body.split('\n');
-    lines.forEach((line, index) => {
-        if (!isCommentLine(line) && line.includes('pictures::open_outside(')) {
-            add('launching', index + 1, 'draws the open-outside mark by hand', LAUNCHING_USE);
-        }
-    });
     const first = lines.findIndex(line => !isCommentLine(line) && LAUNCHING_ACTION.test(line));
     if (first < 0 || body.includes(LAUNCHING_PART)) return;
     if (!body.includes('SettingsRow::') && siblingsDraw(root, relative, LAUNCHING_PART)) return;
     add('launching', first + 1, 'names a Launch or Visit action but no row it launches ends in the launch part', LAUNCHING_USE);
+}
+
+function endingRules(relative, body, add) {
+    if (!inSettingsScope(relative)) return;
+    body.split('\n').forEach((line, index) => {
+        if (isCommentLine(line)) return;
+        const mark = ROW_MARKS.find(needle => line.includes(needle));
+        if (mark) add('ending', index + 1, `ends a settings row in a mark other than the chevron (${mark.replace('(', '')})`, ENDING_USE);
+    });
 }
 
 function settingsPageRules(relative, body, add) {
@@ -614,6 +620,7 @@ function rustViolations(relative, content, root) {
     partRules(relative, content, body, add);
     openingRules(relative, body, root, add);
     launchingRules(relative, body, root, add);
+    endingRules(relative, body, add);
     settingsPageRules(relative, body, add);
     return found;
 }

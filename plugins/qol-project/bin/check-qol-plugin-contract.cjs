@@ -59,6 +59,7 @@ const RULES = {
     subHeader: ['Settings header has no sub header', 'give the section, or the contract root when fields sit outside every section, a non-empty description'],
     redundantHeader: ['Settings header repeats its only row', 'give the section a label that differs from its only field label, or add a second field'],
     statusValue: ['Status value is never emitted', 'emit the state from the plugin or delete it from the map'],
+    statusQuiet: ['Status row shows while all is well', 'list the normal states in hide_values, so the row shows only while something needs the user'],
     platformScope: ['Setting is read on one OS only', 'add platforms = [...] naming the OSes whose code reads it, or read it on the others'],
     unhandled: ['Runtime entry is never handled', "handle the id in the plugin's dispatch before declaring it, or delete it from qol-runtime.toml"],
 };
@@ -713,6 +714,16 @@ function statusFindings(doc, dir, facts, fields) {
     return out;
 }
 
+function quietFindings(doc, fields) {
+    const out = [];
+    for (const [id, field] of Object.entries(fields)) {
+        if (!isTable(field) || field.type !== 'status') continue;
+        if (Array.isArray(field.hide_values) && field.hide_values.length > 0) continue;
+        out.push(finding(doc.file, toml.keyLine(doc.lines, fields, id), 'statusQuiet', id, `[field.${id}] is a status field with no hide_values, so its row is always shown`));
+    }
+    return out;
+}
+
 function filled(value) {
     return typeof value === 'string' && value.trim() !== '';
 }
@@ -769,6 +780,7 @@ function configFindings(repo, dir, docs) {
         if (scope) out.push(finding(doc.file, toml.keyLine(doc.lines, fields, id), 'platformScope', id, `[field.${id}] stores "${key}", which ${scope}`));
     }
     out.push(...statusFindings(doc, dir, facts, fields));
+    out.push(...quietFindings(doc, fields));
     return out;
 }
 

@@ -176,6 +176,8 @@ pub struct FieldSpec {
     pub label_map: Option<IndexMap<String, String>>,
     #[serde(default)]
     pub tone_map: Option<IndexMap<String, String>>,
+    #[serde(default)]
+    pub hide_values: Option<Vec<String>>,
 }
 
 impl FieldSpec {
@@ -279,7 +281,7 @@ const TRAY = `fn honour(manifest: &PluginManifest, config: &ConfigSpecV1, runtim
     }
     let _ = (&config.schema_version, &config.title, &config.description, &config.section);
     for field in config.field.values() {
-        let _ = (&field.kind, &field.label, &field.config_key, &field.default, &field.query, &field.active_query, &field.section, &field.platforms, &field.label_map, &field.tone_map);
+        let _ = (&field.kind, &field.label, &field.config_key, &field.default, &field.query, &field.active_query, &field.section, &field.platforms, &field.label_map, &field.tone_map, &field.hide_values);
     }
     for section in config.section.values() {
         let _ = (&section.label, &section.description, &section.actions, &section.platforms);
@@ -330,6 +332,7 @@ default = true
 type = "status"
 label = "State"
 query = "status"
+hide_values = ["ok"]
 `;
 
 const RUNTIME = `schema_version = 1
@@ -613,12 +616,13 @@ section = "audio"
 type = "status"
 label = "Balance"
 query = "status"
+hide_values = ["ok"]
 section = "audio"
 `;
 
 test('sections with a sub header and a distinct lead row pass', () => {
     const repo = fixture();
-    allowed(write(repo, 'plugins/demo/qol-config.toml', `${CONFIG.replace(/\[field\.enabled\][\s\S]*$/, '')}\n[section.audio]\nlabel = "Audio"\ndescription = "How the demo sounds."\n${SECTION_FIELDS}\n[section.solo]\nlabel = "Solo"\ndescription = "One row."\n\n[field.single]\ntype = "status"\nlabel = "Single row"\nquery = "status"\nsection = "solo"\n`));
+    allowed(write(repo, 'plugins/demo/qol-config.toml', `${CONFIG.replace(/\[field\.enabled\][\s\S]*$/, '')}\n[section.audio]\nlabel = "Audio"\ndescription = "How the demo sounds."\n${SECTION_FIELDS}\n[section.solo]\nlabel = "Solo"\ndescription = "One row."\n\n[field.single]\ntype = "status"\nlabel = "Single row"\nquery = "status"\nhide_values = ["ok"]\nsection = "solo"\n`));
 });
 
 test('a section without a description is denied', () => {
@@ -634,7 +638,7 @@ test('a section sharing the label of its only field is denied', () => {
     const only = '\n[section.audio]\nlabel = " Volume "\ndescription = "How loud."\n\n[field.volume]\ntype = "boolean"\nlabel = "volume"\nconfig_key = "general.enabled"\nsection = "audio"\n';
     const reason = denial(write(repo, 'plugins/demo/qol-config.toml', `${CONFIG}${only}`));
     assert.match(reason, /Settings header repeats its only row: \[section\.audio\] label " Volume " equals the label of its only field \[field\.volume\]/);
-    allowed(write(repo, 'plugins/demo/qol-config.toml', `${CONFIG}${only}\n[field.balance]\ntype = "status"\nlabel = "Balance"\nquery = "status"\nsection = "audio"\n`));
+    allowed(write(repo, 'plugins/demo/qol-config.toml', `${CONFIG}${only}\n[field.balance]\ntype = "status"\nlabel = "Balance"\nquery = "status"\nhide_values = ["ok"]\nsection = "audio"\n`));
 });
 
 test('root fields need a top-level description', () => {
@@ -668,6 +672,16 @@ const ADAPTER_FIELD = '\n[field.adapter]\ntype = "string"\nlabel = "Adapter"\nco
 function adapterRepo(file, extra = {}) {
     return fixture({ [`plugins/demo/src/${file}`]: ADAPTER, ...extra });
 }
+
+test('a status field that never hides is denied, one that hides its normal states passes', () => {
+    const repo = fixture();
+    const loud = '\n[field.link]\ntype = "status"\nlabel = "Link"\nquery = "status"\n';
+    const reason = denial(write(repo, 'plugins/demo/qol-config.toml', `${CONFIG}${loud}`));
+    assert.match(reason, /Status row shows while all is well: \[field\.link\] is a status field with no hide_values, so its row is always shown/);
+    assert.match(reason, /list the normal states in hide_values/);
+    denial(write(repo, 'plugins/demo/qol-config.toml', `${CONFIG}${loud}hide_values = []\n`));
+    allowed(write(repo, 'plugins/demo/qol-config.toml', `${CONFIG}${loud}hide_values = ["ok"]\n`));
+});
 
 test('a status map key the plugin never emits is denied, while emitted and boolean keys pass', () => {
     const repo = fixture({ 'plugins/demo/src/state.rs': EMITTER });

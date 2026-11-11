@@ -371,17 +371,35 @@ test('blocks a Visit action in a view that draws no launch part', () => {
     assert.match(r.stderr, /names a Launch or Visit action/);
 });
 
-test('blocks a settings file that draws the open-outside mark by hand', () => {
-    const root = workspace();
-    const r = write(root, SETTINGS, 'fn mark() -> Option<Image> {\n    pictures::open_outside(ink, 14)\n}\n');
-    assert.strictEqual(r.exitCode, 2, r.stderr);
-    assert.match(r.stderr, /draws the open-outside mark by hand/);
+test('blocks a settings file that ends a row in a mark other than the chevron', () => {
+    const marks = [
+        ['pictures::open_outside(ink, 14)', 'pictures::open_outside'],
+        ['icon(Icon::Enter, 14.0, ink)', 'Icon::Enter'],
+        ['icon(Icon::Copy, 14.0, ink)', 'Icon::Copy'],
+        ['icon(Icon::Reveal, 14.0, ink)', 'Icon::Reveal'],
+        ['settings_action_mark(id, mark, busy, row, kit)', 'settings_action_mark'],
+        ['settings_copy_mark(id, copied, row, kit)', 'settings_copy_mark'],
+    ];
+    for (const [call, name] of marks) {
+        const root = workspace();
+        const r = write(root, SETTINGS, `fn ending() {\n    ${call};\n}\n`);
+        assert.strictEqual(r.exitCode, 2, `${name}: ${r.stderr}`);
+        assert.ok(r.stderr.includes(`ends a settings row in a mark other than the chevron (${name})`), r.stderr);
+        assert.match(r.stderr, /a row that acts right here ends in nothing/);
+    }
 });
 
-test('lets the components own the launch part', () => {
+test('the components may not end a row in another mark either', () => {
     const root = workspace();
     const r = write(root, 'libs/gpui/src/settings_panel/components/launch.rs', 'fn mark() {\n    pictures::open_outside(ink, 14);\n}\n');
-    assert.strictEqual(r.exitCode, 0, r.stderr);
+    assert.strictEqual(r.exitCode, 2, r.stderr);
+    assert.match(r.stderr, /ends a settings row in a mark other than the chevron/);
+});
+
+test('a surface outside settings keeps its reveal and copy marks', () => {
+    const root = workspace();
+    const r = write(root, 'plugins/launcher/src/ui/files.rs', 'fn glyph() -> Icon {\n    Icon::Reveal\n}\n');
+    assert.doesNotMatch(r.stderr, /ends a settings row/);
 });
 
 test('reads the code after an out-of-line test module declaration', () => {

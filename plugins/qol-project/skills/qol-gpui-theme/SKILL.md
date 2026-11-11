@@ -319,7 +319,7 @@ same `tile_arts`, `choose_step` and `choose_hints`.
 | Crumb trail | `components::settings_crumb_trail` | the Heading style, separator `/` at px `SPACE_TIGHT` |
 | Setting row | `SettingsRow::setting` | h `HEIGHT_SETTING_ROW`, px `SPACE_INSET`, py `SPACE_TIGHT`, gap `SPACE_CELL`; `.separated(true)` draws the top hairline; `.opens(true)` ends it in the open part (see "Rows that open") |
 | Open part | `SettingsRow::opens(true)`, `settings_block_header(.., opens, ..)` | the 8 x 14 arrow drawn by `pictures::chevron`, last in the row, `SPACE_CELL` after the value; only these two draw it |
-| Launch part | `SettingsRow::launches(Some(Launch::file(name, app)))`, `Launch::link()` | last in the row, h `HEIGHT_INLINE`, gap `SPACE_INSET`, no well of its own: the file tag (its extension upper-cased, `Key` style, on a `KEY_CHIP_HEIGHT` chip, px `SPACE_SNUG`, rounded `RADIUS_TIGHT`, on the row ground's `well`) and the 14 x 14 open-outside mark drawn by `pictures::open_outside`; only `SettingsRow::launches` draws it, and `settings_launch_description` draws a file row's description (see "Rows that launch") |
+| Launch part | `SettingsRow::launches(Some(Launch::file(name, app)))`, `Launch::link()` | last in the row, h `HEIGHT_INLINE`, gap `SPACE_INSET`, no well of its own: the file tag (its extension upper-cased, `Key` style, on a `KEY_CHIP_HEIGHT` chip, px `SPACE_SNUG`, rounded `RADIUS_TIGHT`, on the row ground's `well`) and the open part, the same 8 x 14 arrow `SettingsRow::opens` draws; only `SettingsRow::launches` draws it, and `settings_launch_description` draws a file row's description (see "Rows that launch") |
 | Rule / add row | `SettingsRow::rule` / `::add` | h `HEIGHT_RULE_ROW`, same insets, rounded `RADIUS_CONTROL` |
 | Carried row | `SettingsRow::lifted(lift)` over `settings_row_shade(lift, kit)` | a reorder card's picked-up entry: as `lift` runs from 0 to 1 the row rises `SPACE_INSET`, moves right by `SPACE_CELL` and takes the float shadow, over a shade on the pane well ground that fills the slot it will land in |
 | Label group | `components::settings_label_group(label, Option<description>, row, kit)` | `flex_1 min_w_0 flex flex_col`, gap `SPACE_STACK`; `settings_label` + optional `settings_description` |
@@ -646,10 +646,10 @@ list or entry array drawn as a card) gets it from
 - An add row reads ↵ `add` and draws no arrow; it starts something rather than
   going into it.
 - A row that opens something outside qol (a file in its default app, a web
-  page) draws no arrow: it does not go deeper. It ends in the launch part
-  instead (see "Rows that launch"). Its action is named `Launch…` or
-  `Visit…`, never `Open…`, because the guard reads `Open…` as going deeper
-  (the Profiles backup files are `LaunchBackup`, the GitHub sign-in row is
+  page) ends in the launch part, which draws the same arrow after the file
+  tag (see "Rows that launch"). Its action is named `Launch…` or `Visit…`,
+  never `Open…`, because the guard reads `Open…` as going deeper (the
+  Profiles backup files are `LaunchBackup`, the GitHub sign-in row is
   `VisitGitHub`).
 - At rest the arrow is `faint` at 40 percent on the pane and wakes to full on
   hover, stepping `CHOICE_CHEVRON_HOVER_STEP` right; on the band it is band
@@ -664,15 +664,49 @@ Linked devices > a linked computer all hinted ↵ open with no arrow, because
 the arrow belonged to `SettingsChoiceValue` and each page drew it by hand or
 not at all.
 
+### Row endings
+
+Picked 2026-11-11 in round 17, "Row endings, one meaning", variation 3 "A
+chevron means it opens". A settings row ends in a switch, a value, the arrow,
+or nothing. The arrow is the only mark, and it has one meaning: ↵ opens
+something, a page, a list or another app. A row that acts right here (scan,
+pair, install, remove, check now) ends in nothing; the hint bar names what ↵
+does, and while the action runs the row shows the spinner
+`settings_action_busy(id, busy, kit)` draws in the same place.
+
+- No run mark, no copy mark, no leave arrow, no red cross. A row that destroys
+  keeps its red label (`settings_destroy_label_group`) and the red edge while
+  it is selected.
+- No row copies its value. A row that only shows a value does nothing on ↵
+  and the hint bar shows no ↵ for it. A row that exists to copy something
+  says so in its label ("Copy invitation") and is an action row.
+- A status field (`type = "status"`) lists its normal values in
+  `hide_values`, so its row shows only while something needs the user. It
+  takes no ↵.
+- `qol_gpui::ActionMark` names the marks the kit draws. Reveal and copy belong
+  to launcher and screenshot actions, never to a settings row.
+- Enforced by the design guard rule `ending` (`qac lint`): no file in the
+  settings scope, the components included, names `Icon::Enter`, `Icon::Copy`,
+  `Icon::Reveal`, `pictures::open_outside`, `settings_action_mark` or
+  `settings_copy_mark`. The contract lint rule `statusQuiet` denies a status
+  field without `hide_values`, and `a_status_row_shows_only_while_it_needs_the_user`
+  in `libs/config/tests/contract_cards.rs` holds the tray's own pages to it.
+
+Incident (2026-11-11): the Notifications page showed "Other apps right now",
+a row that only reported a state, selected, with a copy mark and ↵ `copy`.
+The user asked "why copy?" and then: "I am confused by the glyphs on the right
+end because they represent different concepts and actions". Rows ended in a
+switch, a value, the arrow, the run mark, the leave arrow, the copy mark or a
+red cross.
+
 ### Rows that launch
 
 Picked 2026-11-02 in round 195, "Opens outside, with its file tag", variation
-3 (the app named in the description), replacing variation 2 "One well". A row
-whose ↵ opens something outside qol ends in the launch part, never the arrow:
-the arrow means a page in qol, the open-outside mark (a box with an arrow
-leaving its corner) means another app. The row says
-`SettingsRow::launches(Some(launch))` and the kit draws the file tag chip, when
-the launch has one, then the mark.
+3 (the app named in the description). A row whose ↵ opens something outside
+qol ends in the launch part. Since round 17 (2026-11-11) the launch part ends
+in the arrow, not the open-outside mark: the arrow means ↵ opens something,
+in qol or outside it. The row says `SettingsRow::launches(Some(launch))` and
+the kit draws the file tag chip, when the launch has one, then the arrow.
 
 - A file: `Launch::file(file_name, app)`. The tag is the extension
   upper-cased (`JSON`); `app` is the name of the app the system opens it
@@ -688,15 +722,14 @@ the launch has one, then the mark.
   app is known (`20261102-152119-conflict.json · Saved when both sides had
   changes · opens in Visual Studio Code`). The ↵ hint names the app too:
   `open in Visual Studio Code`.
-- A web page: `Launch::link()`, the mark alone; the row's description already
+- A web page: `Launch::link()`, the arrow alone; the row's description already
   names the address.
-- The tag, the mark and the file name are `soft` on the pane and band `ink`
-  on the band.
+- The tag and the file name are `soft` on the pane and band `ink` on the
+  band; the arrow follows "Rows that open".
 - Launching rows: Profiles backup files and the GitHub sign-in row.
 - Enforced by the design guard rule `launching` (`qac lint`): a settings file
   that names a `Launch…` or `Visit…` action must give the row `.launches(..)`,
-  in the file itself when it builds `SettingsRow`s, else in a file beside it;
-  and nothing outside the components calls `pictures::open_outside`.
+  in the file itself when it builds `SettingsRow`s, else in a file beside it.
 
 ### Action marks
 
