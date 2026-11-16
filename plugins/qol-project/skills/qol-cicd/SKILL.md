@@ -138,6 +138,23 @@ that environment. The repository has no deploy key (qol-tools/qol#538, which
 replaced the key the 2026-11 security review found readable by every branch
 workflow).
 
+The ruleset "release tags" (id 27357020) lets only that app and admins create or
+move a tag that matches `*-v*.*.*`, so a workflow token cannot make or move a
+release tag, even one a pull request's own workflow grants `contents: write`.
+It does not restrict deletion, because `release-prune.yml` deletes old tags with
+the workflow token. If a release ever fails at "Create immutable tags" with a
+ruleset violation, the app is missing from that ruleset's bypass list.
+
+One gap stays open by plan, not by choice: a pull request that reaches the merge
+queue runs its own `ci.yml` there, with whatever token scopes it declares. The
+rule that would pin `ci.yml` and `claude-review.yml` to `main` ("Require
+workflows to pass before merging") exists only in organization rulesets, which
+GitHub offers on Team and Enterprise, and qol-tools is on Free. What such a run
+can still do is bounded by the two rulesets, the environments (`versioning`,
+`plugin-index` and `github-pages` are limited to `main`) and the index's
+provenance checks: it cannot reach `main`, a release tag, a signing key or the
+index.
+
 A pull request run uploads the base it tested as a `tested-base` artifact.
 The `merge_group` plan runs `.github/scripts/queue_trust.py` instead of planning afresh: when the pull request run of the entry's head passed the merge gate and nothing that landed since its tested base reaches a crate it tested, the entry is trusted.
 A trusted entry skips check, the registry tool build and, when every OS plan skips, the release build, and the queue gate accepts it; otherwise the entry runs every affected job and the step logs why.
