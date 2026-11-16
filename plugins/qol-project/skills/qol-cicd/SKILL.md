@@ -148,8 +148,8 @@ ruleset violation, the app is missing from that ruleset's bypass list.
 One gap stays open by plan, not by choice: a pull request that reaches the merge
 queue runs its own `ci.yml` there, with whatever token scopes it declares. The
 rule that would pin `ci.yml` and `claude-review.yml` to `main` ("Require
-workflows to pass before merging") exists only in organization rulesets, which
-GitHub offers on Team and Enterprise, and qol-tools is on Free. What such a run
+workflows to pass before merging") exists only in organization rulesets on
+GitHub Enterprise Cloud, and qol-tools is on Free. What such a run
 can still do is bounded by the two rulesets, the environments (`versioning`,
 `plugin-index` and `github-pages` are limited to `main`) and the index's
 provenance checks: it cannot reach `main`, a release tag, a signing key or the
