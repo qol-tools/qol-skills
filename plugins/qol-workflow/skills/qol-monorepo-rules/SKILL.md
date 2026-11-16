@@ -225,7 +225,9 @@ blocks, the owner can comment `/review-override <sha>` with that commit's full
 records the override in a pull request comment and in the claude review check
 and passes that check for that commit only. An override that names another
 commit or comes while the review runs is refused, and a new push is reviewed
-again. Post it only when the user asks for an override.
+again. Only the user can post it: agent sessions sign in to GitHub as
+`kmrh47-agents`, which has the Write role and is not the owner, so when a pull
+request needs an override, ask the user to post that line themselves.
 
 Pushing fixes to the branch of a pull request the user asked for is part of
 that request. Re-arm `gh pr merge --auto` when the merge queue dropped the pull

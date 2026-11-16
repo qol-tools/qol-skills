@@ -166,6 +166,13 @@ Anything it cannot verify fails the check.
 Only a token of the `qol-tools-gate` app (Checks write) posts the check, minted from `MAIN_GATE_APP_CLIENT_ID` and `MAIN_GATE_APP_PRIVATE_KEY` in the main-only `main-gate` environment.
 Until the client id is set, the job logs its verdict and posts nothing.
 Stage 2 makes the ruleset require `main gate` from that app's integration id, beside `merge gate` and `claude review`, once the check has been seen on pull requests and merge groups.
+The app is set up and the check posts on pull request heads; a merge group commit and a `/gate-approve` are still to be seen.
+
+Agent sessions on the owner's PC sign in to GitHub as `kmrh47-agents` (`gh` and git over https), an account with the Write role and no ruleset bypass.
+It opens, pushes, readies and queues pull requests, and it can set secrets and variables, which GitHub allows any Write account.
+It cannot edit rulesets, environments or the apps, cannot push to `main` past the queue, and its `/review-override` and `/gate-approve` comments do not count.
+Those are owner actions: give the user the link and the exact clicks, or the exact line to post.
+The tray's own GitHub sign-in on that PC is still the owner's with the `repo` scope, so the split holds for what agents do by default, not against a session that reads that file.
 
 A pull request run uploads the base it tested as a `tested-base` artifact.
 The `merge_group` plan runs `.github/scripts/queue_trust.py` instead of planning afresh: when the pull request run of the entry's head passed the merge gate and nothing that landed since its tested base reaches a crate it tested, the entry is trusted.
