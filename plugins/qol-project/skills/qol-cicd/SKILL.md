@@ -161,6 +161,7 @@ It checks out only main's `.github/scripts`, reads the pull request through the 
 `main_gate.py` posts one check, `main gate`, on the pull request head or the merge group commit.
 The check passes when no changed file matches `.github/main-gate-paths`, which lists `.github/**` and every file outside it that decides the two required checks, such as `.githooks/**`, `.cargo/**`, `.config/**`, `.qac/**`, `.claude/**` and `CLAUDE.md`.
 Otherwise the owner must approve the exact head commit with an unedited comment whose whole body is `/gate-approve <40-character sha>`.
+`qol pr approve [number]` posts that comment for the pull request's current head; it needs a terminal on stdin, so only the owner runs it, never an agent.
 In the queue, every entry at or ahead of this one that touches a protected path needs that approval, and every protected file in the group must equal its approved head's copy.
 Anything it cannot verify fails the check.
 Only a token of the `qol-tools-gate` app (Checks write) posts the check, minted from `MAIN_GATE_APP_CLIENT_ID` and `MAIN_GATE_APP_PRIVATE_KEY` in the main-only `main-gate` environment.
