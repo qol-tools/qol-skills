@@ -33,6 +33,7 @@ const CANDIDATE_PATH = /[\\/]plugins[\\/][^\\/]+[\\/](?:plugin\.toml|qol-config\
 const SKILL = 'qol-tray:qol-tray-core, "Contracts are honoured to the letter"';
 const PLATFORM_OS = new Set(['linux', 'macos', 'windows']);
 const BOOLEAN_STATES = new Set(['true', 'false']);
+const SLIDER_VARIANTS = new Set(['slider', 'wide_slider', 'level_slider']);
 const MAX_LISTED = 12;
 const CACHE_SLACK = 4;
 
@@ -60,6 +61,7 @@ const RULES = {
     redundantHeader: ['Settings header repeats its only row', 'give the section a label that differs from its only field label, or add a second field'],
     statusValue: ['Status value is never emitted', 'emit the state from the plugin or delete it from the map'],
     statusQuiet: ['Status row shows while all is well', 'list the normal states in hide_values, so the row shows only while something needs the user'],
+    numberSlider: ['Bounded number is not a slider', 'add variant = "slider", "wide_slider" or "level_slider", so the number drags, types and steps like every other bounded number in settings'],
     platformScope: ['Setting is read on one OS only', 'add platforms = [...] naming the OSes whose code reads it, or read it on the others'],
     unhandled: ['Runtime entry is never handled', "handle the id in the plugin's dispatch before declaring it, or delete it from qol-runtime.toml"],
 };
@@ -724,6 +726,28 @@ function quietFindings(doc, fields) {
     return out;
 }
 
+function plainBoundedNumber(entry, kindKey) {
+    return isTable(entry) && entry[kindKey] === 'number' && typeof entry.min === 'number' && typeof entry.max === 'number' && !SLIDER_VARIANTS.has(entry.variant);
+}
+
+function sliderFindings(doc, fields) {
+    const out = [];
+    for (const [id, field] of Object.entries(fields)) {
+        if (!isTable(field)) continue;
+        if (field.hidden !== true && plainBoundedNumber(field, 'type')) {
+            out.push(finding(doc.file, toml.keyLine(doc.lines, fields, id), 'numberSlider', id, `[field.${id}] is a number with a min and a max but no slider variant, so it shows as a bare number well`));
+        }
+        const controls = Array.isArray(field.row_controls) ? field.row_controls : [];
+        controls.forEach((control, index) => {
+            if (!plainBoundedNumber(control, 'control')) return;
+            const name = typeof control.label === 'string' ? control.label : String(index);
+            const line = toml.keyLine(doc.lines, control, 'control') || toml.keyLine(doc.lines, fields, id);
+            out.push(finding(doc.file, line, 'numberSlider', `${id}:control:${name}`, `[[field.${id}.row_controls]] "${name}" is a number with a min and a max but no slider variant, so it shows as a bare number well`));
+        });
+    }
+    return out;
+}
+
 function filled(value) {
     return typeof value === 'string' && value.trim() !== '';
 }
@@ -781,6 +805,7 @@ function configFindings(repo, dir, docs) {
     }
     out.push(...statusFindings(doc, dir, facts, fields));
     out.push(...quietFindings(doc, fields));
+    out.push(...sliderFindings(doc, fields));
     return out;
 }
 

@@ -178,6 +178,14 @@ pub struct FieldSpec {
     pub tone_map: Option<IndexMap<String, String>>,
     #[serde(default)]
     pub hide_values: Option<Vec<String>>,
+    #[serde(default)]
+    pub min: Option<f64>,
+    #[serde(default)]
+    pub max: Option<f64>,
+    #[serde(default)]
+    pub variant: Option<String>,
+    #[serde(default)]
+    pub hidden: Option<bool>,
 }
 
 impl FieldSpec {
@@ -281,7 +289,7 @@ const TRAY = `fn honour(manifest: &PluginManifest, config: &ConfigSpecV1, runtim
     }
     let _ = (&config.schema_version, &config.title, &config.description, &config.section);
     for field in config.field.values() {
-        let _ = (&field.kind, &field.label, &field.config_key, &field.default, &field.query, &field.active_query, &field.section, &field.platforms, &field.label_map, &field.tone_map, &field.hide_values);
+        let _ = (&field.kind, &field.label, &field.config_key, &field.default, &field.query, &field.active_query, &field.section, &field.platforms, &field.label_map, &field.tone_map, &field.hide_values, &field.min, &field.max, &field.variant, &field.hidden);
     }
     for section in config.section.values() {
         let _ = (&section.label, &section.description, &section.actions, &section.platforms);
@@ -681,6 +689,22 @@ test('a status field that never hides is denied, one that hides its normal state
     assert.match(reason, /list the normal states in hide_values/);
     denial(write(repo, 'plugins/demo/qol-config.toml', `${CONFIG}${loud}hide_values = []\n`));
     allowed(write(repo, 'plugins/demo/qol-config.toml', `${CONFIG}${loud}hide_values = ["ok"]\n`));
+});
+
+test('a number with a min and a max is denied until it names a slider variant', () => {
+    const repo = fixture();
+    const level = '\n[field.level]\ntype = "number"\nlabel = "Level"\nactive_query = "status"\n';
+    const bare = `${CONFIG}${level}min = 0\nmax = 10\n`;
+    const reason = denial(write(repo, 'plugins/demo/qol-config.toml', bare));
+    assert.match(reason, /Bounded number is not a slider: \[field\.level\] is a number with a min and a max but no slider variant/);
+    assert.match(reason, /add variant = "slider", "wide_slider" or "level_slider"/);
+    denial(write(repo, 'plugins/demo/qol-config.toml', `${bare}variant = "danger"\n`));
+    for (const variant of ['slider', 'wide_slider', 'level_slider']) {
+        allowed(write(repo, 'plugins/demo/qol-config.toml', `${bare}variant = "${variant}"\n`));
+    }
+    allowed(write(repo, 'plugins/demo/qol-config.toml', `${bare}hidden = true\n`));
+    allowed(write(repo, 'plugins/demo/qol-config.toml', `${CONFIG}${level}min = 0\n`));
+    allowed(write(repo, 'plugins/demo/qol-config.toml', `${CONFIG}${level}`));
 });
 
 test('a status map key the plugin never emits is denied, while emitted and boolean keys pass', () => {

@@ -683,6 +683,11 @@ does, and while the action runs the row shows the spinner
 - A status field (`type = "status"`) lists its normal values in
   `hide_values`, so its row shows only while something needs the user. It
   takes no ↵.
+- A number with a `min` and a `max` names a slider variant (`slider`,
+  `wide_slider` or `level_slider`), on a field and on a list item's
+  `row_controls` entry alike, so every bounded number drags, types and steps
+  the same way. A hidden field is exempt. The contract lint rule
+  `numberSlider` denies a bounded number without one.
 - `qol_gpui::ActionMark` names the marks the kit draws. Reveal and copy belong
   to launcher and screenshot actions, never to a settings row.
 - Enforced by the design guard rule `ending` (`qac lint`): no file in the
