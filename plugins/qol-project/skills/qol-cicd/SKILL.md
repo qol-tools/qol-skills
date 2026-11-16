@@ -155,7 +155,7 @@ can still do is bounded by the two rulesets, the environments (`versioning`,
 provenance checks: it cannot reach `main`, a release tag, a signing key or the
 index.
 
-The main gate is the hand-built replacement for that rule, at stage 1: it runs and is not yet required (qol-tools/qol#550).
+The main gate is the hand-built replacement for that rule (qol-tools/qol#550), and the ruleset requires it.
 `main-gate.yml` starts on `workflow_run` of `tests` (`types: [requested]`) and on `issue_comment`, so it always runs main's definition.
 It checks out only main's `.github/scripts`, reads the pull request through the API, and passes every event value through `env:`.
 `main_gate.py` posts one check, `main gate`, on the pull request head or the merge group commit.
@@ -166,7 +166,7 @@ In the queue, every entry at or ahead of this one that touches a protected path 
 Anything it cannot verify fails the check.
 Only a token of the `qol-tools-gate` app (Checks write) posts the check, minted from `MAIN_GATE_APP_CLIENT_ID` and `MAIN_GATE_APP_PRIVATE_KEY` in the main-only `main-gate` environment.
 Until the client id is set, the job logs its verdict and posts nothing.
-Stage 2 makes the ruleset require `main gate` from that app's integration id, beside `merge gate` and `claude review`, once the check has been seen on pull requests and merge groups.
+The ruleset "main merge queue" requires `main gate` from that app's integration id (5787350), beside `merge gate` and `claude review`, so a check of that name posted by a workflow token does not count. A pull request opened before the gate was required gets the check on its next `tests` run.
 The app is set up and all of it has been seen live: the check on a pull request head, an owner `/gate-approve` turning it green, the check on a merge group commit (qol-tools/qol#552), and a branch workflow that names the `main-gate`, `versioning` or `plugin-index` environment being refused by the branch policy, with and without `deployment: false`.
 
 Agent sessions on the owner's PC sign in to GitHub as `kmrh47-agents` (`gh` and git over https), an account with the Write role and no ruleset bypass.
