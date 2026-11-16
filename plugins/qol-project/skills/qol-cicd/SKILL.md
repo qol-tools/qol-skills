@@ -155,6 +155,18 @@ can still do is bounded by the two rulesets, the environments (`versioning`,
 provenance checks: it cannot reach `main`, a release tag, a signing key or the
 index.
 
+The main gate is the hand-built replacement for that rule, at stage 1: it runs and is not yet required (qol-tools/qol#550).
+`main-gate.yml` starts on `workflow_run` of `tests` (`types: [requested]`) and on `issue_comment`, so it always runs main's definition.
+It checks out only main's `.github/scripts`, reads the pull request through the API, and passes every event value through `env:`.
+`main_gate.py` posts one check, `main gate`, on the pull request head or the merge group commit.
+The check passes when no changed file matches `.github/main-gate-paths`, which lists `.github/**` and every file outside it that decides the two required checks, such as `.githooks/**`, `.cargo/**`, `.config/**`, `.qac/**`, `.claude/**` and `CLAUDE.md`.
+Otherwise the owner must approve the exact head commit with an unedited comment whose whole body is `/gate-approve <40-character sha>`.
+In the queue, every entry at or ahead of this one that touches a protected path needs that approval, and every protected file in the group must equal its approved head's copy.
+Anything it cannot verify fails the check.
+Only a token of the `qol-tools-gate` app (Checks write) posts the check, minted from `MAIN_GATE_APP_CLIENT_ID` and `MAIN_GATE_APP_PRIVATE_KEY` in the main-only `main-gate` environment.
+Until the client id is set, the job logs its verdict and posts nothing.
+Stage 2 makes the ruleset require `main gate` from that app's integration id, beside `merge gate` and `claude review`, once the check has been seen on pull requests and merge groups.
+
 A pull request run uploads the base it tested as a `tested-base` artifact.
 The `merge_group` plan runs `.github/scripts/queue_trust.py` instead of planning afresh: when the pull request run of the entry's head passed the merge gate and nothing that landed since its tested base reaches a crate it tested, the entry is trusted.
 A trusted entry skips check, the registry tool build and, when every OS plan skips, the release build, and the queue gate accepts it; otherwise the entry runs every affected job and the step logs why.
