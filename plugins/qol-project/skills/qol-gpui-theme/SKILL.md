@@ -696,6 +696,16 @@ does, and while the action runs the row shows the spinner
   `settings_copy_mark`. The contract lint rule `statusQuiet` denies a status
   field without `hide_values`, and `a_status_row_shows_only_while_it_needs_the_user`
   in `libs/config/tests/contract_cards.rs` holds the tray's own pages to it.
+- A row states its fact (a picked value, a status, a count) as a tag,
+  `settings_tag(text, tone, row, kit)`, just left of its switch or its arrow.
+  `settings_tagged_label_group(label, tags, description, row, kit)` puts the
+  tags there. A pick whose value ships a picture draws it bare at 44 by 28
+  between the tag and the arrow through `SettingsWell`; a pick without one
+  shows only its tag, never its letters or the plugin's mark. An editable
+  text, colour or number keeps its value in its control.
+- Enforced by the design guard rule `row-fact` (`qac lint`): outside the
+  components, the panel's editable value cell and the display layout card, no
+  file in the settings scope calls `settings_value_text`.
 
 Incident (2026-11-11): the Notifications page showed "Other apps right now",
 a row that only reported a state, selected, with a copy mark and ↵ `copy`.

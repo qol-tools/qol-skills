@@ -389,6 +389,22 @@ test('blocks a settings file that ends a row in a mark other than the chevron', 
     }
 });
 
+test('blocks a settings file that states a row fact as loose text', () => {
+    const root = workspace();
+    const r = write(root, SETTINGS, 'fn fact() {\n    settings_value_text("Not connected", tone, row, kit);\n}\n');
+    assert.strictEqual(r.exitCode, 2, r.stderr);
+    assert.match(r.stderr, /states a settings row's fact as loose text/);
+    assert.match(r.stderr, /settings_tag\(text, tone, row, kit\)/);
+});
+
+test('a row fact drawn as a tag passes, and the editable value cell keeps its text', () => {
+    const root = workspace();
+    const tag = write(root, SETTINGS, 'fn fact() {\n    settings_tag("Not connected", tone, row, kit);\n}\n');
+    assert.strictEqual(tag.exitCode, 0, tag.stderr);
+    const cell = write(root, 'libs/gpui/src/settings_panel/view/mod.rs', 'fn cell() {\n    settings_value_text(value, tone, row, kit);\n}\n');
+    assert.strictEqual(cell.exitCode, 0, cell.stderr);
+});
+
 test('the components may not end a row in another mark either', () => {
     const root = workspace();
     const r = write(root, 'libs/gpui/src/settings_panel/components/launch.rs', 'fn mark() {\n    pictures::open_outside(ink, 14);\n}\n');

@@ -63,6 +63,8 @@ const OPENING_USE = 'SettingsRow::opens(true) on the row that enter opens (or se
 const LAUNCHING_ACTION = /\b(Action|Enter|RowAction)::(Launch|Visit)[A-Z(]/;
 const LAUNCHING_PART = '.launches(';
 const LAUNCHING_USE = 'SettingsRow::launches(Some(Launch::file(name, app))) on a row whose enter opens a file in another app, or Launch::link(host) for a web page: the kit then draws the launch part, the file tag and the chevron';
+const FACT_OWNERS = [COMPONENTS, 'libs/gpui/src/settings_panel/view/mod.rs', 'libs/gpui/src/settings_panel/view/display_layout_card.rs'];
+const FACT_USE = 'settings_tag(text, tone, row, kit) placed just left of the switch or the chevron (settings_tagged_label_group(label, tags, description, row, kit) puts it there): a row states its picked value, status or count as a tag, never as loose text';
 const ROW_MARKS = ['Icon::Enter', 'Icon::Copy', 'Icon::Reveal', 'pictures::open_outside(', 'settings_action_mark(', 'settings_copy_mark('];
 const ENDING_USE = 'nothing: the chevron is the only mark a settings row ends in, drawn by SettingsRow::opens(true) or SettingsRow::launches(..) when enter opens a page, a list or another app; a row that acts right here ends in nothing and the hint bar names what enter does';
 const TEST_MODULE = /#\[cfg\(test\)\]\s*(?:#\[[^\]]*\]\s*)*(?:pub(?:\([^)]*\))?\s+)?mod\s+\w+\s*\{/;
@@ -550,6 +552,14 @@ function endingRules(relative, body, add) {
     });
 }
 
+function factRules(relative, body, add) {
+    if (!inSettingsScope(relative) || FACT_OWNERS.some(owner => relative.startsWith(owner))) return;
+    body.split('\n').forEach((line, index) => {
+        if (isCommentLine(line) || !line.includes('settings_value_text(')) return;
+        add('row-fact', index + 1, 'states a settings row\'s fact as loose text', FACT_USE);
+    });
+}
+
 function settingsPageRules(relative, body, add) {
     if (!relative.startsWith(SETTINGS_PAGES) || !/impl CustomSettingsBreadcrumbs for/.test(body)) return;
     const page = (what, use) => add('settings-page', 0, what, use);
@@ -621,6 +631,7 @@ function rustViolations(relative, content, root) {
     openingRules(relative, body, root, add);
     launchingRules(relative, body, root, add);
     endingRules(relative, body, add);
+    factRules(relative, body, add);
     settingsPageRules(relative, body, add);
     return found;
 }
