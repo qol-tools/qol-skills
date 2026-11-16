@@ -167,7 +167,7 @@ Anything it cannot verify fails the check.
 Only a token of the `qol-tools-gate` app (Checks write) posts the check, minted from `MAIN_GATE_APP_CLIENT_ID` and `MAIN_GATE_APP_PRIVATE_KEY` in the main-only `main-gate` environment.
 Until the client id is set, the job logs its verdict and posts nothing.
 Stage 2 makes the ruleset require `main gate` from that app's integration id, beside `merge gate` and `claude review`, once the check has been seen on pull requests and merge groups.
-The app is set up and the check posts on pull request heads; a merge group commit and a `/gate-approve` are still to be seen.
+The app is set up and all of it has been seen live: the check on a pull request head, an owner `/gate-approve` turning it green, the check on a merge group commit (qol-tools/qol#552), and a branch workflow that names the `main-gate`, `versioning` or `plugin-index` environment being refused by the branch policy, with and without `deployment: false`.
 
 Agent sessions on the owner's PC sign in to GitHub as `kmrh47-agents` (`gh` and git over https), an account with the Write role and no ruleset bypass.
 It opens, pushes, readies and queues pull requests, and it can set secrets and variables, which GitHub allows any Write account.
