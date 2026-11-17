@@ -228,8 +228,8 @@ extend `settings_panel/` instead. What the kit module guarantees:
    the row with `row_swatch`, and a switch on the row with `row_toggle`
    (`action` and `active_action`). `row_controls` needs a `qol-runtime.toml`.
    A list with `detached = true` never draws on the top level: it draws only
-   where an item's row action links to it. Lights is the reference
-   (`plugins/lights/qol-config.toml`).
+   where an item's row action links to it. Lights is the reference: the
+   `qol-config.toml` of `qol-lights`.
    Wire payload-bearing adapters with `SettingsRuntime::with_input_action`;
    never decode row data or build action cards in plugin-specific GPUI code.
 7. Every change saves immediately by PUTting **row values merged over
