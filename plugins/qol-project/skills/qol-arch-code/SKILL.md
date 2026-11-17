@@ -81,7 +81,7 @@ Rules for every Rust crate:
 
 ## Plugin-specific directory hygiene
 
-The plugin `src/` root is a composition layer, not a dumping ground. New Rust files directly under it are limited to `main.rs`, `lib.rs`, and optional `cli.rs`. Put implementation code under the capability, adapter, or presentation boundary that owns it.
+The plugin `src/` root is a composition layer, not a dumping ground. Rust files directly under it are limited to `main.rs`, `lib.rs`, and optional `cli.rs`. Put implementation code under the capability, adapter, or presentation boundary that owns it.
 
 Rules:
 
@@ -705,19 +705,21 @@ All three should be replaced with the trait+impls pattern above.
 
 This skill ships with a Claude Code PreToolUse hook (`bin/check-qol-arch-code.cjs`) that blocks Edit/Write/MultiEdit/NotebookEdit operations introducing the violations listed above. Cross-platform checks are active on `*.rs` files in a qol-tools repository, recognized by a `qol` or `qol-*` folder in the path or by a git remote under `github.com/qol-tools/`, whatever the checkout or worktree folder is called; plugin-layout checks activate when the nearest crate root contains `plugin.toml`. Specifically blocks:
 
-- New Rust implementation modules directly under a plugin's `src/` root. Only `main.rs`, `lib.rs`, and optional `cli.rs` may be introduced there.
-- New `name.rs` + `name/` module hybrids in any Rust crate. Modules with children use `name/mod.rs`.
+- Rust implementation modules directly under a plugin's `src/` root. Only `main.rs`, `lib.rs`, and optional `cli.rs` live there.
+- `name.rs` + `name/` module hybrids in any Rust crate. Modules with children use `name/mod.rs`.
 - Mixed flat and directory-backed OS module forms within one `platform/` directory.
-- New files under catch-all Rust source directories named `common`, `helper(s)`, or `util(s)`.
-- New Rust implementation modules at the qol-tray source root; only `main.rs` and `lib.rs` are accepted.
+- Files under catch-all Rust source directories named `common`, `helper(s)`, or `util(s)`.
+- Rust implementation modules at the qol-tray source root; only `main.rs` and `lib.rs` are accepted.
 - `compile_error!(...)` anywhere.
 - A cfg predicate naming `target_os` outside the canonical mod.rs re-export pattern (`#[cfg(target_os = "X")] mod X;` or `#[cfg(target_os = "X")] pub use X::Platform;`), in `#[cfg]`, `#[cfg_attr]` and inner `#![cfg]` attributes, at any depth of `all`/`any`/`not` and across lines. It counts when it decides on the OS: its value differs between Linux, macOS and Windows for some setting of its other flags, so `#[cfg(all(debug_assertions, target_os = "linux"))]` and `#[cfg_attr(not(target_os = "macos"), allow(dead_code))]` count and `any(target_os = "linux", target_os = "macos", target_os = "windows")` does not. `bin/rust-cfg.cjs` reads every predicate: it is the one cfg parser the qol-project checkers share, the test filter included. The report names each attribute and its item by line.
 - OS-named files (`linux.rs`, `macos.rs`, `windows.rs`) placed outside a `platform/` directory; these must always live under `platform/` (per-feature or top-level).
 - New target-selection facades that omit Linux, macOS, or Windows without selecting an explicit fallback, and callable-surface drift between complete OS adapter sets.
 - Platform decision signals outside an architecture boundary, each listed with its lines: the `cfg!` macros, OS family cfgs, runtime OS constants and OS-specific imports from "Facade decision points" above, OS command dispatch, platform-token branching, and platform-token storage/path routing. The OS-only crates come from the target tables of the nearest `Cargo.toml` with a `[package]` (`[build-dependencies]` for `build.rs`), so a new target-only dependency is covered the moment it is declared, with no list to maintain. Incident (2026-11): #498 and #536 grew `libs/runtime/src/probe.rs` with `#[cfg(all(debug_assertions, unix))]`, `std::os::unix` and `libc` calls that the old pattern list never matched.
 
+The first five items, Rust code in a plugin-root `ui/` and browser assets in `src/ui/` are layout: they hold for every file, not only new ones, so an edit to a file in the wrong place is blocked until the file moves, and `qac lint` reports every such file with or without `--base`. `git mv name.rs name/mod.rs` moves a module without changing its path. Incident (2026-11): the layout checks judged only new paths, so 18 sites on main kept the old forms until #566 moved them.
+
 Allowed without challenge:
-- Existing legacy root modules and hybrids remain editable so the guard does not freeze plugins awaiting migration. New layout debt is blocked; existing debt should be removed during the next ownership refactor. A path is new when it does not exist yet; `qac lint --base=<rev>` counts a path new when `<rev>` lacks it, and `qac lint` without a base counts every path new, so it lists the existing layout debt.
+- Vendored crates under `vendor/` and `third_party/` at the repository root, which keep their upstream layout.
 - Rust/GPUI code under `src/ui/`.
 - OS-named files inside any `platform/` directory; those *are* the OS impl, cfg inside is redundant but harmless.
 - Test files, because cross-platform tests legitimately need cfg gates: files under a `tests/`, `test/`, `benches/` or `examples/` folder below the repository root, files named `test.rs`, `tests.rs`, `*_test.rs` or `*_tests.rs`, and a module file that every parent declares only for tests (`#[cfg(test)] mod fixtures;`, with or without `#[path = ..]`), directly or through a test-only parent.
@@ -927,7 +929,7 @@ The rules come in two kinds, and lint treats them differently.
 Rules about the code as it stands (a target_os cfg on a `use`, facade coverage, source layout, adapter-exclusive helpers, allow attributes, plugin data, crate dependency direction, runtime event names) hold or fail on a file alone, so lint checks them on every file.
 Rules about added code (target_os placement, platform decision signals, settings, active monitor, design, test deadlines, logging, runtime event payload shape) compare a file with its earlier content, which a static file does not have.
 Without a base, lint counts every line as added, which turns "do not add X" into "X must never exist".
-`qac lint --base=<rev>` compares those rules with each file at `<rev>` instead: an unchanged file finds nothing, a changed file finds only what it added, a file git sees as moved since `<rev>` compares with its content at the old path, and a file new since `<rev>` counts in full. The layout rules ask whether the path is new, so a moved file's path counts as new for them: a path-only move into directory form passes, and a move into a plugin's `src/` root is reported.
+`qac lint --base=<rev>` compares those rules with each file at `<rev>` instead: an unchanged file finds nothing, a changed file finds only what it added, a file git sees as moved since `<rev>` compares with its content at the old path, and a file new since `<rev>` counts in full.
 CI runs `qac lint --base=<merge base>` over the whole repo, so rules about the code as it stands hold everywhere and rules about added code judge only the pull request.
 A rule goes in one kind or the other, never both: a new rule reads `readBaseline` only when it is about added code. A missing entry, file or link is a fact about the code as it stands, never added code: comparing it with a base keeps every instance already on main.
 `#[cfg(target_os)]` on a `use` outside `platform/` is owned by qol-arch-cross-platform; qol-arch-code leaves those lines to it so one line is never two findings.

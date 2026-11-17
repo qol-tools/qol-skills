@@ -202,13 +202,13 @@ function findMixedPlatformShape(filePath, sourceRoot) {
     return { kind: 'mixed-platform-shape', conflicts, platformDir };
 }
 
-function isNewPath(filePath) {
-    return lintMode.isTarget(filePath) ? lintMode.pathIsNew() : !fs.existsSync(filePath);
+function isVendored(filePath) {
+    return VENDORED_DIRECTORY.test(serde.repoRelative(filePath));
 }
 
 function findSourceLayoutViolation(filePath) {
     const context = findRustSourceContext(filePath);
-    if (!context || path.extname(filePath) !== '.rs' || !isNewPath(filePath)) return null;
+    if (!context || path.extname(filePath) !== '.rs' || isVendored(filePath)) return null;
 
     const hybrid = findModuleHybrid(filePath, context.sourceRoot);
     if (hybrid) return { kind: 'module-hybrid', ...hybrid };
@@ -236,15 +236,13 @@ function findPluginLayoutViolation(filePath) {
     if (!context) return null;
 
     const extension = path.extname(filePath).toLowerCase();
-    const isNew = isNewPath(filePath);
 
-    if (context.area === 'ui' && isNew && extension === '.rs') {
+    if (context.area === 'ui' && extension === '.rs') {
         return { kind: 'rust-in-web-ui' };
     }
 
     if (
         context.area === 'src' &&
-        isNew &&
         context.parts[0] === 'ui' &&
         WEB_ASSET_EXTENSIONS.has(extension)
     ) {
@@ -253,7 +251,6 @@ function findPluginLayoutViolation(filePath) {
 
     if (
         context.area === 'src' &&
-        isNew &&
         context.parts.length === 1 &&
         extension === '.rs' &&
         !PLUGIN_ROOT_RUST_FILES.has(context.parts[0])
@@ -860,7 +857,7 @@ Bypass for this edit only:
 }
 
 const MONITOR_KIT_PACKAGE = 'qol-gpui';
-const VENDORED_PATH_RE = /[\\/](?:vendor|third_party)[\\/]/;
+const VENDORED_DIRECTORY = /^(?:vendor|third_party)[\\/]/;
 
 const MONITOR_SIGNALS = [
     {
@@ -892,7 +889,7 @@ function monitorSignalCounts(content, signals) {
 }
 
 function findNewMonitorSignals(filePath, newContent) {
-    if (VENDORED_PATH_RE.test(filePath)) return [];
+    if (isVendored(filePath)) return [];
     const source = findRustSourceContext(filePath);
     if (!source) return [];
     const signals = MONITOR_SIGNALS.filter(signal => !signal.owns(source));
@@ -1343,11 +1340,11 @@ function blockSourceLayout(filePath, violation) {
 
     switch (violation.kind) {
         case 'source-root-module':
-            problem = `New Rust implementation modules may not be created directly under a plugin's \`src/\` root.`;
+            problem = `Rust implementation modules may not live directly under a plugin's \`src/\` root.`;
             fix = `Keep only \`main.rs\`, \`lib.rs\`, and optional \`cli.rs\` there. Move this code to \`src/<capability>/mod.rs\` and wire it from the crate facade.`;
             break;
         case 'qol-tray-source-root-module':
-            problem = `New Rust implementation modules may not be created directly under qol-tray's \`src/\` root.`;
+            problem = `Rust implementation modules may not live directly under qol-tray's \`src/\` root.`;
             fix = `Keep only \`main.rs\` and \`lib.rs\` there. Move this code beneath the subsystem that owns it and preserve any stable import through a facade re-export.`;
             break;
         case 'module-hybrid':
@@ -1355,7 +1352,7 @@ function blockSourceLayout(filePath, violation) {
             fix = `Represent a module with children as \`<module>/mod.rs\`; do not combine \`<module>.rs\` with \`<module>/\`.`;
             break;
         case 'catch-all-directory':
-            problem = `New Rust code may not be added under a catch-all \`common\`, \`helper(s)\`, or \`util(s)\` directory.`;
+            problem = `Rust code may not live under a catch-all \`common\`, \`helper(s)\`, or \`util(s)\` directory.`;
             fix = `Name the capability or boundary that owns the code and place it there.`;
             break;
         case 'mixed-platform-shape':
@@ -1382,8 +1379,9 @@ ${problem}
 Fix:
   ${fix}
 
-The guard is prospective: existing legacy files remain editable, but new
-layout debt is blocked. See the qol-project:qol-arch-code skill.
+The layout holds for every file, not only new ones, so an edit to a file
+in the wrong place is blocked until the file moves. Vendored crates keep
+their upstream layout. See the qol-project:qol-arch-code skill.
 
 Bypass for this edit only:
   touch .claude/bypass-qol-arch-code
@@ -1792,12 +1790,12 @@ function evaluate(payload) {
     return 0;
 }
 
-function lintFile(filePath, content, baseline = null, options = {}) {
+function lintFile(filePath, content, baseline = null) {
     return lintMode.run(filePath, () => evaluate({
         tool_name: 'Write',
         tool_input: { file_path: filePath, content },
         cwd: path.dirname(filePath),
-    }), baseline, options);
+    }), baseline);
 }
 
 const LOCATORS = [

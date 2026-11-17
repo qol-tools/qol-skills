@@ -1073,6 +1073,7 @@ function fieldReads(files) {
 module.exports = {
     lexRust,
     production,
+    repoRelative,
     testSpans,
     blankSpans,
     isTestAttribute,

@@ -176,7 +176,8 @@ for (const relative of ['tests/placement.rs', 'examples/01_window.rs']) {
 }
 
 test('ignores vendored crates', () => {
-    const { file } = fixture('src/app.rs', undefined, 'vendored');
+    const { root, file } = fixture('src/app.rs', undefined, 'vendored');
+    fs.mkdirSync(path.join(root, '.git'));
     const r = write(file, body(PRIMARY_DISPLAY));
     assert.equal(r.exitCode, 0, r.stderr);
 });

@@ -113,13 +113,21 @@ test("lint --base reads a moved file's baseline from its old path", () => {
   assert.deepEqual(files, ["plugins/fixture/src/settings/mod.rs"]);
 });
 
-test("lint --base counts a moved path as new for the layout rules", () => {
-  const root = repo({ ...PLUGIN, "plugins/fixture/src/feature/mod.rs": "pub fn run() {}\n" });
+test("lint --base judges layout on files the change leaves alone", () => {
+  const root = repo({ ...PLUGIN, "plugins/fixture/src/loose.rs": "pub fn run() {}\n" });
   const base = commitAll(root);
-  execFileSync("git", ["mv", "plugins/fixture/src/feature/mod.rs", "plugins/fixture/src/loose.rs"], { cwd: root });
   const findings = lint(root, [], { base }).findings;
   assert.deepEqual(findings.map(finding => finding.file), ["plugins/fixture/src/loose.rs"]);
   assert.match(findings[0].summary, /directly under a plugin's `src\/` root/);
+});
+
+test("lint --base passes a path-only move into directory form", () => {
+  const raw = "    let _ = qol_config::plugin_config_paths(&[ID]);\n";
+  const root = repo({ ...PLUGIN, "plugins/fixture/src/config/mod.rs": `pub fn paths() {\n${raw}}\n` });
+  const base = commitAll(root);
+  mkdirSync(path.join(root, "plugins/fixture/src/settings/store"), { recursive: true });
+  execFileSync("git", ["mv", "plugins/fixture/src/config/mod.rs", "plugins/fixture/src/settings/store/mod.rs"], { cwd: root });
+  assert.deepEqual(lint(root, [], { base }).findings, []);
 });
 
 test("lint reports a platform tree property once, on the file that owns it", () => {

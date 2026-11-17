@@ -107,7 +107,7 @@ test('passes canonical plugin src root entrypoints and facades', () => {
     }
 });
 
-test('passes edits to grandfathered plugin src root modules', () => {
+test('blocks edits to an existing module directly under a plugin src root', () => {
     const { file } = fixturePluginPath('src/config.rs', 'pub struct Config;\n');
     const r = run({
         tool_name: 'Edit',
@@ -117,18 +117,19 @@ test('passes edits to grandfathered plugin src root modules', () => {
             new_string: 'pub(crate) struct Config;',
         },
     });
-    assert.equal(r.exitCode, 0, r.stderr);
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /may not live directly under a plugin's `src\/` root/);
 });
 
-test('lint judges layout from the base: a file is new when the base lacks it', () => {
+test('lint judges layout on every file, with or without a base', () => {
     const { pluginRoot, file } = fixturePluginPath('src/feature/capture.rs', 'pub fn start() {}\n');
     fs.mkdirSync(path.join(pluginRoot, 'src', 'feature', 'capture'));
     fs.writeFileSync(path.join(pluginRoot, 'src', 'feature', 'capture', 'worker.rs'), 'pub fn work() {}\n');
     const { lintFile } = require(HOOK);
     const content = fs.readFileSync(file, 'utf8');
-    assert.match(lintFile(file, content, null).join('\n'), /cannot use both/);
-    assert.deepEqual(lintFile(file, content, content), []);
-    assert.deepEqual(lintFile(file, content, 'pub fn old() {}\n'), []);
+    for (const baseline of [null, content, 'pub fn old() {}\n']) {
+        assert.match(lintFile(file, content, baseline).join('\n'), /cannot use both/);
+    }
 });
 
 test('layout violations honor the single-edit bypass marker', () => {
@@ -176,7 +177,7 @@ test('blocks a new sibling file module when its directory exists', () => {
     assert.match(r.stderr, /`<module>\/mod\.rs`/);
 });
 
-test('passes edits inside a grandfathered file-directory module hybrid', () => {
+test('blocks edits inside an existing file-directory module hybrid', () => {
     const { pluginRoot, file } = fixturePluginPath(
         'src/capture/worker.rs',
         'pub fn run() {}\n',
@@ -190,7 +191,45 @@ test('passes edits inside a grandfathered file-directory module hybrid', () => {
             new_string: 'pub fn run() { tracing::info!("run"); }',
         },
     });
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /both .*capture\.rs.*sibling directory/s);
+    assert.match(r.stderr, /holds for every file/);
+});
+
+test('leaves vendored crates to their upstream layout', () => {
+    const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'qol-hook-'));
+    const root = path.join(temp, 'qol-monorepo');
+    const crateRoot = path.join(root, 'vendor', 'gpui');
+    fs.mkdirSync(path.join(root, '.git'), { recursive: true });
+    fs.mkdirSync(path.join(crateRoot, 'src', 'app'), { recursive: true });
+    fs.writeFileSync(path.join(crateRoot, 'Cargo.toml'), '[package]\nname = "gpui"\nversion = "0.1.0"\n');
+    const file = path.join(crateRoot, 'src', 'app.rs');
+    fs.writeFileSync(file, 'mod context;\npub fn run() {}\n');
+    let r = run({
+        tool_name: 'Edit',
+        tool_input: { file_path: file, old_string: 'run', new_string: 'start' },
+    });
     assert.equal(r.exitCode, 0, r.stderr);
+    r = run({
+        tool_name: 'Write',
+        tool_input: { file_path: path.join(crateRoot, 'src', 'app', 'context.rs'), content: 'pub struct Context;\n' },
+    });
+    assert.equal(r.exitCode, 0, r.stderr);
+});
+
+test('judges layout in a checkout that sits inside a folder named vendor', () => {
+    const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'qol-hook-'));
+    const root = path.join(temp, 'vendor', 'qol-monorepo');
+    const crateRoot = path.join(root, 'libs', 'qol-library');
+    fs.mkdirSync(path.join(root, '.git'), { recursive: true });
+    fs.mkdirSync(path.join(crateRoot, 'src', 'capture'), { recursive: true });
+    fs.writeFileSync(path.join(crateRoot, 'Cargo.toml'), '[package]\nname = "qol-library"\nversion = "0.1.0"\n');
+    const r = run({
+        tool_name: 'Write',
+        tool_input: { file_path: path.join(crateRoot, 'src', 'capture.rs'), content: 'mod worker;\n' },
+    });
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /`<module>\/mod\.rs`/);
 });
 
 test('blocks new module hybrids in non-plugin Rust crates', () => {
