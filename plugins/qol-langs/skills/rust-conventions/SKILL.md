@@ -30,6 +30,8 @@ Platform-specific code should be isolated in dedicated modules:
   - This applies to helper functions extracted out of a match just as much as to
     the match itself. Refactoring a `match` into a function is the most common
     way a wildcard sneaks in and a guard is lost.
+  - qac denies a new `_ =>` arm in a match over an enum the workspace declares;
+    "Enforcement: enum match guard" in `qol-project:qol-arch-code` has the shape.
 
 ## Debug probes type-check in release
 
