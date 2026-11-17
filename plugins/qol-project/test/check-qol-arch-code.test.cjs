@@ -44,6 +44,12 @@ function fixtureCratePath(relativePath, content, packageName = 'qol-library') {
     return { root, crateRoot, file };
 }
 
+function fixtureManifestCrate(relativePath, dependencies, content) {
+    const { crateRoot, file } = fixtureCratePath(relativePath, content);
+    fs.appendFileSync(path.join(crateRoot, 'Cargo.toml'), `\n${dependencies}`);
+    return { crateRoot, file };
+}
+
 function fixturePluginPath(relativePath, content) {
     const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'qol-hook-'));
     const root = path.join(temp, 'qol-monorepo');
@@ -952,15 +958,19 @@ test('blocks runtime OS constant outside facade', () => {
 });
 
 test('blocks OS-specific import outside facade', () => {
+    const { file } = fixtureManifestCrate(
+        'src/window/list.rs',
+        '[target.\'cfg(target_os = "macos")\'.dependencies]\ncore-graphics = "0.24"\n',
+    );
     const r = run({
         tool_name: 'Write',
         tool_input: {
-            file_path: '/x/Git/qol-monorepo/src/window/list.rs',
+            file_path: file,
             content: 'use core_graphics::window::CGWindowListCopyWindowInfo;\n',
         },
     });
     assert.equal(r.exitCode, 2);
-    assert.match(r.stderr, /OS-specific import/);
+    assert.match(r.stderr, /OS-specific import: line 1/);
 });
 
 test('blocks OS command dispatch outside facade', () => {
@@ -1216,7 +1226,7 @@ test('blocks a platform cfg added to a production item beside a platform-gated t
         },
     });
     assert.equal(r.exitCode, 2);
-    assert.match(r.stderr, /#\[cfg\(unix\/windows\)\]/);
+    assert.match(r.stderr, /#\[cfg\(\.\.\)\] naming an OS family: line \d+/);
 });
 
 test('blocks platform branching added beside test-only platform data', () => {
@@ -1301,4 +1311,202 @@ test('passes platform decision inside named facade type', () => {
         },
     });
     assert.equal(r.exitCode, 0);
+});
+
+function write(file, content) {
+    return run({ tool_name: 'Write', tool_input: { file_path: file, content } });
+}
+
+function edit(file, oldString, newString) {
+    return run({ tool_name: 'Edit', tool_input: { file_path: file, old_string: oldString, new_string: newString } });
+}
+
+test('blocks target_os nested beside another flag', () => {
+    const r = write(
+        '/x/Git/qol-monorepo/src/sync/probe.rs',
+        '#[cfg(all(debug_assertions, target_os = "linux"))]\nfn probe() {}\n',
+    );
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /line 1: #\[cfg\(all\(debug_assertions, target_os = "linux"\)\)\]/);
+});
+
+test('blocks a cfg attribute that spans lines and names its item', () => {
+    const r = write(
+        '/x/Git/qol-monorepo/src/sync/probe.rs',
+        'pub fn a() {}\n#[cfg(any(\n    feature = "x",\n    target_os = "macos",\n))]\n\nfn b() {}\n',
+    );
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /line 2: #\[cfg\(any\( feature = "x", target_os = "macos", \)\)\]/);
+    assert.match(r.stderr, /line 7: fn b\(\) \{\}/);
+});
+
+test('blocks cfg_attr gated on target_os', () => {
+    const r = write(
+        '/x/Git/qol-monorepo/src/sync/probe.rs',
+        '#[cfg_attr(not(target_os = "linux"), allow(dead_code))]\nfn helper() {}\n',
+    );
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /line 1: #\[cfg_attr\(not\(target_os = "linux"\), allow\(dead_code\)\)\]/);
+});
+
+test('blocks an inner cfg on the OS outside platform', () => {
+    const r = write('/x/Git/qol-monorepo/src/sync/registry.rs', '#![cfg(target_os = "windows")]\npub fn x() {}\n');
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /line 1: \(the whole module\)/);
+});
+
+test('passes cfg text inside literals and comments', () => {
+    const r = write(
+        '/x/Git/qol-monorepo/src/sync/help.rs',
+        'pub const HELP: &str = "#[cfg(target_os = \\"linux\\")] or cfg!(windows)";\n// #[cfg(unix)]\npub fn x() {}\n',
+    );
+    assert.equal(r.exitCode, 0, r.stderr);
+});
+
+test('judges only the cfg attributes an edit adds', () => {
+    const file = fixtureFile(
+        'src/sync/probe.rs',
+        '#[cfg(target_os = "linux")]\nfn probe() {}\npub fn other() {}\n',
+    );
+    const untouched = edit(file, 'pub fn other() {}', 'pub fn other() -> u8 {\n    1\n}');
+    assert.equal(untouched.exitCode, 0, untouched.stderr);
+    const added = edit(file, 'pub fn other() {}', '#[cfg(target_os = "macos")]\nfn probe_mac() {}\npub fn other() {}');
+    assert.equal(added.exitCode, 2);
+    assert.match(added.stderr, /line 3: #\[cfg\(target_os = "macos"\)\]/);
+    assert.doesNotMatch(added.stderr, /line 1: #\[cfg\(target_os = "linux"\)\]/);
+});
+
+test('blocks cfg!(windows) outside a boundary', () => {
+    const r = write(
+        '/x/Git/qol-monorepo/src/sync/paths.rs',
+        "pub fn separator() -> char {\n    if cfg!(windows) { '\\\\' } else { '/' }\n}\n",
+    );
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /cfg!\(\.\.\) naming the OS: line 2$/m);
+});
+
+test('blocks an OS family cfg nested beside another flag', () => {
+    const r = write(
+        '/x/Git/qol-monorepo/src/sync/probe.rs',
+        'pub fn a() {}\n#[cfg(all(debug_assertions, unix))]\nfn b() {}\n',
+    );
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /#\[cfg\(\.\.\)\] naming an OS family: line 2$/m);
+});
+
+test('judges only the platform signals an edit adds, line by line', () => {
+    const file = fixtureFile(
+        'src/sync/paths.rs',
+        "pub fn separator() -> char {\n    if cfg!(windows) { '\\\\' } else { '/' }\n}\npub fn other() {}\n",
+    );
+    const untouched = edit(file, 'pub fn other() {}', 'pub fn other() -> u8 {\n    1\n}');
+    assert.equal(untouched.exitCode, 0, untouched.stderr);
+    const added = edit(
+        file,
+        'pub fn other() {}',
+        'pub fn suffix() -> &' + '\'static str {\n    if cfg!(windows) { ".exe" } else { "" }\n}',
+    );
+    assert.equal(added.exitCode, 2);
+    assert.match(added.stderr, /cfg!\(\.\.\) naming the OS: line 5$/m);
+});
+
+test('blocks a crate the manifest declares only for unix', () => {
+    const { file } = fixtureManifestCrate('src/probe.rs', '[target.\'cfg(unix)\'.dependencies]\nlibc = "0.2"\n');
+    const r = write(file, 'pub fn root() -> bool {\n    unsafe { libc::geteuid() == 0 }\n}\n');
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /OS-specific import: line 2$/m);
+});
+
+test('blocks a crate declared under a target triple', () => {
+    const { file } = fixtureManifestCrate(
+        'src/registry.rs',
+        '[target.x86_64-pc-windows-msvc.dependencies]\nwin-reg = "0.52"\n',
+    );
+    const r = write(file, 'use win_reg::RegKey;\npub fn open() -> Option<RegKey> {\n    None\n}\n');
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /OS-specific import: line 1$/m);
+});
+
+test('passes a crate declared for every OS', () => {
+    for (const dependencies of [
+        '[dependencies]\nlibc = "0.2"\n[target.\'cfg(unix)\'.dependencies]\nlibc = { version = "0.2", features = ["extra_traits"] }\n',
+        '[target.\'cfg(unix)\'.dependencies]\nlibc = "0.2"\n[target.\'cfg(windows)\'.dependencies]\nlibc = "0.2"\n',
+        '[target.\'cfg(target_arch = "x86_64")\'.dependencies]\nlibc = "0.2"\n',
+    ]) {
+        const { file } = fixtureManifestCrate('src/probe.rs', dependencies);
+        const r = write(file, 'pub fn page() -> i64 {\n    unsafe { libc::sysconf(30) }\n}\n');
+        assert.equal(r.exitCode, 0, `${dependencies}\n${r.stderr}`);
+    }
+});
+
+test('reads the build script against build-dependencies', () => {
+    const dependencies = '[target.\'cfg(windows)\'.build-dependencies]\nwinres = "0.1"\n';
+    const build = fixtureManifestCrate('build.rs', dependencies);
+    const r = write(build.file, 'fn main() {\n    winres::WindowsResource::new();\n}\n');
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /OS-specific import: line 2$/m);
+    const library = fixtureManifestCrate('src/version.rs', dependencies);
+    assert.equal(write(library.file, 'pub fn name() -> u8 {\n    winres::VERSION\n}\n').exitCode, 0);
+});
+
+test('passes a local path that shares an OS crate name', () => {
+    const { file } = fixtureManifestCrate('src/probe.rs', '[target.\'cfg(unix)\'.dependencies]\nlibc = "0.2"\n');
+    const r = write(file, 'pub fn root() -> bool {\n    crate::libc::is_root() || self::libc::ok()\n}\n');
+    assert.equal(r.exitCode, 0, r.stderr);
+});
+
+test('blocks std::os paths except std::os::raw', () => {
+    const r = write(
+        '/x/Git/qol-monorepo/src/sync/perms.rs',
+        'use std::{\n    fs,\n    os::unix::fs::PermissionsExt,\n};\nuse std::os::raw::c_int;\npub fn f(_: c_int) {}\n',
+    );
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /OS-specific import: line 3$/m);
+    const raw = write('/x/Git/qol-monorepo/src/sync/ffi.rs', 'use std::os::raw::c_char;\npub fn f(_: *const c_char) {}\n');
+    assert.equal(raw.exitCode, 0, raw.stderr);
+});
+
+test('blocks runtime OS constants imported by name', () => {
+    const r = write(
+        '/x/Git/qol-monorepo/src/sync/host.rs',
+        'use std::env::consts::{ARCH, OS};\npub fn host() -> (&' + '\'static str, &' + '\'static str) {\n    (OS, ARCH)\n}\n',
+    );
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /std::env::consts::OS or FAMILY: line 1$/m);
+    const arch = write(
+        '/x/Git/qol-monorepo/src/sync/arch.rs',
+        'use std::env::consts::ARCH;\npub fn arch() -> &' + '\'static str {\n    ARCH\n}\n',
+    );
+    assert.equal(arch.exitCode, 0, arch.stderr);
+});
+
+test('passes cfgs that hold on every OS', () => {
+    const r = write(
+        '/x/Git/qol-monorepo/src/sync/probe.rs',
+        [
+            '#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]',
+            'fn probe() {}',
+            'pub fn portable() -> bool {',
+            '    cfg!(any(unix, windows))',
+            '}',
+            '',
+        ].join('\n'),
+    );
+    assert.equal(r.exitCode, 0, r.stderr);
+});
+
+test('passes OS cfgs on items that only build under cfg(test)', () => {
+    const r = write(
+        '/x/Git/qol-monorepo/src/sync/fixture.rs',
+        [
+            '#[cfg(all(test, target_os = "linux"))]',
+            'pub(crate) fn register_fixture(name: &str) -> usize {',
+            '    name.len()',
+            '}',
+            '#[cfg(all(test, any(target_os = "linux", target_os = "windows")))]',
+            'mod tests {}',
+            '',
+        ].join('\n'),
+    );
+    assert.equal(r.exitCode, 0, r.stderr);
 });

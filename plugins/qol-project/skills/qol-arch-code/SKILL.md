@@ -593,9 +593,10 @@ Platform-specific behavior is broader than `#[cfg(target_os)]`. Any code that ch
 
 This includes:
 
-- `cfg!(target_os = "...")`
-- `std::env::consts::OS`
-- OS API imports such as `core_graphics`, `objc2`, `x11rb`, or `windows::Win32`
+- `cfg!(..)` naming the OS: `cfg!(target_os = "...")`, `cfg!(windows)`, `cfg!(unix)`
+- `#[cfg(..)]` or `#[cfg_attr(..)]` naming an OS family: `unix`, `windows`, `target_family`, `target_vendor`, `target_env`
+- `std::env::consts::OS` and `std::env::consts::FAMILY`
+- OS-specific imports: a `std::os` module other than `std::os::raw`, and a crate the package's `Cargo.toml` declares only under target tables that do not hold on Linux, macOS and Windows alike (`libc` under `cfg(unix)`, `core-graphics` under `cfg(target_os = "macos")`, `winreg` under `x86_64-pc-windows-msvc`)
 - OS launcher commands such as `open`, `osascript`, `xdg-open`, `powershell`, or `cmd.exe`
 - platform manifest logic such as `platforms.len() == 1`
 - OS-keyed storage such as `profile.join("os").join(current_os)`
@@ -710,10 +711,10 @@ This skill ships with a Claude Code PreToolUse hook (`bin/check-qol-arch-code.cj
 - New files under catch-all Rust source directories named `common`, `helper(s)`, or `util(s)`.
 - New Rust implementation modules at the qol-tray source root; only `main.rs` and `lib.rs` are accepted.
 - `compile_error!(...)` anywhere.
-- `#[cfg(target_os = ...)]` (including `all/any/not(target_os = ...)`) outside the canonical mod.rs re-export pattern (`#[cfg(target_os = "X")] mod X;` or `#[cfg(target_os = "X")] pub use X::Platform;`).
+- A cfg predicate naming `target_os` outside the canonical mod.rs re-export pattern (`#[cfg(target_os = "X")] mod X;` or `#[cfg(target_os = "X")] pub use X::Platform;`), in `#[cfg]`, `#[cfg_attr]` and inner `#![cfg]` attributes, at any depth of `all`/`any`/`not` and across lines. It counts when it decides on the OS: its value differs between Linux, macOS and Windows for some setting of its other flags, so `#[cfg(all(debug_assertions, target_os = "linux"))]` and `#[cfg_attr(not(target_os = "macos"), allow(dead_code))]` count and `any(target_os = "linux", target_os = "macos", target_os = "windows")` does not. `bin/rust-cfg.cjs` reads every predicate: it is the one cfg parser the qol-project checkers share, the test filter included. The report names each attribute and its item by line.
 - OS-named files (`linux.rs`, `macos.rs`, `windows.rs`) placed outside a `platform/` directory; these must always live under `platform/` (per-feature or top-level).
 - New target-selection facades that omit Linux, macOS, or Windows without selecting an explicit fallback, and callable-surface drift between complete OS adapter sets.
-- Platform decision signals outside an architecture boundary: `cfg!(target_os)`, `std::env::consts::OS`, OS API imports, OS command dispatch, platform-token branching, or platform-token storage/path routing.
+- Platform decision signals outside an architecture boundary, each listed with its lines: the `cfg!` macros, OS family cfgs, runtime OS constants and OS-specific imports from "Facade decision points" above, OS command dispatch, platform-token branching, and platform-token storage/path routing. The OS-only crates come from the target tables of the nearest `Cargo.toml` with a `[package]` (`[build-dependencies]` for `build.rs`), so a new target-only dependency is covered the moment it is declared, with no list to maintain. Incident (2026-11): #498 and #536 grew `libs/runtime/src/probe.rs` with `#[cfg(all(debug_assertions, unix))]`, `std::os::unix` and `libc` calls that the old pattern list never matched.
 
 Allowed without challenge:
 - Existing legacy root modules and hybrids remain editable so the guard does not freeze plugins awaiting migration. New layout debt is blocked; existing debt should be removed during the next ownership refactor. A path is new when it does not exist yet; `qac lint --base=<rev>` counts a path new when `<rev>` lacks it, and `qac lint` without a base counts every path new, so it lists the existing layout debt.
@@ -725,7 +726,9 @@ Allowed without challenge:
 - Comments. Platform names, `cfg!(target_os = ...)`, and `platforms.len() == 1` written in prose or commented-out code are not platform decisions.
 - Non-platform cfg predicates such as `cfg(debug_assertions)` and `cfg(feature = ...)`.
 - Platform tokens that never meet a branch: carrying a `platforms` field, or passing `target_os` through to a facade, is not a decision. The composite platform-token signals require the token and the branch/routing to appear together, not merely somewhere in the same file.
-- Platform decision signals that the edit did not introduce. The guard reports only signals absent from the file before the edit, so an unrelated edit is not blocked by pre-existing debt. New debt still blocks.
+- Platform decision signals and target_os placements that the edit did not introduce. The guard compares line texts with the file before the edit: a signal whose line, or a placement whose attribute and item lines, the file already had is not reported, so an unrelated edit is not blocked by pre-existing debt, while a new or changed line that carries one blocks, even in a file that already has the same kind. `qac lint` without a base lists the existing ones.
+- cfg predicates that hold on Linux, macOS and Windows alike, such as `any(unix, windows)`.
+- Residual: an import is matched by the dependency key with `-` read as `_`, so a crate whose `[lib] name` differs is not seen; a crate declared for every OS counts as portable even when its API differs per OS (the `qol-arch-cicd` manifest check owns that side); a local item named like an OS-only crate and reached without `crate::`, `self::` or `super::` is reported; `use std::os;` followed by `os::unix::..` and glob imports of `std::os` are not seen.
 - Main-session and subagent edits are checked the same way.
 
 Bypass for one-off legitimate exceptions (and you should be very sure it's legitimate, usually it isn't):
@@ -921,8 +924,8 @@ Residual: the tray renders no plugin `[menu]` items (only its own Settings and m
 The edit-time hooks only see new violations, so existing debt stays invisible until someone touches the file. `qac lint [path ...]` runs the qol-arch-code, cross-platform, cicd, logging, plugin data and plugin-contract hooks over whole tracked and untracked files (the whole repo when no path is given), counting every violation already there. It never consumes a bypass marker, and it skips `vendor/` and `third_party/`. Each hook exposes `lintFile(path, content, baseline)` through `bin/hook-lint-mode.cjs`, so a new filter in any of them is linted too.
 
 The rules come in two kinds, and lint treats them differently.
-Rules about the code as it stands (cfg placement, facade coverage, source layout, adapter-exclusive helpers, allow attributes, plugin data, crate dependency direction, runtime event names) hold or fail on a file alone, so lint checks them on every file.
-Rules about added code (platform decision signals, settings, active monitor, design, test deadlines, logging, runtime event payload shape) compare a file with its earlier content, which a static file does not have.
+Rules about the code as it stands (a target_os cfg on a `use`, facade coverage, source layout, adapter-exclusive helpers, allow attributes, plugin data, crate dependency direction, runtime event names) hold or fail on a file alone, so lint checks them on every file.
+Rules about added code (target_os placement, platform decision signals, settings, active monitor, design, test deadlines, logging, runtime event payload shape) compare a file with its earlier content, which a static file does not have.
 Without a base, lint counts every line as added, which turns "do not add X" into "X must never exist".
 `qac lint --base=<rev>` compares those rules with each file at `<rev>` instead: an unchanged file finds nothing, a changed file finds only what it added, and a file new since `<rev>` counts in full.
 CI runs `qac lint --base=<merge base>` over the whole repo, so rules about the code as it stands hold everywhere and rules about added code judge only the pull request.

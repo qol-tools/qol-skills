@@ -70,15 +70,14 @@ const PLUGIN_CRATE_PATH_RE = /[\\/]plugins[\\/][^\\/]+[\\/]src[\\/]/;
 
 const ALLOW_DEAD_CODE = /#\[allow\([^)]*\bdead_code\b[^)]*\)\]/;
 const ALLOW_UNUSED_MUT = /#\[allow\([^)]*\bunused_mut\b[^)]*\)\]/;
-const CFG_ON_USE_SAMELINE = /#\[cfg\((?:not\(|all\(|any\()?target_os\s*=[^\]]*\]\s*(?:pub(?:\([^)]*\))?\s+)?use\s+/;
-const CFG_TARGET_OS = /#\[cfg\((?:not\(|all\(|any\()?target_os\s*=/;
 const USE_STATEMENT = /^\s*(?:pub(?:\([^)]*\))?\s+)?use\s+/;
-const ATTRIBUTE_LINE = /^\s*#\[/;
 
 const lintMode = require('./hook-lint-mode.cjs');
 const { inQolRepo } = require('./qol-repo.cjs');
 const oneOsStubs = require('./one-os-stubs.cjs');
 const serde = require('./rust-serde.cjs');
+const rustCfg = require('./rust-cfg.cjs');
+const TARGET_OS_KEY = new Set(['target_os']);
 
 function readStdin() {
     try {
@@ -451,37 +450,21 @@ function findAllowViolations(content) {
     return violations;
 }
 
-function findCfgOnUseViolations(content) {
-    const lines = content.split(/\r?\n/);
+function findCfgOnUseViolations(filePath, content) {
+    const code = serde.production(filePath, content);
+    if (code === null) return [];
+    const lines = code.clean.split(/\r?\n/);
     const violations = [];
-    let pendingCfg = null;
-    for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        const lineno = i + 1;
-        if (CFG_ON_USE_SAMELINE.test(line)) {
-            violations.push({ cfgLineno: lineno, cfgText: line, useText: line, useLineno: lineno });
-            pendingCfg = null;
-            continue;
-        }
-        if (pendingCfg !== null) {
-            if (ATTRIBUTE_LINE.test(line)) continue;
-            if (USE_STATEMENT.test(line)) {
-                violations.push({
-                    cfgLineno: pendingCfg.lineno,
-                    cfgText: pendingCfg.text,
-                    useLineno: lineno,
-                    useText: line,
-                });
-            }
-            pendingCfg = null;
-            continue;
-        }
-        if (CFG_TARGET_OS.test(line) && !CFG_ON_USE_SAMELINE.test(line)) {
-            const trimmed = line.trim();
-            if (trimmed.endsWith(']')) {
-                pendingCfg = { lineno, text: line };
-            }
-        }
+    for (const predicate of rustCfg.predicates(code.clean, code.skeleton)) {
+        if (predicate.kind !== 'cfg' || predicate.inner || !rustCfg.decidesOs(predicate, TARGET_OS_KEY)) continue;
+        const item = rustCfg.itemAfter(code.clean, predicate, lines);
+        if (item === null || !USE_STATEMENT.test(item.text)) continue;
+        violations.push({
+            cfgLineno: predicate.line,
+            cfgText: lines.slice(predicate.line - 1, predicate.endLine).map(line => line.trim()).join(' '),
+            useLineno: item.lineno,
+            useText: item.text,
+        });
     }
     return violations;
 }
@@ -602,7 +585,7 @@ function evaluate(payload) {
         return 2;
     }
 
-    const cfgUseViolations = findCfgOnUseViolations(newContent);
+    const cfgUseViolations = findCfgOnUseViolations(filePath, newContent);
     if (cfgUseViolations.length > 0) {
         blockCfgOnUse(filePath, cfgUseViolations);
         return 2;

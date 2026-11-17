@@ -53,7 +53,9 @@ const owners = require('./qol-owner-guard.cjs');
 const events = require('./qol-event-guard.cjs');
 const enumMatches = require('./qol-enum-match-guard.cjs');
 const quotes = require('./qol-quote-guard.cjs');
+const rustCfg = require('./rust-cfg.cjs');
 const serde = require('./rust-serde.cjs');
+const toml = require('./toml-lite.cjs');
 const { inQolRepo } = require('./qol-repo.cjs');
 
 const INSPECTED_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
@@ -64,8 +66,8 @@ const TOOL_MATCH_EXEMPT = ['/builtins/', '/tests/', '/test/', '/session/tool.rs'
 const PLUGIN_ROOT_RUST_FILES = new Set(['main.rs', 'lib.rs', 'cli.rs']);
 const QOL_TRAY_ROOT_RUST_FILES = new Set(['main.rs', 'lib.rs']);
 const CATCH_ALL_SOURCE_DIRS = new Set(['common', 'helper', 'helpers', 'util', 'utils']);
-const OS_MODULE_NAMES = new Set(['linux', 'macos', 'windows']);
-const TARGET_OS_NAMES = ['linux', 'macos', 'windows'];
+const OS_MODULE_NAMES = new Set(rustCfg.TARGETS);
+const TARGET_OS_NAMES = rustCfg.TARGETS;
 const WEB_ASSET_EXTENSIONS = new Set([
     '.css',
     '.htm',
@@ -262,25 +264,27 @@ function findPluginLayoutViolation(filePath) {
     return null;
 }
 
-const CANONICAL_TARGET = /^\s*(mod (linux|macos|windows);|pub(?:\([^)]*\))?\s+use (linux|macos|windows)::)/;
+const CANONICAL_TARGET = new RegExp(`^\\s*(mod (${rustCfg.TARGETS.join('|')});|pub(?:\\([^)]*\\))?\\s+use (${rustCfg.TARGETS.join('|')})::)`);
 const TARGET_ADAPTER_ALIAS = /^\s*(?:pub(?:\([^)]*\))?\s+)?use\s+[A-Za-z_]\w*\s+as\s+imp\s*;/;
-const ATTRIBUTE_LINE = /^\s*#\[/;
-const CFG_TARGET_OS = /#\[cfg\((not\(|all\(|any\()?target_os\s*=/;
-const SAMELINE_CANONICAL = /\]\s*(mod (linux|macos|windows);|pub(?:\([^)]*\))?\s+use (linux|macos|windows)::)/;
 const COMPILE_ERROR = /\bcompile_error!\s*\(/;
 const ARCH_BOUNDARY_BASENAME = /^(platform|facade|strategy|resolver|scope|scope_store)\.rs$/;
 const ARCH_BOUNDARY_SUFFIX = /_(facade|strategy|resolver|scope|scope_store)\.rs$/;
 const ARCH_BOUNDARY_TYPE = /\b(struct|enum|trait)\s+\w*(Platform|Facade|Strategy|Resolver|ScopeStore)\b/;
-const CFG_MACRO = /\bcfg!\s*\([^)]*target_os\s*=/;
-const CFG_TARGET_FAMILY = /#\[cfg\((?:not\(|all\(|any\()?target_family\s*=/;
-const CFG_UNIX_WINDOWS = /#\[cfg\((?:not\(|all\(|any\()?(unix|windows)\b/;
-const RUNTIME_OS_CONST = /\bstd::env::consts::OS\b/;
-const OS_API_IMPORT = /^\s*(?:pub(?:\([^)]*\))?\s+)?use\s+(x11rb|objc2|cocoa|core_graphics|core_foundation|windows::Win32|winapi)\b/m;
+const FAMILY_CFG_KEYS = new Set(['target_family', 'target_vendor', 'target_env', 'unix', 'windows']);
+const TARGET_OS_KEY = new Set(['target_os']);
+const OS_CFG_KEYS = new Set([...FAMILY_CFG_KEYS, ...TARGET_OS_KEY]);
+const RUNTIME_OS_CONST = /\bconsts\s*::\s*(?:OS|FAMILY)\b/;
+const RUNTIME_OS_PATH = /(?:^|::)env::consts::(?:OS|FAMILY)$/;
+const PORTABLE_STD_OS_MODULES = new Set(['raw']);
+const USE_KEYWORD = /(?<![\w$])use\s+/g;
+const RUST_PATH = /(?<![\w:.$])(?:::\s*)?[A-Za-z_]\w*(?:\s*::\s*[A-Za-z_]\w*)+/g;
+const EXTERN_CRATE = /(?<![\w$])extern\s+crate\s+([A-Za-z_]\w*)/g;
 const OS_COMMAND = /\bCommand::new\s*\(\s*"(open|osascript|xdg-open|powershell|cmd(?:\.exe)?|sw_vers|uname|lsb_release)"\s*\)/;
 const PLATFORM_TOKEN = /\b(current_os|target_os|host_os|os_bucket|platforms|supported_platforms)\b|"(linux|macos|windows|darwin|win32|x11|wayland)"/;
 const ROUTING_TOKEN = /\.join\s*\(\s*"os"\s*\)|format!\s*\(\s*"os\/|PathBuf::from\s*\(\s*"os"\s*\)|\b(os|core|device)_(dir|path|bucket)\b|"(core|device)"|"plugin-configs"/;
 const DECISION_TOKEN = /\b(if|match)\b|=>|==|!=|\.len\(\)\s*==\s*1|\.contains\s*\(/;
 const COMPOSITE_WINDOW = 2;
+const SHOWN_SIGNAL_LINES = 8;
 
 function readStdin() {
     try {
@@ -424,7 +428,7 @@ function sanitizeSource(content, blankLiterals) {
 }
 
 function maskTestItems(content) {
-    return serde.blankSpans(content, serde.testSpans(sanitizeSource(content, true)));
+    return serde.blankSpans(content, serde.testSpans(serde.lexRust(content).skeleton));
 }
 
 function productionCode(content) {
@@ -459,47 +463,56 @@ function findCfgViolations(content, allowTargetAdapterAlias = false, usesOwnedEl
     const lines = content.split(/\r?\n/);
     const siblings = allowTargetAdapterAlias ? declaredModules(lines) : new Set();
     const violations = [];
-    let pending = null; // { lineno, text }
-
-    for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        const lineno = i + 1;
-        if (pending !== null) {
-            if (ATTRIBUTE_LINE.test(line)) {
-                continue; // stacked attributes — keep waiting
-            }
-            if (
-                (usesOwnedElsewhere && USE_STATEMENT.test(line)) ||
-                CANONICAL_TARGET.test(line) ||
-                (allowTargetAdapterAlias &&
-                    (TARGET_ADAPTER_ALIAS.test(line) || isFacadeSelection(line, siblings)))
-            ) {
-                pending = null;
-                continue;
-            }
+    for (const predicate of rustCfg.predicates(content, sanitizeSource(content, true))) {
+        if (predicate.kind === 'macro' || !rustCfg.decidesOs(predicate, TARGET_OS_KEY)) continue;
+        const cfgText = lines
+            .slice(predicate.line - 1, predicate.endLine)
+            .map((line, index) => (index === 0 ? line : line.trim()))
+            .join(' ');
+        const target = predicate.inner
+            ? { lineno: predicate.line, text: '(the whole module)' }
+            : rustCfg.itemAfter(content, predicate, lines);
+        if (target === null) {
             violations.push({
-                cfgLineno: pending.lineno,
-                cfgText: pending.text,
-                targetLineno: lineno,
-                targetText: line,
+                cfgLineno: predicate.line,
+                cfgText,
+                targetLineno: -1,
+                targetText: '(no target line, malformed cfg block?)',
             });
-            pending = null;
             continue;
         }
-        if (CFG_TARGET_OS.test(line)) {
-            if (SAMELINE_CANONICAL.test(line)) continue;
-            pending = { lineno, text: line };
-        }
-    }
-    if (pending !== null) {
-        violations.push({
-            cfgLineno: pending.lineno,
-            cfgText: pending.text,
-            targetLineno: -1,
-            targetText: '(no target line — malformed cfg block?)',
-        });
+        if (!predicate.inner && allowedCfgTarget(target.text, allowTargetAdapterAlias, usesOwnedElsewhere, siblings)) continue;
+        violations.push({ cfgLineno: predicate.line, cfgText, targetLineno: target.lineno, targetText: target.text });
     }
     return violations;
+}
+
+function allowedCfgTarget(line, allowTargetAdapterAlias, usesOwnedElsewhere, siblings) {
+    if (usesOwnedElsewhere && USE_STATEMENT.test(line)) return true;
+    if (CANONICAL_TARGET.test(line)) return true;
+    return allowTargetAdapterAlias && (TARGET_ADAPTER_ALIAS.test(line) || isFacadeSelection(line, siblings));
+}
+
+function cfgViolationsIn(filePath, content) {
+    return findCfgViolations(
+        productionCode(content),
+        platformContext(filePath)?.facade === true,
+        !/[\\/]platform[\\/]/.test(filePath),
+    );
+}
+
+function findNewCfgViolations(filePath, newContent) {
+    const key = violation => `${violation.cfgText}\n${violation.targetText}`.replace(/\s+/g, ' ').trim();
+    const before = new Map();
+    for (const violation of cfgViolationsIn(filePath, readBaseline(filePath) || '')) {
+        before.set(key(violation), (before.get(key(violation)) || 0) + 1);
+    }
+    return cfgViolationsIn(filePath, newContent).filter(violation => {
+        const left = before.get(key(violation)) || 0;
+        if (left === 0) return true;
+        before.set(key(violation), left - 1);
+        return false;
+    });
 }
 
 function platformContext(filePath) {
@@ -528,55 +541,8 @@ function isOsAdapterFile(filePath) {
 // names anything other than the target platform (a feature, test, ...), so a
 // selection that depends on it never counts as target coverage.
 function cfgHolds(expression, target) {
-    let index = 0;
-    const skipSpace = () => {
-        while (index < expression.length && /\s/.test(expression[index])) index++;
-    };
-    const parse = () => {
-        skipSpace();
-        const word = expression.slice(index).match(/^[A-Za-z_]\w*/);
-        if (!word) throw new Error('cfg');
-        index += word[0].length;
-        skipSpace();
-        if (expression[index] === '(') {
-            index++;
-            const values = [];
-            skipSpace();
-            while (expression[index] !== ')') {
-                values.push(parse());
-                skipSpace();
-                if (expression[index] === ',') index++;
-                skipSpace();
-                if (index >= expression.length) throw new Error('cfg');
-            }
-            index++;
-            if (word[0] === 'not' && values.length === 1) return values[0] === null ? null : !values[0];
-            if (values.includes(null)) return null;
-            if (word[0] === 'all') return values.every(Boolean);
-            if (word[0] === 'any') return values.some(Boolean);
-            throw new Error('cfg');
-        }
-        if (expression[index] === '=') {
-            index++;
-            skipSpace();
-            const literal = expression.slice(index).match(/^"([^"]*)"/);
-            if (!literal) throw new Error('cfg');
-            index += literal[0].length;
-            if (word[0] === 'target_os') return literal[1] === target;
-            if (word[0] === 'target_family') return literal[1] === (target === 'windows' ? 'windows' : 'unix');
-            return null;
-        }
-        if (word[0] === 'unix') return target !== 'windows';
-        if (word[0] === 'windows') return target === 'windows';
-        return null;
-    };
-    try {
-        const value = parse();
-        skipSpace();
-        return index === expression.length ? value : null;
-    } catch {
-        return null;
-    }
+    const tree = rustCfg.parse(expression);
+    return tree ? rustCfg.holds(tree, target) : null;
 }
 
 function cfgTargets(attribute) {
@@ -792,7 +758,7 @@ function findPlatformFacadeViolations(filePath, newContent) {
 }
 
 const OS_MOD_ALIAS = /^\s*(?:pub(?:\([^)]*\))?\s+)?mod (linux|macos|windows);\s*$/;
-const FAMILY_CFG = /#\[cfg\((?:not\()?(?:unix\b|windows\b|target_family\s*=)/;
+const FAMILY_ALIAS_KEYS = new Set(['unix', 'windows', 'target_family']);
 
 function osModAliases(content) {
     const names = new Set();
@@ -803,6 +769,11 @@ function osModAliases(content) {
     return names;
 }
 
+function hasFamilyCfg(content) {
+    return rustCfg.predicates(sanitizeSource(content, false), sanitizeSource(content, true))
+        .some(predicate => predicate.kind !== 'macro' && rustCfg.decidesOs(predicate, FAMILY_ALIAS_KEYS));
+}
+
 function findFamilyMergeViolation(filePath, newContent) {
     const context = platformContext(filePath);
     if (!context || !context.facade) return null;
@@ -810,7 +781,7 @@ function findFamilyMergeViolation(filePath, newContent) {
     if (!before) return null;
     const after = osModAliases(newContent);
     const removed = [...osModAliases(before)].filter(name => !after.has(name));
-    if (removed.length === 0 || !FAMILY_CFG.test(newContent)) return null;
+    if (removed.length === 0 || !hasFamilyCfg(newContent)) return null;
     return removed;
 }
 
@@ -1095,50 +1066,207 @@ function isArchitectureBoundary(filePath, content) {
     return false;
 }
 
-const STRONG_PLATFORM_SIGNALS = [
-    { label: 'cfg!(target_os)', re: CFG_MACRO },
-    { label: '#[cfg(target_family)]', re: CFG_TARGET_FAMILY },
-    { label: '#[cfg(unix/windows)]', re: CFG_UNIX_WINDOWS },
-    { label: 'std::env::consts::OS', re: RUNTIME_OS_CONST },
-    { label: 'OS-specific import', re: OS_API_IMPORT },
-    { label: 'OS command dispatch', re: OS_COMMAND },
-];
+function regexLines(content, re) {
+    const lines = [];
+    content.split(/\r?\n/).forEach((text, index) => {
+        if (re.test(text)) lines.push(index + 1);
+    });
+    return lines;
+}
 
-function findStrongPlatformSignals(content) {
-    return STRONG_PLATFORM_SIGNALS
-        .filter(candidate => candidate.re.test(content))
-        .map(candidate => candidate.label);
+function predicateLines(predicates, attributes, keys) {
+    return predicates
+        .filter(predicate => (predicate.kind !== 'macro') === attributes)
+        .filter(predicate => rustCfg.decidesOs(predicate, keys))
+        .map(predicate => predicate.line)
+        .filter((line, index, all) => all.indexOf(line) === index);
+}
+
+function packageManifest(filePath) {
+    for (let dir = path.dirname(path.resolve(filePath)); ; dir = path.dirname(dir)) {
+        let text = null;
+        try {
+            text = fs.readFileSync(path.join(dir, 'Cargo.toml'), 'utf8');
+        } catch {
+            text = null;
+        }
+        if (text !== null && /^\s*\[package\]/m.test(text)) return text;
+        if (path.dirname(dir) === dir) return null;
+    }
+}
+
+function osOnlyCrates(filePath) {
+    const manifest = packageManifest(filePath);
+    if (manifest === null) return [];
+    let doc;
+    try {
+        doc = toml.parse(manifest).value;
+    } catch {
+        return [];
+    }
+    const kind = path.basename(filePath) === 'build.rs' ? 'build-dependencies' : 'dependencies';
+    const declared = new Map();
+    const declare = (name, tree) => declared.set(name, [...(declared.get(name) || []), tree]);
+    for (const name of Object.keys(doc[kind] || {})) declare(name, rustCfg.ALWAYS);
+    for (const [target, tables] of Object.entries(doc.target || {})) {
+        const tree = rustCfg.targetTree(target) || rustCfg.ALWAYS;
+        for (const name of Object.keys(tables?.[kind] || {})) declare(name, tree);
+    }
+    return [...declared]
+        .filter(([, trees]) => !trees.includes(rustCfg.ALWAYS) && rustCfg.dependsOnOs({ op: 'any', args: trees }))
+        .map(([name]) => name.replace(/-/g, '_'));
+}
+
+function useStatements(code) {
+    const statements = [];
+    for (const match of code.matchAll(USE_KEYWORD)) {
+        const start = match.index + match[0].length;
+        let depth = 0;
+        let end = start;
+        for (; end < code.length; end++) {
+            if (code[end] === '{') depth++;
+            else if (code[end] === '}' && --depth < 0) break;
+            else if (code[end] === ';' && depth === 0) break;
+        }
+        statements.push({ from: match.index, start, end });
+    }
+    return statements;
+}
+
+function useLeaves(code, start, end, prefix = '', leaves = []) {
+    const open = code.indexOf('{', start);
+    if (open < 0 || open >= end) {
+        const text = code.slice(start, end);
+        const path = prefix + text.replace(/\s+as\s+[A-Za-z_]\w*\s*$/, '').replace(/\s+/g, '');
+        if (text.trim()) leaves.push({ path, index: start + text.length - text.trimStart().length });
+        return leaves;
+    }
+    const head = prefix + code.slice(start, open).replace(/\s+/g, '');
+    let depth = 0;
+    let from = open + 1;
+    for (let index = open; index < end; index++) {
+        if (code[index] === '{') {
+            depth++;
+        } else if (code[index] === '}' && --depth === 0) {
+            if (code.slice(from, index).trim()) useLeaves(code, from, index, head, leaves);
+            break;
+        } else if (code[index] === ',' && depth === 1) {
+            if (code.slice(from, index).trim()) useLeaves(code, from, index, head, leaves);
+            from = index + 1;
+        }
+    }
+    return leaves;
+}
+
+function osSpecificPath(path, crates) {
+    const segments = path.replace(/^::/, '').split('::');
+    if (crates.has(segments[0])) return true;
+    return segments[0] === 'std'
+        && segments[1] === 'os'
+        && /^[A-Za-z_]\w*$/.test(segments[2] || '')
+        && segments[2] !== 'self'
+        && !PORTABLE_STD_OS_MODULES.has(segments[2]);
+}
+
+function runtimeOsLines(code, statements) {
+    const starts = rustCfg.lineStarts(code);
+    const lines = new Set(regexLines(code, RUNTIME_OS_CONST));
+    for (const statement of statements) {
+        for (const leaf of useLeaves(code, statement.start, statement.end)) {
+            if (RUNTIME_OS_PATH.test(leaf.path.replace(/^::/, ''))) lines.add(rustCfg.lineAt(starts, leaf.index));
+        }
+    }
+    return [...lines].sort((a, b) => a - b);
+}
+
+function osImportLines(filePath, code, statements) {
+    const crates = new Set(osOnlyCrates(filePath));
+    const starts = rustCfg.lineStarts(code);
+    const lines = new Set();
+    for (const statement of statements) {
+        for (const leaf of useLeaves(code, statement.start, statement.end)) {
+            if (osSpecificPath(leaf.path, crates)) lines.add(rustCfg.lineAt(starts, leaf.index));
+        }
+    }
+    const inUse = index => statements.some(statement => index >= statement.from && index < statement.end);
+    for (const match of code.matchAll(RUST_PATH)) {
+        if (!inUse(match.index) && osSpecificPath(match[0].replace(/\s+/g, ''), crates)) {
+            lines.add(rustCfg.lineAt(starts, match.index));
+        }
+    }
+    for (const match of code.matchAll(EXTERN_CRATE)) {
+        if (crates.has(match[1])) lines.add(rustCfg.lineAt(starts, match.index));
+    }
+    return [...lines].sort((a, b) => a - b);
+}
+
+function findStrongPlatformSignals(filePath, kept, blanked) {
+    const predicates = rustCfg.predicates(kept, blanked);
+    const statements = useStatements(blanked);
+    return [
+        { label: 'cfg!(..) naming the OS', lines: predicateLines(predicates, false, OS_CFG_KEYS) },
+        { label: '#[cfg(..)] naming an OS family', lines: predicateLines(predicates, true, FAMILY_CFG_KEYS) },
+        { label: 'std::env::consts::OS or FAMILY', lines: runtimeOsLines(blanked, statements) },
+        { label: 'OS-specific import', lines: osImportLines(filePath, blanked, statements) },
+        { label: 'OS command dispatch', lines: regexLines(kept, OS_COMMAND) },
+    ].filter(signal => signal.lines.length > 0);
 }
 
 function findCompositePlatformSignals(content) {
     const lines = content.split(/\r?\n/);
-    let hasRouting = false;
-    let hasDecision = false;
+    const routing = [];
+    const branching = [];
     for (let index = 0; index < lines.length; index++) {
         if (!PLATFORM_TOKEN.test(lines[index])) continue;
         const window = lines
             .slice(Math.max(0, index - COMPOSITE_WINDOW), index + COMPOSITE_WINDOW + 1)
             .join('\n');
-        if (ROUTING_TOKEN.test(window)) hasRouting = true;
-        if (DECISION_TOKEN.test(window)) hasDecision = true;
+        if (ROUTING_TOKEN.test(window)) routing.push(index + 1);
+        if (DECISION_TOKEN.test(window)) branching.push(index + 1);
     }
-    const labels = [];
-    if (hasRouting) labels.push('platform token + storage/path routing');
-    if (hasDecision) labels.push('platform token + branching');
-    return labels;
+    return [
+        { label: 'platform token + storage/path routing', lines: routing },
+        { label: 'platform token + branching', lines: branching },
+    ].filter(signal => signal.lines.length > 0);
 }
 
-function platformDecisionSignals(content) {
-    const production = productionCode(content);
+function platformDecisionSignals(filePath, content) {
+    const masked = maskTestItems(content);
+    const kept = sanitizeSource(masked, false);
+    const blanked = sanitizeSource(masked, true);
     return [
-        ...findStrongPlatformSignals(production),
-        ...findCompositePlatformSignals(production),
+        ...findStrongPlatformSignals(filePath, kept, blanked),
+        ...findCompositePlatformSignals(kept),
     ];
 }
 
+function signalOccurrences(filePath, content) {
+    const lines = content.split(/\r?\n/);
+    const counts = new Map();
+    for (const signal of platformDecisionSignals(filePath, content)) {
+        for (const line of signal.lines) {
+            const key = `${signal.label}\n${(lines[line - 1] || '').replace(/\s+/g, ' ').trim()}`;
+            counts.set(key, (counts.get(key) || 0) + 1);
+        }
+    }
+    return counts;
+}
+
 function findNewPlatformDecisionSignals(filePath, newContent) {
-    const before = new Set(platformDecisionSignals(readBaseline(filePath) || ''));
-    return platformDecisionSignals(newContent).filter(signal => !before.has(signal));
+    const before = signalOccurrences(filePath, readBaseline(filePath) || '');
+    const lines = newContent.split(/\r?\n/);
+    return platformDecisionSignals(filePath, newContent)
+        .map(signal => ({
+            label: signal.label,
+            lines: signal.lines.filter(line => {
+                const key = `${signal.label}\n${(lines[line - 1] || '').replace(/\s+/g, ' ').trim()}`;
+                const left = before.get(key) || 0;
+                if (left === 0) return true;
+                before.set(key, left - 1);
+                return false;
+            }),
+        }))
+        .filter(signal => signal.lines.length > 0);
 }
 
 function blockCompileError(filePath) {
@@ -1159,8 +1287,14 @@ Bypass for this single edit:
 `);
 }
 
-function blockPlatformDecision(filePath, labels) {
-    const detail = labels.map(label => `  - ${label}`).join('\n');
+function signalLines(lines) {
+    const shown = lines.slice(0, SHOWN_SIGNAL_LINES).map(line => `line ${line}`);
+    if (lines.length > SHOWN_SIGNAL_LINES) shown.push(`and ${lines.length - SHOWN_SIGNAL_LINES} more`);
+    return shown.join(', ');
+}
+
+function blockPlatformDecision(filePath, signals) {
+    const detail = signals.map(signal => `  - ${signal.label}: ${signalLines(signal.lines)}`).join('\n');
     lintMode.report(process.stderr, `qol-arch-code violation in ${filePath}.
 
 Detected platform-specific decision logic outside an architecture boundary:
@@ -1170,7 +1304,10 @@ ${detail}
 Platform decisions must live behind a facade, strategy, resolver, scope store,
 or platform/ module. Business code should call that boundary instead of
 branching on OS names, runtime OS constants, OS-specific imports, OS commands,
-or scoped profile storage paths directly.
+or scoped profile storage paths directly. An OS-specific import is a path into
+std::os other than std::os::raw, or into a crate this package's Cargo.toml
+declares only under target tables that do not hold on Linux, macOS and Windows
+alike.
 
 Fix:
   1. Move the decision into an existing facade/resolver/scope store.
@@ -1264,8 +1401,8 @@ function blockCfgViolations(filePath, violations) {
 
     lintMode.report(process.stderr, `qol-arch-code violation in ${filePath}.
 
-Detected #[cfg(target_os = ...)] attributes outside the canonical mod.rs
-re-export pattern:
+Detected cfg predicates naming target_os (in #[cfg], #[cfg_attr] or #![cfg],
+at any depth of all/any/not) outside the canonical mod.rs re-export pattern:
 
 ${detail}
 
@@ -1638,11 +1775,7 @@ function evaluate(payload) {
         return 2;
     }
 
-    const violations = findCfgViolations(
-        productionCode(newContent),
-        platformContext(filePath)?.facade === true,
-        !/[\\/]platform[\\/]/.test(filePath),
-    );
+    const violations = findNewCfgViolations(filePath, newContent);
     if (violations.length > 0) {
         blockCfgViolations(filePath, violations);
         return 2;
@@ -1670,9 +1803,6 @@ function lintFile(filePath, content, baseline = null) {
 const LOCATORS = [
     ...SETTINGS_SIGNALS.map(signal => ({ label: signal.label, re: signal.pattern })),
     ...MONITOR_SIGNALS.map(signal => ({ label: signal.label, re: signal.pattern })),
-    ...STRONG_PLATFORM_SIGNALS,
-    { label: 'platform token + storage/path routing', re: PLATFORM_TOKEN },
-    { label: 'platform token + branching', re: PLATFORM_TOKEN },
     { label: 'compile_error!', re: COMPILE_ERROR },
     { label: 'match on the tool in shared code', re: TOOL_MATCH },
     ...TEST_DEADLINE_SIGNALS.map(signal => ({ label: signal.label, re: signal.pattern })),

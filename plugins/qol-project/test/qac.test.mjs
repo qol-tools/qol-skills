@@ -78,10 +78,26 @@ test("lint --base judges rules about added code against the base revision", () =
 test("lint --base still judges rules about the code as it stands on every file", () => {
   const root = repo({
     ...PLUGIN,
-    "plugins/fixture/src/feature/mod.rs": "#[cfg(target_os = \"linux\")]\npub fn run() {}\n",
+    "plugins/fixture/src/feature/mod.rs": "pub fn run() {\n    compile_error!(\"unsupported\");\n}\n",
   });
   const base = commitAll(root);
   assert.equal(lint(root, [], { base }).findings.length, 1);
+});
+
+test("lint --base judges only the cfg(target_os) placements a change adds", () => {
+  const root = repo({
+    ...PLUGIN,
+    "plugins/fixture/src/feature/mod.rs": "#[cfg(target_os = \"linux\")]\npub fn run() {}\n",
+  });
+  const base = commitAll(root);
+  assert.equal(lint(root, [], { base }).findings.length, 0);
+  writeFileSync(
+    path.join(root, "plugins/fixture/src/feature/mod.rs"),
+    "#[cfg(target_os = \"linux\")]\npub fn run() {}\n#[cfg(all(debug_assertions, target_os = \"macos\"))]\npub fn probe() {}\n",
+  );
+  const findings = lint(root, [], { base }).findings;
+  assert.equal(findings.length, 1);
+  assert.deepEqual(findings[0].lines, [3, 4]);
 });
 
 test("lint reports a platform tree property once, on the file that owns it", () => {

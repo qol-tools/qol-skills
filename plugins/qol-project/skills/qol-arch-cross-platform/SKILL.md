@@ -58,7 +58,7 @@ This pattern is almost always a refactor leftover. Either:
 - The `KeyState` consumer in this file is *also* `#[cfg(target_os = "linux")]`, in which case the consumer (and its `use`) belong in `platform/linux.rs`, not here. Move both.
 - Or the `use` is genuinely only needed on Linux but other items are cross-platform; split the file.
 
-The hook blocks `#[cfg(target_os = ...)] use ...;` outside `platform/`. Inside `platform/<os>.rs` it's redundant (the file is already OS-gated) but harmless; the hook doesn't fire there.
+The hook blocks a `use` behind a `#[cfg(..)]` that decides on `target_os` outside `platform/`. It reads the predicate with `bin/rust-cfg.cjs`, the cfg parser every qol-project checker shares, at any depth of `all`/`any`/`not` and across lines, so `#[cfg(all(feature = "x", target_os = "linux"))]` counts, while a predicate that holds on Linux, macOS and Windows alike does not. Inside `platform/<os>.rs` it's redundant (the file is already OS-gated) but harmless; the hook doesn't fire there.
 
 ### 4. Trait method parity: every OS impl must have every method
 

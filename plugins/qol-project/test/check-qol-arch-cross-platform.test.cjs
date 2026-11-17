@@ -124,6 +124,51 @@ test('blocks #[cfg(target_os)] on pub use statement', () => {
     assert.equal(r.exitCode, 2);
 });
 
+test('blocks target_os nested in a cfg that spans lines on a use statement', () => {
+    const r = run({
+        tool_name: 'Write',
+        tool_input: {
+            file_path: '/x/Git/qol-monorepo/src/foo.rs',
+            content: 'pub fn a() {}\n#[cfg(all(\n    debug_assertions,\n    target_os = "linux",\n))]\n\nuse crate::evdev::KeyState;\n',
+        },
+    });
+    assert.equal(r.exitCode, 2);
+    assert.match(r.stderr, /line 7: use crate::evdev::KeyState;/);
+});
+
+test('passes cfg text in comments and cfg_attr on a use statement', () => {
+    const r = run({
+        tool_name: 'Write',
+        tool_input: {
+            file_path: '/x/Git/qol-monorepo/src/foo.rs',
+            content: '// #[cfg(target_os = "linux")]\nuse crate::evdev::KeyState;\n#[cfg_attr(target_os = "linux", allow(unused_imports))]\nuse crate::evdev::Other;\n',
+        },
+    });
+    assert.equal(r.exitCode, 0, r.stderr);
+});
+
+test('passes OS-gated uses in test items and cfgs that hold on every OS', () => {
+    const r = run({
+        tool_name: 'Write',
+        tool_input: {
+            file_path: '/x/Git/qol-monorepo/src/foo.rs',
+            content: [
+                '#[cfg(all(test, target_os = "linux"))]',
+                'pub(crate) use crate::fixture::register;',
+                '#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]',
+                'use crate::evdev::KeyState;',
+                '#[cfg(test)]',
+                'mod tests {',
+                '    #[cfg(target_os = "macos")]',
+                '    use super::KeyState;',
+                '}',
+                '',
+            ].join('\n'),
+        },
+    });
+    assert.equal(r.exitCode, 0, r.stderr);
+});
+
 test('passes cfg-on-use inside platform/', () => {
     const r = run({
         tool_name: 'Write',

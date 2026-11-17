@@ -2,6 +2,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const rustCfg = require('./rust-cfg.cjs');
 
 const IDENT_CHAR = /[A-Za-z0-9_]/;
 const ESCAPES = { n: '\n', t: '\t', r: '\r', 0: '\0', '\\': '\\', '"': '"', "'": "'" };
@@ -391,49 +392,8 @@ const INNER_ATTRIBUTE = /^#\s*!\s*\[/;
 const ITEM_HEAD = /^\s*(?:\{|(?:pub(?:\s*\([^)]*\))?\s+)?(?:default\s+)?(?:const\s+|async\s+|unsafe\s+|extern\s+(?:"[^"]*"\s+)?)*(?:fn|mod|impl|struct|enum|trait|union|use|type|static|let|macro_rules)\b)/;
 
 function cfgWithoutTest(expression) {
-    let index = 0;
-    const space = () => {
-        while (index < expression.length && /\s/.test(expression[index])) index++;
-    };
-    const parse = () => {
-        space();
-        const word = /^[A-Za-z_]\w*/.exec(expression.slice(index));
-        if (!word) throw new Error('cfg');
-        index += word[0].length;
-        space();
-        if (expression[index] === '(') {
-            index++;
-            const values = [];
-            space();
-            while (expression[index] !== ')') {
-                values.push(parse());
-                space();
-                if (expression[index] === ',') index++;
-                space();
-                if (index >= expression.length) throw new Error('cfg');
-            }
-            index++;
-            if (word[0] === 'not' && values.length === 1) return values[0] === null ? null : !values[0];
-            if (word[0] === 'all') return values.includes(false) ? false : values.includes(null) ? null : true;
-            if (word[0] === 'any') return values.includes(true) ? true : values.includes(null) ? null : false;
-            throw new Error('cfg');
-        }
-        if (expression[index] === '=') {
-            index++;
-            space();
-            const literal = /^"(?:\\.|[^"\\])*"/.exec(expression.slice(index));
-            if (literal) index += literal[0].length;
-            return null;
-        }
-        return word[0] === 'test' ? false : null;
-    };
-    try {
-        const value = parse();
-        space();
-        return index === expression.length ? value : null;
-    } catch {
-        return null;
-    }
+    const tree = rustCfg.parse(expression);
+    return tree === null ? null : rustCfg.kleene(tree, atom => (atom.key === 'test' && atom.value === null ? false : null));
 }
 
 function isTestAttribute(attribute) {
