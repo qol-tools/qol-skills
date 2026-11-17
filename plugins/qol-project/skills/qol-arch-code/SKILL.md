@@ -716,11 +716,12 @@ This skill ships with a Claude Code PreToolUse hook (`bin/check-qol-arch-code.cj
 - Platform decision signals outside an architecture boundary: `cfg!(target_os)`, `std::env::consts::OS`, OS API imports, OS command dispatch, platform-token branching, or platform-token storage/path routing.
 
 Allowed without challenge:
-- Existing legacy root modules and hybrids remain editable so the guard does not freeze plugins awaiting migration. New layout debt is blocked; existing debt should be removed during the next ownership refactor.
+- Existing legacy root modules and hybrids remain editable so the guard does not freeze plugins awaiting migration. New layout debt is blocked; existing debt should be removed during the next ownership refactor. A path is new when it does not exist yet; `qac lint --base=<rev>` counts a path new when `<rev>` lacks it, and `qac lint` without a base counts every path new, so it lists the existing layout debt.
 - Rust/GPUI code under `src/ui/`.
 - OS-named files inside any `platform/` directory; those *are* the OS impl, cfg inside is redundant but harmless.
-- Files under `tests/` and `examples/`, or named `*_test.rs` / `*_tests.rs`, cross-platform tests legitimately need cfg gates.
-- Test-gated items anywhere: a `#[cfg(test)]` module, field, block, or item, and anything carrying `#[test]` / `#[tokio::test]` / `#[rstest]`. A platform cfg on a test states which OS the test can run on; that is correct, not OS branching in business logic. The hook evaluates the compiled non-test view of the file.
+- Test files, because cross-platform tests legitimately need cfg gates: files under a `tests/`, `test/`, `benches/` or `examples/` folder below the repository root, files named `test.rs`, `tests.rs`, `*_test.rs` or `*_tests.rs`, and a module file that every parent declares only for tests (`#[cfg(test)] mod fixtures;`, with or without `#[path = ..]`), directly or through a test-only parent.
+- Test-only items anywhere: a module, item, field, variant or block whose attributes include a test marker (`#[test]`, `#[tokio::test]`, `#[rstest]`, `#[test_case]`, `#[bench]`, `#[proptest]`) or a `cfg` predicate that cannot hold in a build without `cfg(test)` (`cfg(test)`, `cfg(all(test, unix))`), and a whole file that starts with such a `#![cfg(..)]`. `cfg(any(windows, test))` still builds on Windows, so its item is production code. A platform cfg on a test states which OS the test can run on; that is correct, not OS branching in business logic. The hook evaluates the compiled non-test view of the file.
+- One test filter serves every qol-project checker: this hook and the cross-platform, output, design, owner and plugin-contract guards all call `production` and `isTestFile` in `bin/rust-serde.cjs`. Before it, four filters disagreed: one stopped at the first `mod tests {`, one counted any cfg that names `test` as test-only, so `#[cfg(any(target_os = "macos", test))]` hid a platform cfg from the check above.
 - Comments. Platform names, `cfg!(target_os = ...)`, and `platforms.len() == 1` written in prose or commented-out code are not platform decisions.
 - Non-platform cfg predicates such as `cfg(debug_assertions)` and `cfg(feature = ...)`.
 - Platform tokens that never meet a branch: carrying a `platforms` field, or passing `target_os` through to a facade, is not a decision. The composite platform-token signals require the token and the branch/routing to appear together, not merely somewhere in the same file.
@@ -776,10 +777,11 @@ must:
 
 Only violations the edit introduces are reported, counted per rule, so an unrelated
 edit to a file with existing debt passes and a second copy of that debt does not.
-Tests, examples, `*_tests.rs`, `*.test.js`, `generated-*` files and `vendor/` are
-skipped. Inside a file the guard stops at the inline `#[cfg(test)] mod … {` module;
-an out-of-line `#[cfg(test)] mod tests;` declaration does not hide the code after
-it (it used to, which left the Linked devices row model unread).
+Test files (the shared test filter in "Enforcement: PreToolUse hook"), `*.test.js`,
+`generated-*` files and `vendor/` are skipped, and the rules that read the whole file
+read it without its test-only items. Test code never hides the code after it: the
+guard once stopped at an out-of-line `#[cfg(test)] mod tests;` declaration, which
+left the Linked devices row model unread.
 
 To audit a tree, run the guard directly. It exits 1 if any file is flagged:
 
@@ -794,7 +796,7 @@ Implementation: Node.js (`bin/check-qol-arch-code.cjs`): Claude Code requires No
 
 ### Enforcement: output guard
 
-`bin/check-qol-logging.cjs` enforces "Output: log, trace, command output" at edit time. It counts each signal (`eprintln!`, `eprint!`, `println!`, `print!`, `io::stdout()`, `io::stderr()`, a `clippy::print_*` allow, `dbg!`, a `clippy::dbg_macro` allow) in the production view of the file, with comments and the `#[cfg(test)]` module stripped, and denies the edit when a count goes up outside the places that section allows. Clippy is the backstop for anything written without an Edit or Write tool.
+`bin/check-qol-logging.cjs` enforces "Output: log, trace, command output" at edit time. It counts each signal (`eprintln!`, `eprint!`, `println!`, `print!`, `io::stdout()`, `io::stderr()`, a `clippy::print_*` allow, `dbg!`, a `clippy::dbg_macro` allow) in the production view of the file, with comments and every test-only item stripped and test files skipped (the shared test filter in "Enforcement: PreToolUse hook"), and denies the edit when a count goes up outside the places that section allows. Clippy is the backstop for anything written without an Edit or Write tool.
 
 ### Enforcement: settings guard
 
@@ -880,7 +882,7 @@ An entry with `prefixes` also owns every whole string literal that starts with o
 
 The `action marks` entry makes the shared kit (owner `libs/gpui/`, its tests included) the only code that draws the mark at the end of a row, card or menu ("Action marks" in `qol-gpui-theme`). Its `paths` are the drawing calls of every mark (`Icon::Close`, `Icon::Tick`, `Icon::More`, `Icon::Enter`, `Icon::Add`, `Icon::Reveal`, `pictures::chevron`, `pictures::open_outside`, `pictures::tick`, `Busy::ring`, `Busy::new`), and its `calls` with no `entry_points` retire `settings_action_affordance`, the row button, in every file including the owner. Its lock test in `libs/gpui/tests/owners.rs` checks that the paths are exactly the union of `ActionMark::drawn_by()` over `ActionMark::ALL`, so a new mark cannot ship without its drawing call joining the rule, and that each retired call is still defined, so the entry drops it once the last caller is gone. The round 203 survey (2026-11-08) found 47 button rows, five spinner styles, × drawn three ways and the tick meaning four things.
 
-Unlike most guards it includes tests, because a test that types `"linux"` instead of `Os::Linux` is where a copy hides. An entry with `"scope": "production"` leaves test files and test-only items out (the test filter in `bin/rust-serde.cjs`: test files, and items marked as tests or behind a cfg that cannot hold without `test`), for a call that tests make on purpose, such as a fixture that probes a pid. Counts are compared before and after the edit, so existing uses block only when they grow; `qac lint` without `--base` lists them all. Bypass one edit with `touch .claude/bypass-qol-arch-code`; `qac lint` in CI never consumes a bypass.
+Unlike most guards it includes tests, because a test that types `"linux"` instead of `Os::Linux` is where a copy hides. An entry with `"scope": "production"` leaves test files and test-only items out (the shared test filter in "Enforcement: PreToolUse hook"), for a call that tests make on purpose, such as a fixture that probes a pid. Counts are compared before and after the edit, so existing uses block only when they grow; `qac lint` without `--base` lists them all. Bypass one edit with `touch .claude/bypass-qol-arch-code`; `qac lint` in CI never consumes a bypass.
 
 Residual: the guard reads tokens. It misses a name or text built on purpose (`concat!("li", "nux")`, a char array), a path reached through a glob import or a renamed module (`use dirs::*`, `use dirs as d`), an OS read from outside the program (`uname`, `/etc/os-release`), chrome set through a call the entry does not list (an X11 property such as `_MOTIF_WM_HINTS`, `msg_send!` with a selector), and any concept that has no owner entry yet. Each new owner is closed by adding its entry and its lock test.
 

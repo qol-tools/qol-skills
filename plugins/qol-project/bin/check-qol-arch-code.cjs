@@ -52,15 +52,14 @@ const lintMode = require('./hook-lint-mode.cjs');
 const owners = require('./qol-owner-guard.cjs');
 const events = require('./qol-event-guard.cjs');
 const quotes = require('./qol-quote-guard.cjs');
+const serde = require('./rust-serde.cjs');
 const { inQolRepo } = require('./qol-repo.cjs');
 
 const INSPECTED_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 const OS_BASENAMES = new Set(['linux.rs', 'macos.rs', 'windows.rs']);
-const TESTS_PATH_RE = /[\\/]tests[\\/]/;
 const TOOL_MATCH = /\bmatch\s+(?:[a-zA-Z_]\w*\.)?tool\s*\{/;
 const TOOL_MATCH_ROOTS = ['/libs/terminal-sessions/src/cli/', '/plugins/cli-sessions/src/'];
 const TOOL_MATCH_EXEMPT = ['/builtins/', '/tests/', '/test/', '/session/tool.rs'];
-const EXAMPLES_PATH_RE = /[\\/]examples[\\/]/;
 const PLUGIN_ROOT_RUST_FILES = new Set(['main.rs', 'lib.rs', 'cli.rs']);
 const QOL_TRAY_ROOT_RUST_FILES = new Set(['main.rs', 'lib.rs']);
 const CATCH_ALL_SOURCE_DIRS = new Set(['common', 'helper', 'helpers', 'util', 'utils']);
@@ -200,9 +199,13 @@ function findMixedPlatformShape(filePath, sourceRoot) {
     return { kind: 'mixed-platform-shape', conflicts, platformDir };
 }
 
+function isNewPath(filePath) {
+    return lintMode.isTarget(filePath) ? lintMode.baseline() === null : !fs.existsSync(filePath);
+}
+
 function findSourceLayoutViolation(filePath) {
     const context = findRustSourceContext(filePath);
-    if (!context || path.extname(filePath) !== '.rs' || fs.existsSync(filePath)) return null;
+    if (!context || path.extname(filePath) !== '.rs' || !isNewPath(filePath)) return null;
 
     const hybrid = findModuleHybrid(filePath, context.sourceRoot);
     if (hybrid) return { kind: 'module-hybrid', ...hybrid };
@@ -230,15 +233,15 @@ function findPluginLayoutViolation(filePath) {
     if (!context) return null;
 
     const extension = path.extname(filePath).toLowerCase();
-    const isNewPath = !fs.existsSync(filePath);
+    const isNew = isNewPath(filePath);
 
-    if (context.area === 'ui' && isNewPath && extension === '.rs') {
+    if (context.area === 'ui' && isNew && extension === '.rs') {
         return { kind: 'rust-in-web-ui' };
     }
 
     if (
         context.area === 'src' &&
-        isNewPath &&
+        isNew &&
         context.parts[0] === 'ui' &&
         WEB_ASSET_EXTENSIONS.has(extension)
     ) {
@@ -247,7 +250,7 @@ function findPluginLayoutViolation(filePath) {
 
     if (
         context.area === 'src' &&
-        isNewPath &&
+        isNew &&
         context.parts.length === 1 &&
         extension === '.rs' &&
         !PLUGIN_ROOT_RUST_FILES.has(context.parts[0])
@@ -277,9 +280,6 @@ const PLATFORM_TOKEN = /\b(current_os|target_os|host_os|os_bucket|platforms|supp
 const ROUTING_TOKEN = /\.join\s*\(\s*"os"\s*\)|format!\s*\(\s*"os\/|PathBuf::from\s*\(\s*"os"\s*\)|\b(os|core|device)_(dir|path|bucket)\b|"(core|device)"|"plugin-configs"/;
 const DECISION_TOKEN = /\b(if|match)\b|=>|==|!=|\.len\(\)\s*==\s*1|\.contains\s*\(/;
 const COMPOSITE_WINDOW = 2;
-const TEST_MARKER_ATTRIBUTE = /^#\[\s*(?:[A-Za-z_]\w*\s*::\s*)*(?:test|rstest|test_case|bench|proptest)\b/;
-const CFG_ATTRIBUTE = /^#\[\s*cfg\s*\(/;
-const ITEM_HEAD = /^\s*(?:\{|(?:pub(?:\s*\([^)]*\))?\s+)?(?:default\s+)?(?:const\s+|async\s+|unsafe\s+|extern\s+(?:"[^"]*"\s+)?)*(?:fn|mod|impl|struct|enum|trait|union|use|type|static|let|macro_rules)\b)/;
 
 function readStdin() {
     try {
@@ -422,89 +422,8 @@ function sanitizeSource(content, blankLiterals) {
     return out.join('');
 }
 
-function isTestAttribute(attribute) {
-    if (TEST_MARKER_ATTRIBUTE.test(attribute)) return true;
-    if (!CFG_ATTRIBUTE.test(attribute)) return false;
-    let predicate = attribute;
-    let previous;
-    do {
-        previous = predicate;
-        predicate = predicate.replace(/\bnot\s*\([^()]*\)/g, '');
-    } while (predicate !== previous);
-    return /\btest\b/.test(predicate);
-}
-
-function readAttributeRun(code, start) {
-    const attributes = [];
-    let index = start;
-    while (code.startsWith('#[', index)) {
-        let depth = 0;
-        let end = index + 1;
-        for (; end < code.length; end++) {
-            if (code[end] === '[') depth++;
-            else if (code[end] === ']' && --depth === 0) break;
-        }
-        if (end >= code.length) return null;
-        attributes.push(code.slice(index, end + 1));
-        index = end + 1;
-        while (index < code.length && /\s/.test(code[index])) index++;
-    }
-    if (attributes.length === 0 || index >= code.length) return null;
-    return { attributes, itemStart: index };
-}
-
-function findItemEnd(code, start) {
-    const lineEnd = code.indexOf('\n', start);
-    const head = code.slice(start, lineEnd < 0 ? code.length : lineEnd);
-    const blockItem = ITEM_HEAD.test(head);
-    let depth = 0;
-    let openedBody = false;
-    for (let index = start; index < code.length; index++) {
-        const ch = code[index];
-        if (ch === '{' || ch === '(' || ch === '[') {
-            if (ch === '{' && depth === 0) openedBody = true;
-            depth++;
-            continue;
-        }
-        if (ch === '}' || ch === ')' || ch === ']') {
-            depth--;
-            if (depth < 0) return index;
-            if (depth === 0 && openedBody && ch === '}') return index + 1;
-            continue;
-        }
-        if (depth > 0) continue;
-        if (ch === ';') return index + 1;
-        if (ch === ',' && !blockItem) return index + 1;
-    }
-    return null;
-}
-
 function maskTestItems(content) {
-    const code = sanitizeSource(content, true);
-    const ranges = [];
-    let index = 0;
-    while (index < code.length) {
-        const start = code.indexOf('#[', index);
-        if (start < 0) break;
-        const run = readAttributeRun(code, start);
-        const end = run && run.attributes.some(isTestAttribute)
-            ? findItemEnd(code, run.itemStart)
-            : null;
-        if (end === null) {
-            index = start + 2;
-            continue;
-        }
-        ranges.push([start, end]);
-        index = end;
-    }
-    if (ranges.length === 0) return content;
-    const out = content.split('');
-    for (const [from, to] of ranges) {
-        for (let cursor = from; cursor < to && cursor < out.length; cursor++) {
-            if (out[cursor] !== '\n') out[cursor] = ' ';
-        }
-    }
-    return out.join('');
+    return serde.blankSpans(content, serde.testSpans(sanitizeSource(content, true)));
 }
 
 function productionCode(content) {
@@ -1086,18 +1005,9 @@ function testOverrideCount(code) {
     return [...testNames].filter(name => productionNames.has(name)).length;
 }
 
-function isTestPath(filePath) {
-    const basename = crossPlatformBasename(filePath);
-    return TESTS_PATH_RE.test(filePath)
-        || EXAMPLES_PATH_RE.test(filePath)
-        || basename === 'tests.rs'
-        || basename.endsWith('_test.rs')
-        || basename.endsWith('_tests.rs');
-}
-
 function testDeadlineCounts(filePath, content) {
     const code = sanitizeSource(content, true);
-    const production = isTestPath(filePath) ? '' : sanitizeSource(maskTestItems(content), true);
+    const production = serde.isTestFile(filePath) ? '' : sanitizeSource(maskTestItems(content), true);
     return [
         ...TEST_DEADLINE_SIGNALS.map(signal =>
             shortDeadlineCount(code, signal.pattern) - shortDeadlineCount(production, signal.pattern)),
@@ -1654,15 +1564,7 @@ function evaluate(payload) {
         return 2;
     }
 
-    if (
-        TESTS_PATH_RE.test(filePath) ||
-        EXAMPLES_PATH_RE.test(filePath) ||
-        basename.endsWith('_test.rs') ||
-        basename.endsWith('_tests.rs') ||
-        basename === 'tests.rs'
-    ) {
-        return 0;
-    }
+    if (serde.isTestFile(filePath)) return 0;
 
     if (OS_BASENAMES.has(basename)) {
         if (!filePath.split(/[\\/]/).includes('platform')) {

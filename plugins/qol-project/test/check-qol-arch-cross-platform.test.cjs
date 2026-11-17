@@ -487,6 +487,9 @@ test('passes a hidden plugin spawn, a library spawn and a Linux adapter spawn', 
             'fn run() { let _ = Command::new("xdotool").status(); }\n'],
         ['/x/Git/qol-monorepo/apps/tray/src/testing/git_repo.rs',
             'fn init() { let _ = Command::new("git").status(); }\n'],
+        ['/x/Git/qol-monorepo/apps/tray/src/features/runner/platform/mod.rs',
+            '#[cfg(not(test))]\nfn guardian() -> Command {\n    qol_process::guardian_command()\n}\n\n'
+            + '#[cfg(test)]\nfn guardian() -> Command {\n    Command::new("cargo")\n}\n'],
     ];
     for (const [filePath, content] of cases) {
         assert.equal(write(filePath, content).exitCode, 0, `${filePath}\n${content}`);

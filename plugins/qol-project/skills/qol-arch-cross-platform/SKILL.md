@@ -220,7 +220,7 @@ pub(crate) fn helper_only_used_on_some_paths() { ... }   // ok inside platform/
 fn macos_stub(mut buf: Vec<u8>) { ... }                  // ok inside platform/
 ```
 
-In tests/ and examples/, cfg gates are unrestricted; cross-platform tests legitimately need them.
+In test files and test-only items, cfg gates are unrestricted; cross-platform tests legitimately need them. Both come from the test filter that every qol-project checker shares ("Enforcement: PreToolUse hook" in `qol-arch-code`): a `tests/` or `examples/` folder, a `*_tests.rs` file, a module its parent declares only for tests, and any item behind `#[cfg(test)]`, `#[cfg(all(test, ..))]` or a test marker. An item behind `#[cfg(any(windows, test))]` still builds on Windows, so it is checked.
 
 ## Bypass
 

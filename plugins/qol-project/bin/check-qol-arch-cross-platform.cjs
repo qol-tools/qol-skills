@@ -38,8 +38,6 @@ const path = require('node:path');
 const INSPECTED_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 
 const PLATFORM_PATH_RE = /[\\/]platform[\\/]/;
-const TESTS_PATH_RE = /[\\/]tests[\\/]/;
-const EXAMPLES_PATH_RE = /[\\/]examples[\\/]/;
 
 function crossPlatformBasename(p) {
     const parts = p.split(/[\\/]/);
@@ -69,8 +67,6 @@ const TEST_SUPPORT_PATH_RE =
     /[\\/](?:tests|testing|examples)[\\/]|[\\/](?:tests|build)\.rs$|_tests?\.rs$|[\\/]test_[^\\/]*\.rs$|test_support|testkit/;
 const GUI_CRATE_PATH_RE = /[\\/](?:apps[\\/]tray|plugins[\\/][^\\/]+)[\\/]src[\\/]/;
 const PLUGIN_CRATE_PATH_RE = /[\\/]plugins[\\/][^\\/]+[\\/]src[\\/]/;
-const BLOCK_COMMENT = new RegExp('/\\*[\\s\\S]*?\\*/', 'g');
-const LINE_COMMENT = new RegExp('/{2}.*$', 'gm');
 
 const ALLOW_DEAD_CODE = /#\[allow\([^)]*\bdead_code\b[^)]*\)\]/;
 const ALLOW_UNUSED_MUT = /#\[allow\([^)]*\bunused_mut\b[^)]*\)\]/;
@@ -82,6 +78,7 @@ const ATTRIBUTE_LINE = /^\s*#\[/;
 const lintMode = require('./hook-lint-mode.cjs');
 const { inQolRepo } = require('./qol-repo.cjs');
 const oneOsStubs = require('./one-os-stubs.cjs');
+const serde = require('./rust-serde.cjs');
 
 function readStdin() {
     try {
@@ -210,8 +207,8 @@ function rustFiles(root, excludedDirectory, prospectiveFile) {
     return files;
 }
 
-function productionContent(content) {
-    return content.split(/\n\s*#\[cfg\(test\)\]\s*\n\s*mod\s+tests\s*\{/)[0];
+function productionSource(file, content) {
+    return serde.production(file, content || '')?.clean ?? '';
 }
 
 function prospectiveFileContent(candidate, filePath, newContent) {
@@ -274,14 +271,15 @@ function findAdapterExclusiveHelpers(filePath, newContent) {
     if (!platformDir) return [];
     const featureDir = path.dirname(platformDir);
     const parentFile = path.join(featureDir, 'mod.rs');
-    const parentContent = productionContent(
+    const parentContent = productionSource(
+        parentFile,
         prospectiveFileContent(parentFile, filePath, newContent),
     );
     if (!parentContent) return [];
 
     const sharedFiles = rustFiles(crateSourceRoot(featureDir), platformDir, filePath);
     const sharedContent = sharedFiles
-        .map(file => productionContent(prospectiveFileContent(file, filePath, newContent)))
+        .map(file => productionSource(file, prospectiveFileContent(file, filePath, newContent)))
         .join('\n');
     const adapters = adapterContents(platformDir, filePath, newContent);
 
@@ -329,13 +327,6 @@ function addedCodeBaseline(filePath) {
     return readExistingFile(filePath) || '';
 }
 
-function productionView(content) {
-    return content
-        .split(/\n\s*#\[cfg\(test\)\]\s*\n\s*mod\s+\w+\s*\{/)[0]
-        .replace(BLOCK_COMMENT, '')
-        .replace(LINE_COMMENT, '');
-}
-
 function occurrences(content, pattern) {
     return (content.match(pattern) || []).length;
 }
@@ -355,14 +346,14 @@ function matchingLines(content, pattern) {
 function crateHasStopListener(filePath, newContent) {
     const root = crateSourceRoot(path.dirname(path.resolve(filePath)));
     return rustFiles(root, '', path.resolve(filePath))
-        .map(file => productionView(prospectiveFileContent(file, filePath, newContent)))
+        .map(file => productionSource(file, prospectiveFileContent(file, filePath, newContent)))
         .some(content => STOP_LISTENER.test(content));
 }
 
 function findWindowsViolations(filePath, newContent) {
-    if (OTHER_OS_PATH_RE.test(filePath) || TEST_SUPPORT_PATH_RE.test(filePath)) return [];
-    const before = productionView(addedCodeBaseline(filePath));
-    const after = productionView(newContent);
+    if (OTHER_OS_PATH_RE.test(filePath) || TEST_SUPPORT_PATH_RE.test(filePath) || serde.isTestFile(filePath)) return [];
+    const before = productionSource(filePath, addedCodeBaseline(filePath));
+    const after = productionSource(filePath, newContent);
     const violations = [];
     const foreignCommand = FOREIGN_COMMAND_IMPORT.test(after);
     const systemTool = foreignCommand ? QUALIFIED_BARE_SYSTEM_TOOL : BARE_SYSTEM_TOOL;
@@ -442,14 +433,7 @@ function noteOneOsStubs(filePath, newContent) {
 }
 
 function isExempt(filePath) {
-    const basename = crossPlatformBasename(filePath);
-    if (PLATFORM_PATH_RE.test(filePath)) return true;
-    if (TESTS_PATH_RE.test(filePath)) return true;
-    if (EXAMPLES_PATH_RE.test(filePath)) return true;
-    if (basename.endsWith('_test.rs')) return true;
-    if (basename.endsWith('_tests.rs')) return true;
-    if (basename === 'tests.rs') return true;
-    return false;
+    return PLATFORM_PATH_RE.test(filePath) || serde.isTestFile(filePath);
 }
 
 function findAllowViolations(content) {

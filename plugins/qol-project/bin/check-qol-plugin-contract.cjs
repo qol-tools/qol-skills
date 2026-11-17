@@ -291,7 +291,7 @@ function repoFor(root, overrides = new Map()) {
 }
 
 function rustFiles(repo, dir) {
-    return repo.list(dir).filter(file => file.endsWith('.rs') && !rust.TEST_FILE.test(file));
+    return repo.list(dir).filter(file => file.endsWith('.rs') && !rust.isTestFile(path.join(repo.root, file)));
 }
 
 function factsIn(repo, files) {
@@ -877,7 +877,7 @@ function classify(root, filePath) {
     const rel = relative(root, filePath);
     let match;
     if ((match = CONTRACT_PATH.exec(rel))) return { kind: 'contract', rel, dirs: [match[1]] };
-    if (rust.TEST_FILE.test(rel)) return null;
+    if (rust.isTestFile(path.resolve(root, rel))) return null;
     if ((match = SOURCE_PATH.exec(rel))) return { kind: 'source', rel, dirs: [match[1]] };
     if (rel.endsWith('.rs') && [...SCHEMA_DIRS, MARK_DIR].some(dir => rel.startsWith(`${dir}/`))) return { kind: 'shared', rel, dirs: null };
     return null;

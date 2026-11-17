@@ -114,6 +114,17 @@ test('passes edits to grandfathered plugin src root modules', () => {
     assert.equal(r.exitCode, 0, r.stderr);
 });
 
+test('lint judges layout from the base: a file is new when the base lacks it', () => {
+    const { pluginRoot, file } = fixturePluginPath('src/feature/capture.rs', 'pub fn start() {}\n');
+    fs.mkdirSync(path.join(pluginRoot, 'src', 'feature', 'capture'));
+    fs.writeFileSync(path.join(pluginRoot, 'src', 'feature', 'capture', 'worker.rs'), 'pub fn work() {}\n');
+    const { lintFile } = require(HOOK);
+    const content = fs.readFileSync(file, 'utf8');
+    assert.match(lintFile(file, content, null).join('\n'), /cannot use both/);
+    assert.deepEqual(lintFile(file, content, content), []);
+    assert.deepEqual(lintFile(file, content, 'pub fn old() {}\n'), []);
+});
+
 test('layout violations honor the single-edit bypass marker', () => {
     const { root, file } = fixturePluginPath('src/recording.rs');
     const marker = path.join(root, '.claude', 'bypass-qol-arch-code');
@@ -846,6 +857,29 @@ test('blocks cfg(any(target_os)) gating non-OS item', () => {
         },
     });
     assert.equal(r.exitCode, 2);
+});
+
+test('blocks a target_os cfg that also lets the item build for tests', () => {
+    const r = run({
+        tool_name: 'Write',
+        tool_input: {
+            file_path: '/x/Git/qol-monorepo/src/lib.rs',
+            content: '#[cfg(any(target_os = "macos", test))]\npub fn vendor_id() -> u32 {\n    0\n}\n',
+        },
+    });
+    assert.equal(r.exitCode, 2);
+});
+
+test('passes a target_os cfg on a module its parent declares only for tests', () => {
+    const { crateRoot } = fixtureCratePath('src/feature/mod.rs', 'pub fn live() {}\n\n#[cfg(test)]\nmod fixtures;\n');
+    const r = run({
+        tool_name: 'Write',
+        tool_input: {
+            file_path: path.join(crateRoot, 'src', 'feature', 'fixtures.rs'),
+            content: '#[cfg(target_os = "linux")]\npub fn linux_fixture() {}\n',
+        },
+    });
+    assert.equal(r.exitCode, 0, r.stderr);
 });
 
 test('passes feature-only cfg (no target_os involved)', () => {

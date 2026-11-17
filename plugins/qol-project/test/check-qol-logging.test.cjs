@@ -103,6 +103,26 @@ test('ignores prints inside the cfg(test) module and comments', () => {
     ].join('\n')));
 });
 
+test('ignores prints in every test-only item, and still sees the code after them', () => {
+    assertAllow(write(PLUGIN_FILE, [
+        '#[cfg(test)]',
+        'fn fixture() { println!("test"); }',
+        '#[cfg(all(test, unix))]',
+        'mod unix_tests {',
+        '    fn t() { eprintln!("test"); }',
+        '}',
+        'fn f() {}',
+        '',
+    ].join('\n')));
+    assertDeny(write(PLUGIN_FILE, '#[cfg(test)]\nmod tests {}\nfn after() { eprintln!("x"); }\n'), /eprintln!/);
+    assertDeny(write(PLUGIN_FILE, '#[cfg(any(windows, test))]\nfn windows_too() { eprintln!("x"); }\n'), /eprintln!/);
+});
+
+test('ignores prints in a module its parent declares only for tests', () => {
+    const { file } = fixture('plugins/launcher/src/feature/mod.rs', '#[cfg(test)]\nmod fixtures;\n');
+    assertAllow(write(path.join(path.dirname(file), 'fixtures.rs'), 'fn f() { println!("x"); }\n'));
+});
+
 for (const allowed of [
     '/x/qol-monorepo/plugins/launcher/tests/launch.rs',
     '/x/qol-monorepo/plugins/launcher/examples/demo.rs',

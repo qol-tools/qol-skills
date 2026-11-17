@@ -8,11 +8,6 @@ const { spawnSync } = require('node:child_process');
 
 const INSPECTED_TOOLS = new Set(['Edit', 'Write', 'MultiEdit']);
 
-const TEST_PATH_RES = [
-    /[\\/](tests|examples|benches)[\\/]/,
-    /_tests?\.rs$/,
-];
-
 const COMMAND_OUTPUT_PATH_RES = [
     /[\\/]cli\.rs$/,
     /_cli\.rs$/,
@@ -40,6 +35,7 @@ const SIGNALS = [
 const lintMode = require('./hook-lint-mode.cjs');
 const { inQolRepo } = require('./qol-repo.cjs');
 const { readExistingFile, prospectiveContent } = require('./hook-edit-content.cjs');
+const serde = require('./rust-serde.cjs');
 
 function readStdin() {
     try {
@@ -49,21 +45,14 @@ function readStdin() {
     }
 }
 
-function productionView(content) {
-    return content
-        .split(/\n\s*#\[cfg\(test\)\]\s*\n\s*mod\s+\w+\s*\{/)[0]
-        .replace(/\/\*[\s\S]*?\*\//g, '')
-        .replace(/\/\/.*$/gm, '');
-}
-
-function countSignals(content, signals) {
-    const view = productionView(content);
+function countSignals(file, content, signals) {
+    const view = serde.production(file, content)?.clean ?? '';
     return signals.map(signal => (view.match(signal.re) || []).length);
 }
 
-function addedSignals(before, after, signals) {
-    const was = countSignals(before, signals);
-    const now = countSignals(after, signals);
+function addedSignals(file, before, after, signals) {
+    const was = countSignals(file, before, signals);
+    const now = countSignals(file, after, signals);
     return signals.filter((_, index) => now[index] > was[index]).map(signal => signal.name);
 }
 
@@ -99,7 +88,7 @@ function main() {
 
 function inspectedSignals(filePath) {
     if (!filePath.endsWith('.rs') || !inQolRepo(filePath)) return [];
-    if (TEST_PATH_RES.some(re => re.test(filePath))) return [];
+    if (serde.isTestFile(path.resolve(filePath))) return [];
     const commandOutputAllowed = COMMAND_OUTPUT_PATH_RES.some(re => re.test(filePath));
     return SIGNALS.filter(signal => !(commandOutputAllowed && signal.commandOutput));
 }
@@ -204,7 +193,7 @@ function reviewCommand(payload) {
             continue;
         }
         const previous = before.files[file] ?? headContent(before.root, file);
-        const added = addedSignals(previous, after, inspectedSignals(file));
+        const added = addedSignals(file, previous, after, inspectedSignals(file));
         if (added.length) found.push(`${path.relative(before.root, file).split(path.sep).join('/')} (${added.join(', ')})`);
     }
     if (found.length === 0) return;
@@ -229,7 +218,7 @@ function evaluate(payload) {
 
     const existing = readExistingFile(filePath);
     const after = prospectiveContent(tool, input, existing);
-    const added = addedSignals(existing || '', after, signals);
+    const added = addedSignals(filePath, existing || '', after, signals);
     if (added.length === 0) return 0;
     deny(filePath, added);
     return 2;

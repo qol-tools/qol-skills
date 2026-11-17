@@ -3,6 +3,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const serde = require('./rust-serde.cjs');
 
 const SURFACE_ROOT = /^(libs[/]gpui[/]src|apps[/]tray[/]src|plugins[/][^/]+[/]src)[/]/;
 const SETTINGS_SCOPE = [
@@ -67,7 +68,6 @@ const FACT_OWNERS = [COMPONENTS, 'libs/gpui/src/settings_panel/view/mod.rs', 'li
 const FACT_USE = 'settings_tag(text, tone, row, kit) placed just left of the switch or the chevron (settings_tagged_label_group(label, tags, description, row, kit) puts it there): a row states its picked value, status or count as a tag, never as loose text';
 const ROW_MARKS = ['Icon::Enter', 'Icon::Copy', 'Icon::Reveal', 'pictures::open_outside(', 'settings_action_mark(', 'settings_copy_mark('];
 const ENDING_USE = 'nothing: the chevron is the only mark a settings row ends in, drawn by SettingsRow::opens(true) or SettingsRow::launches(..) when enter opens a page, a list or another app; a row that acts right here ends in nothing and the hint bar names what enter does';
-const TEST_MODULE = /#\[cfg\(test\)\]\s*(?:#\[[^\]]*\]\s*)*(?:pub(?:\([^)]*\))?\s+)?mod\s+\w+\s*\{/;
 const LINE_COMMENT = '/'.repeat(2);
 const TRANSPARENT = /^rgba\(\s*0(x0+)?\s*\)$/;
 
@@ -99,8 +99,7 @@ function isCommentLine(line) {
 }
 
 function beforeTests(content) {
-    const tests = TEST_MODULE.exec(content);
-    return tests ? content.slice(0, tests.index) : content;
+    return serde.blankSpans(content, serde.testSpans(serde.lexRust(content).skeleton));
 }
 
 function lineOf(content, index) {
@@ -729,6 +728,7 @@ function isGenerated(relative) {
 
 function designViolations(relative, content, root) {
     if (!content || isTestFile(relative) || isGenerated(relative)) return [];
+    if (relative.endsWith('.rs') && root && serde.isTestFile(path.join(root, relative))) return [];
     const extension = path.extname(relative);
     if (extension === '.rs' && SURFACE_ROOT.test(relative)) return rustViolations(relative, content, root);
     if (WEB_ROOT.test(relative) && extension === '.css') return cssViolations(relative, content);
