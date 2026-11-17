@@ -222,6 +222,14 @@ extend `settings_panel/` instead. What the kit module guarantees:
    carry the `item_card` input row, and Enter runs the selected action
    (`run_item_card_action`), interpolating its `input` from the item, and pops
    back to the list card. The shared spinner shows until the query refreshes.
+   A list can also give each item live controls on its item card with
+   `row_controls` (`control` = `color`, `number`, `switch` or `text`, each with
+   an `action`; a bounded `number` takes `variant = "slider"`), a colour chip on
+   the row with `row_swatch`, and a switch on the row with `row_toggle`
+   (`action` and `active_action`). `row_controls` needs a `qol-runtime.toml`.
+   A list with `detached = true` never draws on the top level: it draws only
+   where an item's row action links to it. Lights is the reference
+   (`plugins/lights/qol-config.toml`).
    Wire payload-bearing adapters with `SettingsRuntime::with_input_action`;
    never decode row data or build action cards in plugin-specific GPUI code.
 7. Every change saves immediately by PUTting **row values merged over
