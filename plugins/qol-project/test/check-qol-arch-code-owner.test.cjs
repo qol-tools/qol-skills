@@ -502,6 +502,218 @@ test('an entry without calls, texts or paths guards nothing', () => {
     assert.equal(write(place(root, 'plugins/demo/src/tone.rs'), RUN).exitCode, 0);
 });
 
+const LIVENESS = {
+    owner: 'libs/process/src/',
+    use: 'qol_process::is_pid_gone',
+    calls: ['is_pid_alive'],
+    entry_points: [],
+    allow: [],
+};
+const PROBE = 'pub fn running(pid: u32) -> bool {\n    is_pid_alive(pid)\n}\n';
+const TESTED = 'pub fn live() {}\n\n#[cfg(test)]\nmod tests {\n    fn running(pid: u32) -> bool {\n        is_pid_alive(pid)\n    }\n}\n';
+
+test('an entry scoped to production passes test code and test files', () => {
+    const root = repo({ rulebook: false });
+    place(root, '.qac/owners.json', JSON.stringify({ liveness: { ...LIVENESS, scope: 'production' } }));
+    const refused = write(place(root, 'plugins/demo/src/watch.rs'), PROBE);
+    assert.equal(refused.exitCode, 2);
+    assert.match(refused.stderr, /liveness set by is_pid_alive in fn running/);
+    assert.equal(write(place(root, 'plugins/demo/src/tested.rs'), TESTED).exitCode, 0);
+    place(root, 'plugins/demo/src/feature/mod.rs', '#[cfg(test)]\nmod fixtures;\n');
+    assert.equal(write(place(root, 'plugins/demo/src/feature/fixtures.rs'), PROBE).exitCode, 0);
+});
+
+test('an entry without a scope guards test code too', () => {
+    const root = repo({ rulebook: false });
+    place(root, '.qac/owners.json', JSON.stringify({ liveness: LIVENESS }));
+    assert.equal(write(place(root, 'plugins/demo/src/tested.rs'), TESTED).exitCode, 2);
+});
+
+const NAMED = {
+    concept: 'process liveness',
+    folders: ['libs/process/src/'],
+    use: 'qol_process::is_pid_gone',
+    calls: [],
+    entryPoints: new Set(),
+    texts: new Set(),
+    paths: ['is_pid_alive', 'is_pid_zombie'],
+    allow: [],
+};
+const named = (src, at = AT) => textViolations(at, src, NAMED);
+
+const namedRefused = [
+    ['a call through the owner', 'fn f(pid: u32) -> bool { qol_process::is_pid_alive(pid) }', 1],
+    ['a call through a re-export', 'fn f(pid: i32) -> bool { crate::process::is_pid_alive(pid) }', 1],
+    ['the name passed as a value', 'fn f(pid: i64) -> bool { u32::try_from(pid).is_ok_and(qol_process::is_pid_alive) }', 1],
+    ['a brace import', 'use qol_process::{is_pid_alive, kill_pid};', 1],
+    ['a wrapper of the same name', 'pub fn is_pid_alive(pid: i32) -> bool { pid > 0 }', 1],
+    ['both names in one block', 'fn f(pid: u32) -> bool { is_pid_alive(pid) && !is_pid_zombie(pid) }', 2],
+    ['one name twice in one block', 'fn f(a: u32, b: u32) -> bool { is_pid_alive(a) || is_pid_alive(b) }', 2],
+];
+
+const namedAllowed = [
+    ['a longer identifier', 'fn f(pid: u32) -> bool { is_pid_alive_now(pid) || was_is_pid_alive(pid) }'],
+    ['the owner function', 'fn f(pid: u32) -> bool { !qol_process::is_pid_gone(pid) }'],
+    ['a comment', '// was is_pid_alive(pid)\nfn f() {}'],
+    ['a string', 'const S: &str = "is_pid_alive";'],
+];
+
+for (const [name, src, n] of namedRefused) {
+    test(`name refused: ${name}`, () => assert.equal(named(src).length, n, JSON.stringify(named(src))));
+}
+
+for (const [name, src] of namedAllowed) {
+    test(`name allowed: ${name}`, () => assert.deepEqual(named(src), []));
+}
+
+test('the owner folder may use its names', () => {
+    const gone = 'pub fn is_pid_gone(pid: u32) -> bool {\n    !is_pid_alive(pid) || is_pid_zombie(pid)\n}\n';
+    assert.deepEqual(named(gone, 'libs/process/src/lib.rs'), []);
+});
+
+test('a rulebook path of one name guards that name on Write', () => {
+    const root = repo({ rulebook: false });
+    place(root, '.qac/owners.json', JSON.stringify({
+        'process liveness': { owner: 'libs/process/src/', use: 'qol_process::is_pid_gone', scope: 'production', paths: ['is_pid_alive'], allow: [] },
+    }));
+    const refused = write(place(root, 'plugins/demo/src/watch.rs'), 'pub fn running(pid: u32) -> bool {\n    qol_process::is_pid_alive(pid)\n}\n');
+    assert.equal(refused.exitCode, 2);
+    assert.match(refused.stderr, /process liveness outside its owner: is_pid_alive/);
+    assert.match(refused.stderr, /use: qol_process::is_pid_gone/);
+    assert.equal(write(place(root, 'plugins/demo/src/tested.rs'), TESTED).exitCode, 0);
+});
+
+const ROUTER = 'apps/tray/src/router.rs';
+const VALUES = {
+    concept: 'conventions values',
+    folders: ['libs/conventions/src/'],
+    use: 'the qol_conventions constant or route builder that holds the value',
+    calls: [],
+    entryPoints: new Set(),
+    texts: new Set(['/api/shortcuts', 'QoL Tray']),
+    prefixes: ['/api/'],
+    paths: [],
+    allow: [`${ROUTER}\0/api/legacy`],
+};
+const values = (src, at = AT) => textViolations(at, src, VALUES);
+
+const valuesRefused = [
+    ['a whole value', 'const NAME: &str = "QoL Tray";', 1],
+    ['a route the owner holds', 'fn f() -> Response { get("/api/shortcuts") }', 1],
+    ['a route under the prefix', 'fn f() -> Response { get("/api/core/queries/updates") }', 1],
+    ['a format template under the prefix', 'fn f(name: &str) -> String { format!("/api/core/actions/{name}") }', 1],
+    ['a value and a route', 'fn f() { let _ = ("QoL Tray", "/api/sync"); }', 2],
+];
+
+const valuesAllowed = [
+    ['the prefix inside a longer string', 'const S: &str = "GET /api/shortcuts failed";'],
+    ['a value inside a longer string', 'const S: &str = "QoL Tray Settings";'],
+    ['a device path', 'const S: &str = "/dev/input/event0";'],
+    ['the owner builder', 'fn f(id: &str) -> String { qol_conventions::api_routes::plugin(id) }'],
+    ['a comment', '// GET /api/shortcuts\nfn f() {}'],
+];
+
+for (const [name, src, n] of valuesRefused) {
+    test(`prefix refused: ${name}`, () => assert.equal(values(src).length, n, JSON.stringify(values(src))));
+}
+
+for (const [name, src] of valuesAllowed) {
+    test(`prefix allowed: ${name}`, () => assert.deepEqual(values(src), []));
+}
+
+test('a prefix names the concept and the whole literal', () => {
+    const [violation] = values('fn f() -> Response {\n    get("/api/sync")\n}\n');
+    assert.equal(violation.line, 2);
+    assert.equal(violation.what, 'conventions values outside its owner: "/api/sync"');
+});
+
+test('a prefix exception holds only for its file and literal', () => {
+    const src = 'fn f() { let _ = (get("/api/legacy"), get("/api/sync")); }';
+    assert.deepEqual(values(src, ROUTER).map(violation => violation.what), [
+        'conventions values outside its owner: "/api/sync"',
+    ]);
+    assert.equal(values(src).length, 2);
+});
+
+test('the owner folder may use its prefixes', () => {
+    assert.deepEqual(values('pub const SYNC: &str = "/api/sync";', 'libs/conventions/src/lib.rs'), []);
+});
+
+test('a rulebook entry with only prefixes guards them on Write', () => {
+    const root = repo({ rulebook: false });
+    place(root, '.qac/owners.json', JSON.stringify({
+        'conventions values': { owner: 'libs/conventions/src/', use: 'qol_conventions::api_routes', scope: 'production', prefixes: ['/api/'], allow: [] },
+    }));
+    const refused = write(place(root, 'plugins/demo/src/client.rs'), 'pub fn sync() -> String {\n    String::from("/api/sync")\n}\n');
+    assert.equal(refused.exitCode, 2);
+    assert.match(refused.stderr, /conventions values outside its owner: "\/api\/sync"/);
+});
+
+const CONVENTIONS = [
+    'pub const TRAY_DISPLAY_NAME: &str = "QoL Tray";',
+    "pub const SOCKET_PATH: &'static str =",
+    '    "/tmp/demo-state.sock";',
+    'pub const DEFAULT_PORT: u16 = 42700;',
+    'pub const ARG_CHECK: &str = "check";',
+    'pub(crate) const INNER: &str = "inner value";',
+    'const PRIVATE: &str = "private value";',
+    'pub const LIST: &[&str] = &["listed value"];',
+    '// pub const COMMENTED: &str = "commented value";',
+    'pub mod routes {',
+    '    pub const SYNC: &str = "/api/sync";',
+    '}',
+    '#[cfg(test)]',
+    'mod tests {',
+    '    pub const FIXTURE: &str = "fixture value";',
+    '}',
+    '',
+].join('\n');
+
+function conventionsRepo(entry) {
+    const root = repo({ rulebook: false });
+    place(root, '.qac/owners.json', JSON.stringify({
+        'conventions values': {
+            owner: 'libs/conventions/src/',
+            use: 'the qol_conventions constant that holds the value',
+            scope: 'production',
+            const_texts: true,
+            skip: [{ text: 'check', why: 'a plain word' }],
+            allow: [],
+            ...entry,
+        },
+    }));
+    place(root, 'libs/conventions/src/lib.rs', CONVENTIONS);
+    place(root, 'libs/conventions/src/artifact/mod.rs', 'pub const NESTED: &str = "nested value";\n');
+    return root;
+}
+
+const uses = values => `pub fn uses() -> Vec<&'static str> {\n    vec![${values.map(value => JSON.stringify(value)).join(', ')}]\n}\n`;
+
+test('const_texts guards every public str const the owner declares, read on every run', () => {
+    const root = conventionsRepo();
+    const refused = write(place(root, 'plugins/demo/src/client.rs'), uses(['QoL Tray', '/tmp/demo-state.sock', '/api/sync', 'nested value']));
+    assert.equal(refused.exitCode, 2);
+    for (const value of ['QoL Tray', '/tmp/demo-state.sock', '/api/sync', 'nested value']) {
+        assert.ok(refused.stderr.includes(`conventions values outside its owner: ${JSON.stringify(value)}`), value);
+    }
+    place(root, 'libs/conventions/src/lib.rs', `${CONVENTIONS}pub const ADDED: &str = "added value";\n`);
+    const added = write(place(root, 'plugins/demo/src/later.rs'), uses(['added value']));
+    assert.equal(added.exitCode, 2);
+    assert.match(added.stderr, /conventions values outside its owner: "added value"/);
+});
+
+test('const_texts leaves skipped, private, test-only and non-str values alone', () => {
+    const root = conventionsRepo();
+    const allowed = ['check', 'inner value', 'private value', 'listed value', 'commented value', 'fixture value', '42700'];
+    const result = write(place(root, 'plugins/demo/src/client.rs'), uses(allowed));
+    assert.equal(result.exitCode, 0, result.stderr);
+});
+
+test('const_texts without the flag guards nothing', () => {
+    const root = conventionsRepo({ const_texts: false });
+    assert.equal(write(place(root, 'plugins/demo/src/client.rs'), uses(['QoL Tray'])).exitCode, 0);
+});
+
 const MARKS = {
     'action marks': {
         owner: 'libs/gpui/src/',

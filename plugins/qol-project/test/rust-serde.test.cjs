@@ -2,6 +2,9 @@
 
 const test = require('node:test');
 const assert = require('node:assert');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 const rust = require('../bin/rust-serde.cjs');
 
 const SCHEMA = `use serde::Deserialize;
@@ -94,6 +97,109 @@ test('production code drops cfg(test) items and whole test files', () => {
     assert.equal(rust.production('plugins/demo/tests/flow.rs', 'fn t() {}'), null);
     assert.ok(rust.TEST_FILE.test('plugins/demo/src/config_tests.rs'));
     assert.ok(!rust.TEST_FILE.test('plugins/demo/src/contest.rs'));
+});
+
+test('a cfg predicate is test-only when it cannot hold without cfg(test)', () => {
+    const cases = [
+        ['test', false],
+        ['not(test)', true],
+        ['all(test, unix)', false],
+        ['any(windows, test)', null],
+        ['any(test, feature = "sandbox")', null],
+        ['all(not(test), debug_assertions)', null],
+        ['all(test, not(any(windows, target_os = "macos")))', false],
+        ['feature = "test"', null],
+        ['any()', false],
+        ['all()', true],
+        ['any(test', null],
+    ];
+    for (const [predicate, value] of cases) assert.equal(rust.cfgWithoutTest(predicate), value, predicate);
+    assert.ok(rust.isTestAttribute('#[cfg(all(test, unix))]'));
+    assert.ok(rust.isTestAttribute('#[tokio::test]'));
+    assert.ok(rust.isTestAttribute('#[rstest]'));
+    assert.ok(!rust.isTestAttribute('#[cfg(any(target_os = "macos", test))]'));
+    assert.ok(!rust.isTestAttribute('#[cfg(not(test))]'));
+    assert.ok(!rust.isTestAttribute('#[cfg_attr(test, derive(Debug))]'));
+});
+
+test('production code drops every test-only item and keeps the rest', () => {
+    const source = [
+        'struct Probe {',
+        '    #[cfg(test)]',
+        '    calls: HashMap<String, Vec<u8>>,',
+        '    live: u8,',
+        '}',
+        '#[cfg(test)]',
+        'thread_local! { static SEEN: u8 = 1; }',
+        '#[cfg(all(test, unix))]',
+        'fn helper() { "dropped"; }',
+        '#[cfg(any(windows, test))]',
+        'fn windows_too() { "kept"; }',
+        '#[tokio::test]',
+        'async fn flow() { "dropped"; }',
+        'fn after() { "kept"; }',
+    ].join('\n');
+    const lexed = rust.production('plugins/demo/src/lib.rs', source);
+    assert.deepStrictEqual(lexed.strings.map(string => string.value), ['kept', 'kept']);
+    assert.equal(lexed.skeleton.length, source.length);
+    assert.ok(lexed.skeleton.includes('live: u8'));
+    assert.ok(!lexed.skeleton.includes('calls'));
+    assert.ok(!lexed.skeleton.includes('SEEN'));
+    assert.deepStrictEqual(rust.production('plugins/demo/src/lib.rs', '#![cfg(test)]\nfn t() { "x"; }\n').strings, []);
+});
+
+function crate(files) {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'qol-serde-'));
+    fs.mkdirSync(path.join(root, '.git'));
+    for (const [relative, content] of Object.entries(files)) {
+        const file = path.join(root, 'demo', 'src', relative);
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        fs.writeFileSync(file, content);
+    }
+    return relative => path.join(root, 'demo', 'src', relative);
+}
+
+test('a module that every parent declares only for tests is a test file', () => {
+    const at = crate({
+        'lib.rs': 'mod feature;\nmod other;\n',
+        'feature/mod.rs': [
+            'mod live;',
+            '#[cfg(test)]',
+            'mod fixtures;',
+            '#[cfg(all(test, unix))]',
+            'mod helpers;',
+            '#[cfg(any(windows, test))]',
+            'mod windows_too;',
+            '#[cfg(test)]',
+            '#[path = "peer_support.rs"]',
+            'mod support;',
+        ].join('\n'),
+        'feature/live.rs': '',
+        'feature/helpers.rs': '',
+        'feature/windows_too.rs': '',
+        'feature/peer_support.rs': '',
+        'feature/fixtures/mod.rs': 'mod data;\n',
+        'feature/fixtures/data.rs': '',
+        'other.rs': '#[cfg(test)]\nmod nested;\nmod kept;\n',
+        'other/nested.rs': '',
+        'other/kept.rs': '',
+    });
+    for (const file of ['feature/fixtures/mod.rs', 'feature/fixtures/data.rs', 'feature/helpers.rs', 'feature/peer_support.rs', 'other/nested.rs']) {
+        assert.ok(rust.isTestFile(at(file)), file);
+        assert.equal(rust.production(at(file), 'fn t() {}'), null, file);
+    }
+    for (const file of ['lib.rs', 'feature/mod.rs', 'feature/live.rs', 'feature/windows_too.rs', 'other/kept.rs', 'feature/undeclared.rs']) {
+        assert.ok(!rust.isTestFile(at(file)), file);
+    }
+});
+
+test('test folders count from the repository root, not from folders above it', () => {
+    const root = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'qol-serde-')), 'tests', 'qol-monorepo');
+    fs.mkdirSync(path.join(root, '.git'), { recursive: true });
+    assert.ok(!rust.isTestFile(path.join(root, 'libs', 'demo', 'src', 'feature.rs')));
+    assert.ok(rust.isTestFile(path.join(root, 'libs', 'demo', 'tests', 'flow.rs')));
+    assert.ok(rust.isTestFile(path.join(root, 'libs', 'demo', 'src', 'feature_tests.rs')));
+    assert.ok(rust.isTestFile('libs/demo/benches/speed.rs'));
 });
 
 test('types parse into names, arguments, sequences and tuples', () => {

@@ -1,5 +1,8 @@
 'use strict';
 
+const fs = require('node:fs');
+const path = require('node:path');
+
 const IDENT_CHAR = /[A-Za-z0-9_]/;
 const ESCAPES = { n: '\n', t: '\t', r: '\r', 0: '\0', '\\': '\\', '"': '"', "'": "'" };
 const TEST_FILE = /(^|[\\/])(tests?|benches|examples)[\\/]|(^|[\\/_])tests?\.rs$/;
@@ -382,35 +385,279 @@ function blockKinds(skeleton) {
     };
 }
 
-function testSpans(skeleton) {
+const TEST_MARKER = /^#\s*\[\s*(?:[A-Za-z_]\w*\s*::\s*)*(?:test|rstest|test_case|bench|proptest)\b/;
+const CFG_ATTRIBUTE = /^#\s*\[\s*cfg\s*\(([\s\S]*)\)\s*\]$/;
+const INNER_ATTRIBUTE = /^#\s*!\s*\[/;
+const ITEM_HEAD = /^\s*(?:\{|(?:pub(?:\s*\([^)]*\))?\s+)?(?:default\s+)?(?:const\s+|async\s+|unsafe\s+|extern\s+(?:"[^"]*"\s+)?)*(?:fn|mod|impl|struct|enum|trait|union|use|type|static|let|macro_rules)\b)/;
+
+function cfgWithoutTest(expression) {
+    let index = 0;
+    const space = () => {
+        while (index < expression.length && /\s/.test(expression[index])) index++;
+    };
+    const parse = () => {
+        space();
+        const word = /^[A-Za-z_]\w*/.exec(expression.slice(index));
+        if (!word) throw new Error('cfg');
+        index += word[0].length;
+        space();
+        if (expression[index] === '(') {
+            index++;
+            const values = [];
+            space();
+            while (expression[index] !== ')') {
+                values.push(parse());
+                space();
+                if (expression[index] === ',') index++;
+                space();
+                if (index >= expression.length) throw new Error('cfg');
+            }
+            index++;
+            if (word[0] === 'not' && values.length === 1) return values[0] === null ? null : !values[0];
+            if (word[0] === 'all') return values.includes(false) ? false : values.includes(null) ? null : true;
+            if (word[0] === 'any') return values.includes(true) ? true : values.includes(null) ? null : false;
+            throw new Error('cfg');
+        }
+        if (expression[index] === '=') {
+            index++;
+            space();
+            const literal = /^"(?:\\.|[^"\\])*"/.exec(expression.slice(index));
+            if (literal) index += literal[0].length;
+            return null;
+        }
+        return word[0] === 'test' ? false : null;
+    };
+    try {
+        const value = parse();
+        space();
+        return index === expression.length ? value : null;
+    } catch {
+        return null;
+    }
+}
+
+function isTestAttribute(attribute) {
+    const text = attribute.trim();
+    if (TEST_MARKER.test(text)) return true;
+    const cfg = CFG_ATTRIBUTE.exec(text);
+    return cfg !== null && cfgWithoutTest(cfg[1]) === false;
+}
+
+function bracketEnd(code, open) {
+    let depth = 0;
+    for (let index = open; index < code.length; index++) {
+        if (code[index] === '[') depth++;
+        else if (code[index] === ']' && --depth === 0) return index;
+    }
+    return -1;
+}
+
+function readAttributeRun(code, start) {
+    const attributes = [];
+    let index = start;
+    while (code.startsWith('#[', index)) {
+        const end = bracketEnd(code, index + 1);
+        if (end < 0) return null;
+        attributes.push(code.slice(index, end + 1));
+        index = end + 1;
+        while (index < code.length && /\s/.test(code[index])) index++;
+    }
+    if (attributes.length === 0 || index >= code.length) return null;
+    return { attributes, itemStart: index };
+}
+
+function findItemEnd(code, start) {
+    const lineEnd = code.indexOf('\n', start);
+    const blockItem = ITEM_HEAD.test(code.slice(start, lineEnd < 0 ? code.length : lineEnd));
+    let depth = 0;
+    let angles = 0;
+    let openedBody = false;
+    for (let index = start; index < code.length; index++) {
+        const ch = code[index];
+        if (ch === '{' || ch === '(' || ch === '[') {
+            if (ch === '{' && depth === 0) openedBody = true;
+            depth++;
+            continue;
+        }
+        if (ch === '}' || ch === ')' || ch === ']') {
+            depth--;
+            if (depth < 0) return index;
+            if (depth === 0 && openedBody && ch === '}') return index + 1;
+            continue;
+        }
+        if (depth > 0) continue;
+        if (!blockItem && ch === '<' && /[\w:]/.test(code[index - 1] || '')) angles++;
+        else if (!blockItem && ch === '>' && angles > 0 && !/[-=]/.test(code[index - 1] || '')) angles--;
+        else if (ch === ';') return index + 1;
+        else if (ch === ',' && !blockItem && angles === 0) return index + 1;
+    }
+    return null;
+}
+
+function innerTestAttribute(code) {
+    let index = 0;
+    for (;;) {
+        while (index < code.length && /\s/.test(code[index])) index++;
+        if (!INNER_ATTRIBUTE.test(code.slice(index, index + 8))) return false;
+        const open = code.indexOf('[', index);
+        const end = bracketEnd(code, open);
+        if (end < 0) return false;
+        if (isTestAttribute(`#${code.slice(open, end + 1)}`)) return true;
+        index = end + 1;
+    }
+}
+
+function testSpans(code) {
+    if (innerTestAttribute(code)) return [[0, code.length]];
     const spans = [];
-    const re = /#\s*\[\s*cfg\s*\(\s*test\s*\)\s*\]/g;
-    let match;
-    while ((match = re.exec(skeleton))) {
-        const rest = skeleton.slice(re.lastIndex);
-        const item = /^\s*(?:#\s*\[[^\]]*\]\s*)*(?:pub(?:\s*\([^)]*\))?\s+)?(?:mod|fn|impl|const|static|use|struct|enum)\b[^{;]*([{;])/.exec(rest);
-        if (!item) continue;
-        const at = re.lastIndex + item[0].length - 1;
-        const end = item[1] === '{' ? matchForward(skeleton, at) : at;
-        spans.push([match.index, end + 1]);
-        re.lastIndex = end + 1;
+    let index = 0;
+    while (index < code.length) {
+        const start = code.indexOf('#[', index);
+        if (start < 0) break;
+        const run = readAttributeRun(code, start);
+        const end = run && run.attributes.some(isTestAttribute) ? findItemEnd(code, run.itemStart) : null;
+        if (end === null) {
+            index = start + 2;
+            continue;
+        }
+        spans.push([start, end]);
+        index = end;
     }
     return spans;
 }
 
+function blankSpans(text, spans) {
+    if (spans.length === 0) return text;
+    let out = '';
+    let last = 0;
+    for (const [start, end] of spans) {
+        out += text.slice(last, start) + blankOut(text.slice(start, end));
+        last = end;
+    }
+    return out + text.slice(last);
+}
+
 function production(file, content) {
-    if (TEST_FILE.test(file)) return null;
+    if (isTestFile(file)) return null;
     const lexed = lexRust(content);
     const spans = testSpans(lexed.skeleton);
     if (spans.length === 0) return lexed;
-    let skeleton = lexed.skeleton;
-    let clean = lexed.clean;
-    for (const [start, end] of spans) {
-        skeleton = skeleton.slice(0, start) + blankOut(skeleton.slice(start, end)) + skeleton.slice(end);
-        clean = clean.slice(0, start) + blankOut(clean.slice(start, end)) + clean.slice(end);
+    return {
+        clean: blankSpans(lexed.clean, spans),
+        skeleton: blankSpans(lexed.skeleton, spans),
+        strings: lexed.strings.filter(string => !spans.some(([start, end]) => string.start >= start && string.start < end)),
+    };
+}
+
+const CRATE_ROOT_FILES = new Set(['lib.rs', 'main.rs', 'build.rs']);
+const MODULE_DECLARATION = /(^|[^\w])((?:pub(?:\s*\([^)]*\))?\s+)?mod\s+(?:r#)?([A-Za-z_]\w*)\s*;)/g;
+const MODULE_HINT = /\bmod\s+(?:r#)?[A-Za-z_]\w*\s*;/;
+const declarationIndex = new Map();
+const testFileVerdicts = new Map();
+
+function readSource(file) {
+    try {
+        return fs.readFileSync(file, 'utf8');
+    } catch {
+        return null;
     }
-    const strings = lexed.strings.filter(string => !spans.some(([start, end]) => string.start >= start && string.start < end));
-    return { clean, skeleton, strings };
+}
+
+function topLevelOffsets(skeleton) {
+    const depths = new Int32Array(skeleton.length + 1);
+    let depth = 0;
+    for (let index = 0; index < skeleton.length; index++) {
+        depths[index] = depth;
+        if (skeleton[index] === '{') depth++;
+        else if (skeleton[index] === '}') depth = Math.max(0, depth - 1);
+    }
+    return index => depths[index] === 0;
+}
+
+function modRsStyle(file) {
+    const name = path.basename(file);
+    return name === 'mod.rs' || CRATE_ROOT_FILES.has(name) || path.basename(path.dirname(file)) === 'bin';
+}
+
+function moduleDeclarations(file, content) {
+    const { skeleton, clean } = lexRust(content);
+    const topLevel = topLevelOffsets(skeleton);
+    const folder = modRsStyle(file) ? path.dirname(file) : file.slice(0, -'.rs'.length);
+    const found = [];
+    for (const match of skeleton.matchAll(MODULE_DECLARATION)) {
+        const at = match.index + match[1].length;
+        if (!topLevel(at)) continue;
+        const attributes = precedingAttributes(skeleton, clean, at);
+        const testOnly = attributes.some(isTestAttribute);
+        const custom = attributes.map(attribute => /^#\s*\[\s*path\s*=\s*"([^"]+)"\s*\]$/.exec(attribute.trim())).find(Boolean);
+        const targets = custom
+            ? [path.resolve(path.dirname(file), custom[1])]
+            : [path.join(folder, `${match[3]}.rs`), path.join(folder, match[3], 'mod.rs')];
+        for (const target of targets) found.push({ target, testOnly, declarer: file });
+    }
+    return found;
+}
+
+function declarationsIn(folder) {
+    if (declarationIndex.has(folder)) return declarationIndex.get(folder);
+    const index = new Map();
+    let names = [];
+    try {
+        names = fs.readdirSync(folder).filter(name => name.endsWith('.rs')).map(name => path.join(folder, name));
+    } catch {}
+    for (const file of [...names, `${folder}.rs`]) {
+        const content = readSource(file);
+        if (content === null || !MODULE_HINT.test(content)) continue;
+        for (const declaration of moduleDeclarations(file, content)) {
+            if (!index.has(declaration.target)) index.set(declaration.target, []);
+            index.get(declaration.target).push(declaration);
+        }
+    }
+    declarationIndex.set(folder, index);
+    return index;
+}
+
+function moduleFolder(file) {
+    return path.basename(file) === 'mod.rs' ? path.dirname(path.dirname(file)) : path.dirname(file);
+}
+
+const repoRoots = new Map();
+
+function repoRelative(file) {
+    const walked = [];
+    let dir = path.dirname(file);
+    let root = null;
+    for (;;) {
+        if (repoRoots.has(dir)) {
+            root = repoRoots.get(dir);
+            break;
+        }
+        walked.push(dir);
+        if (fs.existsSync(path.join(dir, '.git'))) {
+            root = dir;
+            break;
+        }
+        const parent = path.dirname(dir);
+        if (parent === dir) break;
+        dir = parent;
+    }
+    for (const folder of walked) repoRoots.set(folder, root);
+    return root === null ? file : path.relative(root, file);
+}
+
+function isTestFile(file, visiting = new Set()) {
+    if (!path.isAbsolute(file)) return TEST_FILE.test(file);
+    if (TEST_FILE.test(repoRelative(file))) return true;
+    if (!file.endsWith('.rs') || CRATE_ROOT_FILES.has(path.basename(file))) return false;
+    if (testFileVerdicts.has(file)) return testFileVerdicts.get(file);
+    if (visiting.has(file)) return false;
+    visiting.add(file);
+    const folders = new Set([moduleFolder(file), path.dirname(file)]);
+    const declarations = [...folders].flatMap(folder => declarationsIn(folder).get(file) ?? []);
+    const verdict = declarations.length > 0
+        && declarations.every(declaration => declaration.testOnly || isTestFile(declaration.declarer, visiting));
+    testFileVerdicts.set(file, verdict);
+    return verdict;
 }
 
 function parseFields(skeleton, clean, from, to, file) {
@@ -866,6 +1113,11 @@ function fieldReads(files) {
 module.exports = {
     lexRust,
     production,
+    testSpans,
+    blankSpans,
+    isTestAttribute,
+    isTestFile,
+    cfgWithoutTest,
     parseType,
     fileItems,
     schemaOf,

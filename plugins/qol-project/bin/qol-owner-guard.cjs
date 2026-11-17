@@ -2,6 +2,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const serde = require('./rust-serde.cjs');
 
 const OWNERS_FILE = path.join('.qac', 'owners.json');
 const IDENT = /[A-Za-z0-9_]/;
@@ -14,6 +15,8 @@ const STD_OS_CONSTANT = [
 ];
 const BUILD_TARGET_OS = 'CARGO_CFG_TARGET_OS';
 const ESCAPES = { n: '\n', t: '\t', r: '\r', 0: '\0', '\\': '\\', '"': '"', "'": "'" };
+const PUBLIC_STR_CONST = /\bpub\s+const\s+[A-Za-z_][A-Za-z0-9_]*\s*:\s*&\s*(?:'static\s+)?str\s*=\s*$/;
+const constTextsRead = new Map();
 
 function workspaceRoot(filePath) {
     let dir = path.dirname(filePath);
@@ -38,12 +41,17 @@ function readRulebook(root) {
     }
 }
 
+function scopeOf(entry) {
+    return entry.scope === 'production' ? 'production' : 'all';
+}
+
 function osOwnerFrom(rulebook) {
     const entry = rulebook?.os;
     if (!entry || typeof entry.owner !== 'string' || !Array.isArray(entry.names)) return null;
     return {
         owner: entry.owner,
         use: entry.use || 'the owner',
+        scope: scopeOf(entry),
         text: new Set([...entry.names, ...(entry.labels || [])]),
         allow: (entry.allow || []).map(item => `${item.path}\0${item.text}`),
     };
@@ -53,28 +61,67 @@ function loadOsOwner(root) {
     return osOwnerFrom(readRulebook(root));
 }
 
-function entryOwnersFrom(rulebook) {
+function rustFilesUnder(dir) {
+    let entries;
+    try {
+        entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+        return [];
+    }
+    return entries.flatMap(entry => {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) return rustFilesUnder(full);
+        return entry.name.endsWith('.rs') ? [full] : [];
+    });
+}
+
+function constTexts(root, folders) {
+    const key = [root, ...folders].join('\0');
+    if (constTextsRead.has(key)) return constTextsRead.get(key);
+    const values = new Set();
+    for (const folder of folders) {
+        for (const file of rustFilesUnder(path.join(root, folder))) {
+            const { strings } = lex(productionContent(file, fs.readFileSync(file, 'utf8')));
+            for (const literal of strings) {
+                if (literal.value !== '' && PUBLIC_STR_CONST.test(literal.before.slice(-200))) values.add(literal.value);
+            }
+        }
+    }
+    constTextsRead.set(key, values);
+    return values;
+}
+
+function entryOwnersFrom(rulebook, root) {
     if (!rulebook || typeof rulebook !== 'object') return [];
     const owned = [];
     for (const [concept, entry] of Object.entries(rulebook)) {
         if (!entry) continue;
+        const folders = [entry.owner].flat().filter(folder => typeof folder === 'string');
+        if (folders.length === 0) continue;
         const calls = Array.isArray(entry.calls) && Array.isArray(entry.entry_points)
             ? entry.calls.filter(call => /^[A-Za-z_][A-Za-z0-9_]*$/.test(call))
             : [];
+        const skipped = new Set((Array.isArray(entry.skip) ? entry.skip : []).map(item => item?.text));
+        const derived = entry.const_texts === true && root
+            ? [...constTexts(root, folders)].filter(text => !skipped.has(text))
+            : [];
         const texts = (Array.isArray(entry.texts) ? entry.texts : [])
-            .filter(text => typeof text === 'string' && text !== '');
+            .filter(text => typeof text === 'string' && text !== '')
+            .concat(derived);
         const paths = (Array.isArray(entry.paths) ? entry.paths : [])
-            .filter(item => /^[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)+$/.test(item));
-        if (calls.length + texts.length + paths.length === 0) continue;
-        const folders = [entry.owner].flat().filter(folder => typeof folder === 'string');
-        if (folders.length === 0) continue;
+            .filter(item => /^[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*$/.test(item));
+        const prefixes = (Array.isArray(entry.prefixes) ? entry.prefixes : [])
+            .filter(prefix => typeof prefix === 'string' && prefix !== '');
+        if (calls.length + texts.length + paths.length + prefixes.length === 0) continue;
         owned.push({
             concept,
             folders,
             use: entry.use || 'the owner',
+            scope: scopeOf(entry),
             calls,
             entryPoints: new Set(entry.entry_points || []),
             texts: new Set(texts),
+            prefixes,
             paths,
             allow: (entry.allow || []).map(item => `${item.path}\0${item.text}`),
         });
@@ -83,7 +130,7 @@ function entryOwnersFrom(rulebook) {
 }
 
 function loadEntryOwners(root) {
-    return entryOwnersFrom(readRulebook(root));
+    return entryOwnersFrom(readRulebook(root), root);
 }
 
 function lex(src) {
@@ -277,13 +324,15 @@ function callViolations(relative, content, owner) {
 function pathPattern(item) {
     const parts = item.split('::');
     const name = parts.pop();
+    if (parts.length === 0) return new RegExp(`\\b${name}\\b`, 'g');
     const module = parts.map(part => `\\b${part}\\s*::\\s*`).join('');
     return new RegExp(`${module}(?:\\b${name}\\b|\\{[^}]*\\b${name}\\b)`, 'g');
 }
 
 function textViolations(relative, content, owner) {
     if (!relative.endsWith('.rs') || /^(?:vendor|third_party)\//.test(relative)) return [];
-    if (owner.texts.size === 0 && owner.paths.length === 0) return [];
+    const prefixes = owner.prefixes || [];
+    if (owner.texts.size === 0 && owner.paths.length === 0 && prefixes.length === 0) return [];
     if (owner.folders.some(folder => relative.startsWith(folder))) return [];
     const { code, strings } = lex(content);
     const found = [];
@@ -292,7 +341,9 @@ function textViolations(relative, content, owner) {
         found.push({ line, what: `${owner.concept} outside its owner: ${shown}`, use: owner.use });
     };
     for (const literal of strings) {
-        if (owner.texts.has(literal.value)) add(literal.line, JSON.stringify(literal.value), literal.value);
+        if (owner.texts.has(literal.value) || prefixes.some(prefix => literal.value.startsWith(prefix))) {
+            add(literal.line, JSON.stringify(literal.value), literal.value);
+        }
     }
     for (const item of owner.paths) {
         for (const match of code.matchAll(pathPattern(item))) add(lineAt(code, match.index), item, item);
@@ -300,10 +351,21 @@ function textViolations(relative, content, owner) {
     return found;
 }
 
-function ownerViolations(relative, content, os, entries) {
-    const found = os ? osViolations(relative, content, os) : [];
+function productionContent(file, content) {
+    if (serde.isTestFile(file)) return '';
+    return serde.blankSpans(content, serde.testSpans(serde.lexRust(content).skeleton));
+}
+
+function ownerViolations(relative, content, os, entries, file) {
+    let production = null;
+    const view = owner => {
+        if (owner.scope !== 'production') return content;
+        production ??= productionContent(file, content);
+        return production;
+    };
+    const found = os ? osViolations(relative, view(os), os) : [];
     for (const owner of entries) {
-        found.push(...callViolations(relative, content, owner), ...textViolations(relative, content, owner));
+        found.push(...callViolations(relative, view(owner), owner), ...textViolations(relative, view(owner), owner));
     }
     return found.sort((a, b) => a.line - b.line);
 }
@@ -311,14 +373,15 @@ function ownerViolations(relative, content, os, entries) {
 function newViolations(relative, before, after, root) {
     const rulebook = readRulebook(root);
     const os = osOwnerFrom(rulebook);
-    const entries = entryOwnersFrom(rulebook);
+    const entries = entryOwnersFrom(rulebook, root);
     if (!os && entries.length === 0) return [];
+    const file = path.join(root, relative);
     const counts = new Map();
-    for (const violation of ownerViolations(relative, before || '', os, entries)) {
+    for (const violation of ownerViolations(relative, before || '', os, entries, file)) {
         counts.set(violation.what, (counts.get(violation.what) || 0) + 1);
     }
     const fresh = [];
-    for (const violation of ownerViolations(relative, after, os, entries)) {
+    for (const violation of ownerViolations(relative, after, os, entries, file)) {
         const left = counts.get(violation.what) || 0;
         if (left > 0) {
             counts.set(violation.what, left - 1);
@@ -344,6 +407,7 @@ module.exports = {
     callViolations,
     textViolations,
     newViolations,
+    ownerViolations,
     workspaceRoot,
     relativeTo,
     formatViolations,
