@@ -43,8 +43,13 @@ The live color boundary is owned by `src/daemon/` and the corresponding runtime 
 
 ## Settings page
 
-The page follows the Bluetooth plugin's layout and uses only kit parts that page already uses; treat Bluetooth's `qol-config.toml` as the model when changing it. Sections, in order: Lights (the `lights` list, then `find_lights`, a list led by a search row), Main light (light picker, power, color, brightness, color temperature), Dongle (the `dongle` list's lead row, then port and channel), and the presets.
+The page follows the Bluetooth plugin's layout; treat Bluetooth's `qol-config.toml` as the model when changing it. The top level is short: Lights (`find_lights`, a list led by a search row, then a link to the Dongle page) and Saved lights (the `lights` list). Everything else sits one level down.
 
+- Each row of `lights` is one paired light and is controlled on its own: its switch turns that light on or off (`light_on`, `light_off`), `row_swatch` shows its colour, and its page holds `row_controls` for colour, brightness and colour temperature (`set_light_color`, `set_light_brightness`, `set_light_colortemp`), a link to its presets, `add_preset` and `remove_light`.
+- `remove_light` makes the light leave the Zigbee network and forgets it; the daemon drops it from the stored `devices` and clears `main_target_id` when it named that light.
+- `presets` is `detached`: it draws only on a light's page, never on the top level. A preset's page edits its name, power, colour, brightness and colour temperature and removes it.
+- A bounded number control is a slider with a number box (`variant = "slider"`); `qac lint` refuses a bounded number drawn any other way.
+- The daemon owns the stored `devices`, `presets` and `main_target_id` keys and writes them through one queued writer (`src/daemon/persist.rs`), which settles for 400 ms and writes the batch; a config reload flushes that queue first so a queued edit is not lost.
 - `lights` marks the main light with a badge; an empty main target means the sole paired light.
 - `find_lights` reads the daemon's pairing session (`src/daemon/pairing.rs`): `pair` and `stop_pair` start and end it, and only a light the config did not know, joining while the window is open, is counted and closes permit-join. A known light rejoining after a power cycle sends the same announce and must not end a search.
 - `dongle` and the find lead offer `reload` (Find dongle) only while the coordinator is missing or offline; once ready, `reload` only rereads config.
