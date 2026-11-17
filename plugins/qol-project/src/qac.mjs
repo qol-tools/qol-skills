@@ -62,25 +62,39 @@ export function splitRule(summary, file = "") {
 // revision: an unchanged file is its own baseline, a file new since the base
 // has none. Without a base every line counts as added.
 export function baselineReader(root, base, exec = execFileSync) {
-  if (!base) return () => null;
+  if (!base) return Object.assign(() => null, { isNewPath: () => true });
   const run = args => exec("git", args, {
     cwd: root,
     encoding: "utf8",
     maxBuffer: 256 * 1024 * 1024,
     stdio: ["ignore", "pipe", "ignore"],
   });
-  const changed = new Set([
-    ...run(["diff", "--name-only", "-z", base, "--"]).split("\0"),
-    ...run(["ls-files", "-z", "--others", "--exclude-standard"]).split("\0"),
-  ].filter(Boolean));
-  return (file, content) => {
+  const moved = new Map();
+  const added = new Set(run(["ls-files", "-z", "--others", "--exclude-standard"]).split("\0").filter(Boolean));
+  const changed = new Set(added);
+  const fields = run(["diff", "--name-status", "-z", "-M", base, "--"]).split("\0");
+  for (let index = 0; index < fields.length && fields[index]; ) {
+    const status = fields[index];
+    if (/^[RC]/.test(status)) {
+      moved.set(fields[index + 2], fields[index + 1]);
+      added.add(fields[index + 2]);
+      changed.add(fields[index + 2]);
+      index += 3;
+      continue;
+    }
+    if (status === "A") added.add(fields[index + 1]);
+    changed.add(fields[index + 1]);
+    index += 2;
+  }
+  const reader = (file, content) => {
     if (!changed.has(file)) return content;
     try {
-      return run(["show", `${base}:${file}`]);
+      return run(["show", `${base}:${moved.get(file) ?? file}`]);
     } catch {
       return null;
     }
   };
+  return Object.assign(reader, { isNewPath: file => added.has(file) });
 }
 
 export function lintFiles(root, files, { hooks = HOOKS, read = readFileSync, onProgress = () => {}, sources = {}, baseline = () => null } = {}) {
@@ -95,8 +109,9 @@ export function lintFiles(root, files, { hooks = HOOKS, read = readFileSync, onP
       continue;
     }
     const before = baseline(file, content);
+    const pathIsNew = baseline.isNewPath ? baseline.isNewPath(file) : before === null;
     for (const [hook, module] of hooks) {
-      for (const message of module.lintFile(absolute, content, before)) {
+      for (const message of module.lintFile(absolute, content, before, { pathIsNew })) {
         const summary = summarize(message);
         const lines = locate(message, content, file, module.LOCATORS);
         findings.push({ file, hook, summary, ...splitRule(summary, file), lines, message });
