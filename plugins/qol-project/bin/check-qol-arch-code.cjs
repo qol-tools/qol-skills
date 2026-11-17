@@ -51,6 +51,7 @@ const design = require('./qol-design-guard.cjs');
 const lintMode = require('./hook-lint-mode.cjs');
 const owners = require('./qol-owner-guard.cjs');
 const events = require('./qol-event-guard.cjs');
+const enumMatches = require('./qol-enum-match-guard.cjs');
 const quotes = require('./qol-quote-guard.cjs');
 const serde = require('./rust-serde.cjs');
 const { inQolRepo } = require('./qol-repo.cjs');
@@ -1454,6 +1455,28 @@ function findNewEventViolations(filePath, newContent) {
     return events.newViolations(filePath, readBaseline(filePath), newContent);
 }
 
+function blockEnumMatches(filePath, violations) {
+    lintMode.report(process.stderr, `qol-arch-code enum match violation in ${filePath}.
+
+This edit adds a \`_ =>\` arm to a match over an enum the workspace declares:
+
+${enumMatches.formatViolations(violations)}
+
+The wildcard turns the compile error a new variant would raise here into a
+silent default. Name the variants the arm stands for, joined with |, so a new
+variant makes the compiler point at this match.
+
+Reference: qol-project:qol-arch-code skill, "Enforcement: enum match guard".
+
+Bypass for this edit only:
+  touch .claude/bypass-qol-arch-code
+`);
+}
+
+function findNewEnumMatchViolations(filePath, newContent) {
+    return enumMatches.newViolations(filePath, readBaseline(filePath), newContent);
+}
+
 function blockQuotes(filePath, broken) {
     lintMode.report(process.stderr, `qol-arch-code quoted line violation in ${filePath}.
 
@@ -1556,6 +1579,12 @@ function evaluate(payload) {
     const eventViolations = deadlineContent ? findNewEventViolations(filePath, deadlineContent) : [];
     if (eventViolations.length > 0 && !consumeBypass(cwd, filePath, basename)) {
         blockEvents(filePath, eventViolations);
+        return 2;
+    }
+
+    const enumMatchViolations = deadlineContent ? findNewEnumMatchViolations(filePath, deadlineContent) : [];
+    if (enumMatchViolations.length > 0 && !consumeBypass(cwd, filePath, basename)) {
+        blockEnumMatches(filePath, enumMatchViolations);
         return 2;
     }
 

@@ -843,6 +843,16 @@ It denies an edit that raises the count of such matches in a file above the coun
 
 Residual: the guard sees the token shape only. A chain of `if tool == ..` comparisons, a `matches!(tool, ..)`, a `match` on a binding that was copied out of the tool (`let kind = session.tool; match kind {`), a table keyed by tool outside `session/tool.rs`, and code outside the two scoped roots pass. Review catches those.
 
+### Enforcement: enum match guard
+
+A `match` over an enum the workspace declares names every variant. A `_ =>` arm turns the compile error a new variant would raise into a silent default, and the same fix was made by hand three times (2b470e290 in qol-config, 54c50e060 in the CLI, 5bf356ffb in bluetooth). Write the variants the arm stands for joined with `|` instead.
+
+`bin/check-qol-arch-code.cjs` enforces this at edit time through `bin/qol-enum-match-guard.cjs`. In production code it finds each `match` that has an unguarded `_ =>` arm and whose other arms name `Enum::Variant` paths of one enum (through a module path, `&`, a `name @` binding or `|` alternatives; `Self::Variant` resolves to the type of the enclosing `impl` block). It then reads that enum's declarations from the workspace: one `git grep` over the `.rs` files of the repository, tracked and untracked but not ignored, outside `vendor/` and `third_party/`, plus enums the edited file itself declares. The match is a violation when a declaration holds every variant the arms name and has variants they do not name; the message "enum match violation" lists them as `line N: \`_ =>\` stands for Enum::A, Enum::B`. An enum marked `#[non_exhaustive]` is skipped, because other crates must keep a wildcard for it.
+
+Allowed: matches on `Option`, `Result`, strings, numbers and tuples, enums declared outside the workspace (`std::io::ErrorKind`, `serde_json::Value`), an outside enum whose name a workspace enum shares but whose variants it lacks, a guarded `_ if .. =>` arm, a binding catch-all such as `other => other`, which hands the value on, and test code. The guard only reports wildcards the edit adds: per enum, a file may not hold more such matches than its baseline, so an edit to the arms of a match that already had its wildcard passes. `qac lint` without `--base` lists all of them (169 in 91 files when the guard landed), and with `--base` only the ones the change added. Bypass one edit with `touch .claude/bypass-qol-arch-code`.
+
+Residual: the guard reads syntax, not types. A match whose arms name variants through a `use Enum::*` import, a binding catch-all that falls back instead of handing the value on, and an `if let` with an `else` pass. For the case rustc can see, a `_` that stands for exactly one variant, clippy's `match_wildcard_for_single_variants` is the type-aware check.
+
 ### Enforcement: quoted line guard
 
 A file a Rust test reads through `include_str!` and checks with `CONST.contains("...")` changes together with those quotes: edit the quotes in the test first, then the file. The tests only run in CI, so a quote left behind fails minutes later instead of at the edit.
