@@ -164,7 +164,7 @@ A pull request that changes the tests' own CI (`ci.yml`, its scripts and actions
 The judges run as `python3 -P` and add their own folder after Python's, so a file planted in `.github/scripts` under a standard module's name is never loaded.
 When the owner's `/gate-approve` comment is on the pull request but the check stays red, the comment run was skipped (its trigger needs the body to start with the command, and a pasted leading space breaks that): rerun the gate's run for that head with `gh run rerun <run-id>`, which reads the comment, and never ask the owner to paste again.
 Otherwise the owner must approve the exact head commit with an unedited comment whose whole body is `/gate-approve <40-character sha>`.
-`qol pr approve [number]` posts that comment for the pull request's current head; it needs a terminal on stdin, so only the owner runs it, never an agent.
+`qol pr approve [number]` puts that line for the pull request's current head on the clipboard and opens the pull request's comment box in the browser, where the owner pastes and posts it; it posts nothing itself, since `gh` on the owner's machine signs in as `kmrh47-agents`, and it needs a terminal on stdin, so only the owner runs it, never an agent.
 In the queue, every entry at or ahead of this one that touches a protected path needs that approval, and every protected file in the group must equal its approved head's copy.
 Anything it cannot verify fails the check.
 Only a token of the `qol-tools-gate` app (Checks write) posts the check, minted from `MAIN_GATE_APP_CLIENT_ID` and `MAIN_GATE_APP_PRIVATE_KEY` in the main-only `main-gate` environment.
