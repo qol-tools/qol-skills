@@ -80,6 +80,8 @@ never a monitor.
 
 Once a drag starts, the selector draws only the dimmed backdrop and the selection frame: the guide, the capture chip and the selection label leave so nothing covers what is being selected.
 
+A drag follows the global pointer from a frame callback (`Window::on_next_frame`), once per display frame, never from a timer. On a 120 Hz MacBook display the 16 ms timer path moved the rectangle only 12 times a second while the window presented 105 frames a second, so the drag looked choppy (qol-tools/qol#577). The 16 ms drag poll stays for release detection and as the fallback writer, and both writers go through `SelectionState::follow_global_pointer`, which reports a move only when the pointer moved. The hover poll stops once a drag starts where a global pointer exists, because a press always ends the selection; it keeps running only where a platform has a global cancel signal. Measure a drag by how often the rectangle changes on screen, not by presented frames: gpui re-presents the last frame for a second after input.
+
 The capture chip and the selector guide form one top-center stack. Both pass the
 monitor's `qol_gpui::dead_zone` report to their placement, and the guide is
 placed inside the chip's clear area, so on a notched MacBook display the chip
