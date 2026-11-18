@@ -30,6 +30,10 @@ Release builds resolve their matrix from the plugin's declared `platforms` (`.gi
 No matrix-padding for OSes the plugin doesn't claim - macOS runners cost ~10x Linux, and red builds on platforms a plugin never meant to support train the reader to ignore red.
 Never hardcode a runner list for plugin builds; if a plugin's platform set changes, `plugin.toml` is the only place that changes.
 
+A plugin claims an OS for CI alone with `test_platforms` under `[build]` in `plugin.toml`, such as Explorer's `test_platforms = ["macos", "windows"]`.
+CI's affected-crate planning (`.github/scripts/affected_crates.py`) then builds, lints and tests the plugin on those OSes too, so code that would break there is caught before the plugin ships there.
+Release builds, live-test builds and the tray still read only `[plugin] platforms`, and manifest validation refuses an unknown OS name in `test_platforms`.
+
 ### 2. Strictness parity between CI, release, and local builds
 
 CI gates with clippy `--all-targets -- -D warnings`; the release workflows build with `RUSTFLAGS: -D warnings`.
