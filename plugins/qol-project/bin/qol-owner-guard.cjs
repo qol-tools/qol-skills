@@ -16,7 +16,13 @@ const STD_OS_CONSTANT = [
 const BUILD_TARGET_OS = 'CARGO_CFG_TARGET_OS';
 const ESCAPES = { n: '\n', t: '\t', r: '\r', 0: '\0', '\\': '\\', '"': '"', "'": "'" };
 const PUBLIC_STR_CONST = /\bpub\s+const\s+[A-Za-z_][A-Za-z0-9_]*\s*:\s*&\s*(?:'static\s+)?str\s*=\s*$/;
+const INT_TYPE = '(?:u8|u16|u32|u64|u128|usize|i8|i16|i32|i64|i128|isize)';
+const PUBLIC_INT_CONST = new RegExp(`\\bpub\\s+const\\s+[A-Za-z_][A-Za-z0-9_]*\\s*:\\s*${INT_TYPE}\\s*=\\s*(\\d[\\d_]*)(?:${INT_TYPE})?\\s*;`, 'g');
+const NO_FRACTION_BEFORE = String.raw`(?<!\w)(?<!(?<!\.)\.)`;
+const INTEGER_TOKEN = new RegExp(`${NO_FRACTION_BEFORE}(\\d[\\d_]*)(?:${INT_TYPE})?(?!\\w|\\.(?![.A-Za-z_]))`, 'g');
+const NUMBER_IN_TEXT = new RegExp(`${NO_FRACTION_BEFORE}(\\d[\\d_]*)(?!\\w|\\.\\d)`, 'g');
 const constTextsRead = new Map();
+const constNumbersRead = new Map();
 
 function workspaceRoot(filePath) {
     let dir = path.dirname(filePath);
@@ -91,6 +97,24 @@ function constTexts(root, folders) {
     return values;
 }
 
+function decimalText(digits) {
+    return digits.replace(/_/g, '').replace(/^0+(?=\d)/, '');
+}
+
+function constNumbers(root, folders) {
+    const key = [root, ...folders].join('\0');
+    if (constNumbersRead.has(key)) return constNumbersRead.get(key);
+    const values = new Set();
+    for (const folder of folders) {
+        for (const file of rustFilesUnder(path.join(root, folder))) {
+            const { code } = lex(productionContent(file, fs.readFileSync(file, 'utf8')));
+            for (const match of code.matchAll(PUBLIC_INT_CONST)) values.add(decimalText(match[1]));
+        }
+    }
+    constNumbersRead.set(key, values);
+    return values;
+}
+
 function entryOwnersFrom(rulebook, root) {
     if (!rulebook || typeof rulebook !== 'object') return [];
     const owned = [];
@@ -105,6 +129,9 @@ function entryOwnersFrom(rulebook, root) {
         const derived = entry.const_texts === true && root
             ? [...constTexts(root, folders)].filter(text => !skipped.has(text))
             : [];
+        const numbers = entry.const_numbers === true && root
+            ? [...constNumbers(root, folders)].filter(number => !skipped.has(number))
+            : [];
         const texts = (Array.isArray(entry.texts) ? entry.texts : [])
             .filter(text => typeof text === 'string' && text !== '')
             .concat(derived);
@@ -112,7 +139,7 @@ function entryOwnersFrom(rulebook, root) {
             .filter(item => /^[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*$/.test(item));
         const prefixes = (Array.isArray(entry.prefixes) ? entry.prefixes : [])
             .filter(prefix => typeof prefix === 'string' && prefix !== '');
-        if (calls.length + texts.length + paths.length + prefixes.length === 0) continue;
+        if (calls.length + texts.length + numbers.length + paths.length + prefixes.length === 0) continue;
         owned.push({
             concept,
             folders,
@@ -121,6 +148,7 @@ function entryOwnersFrom(rulebook, root) {
             calls,
             entryPoints: new Set(entry.entry_points || []),
             texts: new Set(texts),
+            numbers: new Set(numbers),
             prefixes,
             paths,
             allow: (entry.allow || []).map(item => `${item.path}\0${item.text}`),
@@ -332,7 +360,8 @@ function pathPattern(item) {
 function textViolations(relative, content, owner) {
     if (!relative.endsWith('.rs') || /^(?:vendor|third_party)\//.test(relative)) return [];
     const prefixes = owner.prefixes || [];
-    if (owner.texts.size === 0 && owner.paths.length === 0 && prefixes.length === 0) return [];
+    const numbers = owner.numbers || new Set();
+    if (owner.texts.size === 0 && owner.paths.length === 0 && prefixes.length === 0 && numbers.size === 0) return [];
     if (owner.folders.some(folder => relative.startsWith(folder))) return [];
     const { code, strings } = lex(content);
     const found = [];
@@ -340,13 +369,25 @@ function textViolations(relative, content, owner) {
         if (owner.allow.includes(`${relative}\0${text}`)) return;
         found.push({ line, what: `${owner.concept} outside its owner: ${shown}`, use: owner.use });
     };
+    const ownedText = literal => owner.texts.has(literal.value) || prefixes.some(prefix => literal.value.startsWith(prefix));
     for (const literal of strings) {
-        if (owner.texts.has(literal.value) || prefixes.some(prefix => literal.value.startsWith(prefix))) {
-            add(literal.line, JSON.stringify(literal.value), literal.value);
-        }
+        if (ownedText(literal)) add(literal.line, JSON.stringify(literal.value), literal.value);
     }
     for (const item of owner.paths) {
         for (const match of code.matchAll(pathPattern(item))) add(lineAt(code, match.index), item, item);
+    }
+    if (numbers.size > 0) {
+        for (const literal of strings) {
+            if (ownedText(literal)) continue;
+            const held = [...literal.value.matchAll(NUMBER_IN_TEXT)]
+                .map(match => decimalText(match[1]))
+                .filter(number => numbers.has(number) && !owner.allow.includes(`${relative}\0${number}`));
+            if (held.length > 0) add(literal.line, JSON.stringify(literal.value), held[0]);
+        }
+        for (const match of code.matchAll(INTEGER_TOKEN)) {
+            const number = decimalText(match[1]);
+            if (numbers.has(number)) add(lineAt(code, match.index), match[0], number);
+        }
     }
     return found;
 }

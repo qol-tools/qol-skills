@@ -9,7 +9,7 @@ const { spawnSync } = require('node:child_process');
 
 const HOOK = path.join(__dirname, '..', 'bin', 'check-qol-arch-code.cjs');
 const { lintFile } = require(HOOK);
-const { osViolations, callViolations, textViolations } = require(path.join(__dirname, '..', 'bin', 'qol-owner-guard.cjs'));
+const { osViolations, callViolations, textViolations, loadEntryOwners, ownerViolations } = require(path.join(__dirname, '..', 'bin', 'qol-owner-guard.cjs'));
 
 const OWNERS = {
     os: {
@@ -712,6 +712,213 @@ test('const_texts leaves skipped, private, test-only and non-str values alone', 
 test('const_texts without the flag guards nothing', () => {
     const root = conventionsRepo({ const_texts: false });
     assert.equal(write(place(root, 'plugins/demo/src/client.rs'), uses(['QoL Tray'])).exitCode, 0);
+});
+
+const NUMBER_CONSTS = [
+    'pub const SPACED: u32 = 1_234_567;',
+    'pub const SUFFIXED: u16 = 42_800u16;',
+    'pub const UNDERSCORE_SUFFIX: u64 = 9_100_u64;',
+    'pub const SCHEMA_VERSION: u32 = 1;',
+    'pub const ALSO_ONE: u8 = 0_1u8;',
+    'pub(crate) const INNER: u32 = 777;',
+    'const PRIVATE: u32 = 778;',
+    'pub const HEX: u32 = 0xA6CC;',
+    'pub const FLOAT: f64 = 55.5;',
+    'pub const SUM: u32 = 5 + 6;',
+    '// pub const COMMENTED: u32 = 779;',
+    '#[cfg(test)]',
+    'mod tests {',
+    '    pub const FIXTURE: u32 = 780;',
+    '}',
+    '',
+].join('\n');
+
+function numbersRepo(entry) {
+    const root = conventionsRepo({ const_texts: false, const_numbers: true, skip: [{ text: '1', why: 'a schema version' }], ...entry });
+    place(root, 'libs/conventions/src/numbers.rs', NUMBER_CONSTS);
+    return root;
+}
+
+function numberFindings(root, relative, content) {
+    const entries = loadEntryOwners(root);
+    return ownerViolations(relative, content, null, entries, path.join(root, relative)).map(violation => {
+        assert.match(violation.what, /^conventions values outside its owner: /);
+        assert.equal(violation.use, 'the qol_conventions constant that holds the value');
+        return violation.what.replace('conventions values outside its owner: ', '');
+    });
+}
+
+const CLIENT = 'plugins/demo/src/client.rs';
+const inFn = body => `pub fn port() -> u32 {\n    ${body}\n}\n`;
+const inText = value => inFn(`let url = ${JSON.stringify(value)};`);
+
+const numberTokens = [
+    ['a plain literal', 'let port = 42700;', ['42700']],
+    ['an underscored literal with a suffix', 'bind(42_700u16);', ['42_700u16']],
+    ['a suffix after an underscore', 'bind(42700_u16);', ['42700_u16']],
+    ['a suffix', 'bind(42700u16);', ['42700u16']],
+    ['leading zeros are decimal', 'bind(00042700);', ['00042700']],
+    ['a constant declared with underscores', 'let id = 1234567;', ['1234567']],
+    ['a constant declared with a suffix', 'bind(42800);', ['42800']],
+    ['a constant declared with an underscore and a suffix', 'let n = 9100;', ['9100']],
+    ['the start of a range', 'for p in 42700..42800 {}', ['42700', '42800']],
+    ['the end of a range', 'for p in 42000..42700 {}', ['42700']],
+    ['an inclusive range', 'for p in 42700..=42800 {}', ['42700', '42800']],
+    ['a method call on the literal', 'let m = 42700.max(1);', ['42700']],
+    ['a match arm', 'match p { 42700 => 1, _ => 2 }', ['42700']],
+    ['an array', 'let ports = [42700, 42800, 5];', ['42700', '42800']],
+    ['in a macro', 'assert_eq!(p, 42_700);', ['42_700']],
+];
+
+const numberTokensLeftAlone = [
+    ['inside an identifier', 'let port42700 = 3;'],
+    ['inside an identifier before the digits', 'let p_42700x = 3;'],
+    ['a longer number', 'let p = 427001;'],
+    ['a longer number before', 'let p = 142700;'],
+    ['a float', 'let p = 42700.0;'],
+    ['a float with an exponent', 'let p = 42700e2;'],
+    ['a float suffix', 'let p = 42700f32;'],
+    ['a fraction digit', 'let p = 1.42700;'],
+    ['a tuple field', 'let p = pair.42700;'],
+    ['a hex literal', 'let p = 0x42700;'],
+    ['the owner hex literal', 'let p = 0xA6CC;'],
+    ['an octal literal', 'let p = 0o42700;'],
+    ['a binary literal', 'let p = 0b101;'],
+    ['a line comment', 'let p = 1; // 42700'],
+    ['a doc comment', '/// the tray listens on 42700'],
+    ['a block comment', '/* 42700 */ let p = 1;'],
+    ['a nested block comment', '/* a /* 42700 */ 42800 */ let p = 1;'],
+    ['a char literal', "let c = '7';"],
+    ['a private, a pub(crate), a commented and a test-only const', 'let all = [777, 778, 779, 780];'],
+    ['a float, a sum and a hex const', 'let all = [55, 5, 6, 10817];'],
+    ['the skipped schema version', 'let v = 1;'],
+    ['the skipped schema version with an underscore and a suffix', 'let v = 0_1u8;'],
+    ['another number', 'let p = 42701;'],
+];
+
+test('const_numbers owns every public integer const, whole, as typed', () => {
+    const root = numbersRepo();
+    for (const [name, body, shown] of numberTokens) {
+        assert.deepEqual(numberFindings(root, CLIENT, inFn(body)), shown, name);
+    }
+});
+
+test('const_numbers leaves lookalikes, comments, hex, other values and the skip alone', () => {
+    const root = numbersRepo();
+    for (const [name, body] of numberTokensLeftAlone) {
+        assert.deepEqual(numberFindings(root, CLIENT, inFn(body)), [], name);
+    }
+});
+
+const numberTexts = [
+    ['an address', '127.0.0.1:42700', true],
+    ['an url', 'http://127.0.0.1:42700/api/mcp', true],
+    ['the whole text', '42700', true],
+    ['a range', 'ports 42700..42800', true],
+    ['a format string', '{host}:42700', true],
+    ['an underscored number', 'id 1_234_567 here', true],
+    ['two copies', '127.0.0.1:42700 or localhost:42700', true],
+    ['two owned numbers', '42700 and 42800', true],
+    ['an escaped quote around it', 'say \\"42700\\"', true],
+    ['inside an identifier', 'port42700', false],
+    ['a longer number', '427001', false],
+    ['a longer number before', '142700', false],
+    ['a float', 'version 42700.0', false],
+    ['a hex literal', '0x42700', false],
+    ['another port', '127.0.0.1:42701', false],
+    ['an address that holds the skipped number', '127.0.0.1', false],
+    ['a version that holds the skipped number', 'v1.2.3', false],
+    ['a number that is not owned', 'page 1 of 3', false],
+];
+
+test('const_numbers owns a number held whole inside a string literal, reported once as the string', () => {
+    const root = numbersRepo();
+    for (const [name, value, held] of numberTexts) {
+        const content = inText(value);
+        assert.deepEqual(numberFindings(root, CLIENT, content), held ? [JSON.stringify(value)] : [], name);
+    }
+});
+
+test('const_numbers skips a number in a comment around a string and a string in a comment', () => {
+    const root = numbersRepo();
+    const content = '// let url = "127.0.0.1:42700";\n/* "http://x:42700" */\n';
+    assert.deepEqual(numberFindings(root, CLIENT, content), []);
+});
+
+test('const_numbers owns the skip texts as normalized decimals only', () => {
+    const open = numbersRepo({ skip: [] });
+    assert.deepEqual(numberFindings(open, CLIENT, inFn('let v = [1, 0_1u8];')), ['1', '0_1u8']);
+    assert.deepEqual(numberFindings(open, CLIENT, inText('v 1 here')), ['"v 1 here"']);
+    const spaced = numbersRepo({ skip: [{ text: '1', why: 'a schema version' }, { text: '1234567', why: 'an id' }] });
+    assert.deepEqual(numberFindings(spaced, CLIENT, inFn('let v = [1, 1_234_567, 42700];')), ['42700']);
+});
+
+test('const_numbers keeps the owner folders, tests and allowed files free', () => {
+    const root = numbersRepo();
+    const body = 'let p = 42700;\nlet url = "127.0.0.1:42700";';
+    const cases = [
+        ['an owner file', 'libs/conventions/src/other.rs', inFn(body), []],
+        ['a nested owner file', 'libs/conventions/src/artifact/mod.rs', inFn(body), []],
+        ['a test file', 'plugins/demo/tests/ports.rs', inFn(body), []],
+        ['a test module', CLIENT, `${inFn('let q = 1;')}#[cfg(test)]\nmod tests {\n    fn t() {\n        let p = 42700;\n        let u = "127.0.0.1:42700";\n    }\n}\n`, []],
+        ['a vendored file', 'vendor/dep/src/lib.rs', inFn(body), []],
+        ['a file outside rust', 'plugins/demo/notes.md', body, []],
+        ['production code', CLIENT, inFn(body), ['42700', '"127.0.0.1:42700"']],
+    ];
+    for (const [name, relative, content, expected] of cases) {
+        assert.deepEqual(numberFindings(root, relative, content), expected, name);
+    }
+    const everything = numbersRepo({ scope: 'all' });
+    assert.deepEqual(numberFindings(everything, 'plugins/demo/tests/ports.rs', inFn(body)), ['42700', '"127.0.0.1:42700"']);
+});
+
+test('const_numbers allow names the file and the number as plain decimal text', () => {
+    const allowed = { path: CLIENT, text: '42700', why: 'the probe names the tray port' };
+    const root = numbersRepo({ allow: [allowed] });
+    const body = 'let a = [42700, 42_700u16, 42700..42800];\nlet u = "127.0.0.1:42700";';
+    assert.deepEqual(numberFindings(root, CLIENT, inFn(body)), ['42800']);
+    assert.deepEqual(numberFindings(root, 'plugins/demo/src/other.rs', inFn('let a = 42700;')), ['42700']);
+    assert.deepEqual(numberFindings(root, CLIENT, inText('42700 and 42800')), ['"42700 and 42800"']);
+    assert.deepEqual(numberFindings(root, CLIENT, inText('127.0.0.1:42700')), []);
+    const typed = numbersRepo({ allow: [{ path: CLIENT, text: '42_700u16', why: 'typed form' }] });
+    assert.deepEqual(numberFindings(typed, CLIENT, inFn('let a = 42_700u16;')), ['42_700u16']);
+});
+
+test('const_numbers without the flag guards no number', () => {
+    for (const entry of [{ const_numbers: false }, { const_numbers: 'yes' }, { const_numbers: undefined }]) {
+        const root = numbersRepo(entry);
+        assert.deepEqual(numberFindings(root, CLIENT, inFn('let p = 42700;\nlet url = "127.0.0.1:42700";')), [], JSON.stringify(entry));
+    }
+});
+
+test('const_numbers keeps const_texts and counts violations by their message', () => {
+    const root = numbersRepo({ const_texts: true });
+    const found = numberFindings(root, CLIENT, inFn('let p = 42700;\nlet s = "QoL Tray";'));
+    assert.deepEqual(found, ['42700', '"QoL Tray"']);
+});
+
+test('const_numbers reports a string once when it is also an owned text or prefix', () => {
+    const root = numbersRepo({ const_texts: true, prefixes: ['/api/'] });
+    place(root, 'libs/conventions/src/address.rs', 'pub const TRAY_ADDRESS: &str = "127.0.0.1:42700";\n');
+    assert.deepEqual(numberFindings(root, CLIENT, inText('127.0.0.1:42700')), ['"127.0.0.1:42700"']);
+    assert.deepEqual(numberFindings(root, CLIENT, inText('/api/ports/42700')), ['"/api/ports/42700"']);
+});
+
+test('const_numbers refuses a new copy on Write, lets an existing copy stay and reads a new const on the next run', () => {
+    const root = numbersRepo();
+    const file = place(root, CLIENT, inFn('let p = 42700;'));
+    assert.equal(write(file, `${inFn('let p = 42700;')}pub fn other() {}\n`).exitCode, 0);
+    const grown = write(file, `${inFn('let p = 42700;')}pub fn again() -> u32 {\n    42_700u16 as u32\n}\n`);
+    assert.equal(grown.exitCode, 2);
+    assert.match(grown.stderr, /conventions values outside its owner: 42_700u16/);
+    const url = write(place(root, 'plugins/demo/src/url.rs'), inText('http://127.0.0.1:42700/api/mcp'));
+    assert.equal(url.exitCode, 2);
+    assert.match(url.stderr, /conventions values outside its owner: "http:\/\/127\.0\.0\.1:42700\/api\/mcp"/);
+    assert.equal(write(place(root, 'plugins/demo/src/free.rs'), inFn('let p = 42900;')).exitCode, 0);
+    place(root, 'libs/conventions/src/numbers.rs', `${NUMBER_CONSTS}pub const ADDED: u16 = 42_900;\n`);
+    const added = write(place(root, 'plugins/demo/src/later.rs'), inFn('let p = 42900;'));
+    assert.equal(added.exitCode, 2);
+    assert.match(added.stderr, /conventions values outside its owner: 42900/);
 });
 
 const MARKS = {
