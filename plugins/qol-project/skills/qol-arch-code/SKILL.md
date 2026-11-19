@@ -803,6 +803,32 @@ Implementation: Node.js (`bin/check-qol-arch-code.cjs`): Claude Code requires No
 
 `bin/check-qol-logging.cjs` enforces "Output: log, trace, command output" at edit time. It counts each signal (`eprintln!`, `eprint!`, `println!`, `print!`, `io::stdout()`, `io::stderr()`, a `clippy::print_*` allow, `dbg!`, a `clippy::dbg_macro` allow) in the production view of the file, with comments and every test-only item stripped and test files skipped (the shared test filter in "Enforcement: PreToolUse hook"), and denies the edit when a count goes up outside the places that section allows. Clippy is the backstop for anything written without an Edit or Write tool.
 
+#### File system results thrown away
+
+The same hook keeps a failed write from vanishing.
+Pid registries, restore state and Explorer's undo renames were lost with no log because the `Result` of a `std::fs` call was thrown away; the rename that undoes a move in `plugins/explorer/src/ui/browse/ops_edit.rs` was one.
+It denies a `.rs` edit in a qol repository, and `qac lint` reports a Rust file, with a call to one of these in any of these shapes:
+
+- `let _ = CALL;` or `_ = CALL;`
+- `CALL.ok();`, `CALL.unwrap_or_default();` or `CALL.unwrap_or(..);` written as a statement, or bound to `_` as in `let _ = CALL.ok();`: each adapter turns the error into a value nobody reads
+- `match CALL { .. }` with an empty `Err` arm: `Err(_) => {}`, `Err(_name) => {}` or `Err(..) => {}`, or the same with `()` as the body, with or without the trailing comma
+- `match CALL { .. }` with an empty top-level `_ => {}` or `_ => ()` arm and no other top-level arm whose pattern starts with `Err`. When an `Err(e) => ..` arm is present, the `_` arm covers only `Ok` and passes
+
+`CALL` is `fs::NAME(..)` or `std::fs::NAME(..)`, with any whitespace around `::`, and the statement ends right after the call's closing parenthesis or right after its adapter.
+The mutator set is closed: `write`, `create_dir`, `create_dir_all`, `rename`, `copy`, `set_permissions`, `hard_link`, `soft_link`.
+`remove_file`, `remove_dir` and `remove_dir_all` stay allowed, because a failed removal is best-effort cleanup: nothing is lost, only a leftover stays behind.
+
+The fix is to return the error with `?`, or to log it with `log::warn!` naming the path.
+A `?`, or a chained `.map_err(..)`, `.inspect_err(..)`, `.unwrap_or_else(..)` or `.or_else(..)`, passes, because its closure can handle the error.
+
+A thrown-away result is a fact about the code as it stands, so it is a rule about the code as it stands: an edit that leaves a site anywhere in the file is denied, and `qac lint` reports every site with or without `--base`.
+Test code (test files and `#[cfg(test)]` items) is not checked, and text inside a string or a comment never matches.
+There is no bypass: handle the error in the same edit.
+
+The survey of 2026-11-17 found 31 sites; #563, #564 and #587 handled them before the rule landed.
+
+Residual: the match is by shape, so a bare `write(` imported through `use std::fs::write`, `tokio::fs`, `File` and `OpenOptions` writes, a closure that ignores the error (`.unwrap_or_else(|_| ())`), and a result dropped through `drop()` or a named `_x` binding all pass.
+
 ### Enforcement: settings guard
 
 A plugin declares every setting in its `qol-config.toml` and reads its config only through `qol_config::load_plugin_config_from_env_with_contract` (or `load_plugin_config_with_contract`). It never locates, reads or writes its config file itself.
@@ -953,7 +979,7 @@ Residual: only Rust is checked, since only Rust can use the crate, so JavaScript
 The edit-time hooks only see new violations, so existing debt stays invisible until someone touches the file. `qac lint [path ...]` runs the qol-arch-code, cross-platform, cicd, logging, plugin data and plugin-contract hooks over whole tracked and untracked files (the whole repo when no path is given), counting every violation already there. It never consumes a bypass marker, and it skips `vendor/` and `third_party/`. Each hook exposes `lintFile(path, content, baseline)` through `bin/hook-lint-mode.cjs`, so a new filter in any of them is linted too.
 
 The rules come in two kinds, and lint treats them differently.
-Rules about the code as it stands (a target_os cfg on a `use`, facade coverage, source layout, adapter-exclusive helpers, allow attributes, plugin data, plugin identity, crate dependency direction, runtime event names) hold or fail on a file alone, so lint checks them on every file.
+Rules about the code as it stands (a target_os cfg on a `use`, facade coverage, source layout, adapter-exclusive helpers, allow attributes, plugin data, plugin identity, file system results thrown away, crate dependency direction, runtime event names) hold or fail on a file alone, so lint checks them on every file.
 Rules about added code (target_os placement, platform decision signals, settings, active monitor, design, test deadlines, logging, runtime event payload shape) compare a file with its earlier content, which a static file does not have.
 Without a base, lint counts every line as added, which turns "do not add X" into "X must never exist".
 `qac lint --base=<rev>` compares those rules with each file at `<rev>` instead: an unchanged file finds nothing, a changed file finds only what it added, a file git sees as moved since `<rev>` compares with its content at the old path, and a file new since `<rev>` counts in full.

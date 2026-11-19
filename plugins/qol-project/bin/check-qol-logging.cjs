@@ -32,6 +32,16 @@ const SIGNALS = [
     { name: 'allow(clippy::dbg_macro)', re: /#!?\[\s*(?:allow|expect)\s*\([^\]]*clippy::dbg_macro/g, commandOutput: false },
 ];
 
+const FS_MUTATORS = ['write', 'create_dir', 'create_dir_all', 'rename', 'copy', 'set_permissions', 'hard_link', 'soft_link'];
+const FS_CALL_RE = new RegExp(`(?<![\\w.])((?:std\\s*::\\s*)?fs)\\s*::\\s*(${FS_MUTATORS.join('|')})\\s*\\(`, 'g');
+const FS_BINDING_RE = /(?:\blet\s+_|(?<![\w.])_)\s*=(?![=>])\s*$/;
+const FS_ADAPTER_RE = /^\s*\.\s*(ok|unwrap_or_default|unwrap_or)\s*\(/;
+const FS_EMPTY_ARM = String.raw`=>\s*(?:\{\s*\}|\(\s*\))\s*,?`;
+const FS_ERR_ARM_RE = new RegExp(String.raw`(?<![\w:])Err\s*\(\s*(?:_\w*|\.\.)\s*\)\s*${FS_EMPTY_ARM}`, 'g');
+const FS_ANY_ARM_RE = new RegExp(String.raw`(?<![\w:])_\s*${FS_EMPTY_ARM}`, 'g');
+const FS_ERR_PATTERN_RE = /(?<![\w:])Err\b/g;
+const FS_SKILL_SECTION = 'qol-project:qol-arch-code, "File system results thrown away"';
+
 const lintMode = require('./hook-lint-mode.cjs');
 const { inQolRepo } = require('./qol-repo.cjs');
 const { readExistingFile, prospectiveContent } = require('./hook-edit-content.cjs');
@@ -56,17 +66,107 @@ function addedSignals(file, before, after, signals) {
     return signals.filter((_, index) => now[index] > was[index]).map(signal => signal.name);
 }
 
+function lineOf(content, offset) {
+    let line = 1;
+    for (let index = content.indexOf('\n'); index !== -1 && index < offset; index = content.indexOf('\n', index + 1)) line++;
+    return line;
+}
+
+function closing(text, open, left, right) {
+    let depth = 0;
+    for (let index = open; index < text.length; index++) {
+        if (text[index] === left) depth++;
+        else if (text[index] === right && --depth === 0) return index;
+    }
+    return -1;
+}
+
+function followsStatementBoundary(skeleton, start) {
+    const before = skeleton.slice(0, start).trimEnd();
+    return before === '' || ';{}'.includes(before[before.length - 1]);
+}
+
+function followsPathSegment(skeleton, start) {
+    const before = skeleton.slice(0, start).trimEnd();
+    if (!before.endsWith('::')) return false;
+    return /[\w>]$/.test(before.slice(0, -2).trimEnd());
+}
+
+function topLevelArms(body, re) {
+    const depths = new Int32Array(body.length + 1);
+    for (let index = 0, depth = 0; index < body.length; index++) {
+        if ('({['.includes(body[index])) depth++;
+        else if (')}]'.includes(body[index])) depth = Math.max(0, depth - 1);
+        depths[index + 1] = depth;
+    }
+    return [...body.matchAll(re)].filter(arm => {
+        if (depths[arm.index] !== 0) return false;
+        const before = body.slice(0, arm.index).trimEnd();
+        return before === '' || ',}'.includes(before[before.length - 1]);
+    });
+}
+
+function matchDropsError(skeleton, open) {
+    const close = closing(skeleton, open, '{', '}');
+    if (close < 0) return false;
+    const body = skeleton.slice(open + 1, close);
+    if (topLevelArms(body, FS_ERR_ARM_RE).length > 0) return true;
+    return topLevelArms(body, FS_ANY_ARM_RE).length > 0 && topLevelArms(body, FS_ERR_PATTERN_RE).length === 0;
+}
+
+function adapterEnd(skeleton, close) {
+    const adapter = FS_ADAPTER_RE.exec(skeleton.slice(close + 1));
+    if (!adapter) return close;
+    const open = close + adapter[0].length;
+    const end = closing(skeleton, open, '(', ')');
+    if (end < 0) return -1;
+    const empty = skeleton.slice(open + 1, end).trim() === '';
+    return adapter[1] === 'unwrap_or' || empty ? end : -1;
+}
+
+function thrownAwayShape(skeleton, call, close) {
+    const origin = skeleton.slice(0, call.index).replace(/::\s*$/, '').length;
+    const before = skeleton.slice(Math.max(0, origin - 64), origin);
+    const end = adapterEnd(skeleton, close);
+    if (end >= 0 && /^\s*;/.test(skeleton.slice(end + 1))) {
+        if (FS_BINDING_RE.test(before)) return true;
+        if (end > close && followsStatementBoundary(skeleton, origin)) return true;
+    }
+    const opening = /^\s*\{/.exec(skeleton.slice(close + 1));
+    return Boolean(opening) && /(?<![\w.])match\s+$/.test(before) && matchDropsError(skeleton, close + opening[0].length);
+}
+
+function fsGaps(filePath, content) {
+    if (!/\bfs\s*::/.test(content)) return [];
+    const code = serde.production(path.resolve(filePath), content);
+    if (!code) return [];
+    const gaps = [];
+    for (const call of code.skeleton.matchAll(FS_CALL_RE)) {
+        if (followsPathSegment(code.skeleton, call.index)) continue;
+        const close = closing(code.skeleton, call.index + call[0].length - 1, '(', ')');
+        if (close < 0 || !thrownAwayShape(code.skeleton, call, close)) continue;
+        const spelled = call[1].replace(/\s+/g, '');
+        gaps.push(`File system result thrown away in ${path.basename(filePath)}: on line ${lineOf(content, call.index)}, ${spelled}::${call[2]}(..) drops the error of std::fs::${call[2]}; return it with ? or log it with log::warn! naming the path.\n` +
+            `[qol-logging] handle the error of this call in this edit (${FS_SKILL_SECTION})`);
+    }
+    return gaps;
+}
+
 function denyReason(where, added) {
     return `New ${added.join(', ')} in ${where}: outside a cli, build or tools module, qol code writes only log:: (log) or qol_runtime::probe! (trace), and dbg! nowhere.\n` +
         `[qol-logging] use log::error!/warn!/info!/debug! or probe!, or return the text to a cli module that prints it (qol-project:qol-arch-code, "Output: log, trace, command output")`;
 }
 
-function deny(filePath, added) {
-    const reason = denyReason(path.basename(filePath), added);
+function deny(filePath, added, gaps = []) {
+    const reasons = [
+        ...(added.length ? [denyReason(path.basename(filePath), added)] : []),
+        ...gaps,
+    ];
     if (lintMode.active()) {
-        lintMode.report(process.stderr, reason);
+        for (const reason of reasons) lintMode.report(process.stderr, reason);
         return;
     }
+    const reason = reasons.join('\n\n');
     process.stdout.write(JSON.stringify({
         hookSpecificOutput: {
             hookEventName: 'PreToolUse',
@@ -213,14 +313,15 @@ function evaluate(payload) {
     if (!INSPECTED_TOOLS.has(tool)) return;
     const input = payload.tool_input || {};
     const filePath = input.file_path || '';
+    if (!filePath.endsWith('.rs') || !inQolRepo(filePath)) return;
     const signals = inspectedSignals(filePath);
-    if (signals.length === 0) return;
 
     const existing = readExistingFile(filePath);
     const after = prospectiveContent(tool, input, existing);
     const added = addedSignals(filePath, existing || '', after, signals);
-    if (added.length === 0) return 0;
-    deny(filePath, added);
+    const gaps = fsGaps(filePath, after);
+    if (added.length === 0 && gaps.length === 0) return 0;
+    deny(filePath, added, gaps);
     return 2;
 }
 

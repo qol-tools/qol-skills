@@ -229,6 +229,248 @@ test('flags prints in a new untracked file', () => {
     assert.match(JSON.parse(result.stdout).reason, /new\.rs \(dbg!\)/);
 });
 
+const FS_MUTATORS = ['write', 'create_dir', 'create_dir_all', 'rename', 'copy', 'set_permissions', 'hard_link', 'soft_link'];
+const THROWN_AWAY = /File system result thrown away in controller\.rs: on line (\d+), (\S+) drops the error of std::fs::(\w+); return it with \? or log it with log::warn! naming the path\./;
+
+function lint(content, file = PLUGIN_FILE, baseline = null) {
+    return require(HOOK).lintFile(file, content, baseline);
+}
+
+function fsFindings(content, file) {
+    return lint(content, file).filter(message => THROWN_AWAY.test(message)).map(message => {
+        const [, line, shown, name] = THROWN_AWAY.exec(message);
+        return { line: Number(line), shown, name };
+    });
+}
+
+const SHAPES = {
+    'let underscore': call => `let _ = ${call};`,
+    'bare underscore': call => `_ = ${call};`,
+    'ok statement': call => `${call}.ok();`,
+    'empty block arm': call => `match ${call} {\n        Ok(()) => {}\n        Err(_) => {}\n    }`,
+    'unit arm with comma': call => `match ${call} {\n        Ok(()) => (),\n        Err(_) => (),\n    }`,
+    'named underscore arm': call => `match ${call} {\n        Ok(()) => {}\n        Err(_why) => {},\n    }`,
+    'rest pattern block arm': call => `match ${call} {\n        Ok(()) => {}\n        Err(..) => {}\n    }`,
+    'rest pattern unit arm': call => `match ${call} {\n        Ok(()) => (),\n        Err(..) => (),\n    }`,
+    'wildcard block arm': call => `match ${call} {\n        Ok(()) => log::info!("saved"),\n        _ => {}\n    }`,
+    'wildcard unit arm': call => `match ${call} {\n        Ok(()) => log::info!("saved"),\n        _ => (),\n    }`,
+    'let underscore ok': call => `let _ = ${call}.ok();`,
+    'bare underscore ok': call => `_ = ${call}.ok();`,
+    'ok statement with spaces': call => `${call} . ok ( ) ;`,
+    'unwrap_or_default statement': call => `${call}.unwrap_or_default();`,
+    'let underscore unwrap_or_default': call => `let _ = ${call}.unwrap_or_default();`,
+    'bare underscore unwrap_or_default': call => `_ = ${call}.unwrap_or_default();`,
+    'unwrap_or statement': call => `${call}.unwrap_or(());`,
+    'let underscore unwrap_or': call => `let _ = ${call}.unwrap_or(());`,
+    'bare underscore unwrap_or': call => `_ = ${call}.unwrap_or(());`,
+};
+
+const SPELLINGS = {
+    short: name => `fs::${name}(path, data)`,
+    std: name => `std::fs::${name}(path, data)`,
+    'short with spaces': name => `fs :: ${name} (path, data)`,
+    'std with spaces': name => `std :: fs\n        :: ${name}(path, data)`,
+};
+
+for (const [shape, build] of Object.entries(SHAPES)) {
+    for (const [spelling, spell] of Object.entries(SPELLINGS)) {
+        test(`reports ${shape} with the ${spelling} spelling for every mutator`, () => {
+            for (const name of FS_MUTATORS) {
+                const found = fsFindings(`fn f() {\n    ${build(spell(name))}\n}\n`);
+                assert.deepEqual(found.map(({ line, name: reported }) => [line, reported]), [[2, name]], `${shape} ${name}`);
+            }
+        });
+    }
+}
+
+test('shows the call the way it is spelled, without spaces around the path separators', () => {
+    assert.equal(fsFindings('fn f() {\n    let _ = std :: fs :: rename(a, b);\n}\n')[0].shown, 'std::fs::rename(..)');
+    assert.equal(fsFindings('fn f() {\n    let _ = fs :: copy(a, b);\n}\n')[0].shown, 'fs::copy(..)');
+});
+
+test('reports a call whose arguments span lines, nest calls and hold closures', () => {
+    const found = fsFindings([
+        'fn f() {',
+        '    let _ = fs::write(',
+        '        dir.join(format!("{}.pid", pid)),',
+        '        encode(&|x| (x, (1, 2))),',
+        '    );',
+        '}',
+        '',
+    ].join('\n'));
+    assert.deepEqual(found.map(({ line }) => line), [2]);
+});
+
+const HANDLED = {
+    'question mark': 'fs::write(p, d)?;',
+    'question mark on a let': 'let _ = fs::write(p, d)?;',
+    'binding kept': 'let result = fs::write(p, d);',
+    'named binding': 'let _kept = fs::write(p, d);',
+    'unwrap': 'fs::write(p, d).unwrap();',
+    'expect': 'fs::write(p, d).expect("write");',
+    'map_err': 'let _ = fs::write(p, d).map_err(|e| log::warn!("{e}"));',
+    'map_err statement': 'fs::write(p, d).map_err(|e| log::warn!("{e}")).ok();',
+    'inspect_err': 'let _ = fs::write(p, d).inspect_err(|e| log::warn!("{e}"));',
+    'unwrap_or_else': 'fs::write(p, d).unwrap_or_else(|e| log::warn!("{e}"));',
+    'or_else': 'let _ = fs::write(p, d).or_else(|e| retry(e));',
+    'if let Err': 'if let Err(e) = fs::write(p, d) { log::warn!("{e}"); }',
+    'logging arm': 'match fs::write(p, d) {\n        Ok(()) => {}\n        Err(e) => log::warn!("{e}"),\n    }',
+    'logging arm with block': 'match fs::write(p, d) {\n        Ok(()) => {}\n        Err(_) => { log::warn!("write failed"); }\n    }',
+    'empty arm of another match': 'match other() {\n        Ok(()) => {}\n        Err(_) => {}\n    }',
+    'empty arm nested in the body': 'match fs::write(p, d) {\n        Ok(()) => match next() {\n            Ok(()) => {}\n            Err(_) => {}\n        },\n        Err(e) => log::warn!("{e}"),\n    }',
+    'wildcard beside an Err arm': 'match fs::write(p, d) {\n        Ok(()) => {}\n        Err(e) => log::warn!("{e}"),\n        _ => {}\n    }',
+    'wildcard beside an Err arm with a guard': 'match fs::write(p, d) {\n        Err(e) if retry(&e) => again(),\n        Ok(()) => {}\n        _ => {}\n    }',
+    'wildcard beside an Err arm in a block': 'match fs::write(p, d) {\n        Err(e) => { log::warn!("{e}"); }\n        _ => (),\n    }',
+    'wildcard arm that logs': 'match fs::write(p, d) {\n        Ok(()) => {}\n        _ => log::warn!("failed"),\n    }',
+    'wildcard of another match': 'match other() {\n        Ok(()) => {}\n        _ => {}\n    }',
+    'wildcard nested in the body': 'match fs::write(p, d) {\n        Ok(()) => match next() {\n            Ok(()) => {}\n            _ => {}\n        },\n        Err(e) => log::warn!("{e}"),\n    }',
+    'wildcard inside an Ok pattern': 'match fs::write(p, d) {\n        Ok(_) => {}\n        Err(e) => log::warn!("{e}"),\n    }',
+    'Err with a binding': 'match fs::write(p, d) {\n        Ok(()) => {}\n        Err(error) => log::warn!("{error}"),\n    }',
+    'ok kept in a binding': 'let kept = fs::write(p, d).ok();',
+    'unwrap_or_default kept in a binding': 'let kept = fs::write(p, d).unwrap_or_default();',
+    'unwrap_or kept in a binding': 'let kept = fs::write(p, d).unwrap_or(());',
+    'unwrap_or_default chained on': 'fs::write(p, d).unwrap_or_default().to_string();',
+    'unwrap_or with a handler before it': 'let _ = fs::write(p, d).map_err(|e| log::warn!("{e}")).unwrap_or(());',
+    'unwrap_or_else statement': 'fs::write(p, d).unwrap_or_else(|_| ());',
+    'returned value': 'return fs::write(p, d);',
+    'tail value': 'fs::write(p, d)',
+    'remove_file': 'let _ = fs::remove_file(p);',
+    'remove_dir': '_ = fs::remove_dir(p);',
+    'remove_dir_all': 'fs::remove_dir_all(p).ok();',
+    'remove_dir_all match': 'match fs::remove_dir_all(p) {\n        Ok(()) => {}\n        Err(_) => {}\n    }',
+    'read': 'let _ = fs::read(p);',
+    'read_to_string': 'fs::read_to_string(p).ok();',
+    'metadata': 'let _ = fs::metadata(p);',
+    'tokio fs': 'let _ = tokio::fs::write(p, d);',
+    'tokio fs with spaces': 'let _ = tokio :: fs :: rename(a, b);',
+    'crate fs module': 'let _ = crate::fs::write(p, d);',
+    'other receiver': 'let _ = other.fs::write(p, d);',
+    'longer function name': 'let _ = fs::write_all(p, d);',
+    'longer module name': 'let _ = myfs::write(p, d);',
+    'imported write': 'let _ = write(p, d);',
+    'file handle': 'let _ = file.write(d);',
+    'drop': 'drop(fs::write(p, d));',
+    'ok result kept': 'let kept = fs::write(p, d).ok();',
+    'ok in a condition': 'if fs::write(p, d).ok().is_some() { go(); }',
+};
+
+for (const [name, body] of Object.entries(HANDLED)) {
+    test(`passes ${name}`, () => {
+        assert.deepEqual(fsFindings(`fn f() {\n    ${body}\n}\n`), []);
+    });
+}
+
+test('reports a call written with a leading path separator', () => {
+    assert.equal(fsFindings('fn f() {\n    let _ = ::std::fs::write(p, d);\n}\n').length, 1);
+});
+
+test('ignores a call inside a string, a comment or a raw string', () => {
+    assert.deepEqual(fsFindings([
+        'fn f() {',
+        '    let text = "let _ = fs::write(p, d);";',
+        '    let raw = r#"fs::rename(a, b).ok();"#;',
+        '    // let _ = fs::copy(a, b);',
+        '    /* fs::write(p, d).ok(); */',
+        '    /// let _ = fs::create_dir(p);',
+        '}',
+        '',
+    ].join('\n')), []);
+});
+
+test('ignores a test file and a cfg(test) module, and still sees the code after them', () => {
+    const body = 'fn f() {\n    let _ = fs::write(p, d);\n    fs::rename(a, b).ok();\n}\n';
+    for (const file of [
+        '/x/qol-monorepo/plugins/launcher/tests/launch.rs',
+        '/x/qol-monorepo/plugins/launcher/src/tests.rs',
+        '/x/qol-monorepo/plugins/launcher/examples/demo.rs',
+    ]) assert.deepEqual(fsFindings(body, file), [], file);
+    assert.deepEqual(fsFindings(`#[cfg(test)]\nmod tests {\n    ${body}}\n`), []);
+    assert.deepEqual(fsFindings(`#[cfg(all(test, unix))]\nfn fixture() {\n    ${body}}\n`), []);
+    assert.deepEqual(fsFindings(`#[cfg(test)]\nmod tests {}\n${body}`).map(({ line }) => line), [4, 5]);
+});
+
+test('ignores non-qol repos and non-Rust files for thrown-away results', () => {
+    const body = 'fn f() { let _ = fs::write(p, d); }\n';
+    assert.deepEqual(lint(body, '/x/other-repo/src/main.rs'), []);
+    assert.deepEqual(lint(body, '/x/qol-monorepo/scripts/run.sh'), []);
+});
+
+test('reports several sites in line order, one finding each', () => {
+    const found = fsFindings([
+        'fn f() {',
+        '    fs::rename(a, b).ok();',
+        '    let _ = fs::write(p, d);',
+        '    let _ = fs::remove_file(p);',
+        '    match fs::copy(a, b) {',
+        '        Ok(_) => {}',
+        '        Err(_) => {}',
+        '    }',
+        '    _ = std::fs::hard_link(a, b);',
+        '}',
+        '',
+    ].join('\n'));
+    assert.deepEqual(found.map(({ line, name }) => [line, name]), [[2, 'rename'], [3, 'write'], [5, 'copy'], [9, 'hard_link']]);
+});
+
+test('a finding carries the rule title, the way forward and a hint line', () => {
+    const [message] = lint('fn f() {\n    let _ = fs::write(p, d);\n}\n');
+    assert.equal(message.split('\n').length, 2);
+    assert.match(message, /^File system result thrown away in controller\.rs: on line 2, /);
+    assert.match(message, /\n\[qol-logging\] .*qol-arch-code/);
+});
+
+test('lint mode reports every site whatever the baseline holds', () => {
+    const content = 'fn f() {\n    let _ = fs::write(p, d);\n    fs::rename(a, b).ok();\n}\n';
+    for (const baseline of [null, '', content, 'fn f() {}\n']) {
+        assert.equal(lint(content, PLUGIN_FILE, baseline).filter(message => THROWN_AWAY.test(message)).length, 2);
+    }
+});
+
+test('lint mode reports a print and a thrown-away result as separate findings', () => {
+    const messages = lint('fn f() {\n    eprintln!("x");\n    let _ = fs::write(p, d);\n}\n');
+    assert.equal(messages.length, 2);
+    assert.match(messages[0], /New eprintln! in controller\.rs/);
+    assert.match(messages[1], THROWN_AWAY);
+});
+
+test('the hook denies a write that leaves a site, naming the line and the call', () => {
+    const result = write(PLUGIN_FILE, 'fn f() {\n    let _ = std::fs::create_dir_all(dir);\n}\n');
+    assertDeny(result, /File system result thrown away in controller\.rs: on line 2, std::fs::create_dir_all\(\.\.\) drops the error of std::fs::create_dir_all/);
+});
+
+test('the hook allows a clean write and a write that only removes files', () => {
+    assertAllow(write(PLUGIN_FILE, 'fn f() -> std::io::Result<()> {\n    fs::write(p, d)?;\n    let _ = fs::remove_file(p);\n    Ok(())\n}\n'));
+});
+
+test('the hook denies an edit while the file keeps a site that was already there', () => {
+    const { file } = fixture('plugins/launcher/src/ui/controller.rs', 'fn f() {\n    let _ = fs::write(p, d);\n}\nfn g() {}\n');
+    assertDeny(run({
+        tool_name: 'Edit',
+        tool_input: { file_path: file, old_string: 'fn g() {}', new_string: 'fn g() { h(); }' },
+    }), /on line 2, fs::write\(\.\.\) drops the error of std::fs::write/);
+});
+
+test('the hook allows the edit that handles the site', () => {
+    const { file } = fixture('plugins/launcher/src/ui/controller.rs', 'fn f() {\n    let _ = fs::write(p, d);\n}\n');
+    assertAllow(run({
+        tool_name: 'Edit',
+        tool_input: { file_path: file, old_string: 'let _ = fs::write(p, d);', new_string: 'fs::write(p, d).map_err(|e| log::warn!("{e}")).ok();' },
+    }));
+});
+
+test('the hook denies a site added through MultiEdit', () => {
+    const { file } = fixture('apps/tray/src/app/mod.rs', 'fn f() {}\n');
+    assertDeny(run({
+        tool_name: 'MultiEdit',
+        tool_input: { file_path: file, edits: [{ old_string: 'fn f() {}', new_string: 'fn f() { fs::rename(a, b).ok(); }' }] },
+    }), /fs::rename\(\.\.\) drops the error of std::fs::rename/);
+});
+
+test('the hook gives one reason when a print and a site arrive together', () => {
+    const result = write(PLUGIN_FILE, 'fn f() {\n    eprintln!("x");\n    let _ = fs::write(p, d);\n}\n');
+    assertDeny(result, /New eprintln! in controller\.rs[\s\S]*File system result thrown away in controller\.rs: on line 3/);
+});
+
 test('does not flag prints that were already there or live in test modules', () => {
     const dir = repo();
     fs.appendFileSync(path.join(dir, 'libs/peers/src/lib.rs'), 'fn dirty() { println!("before"); }\n');
