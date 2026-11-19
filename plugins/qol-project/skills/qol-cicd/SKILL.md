@@ -30,7 +30,8 @@ Release units and tagging rules live in the `qol-tray-release-flow` skill; read 
 - Pin third-party actions to a commit SHA (the existing workflows all do).
 - `release.yml` and `qol-tray-release.yml` verify a candidate with main's scripts from a sparse `trusted` checkout; that checkout must carry every file the scripts read: `.github/scripts` and `libs/conventions/src` (`plugin_version.py` reads `RESERVED_PLUGIN_IDS` from the conventions crate at import time). Incident (2026-11-07): #493 checked out only the scripts folder, so every plugin and tray release failed at "Verify exact release candidate" for a day until #503; `test_trusted_script_checkouts_carry_the_files_the_scripts_import` holds the list, so a script that starts reading another repo file must extend the checkout and the test together.
 - Keep `RUSTFLAGS`/clippy at `-D warnings` parity with local checks; a workflow that is more lenient than the local gate hides breakage until release time.
-- The Linux package step of `rust-setup` points apt at `https://mirrors.edge.kernel.org/ubuntu/` after a failed `apt-get update`: on 2026-11-11 hosted runners could not resolve any `ubuntu.com` name for three hours, and all three mirrors of the runner's list are `ubuntu.com` hosts (qol-tools/qol#542, actions/runner-images#15296). apt still verifies packages against Ubuntu's keys. The fallback has not yet run in a real outage.
+- The Linux package step of `rust-setup` installs from a saved set of package files ("The saved Linux package set" below) and asks a mirror only for the files Ubuntu replaced since. It downloads those with `apt-get install --download-only`, a call of its own bounded at one minute on the runner's mirror, so the short bound stops a download and never dpkg.
+- That step points apt at `https://mirrors.edge.kernel.org/ubuntu/` after a failed `apt-get update` or a download that did not finish: on 2026-11-11 hosted runners could not resolve any `ubuntu.com` name for three hours, and all three mirrors of the runner's list are `ubuntu.com` hosts (qol-tools/qol#542, actions/runner-images#15296). apt still verifies packages against Ubuntu's keys. The update fallback has not yet run in a real outage.
 - Platform coverage derives from `plugin.toml` `platforms` - never hardcode a runner list for plugin builds.
 - Every publish job builds the registry tool (`qol-plugin-registry`) after merge, with `system-dependencies: "false"`. The `registry tool build` job in `ci.yml` builds it the same way and the merge gate needs it, so a dependency that pulls a system library into the tool fails the pull request instead of every release. `test_release_workflow_contract.py` holds that job and the publish jobs to one contract; change them together.
 - The registry tool reads a blob up to the size its manifest declares, so a host executable over the 64 MiB response cap still publishes, and it refuses a declared size over 1 GiB before it sends the request.
@@ -83,6 +84,22 @@ replacement or a newer entry. Cache deletion uses
 [GitHub's ID endpoint](https://docs.github.com/en/rest/actions/cache#delete-a-github-actions-cache-for-a-repository-using-a-cache-id).
 Test overlapping saves, foreign refs, CLI budget wiring, and that no build job
 holds a deletion token.
+
+### The saved Linux package set
+
+The Linux system packages install from `.deb` files kept in the Actions cache under `apt-archives-<image>-<8 hex of the file names>`.
+The setup restores the newest set, copies it into apt's archive folder, and lets apt update its lists and check every file against them, so a stale or altered file is downloaded again.
+`autoclean` drops the files Ubuntu replaced before a set is saved, so a set never grows.
+Main saves a changed set; any other run saves only when it restored nothing, into its own ref.
+Until a main run has saved the new set, every job downloads the replaced files from a mirror.
+
+Incident (2026-11-18): GitHub ran half of the Linux jobs on AWS runners, whose mirror list names `us-east-2.ec2.archive.ubuntu.com`.
+It served the packages at under 150 kB/s, so the step took 4 to 13 minutes where an Azure runner takes under one.
+The outside mirror was slow from those runners too and the Actions cache was not, which is why the files come from the cache (qol-tools/qol#580).
+
+- The key keeps its trailing 8 hex characters: `cache_prune.py` strips that segment to name the namespace, and keeps the most recently used entry of each ref.
+- The restore key is the prefix and the exact key never exists, so the newest set wins; a key that could match exactly would pin every job to one set.
+- The runner image is a variable of the runner's shell: `${{ env.ImageOS }}` is empty in a workflow expression, so a shell step writes the key prefix. Never write `ImageOS` to `GITHUB_ENV`: the build cache's `shared-key` reads that expression, and every build cache key would change at once.
 
 ### What a build cache entry holds
 
