@@ -7,12 +7,17 @@ const path = require('node:path');
 const lintMode = require('./hook-lint-mode.cjs');
 const { readExistingFile, prospectiveContent } = require('./hook-edit-content.cjs');
 const { inQolRepo } = require('./qol-repo.cjs');
+const rust = require('./rust-serde.cjs');
 
 const INSPECTED_TOOLS = new Set(['Edit', 'Write', 'MultiEdit']);
 const MANIFEST = 'plugin.toml';
+const RUST_SOURCE = /\.rs$/;
 const SKILL_SECTION = 'qol-project:qol-arch-code, "Enforcement: plugin data guard"';
 
 const OPENS_WITHOUT_LAUNCHER_ENTRY = new Set(['qol-launcher', 'qol-alt-tab']);
+const IDENTITY_KEEPERS = ['libs/migrations/', 'libs/conventions/', 'libs/plugin-ids/'];
+const IDENTITY_CONSTANTS = { id: 'ID', uid: 'UID', socket: 'SOCKET_NAME', port: 'PORT' };
+const INTEGER_LITERAL = /(?<![\w.])(\d[\d_]*)(?:[ui](?:8|16|32|64|128|size))?(?![\w.])/g;
 
 function readStdin() {
     try {
@@ -125,6 +130,138 @@ function dataGaps(content, dir) {
     return gaps;
 }
 
+function isDirectory(dir) {
+    try {
+        return fs.statSync(dir).isDirectory();
+    } catch {
+        return false;
+    }
+}
+
+const identityRoots = new Map();
+
+function identityRoot(file) {
+    const start = path.dirname(file);
+    if (identityRoots.has(start)) return identityRoots.get(start);
+    let root = null;
+    for (let dir = start; ; dir = path.dirname(dir)) {
+        if (fs.existsSync(path.join(dir, '.git')) && isDirectory(path.join(dir, 'plugins'))) {
+            root = dir;
+            break;
+        }
+        if (path.dirname(dir) === dir) break;
+    }
+    identityRoots.set(start, root);
+    return root;
+}
+
+function manifestIdentities(folder, manifest) {
+    if (!manifest?.plugin) return [];
+    const socket = manifest.daemon?.values.socket;
+    const module = folder.replace(/-/g, '_');
+    return [
+        ['id', manifest.plugin.values.id],
+        ['uid', manifest.plugin.values.uid],
+        ['socket', typeof socket === 'string' ? path.posix.basename(socket) : null],
+        ['port', daemonPort(manifest)],
+    ]
+        .filter(([, value]) => typeof value === 'string' && value !== '')
+        .map(([kind, value]) => ({
+            kind,
+            value,
+            folder,
+            module,
+            within: kind === 'port' ? new RegExp(`(?<![\\w.])${value}(?![\\w.])`) : null,
+        }));
+}
+
+const identitiesByRoot = new Map();
+
+function identities(root) {
+    if (identitiesByRoot.has(root)) return identitiesByRoot.get(root);
+    const plugins = path.join(root, 'plugins');
+    let folders = [];
+    try {
+        folders = fs.readdirSync(plugins, { withFileTypes: true })
+            .filter(entry => entry.isDirectory())
+            .map(entry => entry.name)
+            .sort();
+    } catch {}
+    const entries = folders.flatMap(folder => manifestIdentities(folder, readManifest(path.join(plugins, folder, MANIFEST))));
+    identitiesByRoot.set(root, entries);
+    return entries;
+}
+
+function mentionsIdentity(content, entries) {
+    let digits = null;
+    return entries.some(entry => {
+        if (entry.kind !== 'port') return content.includes(entry.value);
+        digits ??= content.replace(/(?<=\d)_(?=\d)/g, '');
+        return digits.includes(entry.value);
+    });
+}
+
+function literalVerb(entry, text) {
+    if (text === entry.value) return 'is';
+    if (entry.kind === 'socket' && text.endsWith(`/${entry.value}`)) return 'holds';
+    if (entry.within?.test(text)) return 'holds';
+    return null;
+}
+
+function foreignMatch(rel, matches) {
+    if (matches.length === 0) return null;
+    if (matches.some(({ entry }) => rel.startsWith(`plugins/${entry.folder}/`))) return null;
+    return matches[0];
+}
+
+function identityHits(rel, code, entries) {
+    const hits = [];
+    for (const literal of code.strings) {
+        const matches = entries
+            .map(entry => ({ entry, verb: literalVerb(entry, literal.value) }))
+            .filter(({ verb }) => verb !== null);
+        const match = foreignMatch(rel, matches);
+        if (match) hits.push({ ...match, start: literal.start, shown: JSON.stringify(literal.value) });
+    }
+    const ports = entries.filter(entry => entry.kind === 'port');
+    for (const token of code.skeleton.matchAll(INTEGER_LITERAL)) {
+        const digits = token[1].replace(/_/g, '');
+        const matches = ports.filter(entry => entry.value === digits).map(entry => ({ entry, verb: 'is' }));
+        const match = foreignMatch(rel, matches);
+        if (match) hits.push({ ...match, start: token.index, shown: token[0] });
+    }
+    return hits.sort((left, right) => left.start - right.start);
+}
+
+function lineOf(content, offset) {
+    let line = 1;
+    for (let index = content.indexOf('\n'); index !== -1 && index < offset; index = content.indexOf('\n', index + 1)) line++;
+    return line;
+}
+
+function identityGaps(filePath, content) {
+    if (!content) return [];
+    const file = path.resolve(filePath);
+    const root = identityRoot(file);
+    if (!root) return [];
+    const rel = path.relative(root, file).split(path.sep).join('/');
+    if (IDENTITY_KEEPERS.some(prefix => rel.startsWith(prefix))) return [];
+    const entries = identities(root);
+    if (!mentionsIdentity(content, entries)) return [];
+    const code = rust.production(file, content);
+    if (!code) return [];
+    return identityHits(rel, code, entries).map(({ entry, verb, start, shown }) => ({
+        rule: 'identity',
+        text: `Plugin identity typed by hand in ${path.basename(file)}: on line ${lineOf(content, start)}, ${shown} ${verb} the ${entry.folder} plugin's ${entry.kind} typed by hand; use qol_plugin_ids::${entry.module}::${IDENTITY_CONSTANTS[entry.kind]} instead.`,
+        hint: 'take it from the generated qol-plugin-ids crate in this edit',
+    }));
+}
+
+function gapsFor(filePath, content) {
+    if (path.basename(filePath) === MANIFEST) return dataGaps(content, path.dirname(filePath));
+    return identityGaps(filePath, content);
+}
+
 function reason(gap) {
     return `${gap.text}\n[qol-plugin-data] ${gap.hint ?? 'ship the missing entry in this edit'} (${SKILL_SECTION})`;
 }
@@ -148,8 +285,9 @@ function evaluate(payload) {
     if (!INSPECTED_TOOLS.has(tool)) return 0;
     const input = payload.tool_input || {};
     const filePath = input.file_path || '';
-    if (path.basename(filePath) !== MANIFEST || !inQolRepo(filePath)) return 0;
-    const gaps = dataGaps(prospectiveContent(tool, input, readExistingFile(filePath)), path.dirname(filePath));
+    const inspected = path.basename(filePath) === MANIFEST || RUST_SOURCE.test(filePath);
+    if (!inspected || !inQolRepo(filePath)) return 0;
+    const gaps = gapsFor(filePath, prospectiveContent(tool, input, readExistingFile(filePath)));
     if (gaps.length === 0) return 0;
     deny(gaps);
     return 2;

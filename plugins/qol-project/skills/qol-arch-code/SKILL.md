@@ -921,12 +921,30 @@ A gap is a fact about the manifest as it stands, so it is a rule about the code 
 
 Residual: the tray renders no plugin `[menu]` items (only its own Settings and mode toggle), so a tray menu entry is not plugin data and this guard does not ask for one. An open action under another id, or a window opened only by a runtime action, passes.
 
+#### Plugin identity typed by hand
+
+The same hook keeps a plugin's identity in its `plugin.toml`.
+It denies a `.rs` edit in a qol repository, and `qac lint` reports a Rust file, that types one of these outside the plugin's own folder:
+
+- a string literal equal to a manifest's `[plugin].id` or `uid`
+- a string literal equal to the file name of its `[daemon].socket`, or a path ending in that name
+- an integer literal equal to its `[daemon].port`, or a string literal holding that port
+
+The values come from every `plugins/*/plugin.toml` on each run, so a new plugin is covered without a list.
+The fix is the generated crate: `qol_plugin_ids::<folder, with - as _>::{ID, UID, SOCKET_NAME, PORT}`, which `libs/plugin-ids` builds from the same manifests.
+A copy typed by hand keeps the old value when a plugin changes its id, socket or port, and nothing fails until the tray cannot find the plugin; qol-monorepo #568 moved every such copy to the crate.
+A plugin may type its own values in its own folder, and test code (test files and `#[cfg(test)]` items) is not checked.
+Three folders keep their copies: `libs/migrations` (frozen history: each migration names the ids as they were then), `libs/conventions` (every plugin builds against it, so it keeps the launcher window title and the reserved template id instead of depending on a crate that changes with every manifest) and `libs/plugin-ids` (the generated crate itself).
+Like a manifest gap, a typed identity is a fact about the code as it stands: an edit that leaves one in the file is denied, and `qac lint` reports every one with or without `--base`.
+
+Residual: only Rust is checked, since only Rust can use the crate, so JavaScript, Python and shell files pass. An id inside a longer string (`plugins/qol-memory`) and a value built with `concat!` or escapes pass too.
+
 ### Lint: `qac`
 
 The edit-time hooks only see new violations, so existing debt stays invisible until someone touches the file. `qac lint [path ...]` runs the qol-arch-code, cross-platform, cicd, logging, plugin data and plugin-contract hooks over whole tracked and untracked files (the whole repo when no path is given), counting every violation already there. It never consumes a bypass marker, and it skips `vendor/` and `third_party/`. Each hook exposes `lintFile(path, content, baseline)` through `bin/hook-lint-mode.cjs`, so a new filter in any of them is linted too.
 
 The rules come in two kinds, and lint treats them differently.
-Rules about the code as it stands (a target_os cfg on a `use`, facade coverage, source layout, adapter-exclusive helpers, allow attributes, plugin data, crate dependency direction, runtime event names) hold or fail on a file alone, so lint checks them on every file.
+Rules about the code as it stands (a target_os cfg on a `use`, facade coverage, source layout, adapter-exclusive helpers, allow attributes, plugin data, plugin identity, crate dependency direction, runtime event names) hold or fail on a file alone, so lint checks them on every file.
 Rules about added code (target_os placement, platform decision signals, settings, active monitor, design, test deadlines, logging, runtime event payload shape) compare a file with its earlier content, which a static file does not have.
 Without a base, lint counts every line as added, which turns "do not add X" into "X must never exist".
 `qac lint --base=<rev>` compares those rules with each file at `<rev>` instead: an unchanged file finds nothing, a changed file finds only what it added, a file git sees as moved since `<rev>` compares with its content at the old path, and a file new since `<rev>` counts in full.
