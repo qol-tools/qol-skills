@@ -91,7 +91,9 @@ The Linux system packages install from `.deb` files kept in the Actions cache un
 The setup restores the newest set, copies it into apt's archive folder, and lets apt update its lists and check every file against them, so a stale or altered file is downloaded again.
 `autoclean` drops the files Ubuntu replaced before a set is saved, so a set never grows.
 Main saves a changed set; any other run saves only when it restored nothing, into its own ref.
+A push to main runs the whole setup only when it builds a release candidate or the build cache missed, so on main a `lookup-only` call also downloads and saves the set, and stops before it installs (qol-tools/qol#582).
 Until a main run has saved the new set, every job downloads the replaced files from a mirror.
+With the set restored a job still runs `apt-get update` against the runner's mirror: 13 MB of lists, a few seconds on most runners and over a minute on a slow AWS one.
 
 Incident (2026-11-18): GitHub ran half of the Linux jobs on AWS runners, whose mirror list names `us-east-2.ec2.archive.ubuntu.com`.
 It served the packages at under 150 kB/s, so the step took 4 to 13 minutes where an Azure runner takes under one.
