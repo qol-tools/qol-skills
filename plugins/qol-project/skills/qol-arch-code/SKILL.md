@@ -772,7 +772,7 @@ Updates all have it; the pre-redesign Linked computers page had none of it). A f
 under `apps/tray/src/settings_surface/` that implements `CustomSettingsBreadcrumbs`
 must:
 
-- lay its rows out in `settings_list()`, windowed by `visible_range` and closed by `kit.scroll_cue(ScrollSource::Window { .. })`;
+- lay its rows out in `settings_list()`, windowed by `visible_range` and closed by `kit.scroll_cue(id, ScrollSource::window(..), ground)`;
 - size that window to the page, never a fixed row count: put `ListHeight::recorder(cx.weak_entity())` in the list and call `ScrollList::fit_to(&height, rows, SETTINGS_LIST_GAP, row_height)` in `render`, giving headers `SettingsGroupHeader::height_with_detail()` (theme guard `every_settings_page_list_fills_the_page_height`; a fixed 9-row Hotkeys page left a tall window empty);
 - group rows under `SettingsGroupHeader::new(title, Some(colophon), kit)`;
 - put values on the right in `settings_value_group()` (`settings_value_text`), and end each row in its action mark, never a button (`settings_action_affordance` is retired; see "Action marks" in `qol-gpui-theme`);

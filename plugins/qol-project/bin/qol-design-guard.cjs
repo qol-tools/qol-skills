@@ -470,7 +470,7 @@ function partRules(relative, content, body, add) {
     const scrolls = (body.match(/\.overflow_y_scroll\(\)/g) || []).length + (body.match(/\.visible_range\(/g) || []).length;
     const cues = (body.match(/scroll_cue\(/g) || []).length;
     if (scrolls > cues) {
-        add('scroll-cue', 0, `scrolls ${scrolls} lists but draws ${cues} scroll cues`, 'kit.scroll_cue(ScrollSource, ground) at the end of every scrolling list');
+        add('scroll-cue', 0, `scrolls ${scrolls} lists but draws ${cues} scroll cues`, 'kit.scroll_cue(id, ScrollSource, ground) at the end of every scrolling list');
     }
     const scrollers = (body.match(/\.overflow_y_scroll\(\)|\.overflow_scroll\(\)/g) || []).length;
     const tracked = (body.match(/\.track_scroll\(/g) || []).length;
@@ -563,7 +563,7 @@ function settingsPageRules(relative, body, add) {
     if (!relative.startsWith(SETTINGS_PAGES) || !/impl CustomSettingsBreadcrumbs for/.test(body)) return;
     const page = (what, use) => add('settings-page', 0, what, use);
     if (!body.includes('settings_list()')) {
-        page('lays its rows out without settings_list()', 'settings_page().child(settings_list()) windowed by ScrollList::visible_range and closed by kit.scroll_cue(ScrollSource::Window { .. })');
+        page('lays its rows out without settings_list()', 'settings_page().child(settings_list()) windowed by ScrollList::visible_range and closed by kit.scroll_cue(id, ScrollSource::window(..), ground)');
     }
     if (!body.includes('SettingsGroupHeader::new(')) {
         page('has no group headers', 'SettingsGroupHeader::new(title, Some(colophon), kit).current(..) over each group of rows (R8: the masthead and its colophon)');
