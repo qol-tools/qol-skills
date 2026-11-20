@@ -806,7 +806,7 @@ Implementation: Node.js (`bin/check-qol-arch-code.cjs`): Claude Code requires No
 #### File system results thrown away
 
 The same hook keeps a failed write from vanishing.
-Pid registries, restore state and Explorer's undo renames were lost with no log because the `Result` of a `std::fs` call was thrown away; the rename that undoes a move in `plugins/explorer/src/ui/browse/ops_edit.rs` was one.
+Pid registries, restore state and Explorer's undo renames were lost with no log because the `Result` of a `std::fs` call was thrown away; the rename that undoes a move in qol-explorer's `src/ui/browse/ops_edit.rs` was one.
 It denies a `.rs` edit in a qol repository, and `qac lint` reports a Rust file, with a call to one of these in any of these shapes:
 
 - `let _ = CALL;` or `_ = CALL;`
