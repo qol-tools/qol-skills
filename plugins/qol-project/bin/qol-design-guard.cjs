@@ -67,7 +67,9 @@ const LAUNCHING_USE = 'SettingsRow::launches(Some(Launch::file(name, app))) on a
 const FACT_OWNERS = [COMPONENTS, 'libs/gpui/src/settings_panel/view/mod.rs', 'libs/gpui/src/settings_panel/view/display_layout_card.rs'];
 const FACT_USE = 'settings_tag(text, tone, row, kit) placed just left of the switch or the chevron (settings_tagged_label_group(label, tags, description, row, kit) puts it there): a row states its picked value, status or count as a tag, never as loose text';
 const ROW_MARKS = ['Icon::Enter', 'Icon::Copy', 'Icon::Reveal', 'pictures::open_outside(', 'settings_action_mark(', 'settings_copy_mark('];
-const ENDING_USE = 'nothing: the chevron is the only mark a settings row ends in, drawn by SettingsRow::opens(true) or SettingsRow::launches(..) when enter opens a page, a list or another app; a row that acts right here ends in nothing and the hint bar names what enter does';
+const ENDING_USE = 'nothing: the chevron is the only mark a settings row ends in, drawn by SettingsRow::opens(true) or SettingsRow::launches(..) when enter opens a page, a list or another app; a row that acts right here ends in its action word, settings_action_word(id, verb, busy, row, kit), the verb the hint bar names for enter';
+const ACTION_WORD = /\b(Row)?Action::[A-Z]/;
+const ACTION_WORD_USE = 'settings_action_word(id, verb, busy, row, kit) at the end of every row whose enter acts right here, with the verb the hint bar names for it, so the row says what enter does';
 const LINE_COMMENT = '/'.repeat(2);
 const TRANSPARENT = /^rgba\(\s*0(x0+)?\s*\)$/;
 
@@ -569,7 +571,10 @@ function settingsPageRules(relative, body, add) {
         page('has no group headers', 'SettingsGroupHeader::new(title, Some(colophon), kit).current(..) over each group of rows (R8: the masthead and its colophon)');
     }
     if (!body.includes('settings_value_group()')) {
-        page('puts no value or action at the right of its rows', 'settings_value_group() holding settings_value_text(value, tone, ground, kit), with the row ending in its action mark, never a button (settings_action_affordance is retired; see "Action marks" in qol-gpui-theme)');
+        page('puts no value or action at the right of its rows', 'settings_value_group() holding settings_value_text(value, tone, ground, kit), with a row that acts right here ending in settings_action_word(id, verb, busy, row, kit), never a button (see "Row endings" in qol-gpui-theme)');
+    }
+    if (ACTION_WORD.test(body) && !body.includes('settings_action_word(')) {
+        page('runs row actions but names none at the row end', ACTION_WORD_USE);
     }
     if (!/fn settings_hints\s*\(/.test(body)) {
         page('names no keys in the hint bar', 'CustomSettingsBreadcrumbs::settings_hints returning CustomHints with SettingsHint::new(Key::ENTER, action) and SettingsHint::new(Key::UP_DOWN, "move")');

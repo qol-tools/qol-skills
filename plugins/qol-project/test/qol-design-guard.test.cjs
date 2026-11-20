@@ -260,6 +260,31 @@ test('passes a core settings page with list, group headers, values, hints and in
     assert.strictEqual(r.exitCode, 0, r.stderr);
 });
 
+const ACTING_PAGE = COMPLIANT_PAGE.replace(
+    'impl CustomSettingsBreadcrumbs for PeersView {\n',
+    'fn run(action: RowAction) {\n    match action {\n        RowAction::Pair => {}\n    }\n}\n\nimpl CustomSettingsBreadcrumbs for PeersView {\n',
+);
+
+test('blocks a core settings page that runs row actions but names none at the row end', () => {
+    for (const page of [ACTING_PAGE, ACTING_PAGE.replace(/RowAction::/g, 'Action::')]) {
+        const root = workspace();
+        const r = write(root, SETTINGS, page);
+        assert.strictEqual(r.exitCode, 2, r.stderr);
+        assert.match(r.stderr, /runs row actions but names none at the row end/);
+        assert.match(r.stderr, /settings_action_word\(id, verb, busy, row, kit\)/);
+    }
+});
+
+test('passes a core settings page that ends its acting rows in their action word', () => {
+    const root = workspace();
+    const worded = ACTING_PAGE.replace(
+        '.child(settings_value_group())',
+        '.child(settings_value_group().child(settings_action_word("pair", "pair", false, ground, kit())))',
+    );
+    const r = write(root, SETTINGS, worded);
+    assert.strictEqual(r.exitCode, 0, r.stderr);
+});
+
 const CRUMB_PAGE = COMPLIANT_PAGE.replace(
     'impl CustomSettingsBreadcrumbs for PeersView {\n',
     'impl CustomSettingsBreadcrumbs for PeersView {\n    fn settings_breadcrumbs(&self) -> Vec<SettingsDestination> {\n        match self.level {\n            Level::Main => Vec::new(),\n            Level::Peer => SettingsDestination::new("peer").ok().into_iter().collect(),\n        }\n    }\n',
@@ -385,7 +410,7 @@ test('blocks a settings file that ends a row in a mark other than the chevron', 
         const r = write(root, SETTINGS, `fn ending() {\n    ${call};\n}\n`);
         assert.strictEqual(r.exitCode, 2, `${name}: ${r.stderr}`);
         assert.ok(r.stderr.includes(`ends a settings row in a mark other than the chevron (${name})`), r.stderr);
-        assert.match(r.stderr, /a row that acts right here ends in nothing/);
+        assert.match(r.stderr, /a row that acts right here ends in its action word/);
     }
 });
 

@@ -668,11 +668,15 @@ not at all.
 
 Picked 2026-11-11 in round 17, "Row endings, one meaning", variation 3 "A
 chevron means it opens". A settings row ends in a switch, a value, the arrow,
-or nothing. The arrow is the only mark, and it has one meaning: ↵ opens
-something, a page, a list or another app. A row that acts right here (scan,
-pair, install, remove, check now) ends in nothing; the hint bar names what ↵
-does, and while the action runs the row shows the spinner
-`settings_action_busy(id, busy, kit)` draws in the same place.
+or its action word. The arrow is the only mark, and it has one meaning: ↵
+opens something, a page, a list or another app. A row that acts right here
+(scan, pair, install, remove, check now) ends in its action word,
+`settings_action_word(id, verb, busy, row, kit)`: the verb the hint bar names
+for ↵, drawn as a tag, with the spinner beside it while the action runs.
+Changed 2026-11-20 at the user's request ("where is the action button label
+that guides the user to communicate what clicking here does?"): round 17 had
+acting rows end in nothing, so only rows with a fact showed anything at their
+right end.
 
 - No run mark, no copy mark, no leave arrow, no red cross. A row that destroys
   keeps its red label (`settings_destroy_label_group`) and the red edge while
@@ -693,7 +697,9 @@ does, and while the action runs the row shows the spinner
 - Enforced by the design guard rule `ending` (`qac lint`): no file in the
   settings scope, the components included, names `Icon::Enter`, `Icon::Copy`,
   `Icon::Reveal`, `pictures::open_outside`, `settings_action_mark` or
-  `settings_copy_mark`. The contract lint rule `statusQuiet` denies a status
+  `settings_copy_mark`. The design guard rule `settings-page` denies a core
+  settings page that names a `RowAction::` or `Action::` variant and never calls
+  `settings_action_word(`. The contract lint rule `statusQuiet` denies a status
   field without `hide_values`, and `a_status_row_shows_only_while_it_needs_the_user`
   in `libs/config/tests/contract_cards.rs` holds the tray's own pages to it.
 - A row states its fact (a picked value, a status, a count) as a tag,
