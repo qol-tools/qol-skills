@@ -49,6 +49,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const design = require('./qol-design-guard.cjs');
 const lintMode = require('./hook-lint-mode.cjs');
+const layers = require('./module-layers.cjs');
 const owners = require('./qol-owner-guard.cjs');
 const events = require('./qol-event-guard.cjs');
 const enumMatches = require('./qol-enum-match-guard.cjs');
@@ -1612,6 +1613,10 @@ function findNewEnumMatchViolations(filePath, newContent) {
     return enumMatches.newViolations(filePath, readBaseline(filePath), newContent);
 }
 
+function blockLayers(findings) {
+    for (const finding of findings) lintMode.report(process.stderr, `${finding.message}\n`);
+}
+
 function blockQuotes(filePath, broken) {
     lintMode.report(process.stderr, `qol-arch-code quoted line violation in ${filePath}.
 
@@ -1729,6 +1734,12 @@ function evaluate(payload) {
     }
 
     if (serde.isTestFile(filePath)) return 0;
+
+    const layerFindings = deadlineContent ? layers.findings(filePath, deadlineContent) : [];
+    if (layerFindings.length > 0 && !consumeBypass(cwd, filePath, basename)) {
+        blockLayers(layerFindings);
+        return 2;
+    }
 
     if (OS_BASENAMES.has(basename)) {
         if (!filePath.split(/[\\/]/).includes('platform')) {

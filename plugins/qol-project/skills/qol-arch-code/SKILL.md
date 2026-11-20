@@ -67,6 +67,32 @@ feature logic -> plugin action ids / tray settings / env contract
 
 This keeps the tool useful from a terminal, script, test, or future host while still letting qol-tray consume the same API.
 
+### Module layers
+
+Every Rust module in a crate belongs to one layer, read from its path under `src/`.
+This table is the one definition of the layers: the module layer rules in "Enforcement: module layers" read it from this file on every run, so a change here changes what they enforce.
+
+<!-- module-layers:start -->
+| Layer | Module names |
+|---|---|
+| adapter | `cli`, `app`, `daemon`, `runtime`, `doctor`, `qol`, `plugin`, `adapter` |
+| presentation | `ui` |
+| config | `config` |
+| platform | `platform` |
+<!-- module-layers:end -->
+
+A module's layer is decided in this order:
+
+1. `src/main.rs` and `src/lib.rs` are the crate root, which composes the crate.
+2. A module whose top-level module (the first folder or file under `src/`) is an adapter name is in the adapter layer, at any depth, its own `platform/` included.
+3. A module whose top-level module is a presentation name is in the presentation layer.
+4. A module with a platform name anywhere in its path is in the platform layer.
+5. A module whose top-level module is a config name is in the config layer.
+6. Every other module is a capability.
+
+Dependencies point down: the root composes the crate, the adapter and presentation layers call into capabilities and config, and platform code sits below the capability that owns it; a capability, config or platform module never reaches up into the adapter or presentation layer.
+Adapters own context (arguments, action ids, host config and env, the daemon socket); capabilities hold behavior and take typed values.
+
 ## Rust module and directory hygiene
 
 Every crate's `src/` root is a composition layer. Keep public facades and required entrypoints there; place implementation beneath the capability, adapter, or presentation boundary that owns it. The host has the strictest application root: `apps/tray/src/` contains only `main.rs` and `lib.rs`. Plugins allow only `main.rs`, `lib.rs`, and optional `cli.rs` at their source root. Ordinary libraries may keep stable public facade modules at the root, but implementation growth moves behind owned directories.
@@ -1001,12 +1027,42 @@ Like a manifest gap, a typed identity is a fact about the code as it stands: an 
 
 Residual: only Rust is checked, since only Rust can use the crate, so JavaScript, Python and shell files pass. An id inside a longer string (`plugins/qol-memory`) and a value built with `concat!` or escapes pass too.
 
+### Enforcement: module layers
+
+The layers in "Module layers" hold in code: `bin/check-qol-arch-code.cjs` denies a `.rs` edit, and `qac lint` reports a Rust file, that breaks one of the rules below.
+`bin/module-layers.cjs` decides each module's layer from the table between the `module-layers` markers in this file, read on every run; when the table is missing or a row has no names, every rule passes.
+It reads the rest from the code: a crate is the nearest `Cargo.toml` with a `[package]` table and a `src/` folder (`src/bin/` is left out), a plugin crate has a `plugin.toml` beside that `Cargo.toml`, and an app crate sits under `apps/`.
+Each rule is about the code as it stands, so an edit that leaves a finding in the file is denied and `qac lint` reports it with or without `--base`.
+Test files and `#[cfg(test)]` items are not checked.
+Each message names the line and ends with `[qol-arch-code] fix it in this edit`.
+Bypass one edit with `touch .claude/bypass-qol-arch-code`; `qac lint` in CI never consumes a bypass.
+
+- **Upward import.** In a plugin crate, a platform, capability or config module may not name an adapter or presentation module: `crate::cli`, a `crate::{ui, ..}` group, or a `super::` chain that climbs to the crate root and names one. A `pub(in crate::..)` path is visibility, not a reference. The fix moves what both need into a capability or config module, or has the adapter pass it in.
+- **Platform visibility.** In any crate, a module below the root declares its platform module private: `pub mod platform`, `pub(crate) mod platform` and `pub(super) mod platform` are refused, `mod platform;` and `pub(self)` pass. Callers use what the capability's facade re-exports.
+- **Crate root.** In a plugin or app crate, `src/main.rs` holds only `fn main`, `mod`, `use` and `const`, and `src/lib.rs` only `mod`, `use`, `pub use` and `const`. A free `fn`, `struct`, `enum`, `trait`, `impl`, `static` or `union` there moves into the module that owns it.
+- **Host call.** In a plugin crate, a platform or capability module does not read host config or host env and does not call qol-tray. The hook refuses three shapes:
+  - a `qol_conventions` `ENV_*` constant;
+  - a path through a `qol_conventions` route module;
+  - a call to a host function.
+  The `ENV_*` constants are the `pub const ENV_*` items in `libs/conventions/src/`. A route module is a module there that holds an `/api/` string. A host function is a free function of a lib crate (not `qol_conventions`) whose body names one of those, or calls another host function by a qualified path or an imported name. It is also a free function of the plugin's own root, adapter, config or presentation modules that does either. A presentation module may still load config for its own window. The adapter reads or calls the host and passes the value in.
+- **Action table.** In a plugin crate, a module outside the root and the adapter layer may not `match` on two or more of the plugin's own action or query ids as string patterns. The ids are the keys of `[action]` in `plugin.toml` and of `[action]` and `[query]` in `qol-runtime.toml`. The adapter turns an id into a typed command once.
+- **Daemon transport.** In a plugin crate, a module outside the root and the adapter layer may not name a lib module that reads an `ENV_DAEMON_*` constant, such as `qol_plugin_daemon::daemon`. Only the adapter runs or calls the daemon.
+- **Manifest values read once.** `env!` or `option_env!` of a variable that the conventions build script sets with `cargo:rustc-env`, such as `QOL_PLUGIN_ID` or `QOL_DAEMON_PORT`, appears only in the crate root, once per variable, as `pub(crate) const PLUGIN_ID: &str = env!("QOL_PLUGIN_ID");`; other modules use the const.
+
+When the rules landed (2026-11-20), qol-monorepo #556 and #601 had cleared every finding in the tree; qol-tray, the lib and tool crates and the vendored crates still held 113 upward imports and 543 crate root items, which is why those two rules cover only the crates named above.
+
+Residual: the rules read syntax, not types or resolved names.
+An import through a glob, a re-export, or a renamed module passes. So does a host function reached through a trait method, a closure or function pointer, or a method call.
+A host call whose route is built from parts passes, such as `qol_plugin_api::host_exec::post_to_daemon` with a route the caller assembles.
+An action id compared in an `if` chain, held in a map or matched one at a time passes.
+A manifest value read through `std::env::var` at run time passes.
+
 ### Lint: `qac`
 
 The edit-time hooks only see new violations, so existing debt stays invisible until someone touches the file. `qac lint [path ...]` runs the qol-arch-code, cross-platform, cicd, logging, plugin data and plugin-contract hooks over whole tracked and untracked files (the whole repo when no path is given), counting every violation already there. It never consumes a bypass marker, and it skips `vendor/` and `third_party/`. Each hook exposes `lintFile(path, content, baseline)` through `bin/hook-lint-mode.cjs`, so a new filter in any of them is linted too.
 
 The rules come in two kinds, and lint treats them differently.
-Rules about the code as it stands (a target_os cfg on a `use`, facade coverage, source layout, adapter-exclusive helpers, allow attributes, plugin data, plugin identity, file system results thrown away, a process entry point's logger, crate dependency direction, runtime event names) hold or fail on a file alone, so lint checks them on every file.
+Rules about the code as it stands (a target_os cfg on a `use`, facade coverage, source layout, module layers, adapter-exclusive helpers, allow attributes, plugin data, plugin identity, file system results thrown away, a process entry point's logger, crate dependency direction, runtime event names) hold or fail on a file alone, so lint checks them on every file.
 Rules about added code (target_os placement, platform decision signals, settings, active monitor, design, test deadlines, logging, runtime event payload shape) compare a file with its earlier content, which a static file does not have.
 Without a base, lint counts every line as added, which turns "do not add X" into "X must never exist".
 `qac lint --base=<rev>` compares those rules with each file at `<rev>` instead: an unchanged file finds nothing, a changed file finds only what it added, a file git sees as moved since `<rev>` compares with its content at the old path, and a file new since `<rev>` counts in full.

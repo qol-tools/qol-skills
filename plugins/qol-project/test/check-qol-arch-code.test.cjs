@@ -94,13 +94,14 @@ test('blocks new Rust implementation modules at a plugin src root', () => {
 });
 
 test('passes canonical plugin src root entrypoints and facades', () => {
-    for (const basename of ['main.rs', 'lib.rs', 'cli.rs']) {
+    const contents = { 'main.rs': 'fn main() {}\n', 'lib.rs': 'pub mod app;\n', 'cli.rs': 'pub fn run() {}\n' };
+    for (const [basename, content] of Object.entries(contents)) {
         const { file } = fixturePluginPath(`src/${basename}`);
         const r = run({
             tool_name: 'Write',
             tool_input: {
                 file_path: file,
-                content: 'pub fn run() {}\n',
+                content,
             },
         });
         assert.equal(r.exitCode, 0, `${basename}: ${r.stderr}`);
