@@ -24,6 +24,11 @@
  *      that are known platform-specific. These belong in
  *      [target.'cfg(target_os = "...")'.dependencies].
  *
+ * qac lint alone (lintFile, never the edit hook) also checks every
+ * workspace member's Cargo.toml: a [features] key that CI never turns on is
+ * reported at its line. The rule reads the whole tree and ignores the
+ * baseline.
+ *
  * Bypass:
  *   touch .claude/bypass-qol-arch-cicd          # next 1 edit passes
  *   echo N > .claude/bypass-qol-arch-cicd       # next N edits pass
@@ -56,6 +61,7 @@ const PLATFORM_CRATES = new Set([
 const lintMode = require('./hook-lint-mode.cjs');
 const { inQolRepo } = require('./qol-repo.cjs');
 const crateDirection = require('./crate-direction.cjs');
+const toml = require('./toml-lite.cjs');
 const { readExistingFile, prospectiveContent } = require('./hook-edit-content.cjs');
 
 function readStdin() {
@@ -390,6 +396,307 @@ Bypass for this edit only:
 `);
 }
 
+const SEPARATOR = Symbol('separator');
+const DEPENDENCY_KINDS = ['dependencies', 'dev-dependencies', 'build-dependencies'];
+const coverageByRoot = new Map();
+
+function readText(file) {
+    try {
+        return fs.readFileSync(file, 'utf8');
+    } catch {
+        return null;
+    }
+}
+
+function parseToml(text) {
+    if (text === null) return null;
+    try {
+        return toml.parse(text);
+    } catch {
+        return null;
+    }
+}
+
+function isTable(value) {
+    return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function strings(value) {
+    return Array.isArray(value) ? value.filter(item => typeof item === 'string') : [];
+}
+
+function expandGlob(root, pattern) {
+    let dirs = [root];
+    for (const segment of pattern.split(/[\\/]/).filter(part => part && part !== '.')) {
+        if (!/[*?]/.test(segment)) {
+            dirs = dirs.map(dir => path.join(dir, segment));
+            continue;
+        }
+        const re = new RegExp(`^${segment.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.')}$`);
+        const next = [];
+        for (const dir of dirs) {
+            let entries = [];
+            try {
+                entries = fs.readdirSync(dir, { withFileTypes: true });
+            } catch {
+                continue;
+            }
+            for (const entry of entries) {
+                if (entry.isDirectory() && re.test(entry.name)) next.push(path.join(dir, entry.name));
+            }
+        }
+        dirs = next;
+    }
+    return dirs;
+}
+
+function workspaceMembers(root, workspace) {
+    const excluded = strings(workspace.exclude).flatMap(pattern => expandGlob(root, pattern));
+    const isExcluded = dir => excluded.some(skip => dir === skip || dir.startsWith(skip + path.sep));
+    const dirs = new Set([root, ...strings(workspace.members).flatMap(pattern => expandGlob(root, pattern))]);
+    const members = [];
+    for (const dir of dirs) {
+        if (dir !== root && isExcluded(dir)) continue;
+        const manifest = path.join(dir, 'Cargo.toml');
+        const doc = parseToml(readText(manifest));
+        const name = doc?.value.package?.name;
+        if (typeof name !== 'string') continue;
+        members.push({ dir, manifest, name, doc });
+    }
+    return members;
+}
+
+function dependencyTables(value) {
+    const tables = [];
+    const collect = scope => {
+        for (const kind of DEPENDENCY_KINDS) {
+            if (isTable(scope?.[kind])) tables.push(scope[kind]);
+        }
+    };
+    collect(value);
+    for (const target of Object.values(isTable(value.target) ? value.target : {})) collect(target);
+    return tables;
+}
+
+function dependencyPackage(key, spec, shared) {
+    if (!isTable(spec)) return key;
+    if (typeof spec.package === 'string') return spec.package;
+    const inherited = spec.workspace === true && isTable(shared?.[key]) ? shared[key].package : null;
+    return typeof inherited === 'string' ? inherited : key;
+}
+
+function shellTokens(line) {
+    const tokens = [];
+    let current = null;
+    const flush = () => {
+        if (current !== null) tokens.push(current);
+        current = null;
+    };
+    const expression = index => {
+        const end = line.indexOf('}}', index);
+        return end < 0 ? line.length : end + 2;
+    };
+    for (let i = 0; i < line.length; i++) {
+        const c = line[i];
+        if (line.startsWith('${{', i)) {
+            const stop = expression(i);
+            current = (current ?? '') + line.slice(i, stop);
+            i = stop - 1;
+        } else if (c === '"' || c === "'") {
+            let j = i + 1;
+            current = current ?? '';
+            while (j < line.length && line[j] !== c) {
+                if (line.startsWith('${{', j)) {
+                    const stop = expression(j);
+                    current += line.slice(j, stop);
+                    j = stop;
+                } else if (c === '"' && line[j] === '\\' && j + 1 < line.length) {
+                    current += line[j + 1];
+                    j += 2;
+                } else {
+                    current += line[j++];
+                }
+            }
+            i = j;
+        } else if (c === '\\' && i + 1 < line.length) {
+            current = (current ?? '') + line[++i];
+        } else if (/\s/.test(c)) {
+            flush();
+        } else if (';|&<>'.includes(c)) {
+            flush();
+            if (tokens[tokens.length - 1] !== SEPARATOR) tokens.push(SEPARATOR);
+        } else if (c === '#' && current === null) {
+            break;
+        } else {
+            current = (current ?? '') + c;
+        }
+    }
+    flush();
+    return tokens;
+}
+
+function logicalLines(text) {
+    const raw = text.split(/\r?\n/);
+    const lines = [];
+    for (let i = 0; i < raw.length; i++) {
+        let line = raw[i];
+        const folded = /^(\s*)(?:-\s+)?run:\s*>[-+]?\s*$/.exec(line);
+        if (folded) {
+            const parts = [];
+            while (i + 1 < raw.length && (raw[i + 1].trim() === '' || raw[i + 1].search(/\S/) > folded[1].length)) parts.push(raw[++i].trim());
+            lines.push(parts.join(' '));
+            continue;
+        }
+        while (/\\\s*$/.test(line) && i + 1 < raw.length) line = `${line.replace(/\\\s*$/, '')} ${raw[++i].trim()}`;
+        if (!/^\s*#/.test(line)) lines.push(line);
+    }
+    return lines;
+}
+
+function cargoCommand(args) {
+    const command = { packages: new Set(), excluded: new Set(), features: [], allFeatures: false, workspace: false };
+    const packageName = value => value.replace(/[@:].*$/, '');
+    const valued = (arg, i, long, short) => {
+        if (arg === long || (short && arg === short)) {
+            const value = args[i + 1];
+            return value !== undefined && !value.startsWith('-') ? { value, used: 1 } : { value: null, used: 0 };
+        }
+        if (arg.startsWith(`${long}=`)) return { value: arg.slice(long.length + 1), used: 0 };
+        if (short && arg.startsWith(short) && !arg.startsWith('--')) return { value: arg.slice(short.length).replace(/^=/, ''), used: 0 };
+        return null;
+    };
+    for (let i = 0; i < args.length; i++) {
+        const arg = args[i];
+        if (arg === '--') break;
+        if (arg === '--all-features') command.allFeatures = true;
+        else if (arg === '--workspace' || arg === '--all') command.workspace = true;
+        for (const [long, short, apply] of [
+            ['--package', '-p', value => command.packages.add(packageName(value))],
+            ['--exclude', null, value => command.excluded.add(packageName(value))],
+            ['--features', '-F', value => command.features.push(value)],
+        ]) {
+            const found = valued(arg, i, long, short);
+            if (!found) continue;
+            if (found.value !== null) apply(found.value);
+            i += found.used;
+            break;
+        }
+    }
+    return command;
+}
+
+function workflowCommands(text) {
+    const commands = [];
+    for (const line of logicalLines(text)) {
+        const tokens = shellTokens(line);
+        for (let i = 0; i < tokens.length; i++) {
+            if (tokens[i] !== 'cargo') continue;
+            let end = i + 1;
+            while (end < tokens.length && tokens[end] !== SEPARATOR) end++;
+            const args = tokens.slice(i + 1, end);
+            commands.push(cargoCommand(args[0]?.startsWith('+') ? args.slice(1) : args));
+            i = end;
+        }
+    }
+    return commands;
+}
+
+function buildCoverage(root) {
+    const rootDoc = parseToml(readText(path.join(root, 'Cargo.toml')));
+    const workspace = rootDoc?.value.workspace;
+    if (!isTable(workspace)) return null;
+    const members = workspaceMembers(root, workspace);
+    const byName = new Map(members.map(member => [member.name, member]));
+    const covered = new Set();
+    const queue = [];
+    const cover = (name, feature) => {
+        const key = `${name}\0${feature}`;
+        const member = byName.get(name);
+        if (!member || covered.has(key) || !(feature in (member.doc.value.features ?? {}))) return;
+        covered.add(key);
+        queue.push([member, feature]);
+    };
+    const coverAll = member => {
+        for (const feature of Object.keys(isTable(member.doc.value.features) ? member.doc.value.features : {})) cover(member.name, feature);
+    };
+
+    const workflowDir = path.join(root, '.github', 'workflows');
+    let workflows = [];
+    try {
+        workflows = fs.readdirSync(workflowDir).filter(file => /\.ya?ml$/.test(file)).sort();
+    } catch {
+        return null;
+    }
+    for (const file of workflows) {
+        for (const command of workflowCommands(readText(path.join(workflowDir, file)) ?? '')) {
+            for (const spelled of command.features.flatMap(value => value.split(/[\s,]+/)).filter(value => value && !value.includes('$'))) {
+                const slash = spelled.indexOf('/');
+                if (slash > 0) cover(spelled.slice(0, slash).replace(/\?$/, ''), spelled.slice(slash + 1));
+                else for (const name of command.packages) cover(name, spelled);
+            }
+            if (!command.allFeatures) continue;
+            for (const member of members) {
+                if (command.packages.has(member.name) || (command.workspace && !command.excluded.has(member.name))) coverAll(member);
+            }
+        }
+    }
+
+    const shared = isTable(workspace.dependencies) ? workspace.dependencies : {};
+    const coverDependencies = (table, aliases) => {
+        for (const [key, spec] of Object.entries(table)) {
+            const name = dependencyPackage(key, spec, shared);
+            aliases?.set(key, name);
+            if (isTable(spec)) for (const feature of strings(spec.features)) cover(name, feature);
+        }
+    };
+    coverDependencies(shared, null);
+    const aliasesByMember = new Map();
+    for (const member of members) {
+        const aliases = new Map();
+        aliasesByMember.set(member.name, aliases);
+        for (const table of dependencyTables(member.doc.value)) coverDependencies(table, aliases);
+        const plugin = parseToml(readText(path.join(member.dir, 'plugin.toml')));
+        for (const feature of strings(plugin?.value.build?.features)) cover(member.name, feature);
+        cover(member.name, 'default');
+    }
+
+    while (queue.length > 0) {
+        const [member, feature] = queue.pop();
+        for (const entry of strings(member.doc.value.features[feature])) {
+            if (entry.startsWith('dep:')) continue;
+            const slash = entry.indexOf('/');
+            if (slash < 0) {
+                cover(member.name, entry);
+                continue;
+            }
+            const dependency = entry.slice(0, slash).replace(/\?$/, '');
+            cover(aliasesByMember.get(member.name).get(dependency) ?? dependency, entry.slice(slash + 1));
+        }
+    }
+    return { members: new Map(members.map(member => [path.resolve(member.manifest), member])), covered };
+}
+
+function coverageOf(root) {
+    if (!coverageByRoot.has(root)) coverageByRoot.set(root, buildCoverage(root));
+    return coverageByRoot.get(root);
+}
+
+function uncoveredFeatures(filePath, content) {
+    if (crossPlatformBasename(filePath) !== CARGO_TOML_BASENAME || !inQolRepo(filePath)) return [];
+    const root = crateDirection.workspaceRoot(path.dirname(filePath));
+    const coverage = root && coverageOf(root);
+    const member = coverage?.members.get(path.resolve(filePath));
+    const doc = member && parseToml(content);
+    if (!doc || !isTable(doc.value.features)) return [];
+    return Object.keys(doc.value.features)
+        .filter(feature => feature !== 'default' && !coverage.covered.has(`${member.name}\0${feature}`))
+        .map(feature => ({ name: member.name, feature, line: toml.keyLine(doc.lines, doc.value.features, feature) }));
+}
+
+function featureGapMessage(filePath, gap) {
+    return `Cargo feature never built by CI in ${crossPlatformBasename(filePath)}: on line ${gap.line}, no workflow cargo step, dependent crate or plugin.toml [build] features turns on ${gap.name} feature \`${gap.feature}\`, so its code never compiles. Turn it on in one of them, or remove the feature.`;
+}
+
 function main() {
     const raw = readStdin().trim();
     if (!raw) return 0;
@@ -474,11 +781,16 @@ function evaluate(payload) {
 }
 
 function lintFile(filePath, content, baseline = null) {
-    return lintMode.run(filePath, () => evaluate({
-        tool_name: 'Write',
-        tool_input: { file_path: filePath, content },
-        cwd: path.dirname(filePath),
-    }), baseline);
+    return lintMode.run(filePath, () => {
+        evaluate({
+            tool_name: 'Write',
+            tool_input: { file_path: filePath, content },
+            cwd: path.dirname(filePath),
+        });
+        for (const gap of uncoveredFeatures(filePath, content)) {
+            lintMode.report(process.stderr, featureGapMessage(filePath, gap));
+        }
+    }, baseline);
 }
 
 module.exports = { lintFile };

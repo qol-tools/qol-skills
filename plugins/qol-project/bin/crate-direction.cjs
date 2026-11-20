@@ -91,4 +91,4 @@ function violations(filePath, content) {
     return found;
 }
 
-module.exports = { violations };
+module.exports = { violations, workspaceRoot };

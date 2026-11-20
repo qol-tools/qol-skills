@@ -70,6 +70,11 @@ Known platform-specific crates: `x11rb`, `xkbcommon`, `objc2`, `core-foundation`
 The monorepo builds from a single checkout with workspace path deps; no workflow needs to check out anything else to run `cargo`.
 If a workflow change starts adding extra checkouts or manifest rewrites to make `cargo` resolve, the change is fighting the workspace layout - stop and rethink.
 
+### 5. Every Cargo feature is built by CI
+
+A `[features]` key of a workspace member that no CI build turns on is code that is never compiled, so it rots until a release needs it.
+`qac lint` fails each such feature when no `cargo` step in `.github/workflows` names it with `--features`/`-F` (or `--all-features`), no workspace member's dependency entry lists it, no `plugin.toml` `[build] features` lists it, and no `default` list or covered feature reaches it.
+
 ## Verification matrix
 
 A change to a workflow or `Cargo.toml` passes when:
