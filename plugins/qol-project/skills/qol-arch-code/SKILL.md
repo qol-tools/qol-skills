@@ -555,7 +555,7 @@ Do not prefix a message with `[module]`. The target already names the module.
 
 ### Rules
 
-- Every process except qol-tray calls `qol_log::init_stderr()` first thing in `main`. Without it every `log::` call in that process is dropped, because `log` discards records until a logger is installed.
+- Every process except qol-tray's host binary calls `qol_log::init_stderr()` as the first statement of `main`. Without it every `log::` call in that process is dropped, because `log` discards records until a logger is installed. Two kinds of bin cannot depend on qol-log and are exempt: a bin whose package is in qol-log's normal dependency closure (it would make a cycle), and a bin whose package `.config/hakari.toml` lists under `[final-excludes] workspace-members` (qol-log depends on workspace-hack).
 - A library never prints. When library code produces something a person should read, it returns it (a `String`, a report, a `Result`) and the calling `cli` module prints it. `host_exec::run_exec` returns `Err(message)`: `qol-tray exec` prints it, and the launcher turns it into a launch error.
 - Moving a print into a `cli` module means moving the code that decides what to print, not wrapping the print in a helper called from daemon code.
 - `writeln!(std::io::stderr(), ...)` is still a print. The same location rules apply to raw `io::stdout()` and `io::stderr()` handles.
@@ -829,6 +829,26 @@ The survey of 2026-11-17 found 31 sites; #563, #564 and #587 handled them before
 
 Residual: the match is by shape, so a bare `write(` imported through `use std::fs::write`, `tokio::fs`, `File` and `OpenOptions` writes, a closure that ignores the error (`.unwrap_or_else(|_| ())`), and a result dropped through `drop()` or a named `_x` binding all pass.
 
+#### Process entry points start the logger
+
+The same hook holds the rule "Every process except qol-tray's host binary calls `qol_log::init_stderr()` as the first statement of `main`" (see "Rules" under "Output: log, trace, command output").
+It denies a `.rs` edit in qol-monorepo, and `qac lint` reports a Rust file, whose `fn main` (async included) lacks the call, with one finding saying so, or calls it later than the first statement, with one finding naming the line of the call.
+A package is in qol-monorepo when its Cargo workspace root has a `libs/log/Cargo.toml`, so a package in a workspace of its own, such as `docs/research/qol-memory/tier1`, is not checked.
+
+A process entry point is a package's `src/main.rs`, `src/bin/*.rs`, `src/bin/*/main.rs` and every `[[bin]] path` in its `Cargo.toml`.
+Examples, tests, benches, `build.rs` and a `fn main` inside a module or a `#[cfg(test)]` item are not entry points.
+The call is `qol_log::init_stderr()`, or `init_stderr()` after `use qol_log::init_stderr`; text in a string or a comment never counts.
+
+Three kinds of bin are exempt, and the lint derives two of them from the repository when it runs, so no crate name is listed in the hook except the host:
+
+- qol-tray's host binary: the bin named `qol-tray` of the package named `qol-tray`, which installs its own tracing subscriber. The package's other bins (install, doctor, migrate, resident-policy) are checked.
+- A bin whose package is in the normal dependency closure of `libs/log`. The closure follows `[dependencies]` and `[target.*.dependencies]` paths from `libs/log/Cargo.toml` onward, resolving `workspace = true` through the root `[workspace.dependencies]`. Dev and build dependencies are not followed. Such a bin cannot depend on qol-log without a cycle; qol-config's bin is one.
+- A bin whose package `.config/hakari.toml` lists under `[final-excludes] workspace-members`. qol-log depends on workspace-hack, so a package kept off it cannot depend on qol-log; qol-build-identity and qol-plugin-registry are two.
+
+The finding does not say why a bin is exempt, so a bin that is not exempt gets the same finding as any other.
+Like the thrown-away rule it is a rule about the code as it stands: an edit to a main that still lacks the call is denied, and `qac lint` reports every site with or without `--base`.
+Residual: a `fn main` produced by a macro, and a call written through a differently named import or a wrapper function, are not seen as the call or as a main.
+
 ### Enforcement: settings guard
 
 A plugin declares every setting in its `qol-config.toml` and reads its config only through `qol_config::load_plugin_config_from_env_with_contract` (or `load_plugin_config_with_contract`). It never locates, reads or writes its config file itself.
@@ -979,7 +999,7 @@ Residual: only Rust is checked, since only Rust can use the crate, so JavaScript
 The edit-time hooks only see new violations, so existing debt stays invisible until someone touches the file. `qac lint [path ...]` runs the qol-arch-code, cross-platform, cicd, logging, plugin data and plugin-contract hooks over whole tracked and untracked files (the whole repo when no path is given), counting every violation already there. It never consumes a bypass marker, and it skips `vendor/` and `third_party/`. Each hook exposes `lintFile(path, content, baseline)` through `bin/hook-lint-mode.cjs`, so a new filter in any of them is linted too.
 
 The rules come in two kinds, and lint treats them differently.
-Rules about the code as it stands (a target_os cfg on a `use`, facade coverage, source layout, adapter-exclusive helpers, allow attributes, plugin data, plugin identity, file system results thrown away, crate dependency direction, runtime event names) hold or fail on a file alone, so lint checks them on every file.
+Rules about the code as it stands (a target_os cfg on a `use`, facade coverage, source layout, adapter-exclusive helpers, allow attributes, plugin data, plugin identity, file system results thrown away, a process entry point's logger, crate dependency direction, runtime event names) hold or fail on a file alone, so lint checks them on every file.
 Rules about added code (target_os placement, platform decision signals, settings, active monitor, design, test deadlines, logging, runtime event payload shape) compare a file with its earlier content, which a static file does not have.
 Without a base, lint counts every line as added, which turns "do not add X" into "X must never exist".
 `qac lint --base=<rev>` compares those rules with each file at `<rev>` instead: an unchanged file finds nothing, a changed file finds only what it added, a file git sees as moved since `<rev>` compares with its content at the old path, and a file new since `<rev>` counts in full.

@@ -46,6 +46,7 @@ const lintMode = require('./hook-lint-mode.cjs');
 const { inQolRepo } = require('./qol-repo.cjs');
 const { readExistingFile, prospectiveContent } = require('./hook-edit-content.cjs');
 const serde = require('./rust-serde.cjs');
+const { entryGaps } = require('./process-entry.cjs');
 
 function readStdin() {
     try {
@@ -319,7 +320,7 @@ function evaluate(payload) {
     const existing = readExistingFile(filePath);
     const after = prospectiveContent(tool, input, existing);
     const added = addedSignals(filePath, existing || '', after, signals);
-    const gaps = fsGaps(filePath, after);
+    const gaps = [...fsGaps(filePath, after), ...entryGaps(filePath, after)];
     if (added.length === 0 && gaps.length === 0) return 0;
     deny(filePath, added, gaps);
     return 2;
