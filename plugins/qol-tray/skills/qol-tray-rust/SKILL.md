@@ -70,8 +70,9 @@ Rule for new code: do **not** scatter `#[cfg(target_os = "...")]` across feature
 ## Concurrency
 
 - Tokio for I/O-bound work; `std::thread` for CPU-bound.
-- Shared state: prefer `tokio::sync::{mpsc, oneshot, watch}` over `Arc<Mutex<T>>`.
-- When `Arc<Mutex<T>>` is unavoidable, keep lock scope narrow - **never** hold a lock across `.await`.
+- Shared state: prefer `tokio::sync::{mpsc, oneshot, watch}` over `Arc<qol_sync::Mutex<T>>`.
+- When a lock is unavoidable, take it from `qol_sync` (`Mutex`, `RwLock`, `Condvar`), whose lock calls return the guard and recover a poisoned lock, because `qac lint` refuses the std locks outside tests.
+- Keep lock scope narrow and **never** hold a guard across `.await`; the tray's `clippy.toml` names `qol_sync::MutexGuard`, so clippy still flags it.
 - Cancellation: explicit via `CancellationToken` or dropped senders, never ad-hoc `AtomicBool` flags.
 - Track every `tokio::spawn` `JoinHandle`. Detached unbounded tasks are how leaks and zombie daemons happen.
 
