@@ -71,3 +71,7 @@ Local and remote providers are not interchangeable in privacy terms. A remote pr
 ## Verification
 
 Run format, build, Clippy with warnings denied, and tests, plus `cargo run -q -p qol -- check`. Turn, routing, and provider-selection logic must be covered without a microphone or a network. Claims about capture, transcription accuracy, or delivery into a live session need evidence from a real run on a declared target, which per the workspace rule means a guest environment rather than the host.
+
+## Roadmap
+
+The directed-speech gate and fast delivery for an always-on mic are planned in `docs/plans/2026-11-21-voice-directed-speech.md` in qol-monorepo, with the prototype's measurements and timestamped log. Read it before changing routing, turn policy or delivery speed for that case.
