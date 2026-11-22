@@ -214,6 +214,12 @@ conventional" step runs `.githooks/commit-msg` on that subject: it fails the
 not rerun them. See the qol-workflow:commit skill, "Pull request titles".
 A batch's combined pull request names its originals' scopes in its title, because a title with no scope releases every unit the batch reaches.
 
+Agent sessions commit and open pull requests as `kmrh47-agents`, so the squash commit is that account's, and the owner `KMRH47` is credited on it only through a `Co-authored-by` line.
+`.githooks/prepare-commit-msg` writes that line at the end of every commit whose author email is one of the agent account's two, and GitHub's squash carries the co-authors of a pull request's commits.
+It leaves other authors alone, and a message with no text yet (a commit written in the editor), so closing the editor empty still aborts.
+The plan job's "Squash commit credits the owner" step runs `.github/scripts/owner_credit.py`: a pull request run reads the pull request's author and the authors and co-authors of its commits, a `merge_group` run reads the accounts GitHub credits on the commit that lands, and either fails when `kmrh47-agents` is credited and `KMRH47` is not.
+The fix for a failed step is a new commit made with `core.hooksPath` set to `.githooks`, such as a merge of main into the branch.
+
 The `claude review` verdict job runs the pull request's own `claude-review.yml` and `review_gate.py`, and the ruleset accepts any Actions job named `claude review`.
 A pull request that changes either file, or adds a job of that name, therefore judges itself.
 Only an org ruleset that requires the workflow from a trusted ref closes that gap.
