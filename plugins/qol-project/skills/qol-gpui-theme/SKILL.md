@@ -305,8 +305,9 @@ that register; the table above is the general one.
 
 A core tool reaches the panel chrome through `CustomSettingsBreadcrumbs`.
 `settings_breadcrumbs` adds its words to the trail, and `settings_hints` returns
-`CustomHints { question, left, right }`, where the panel adds `esc back` when
-`right` is empty. The panel calls `settings_page_shown` every time it shows the
+`CustomHints { left, right }`, where the panel adds `esc back` when
+`right` is empty. The hint bar only lists keys: a tool that asks pushes a
+`SettingsQuestion` card (see "Asking on a card"). The panel calls `settings_page_shown` every time it shows the
 tool's page, so a tool that keeps a snapshot reloads it there instead of waiting
 for its next poll. While a core tool reports a crumb its own deck is deeper than
 its list, so the panel draws no accent edge on the tool's card and the tool's
@@ -343,7 +344,8 @@ same `tile_arts`, `choose_step` and `choose_hints`.
 | Device list | `SettingsDeviceEntry` with `DeviceLight`, `settings_device_kind`, `DEVICE_LIST_WIDTH` | a column `DEVICE_LIST_WIDTH` 240 wide on the rail ground beside the page body, py `SPACE_INSET`, inner corners `RADIUS_CARD - LINE` while the plugin rail is open; a kind is the Label style in rail `faint`, h `DEVICE_KIND_HEIGHT` 32, pb `SPACE_TIGHT`; an entry is h `HEIGHT_RULE_ROW`, px `SPACE_PAD`, gap `SPACE_CELL`: a 48 x 30 `pictures::fitted_image`, ListName over a Detail status in `soft` led by a status dot (`success` when live, `faint` when away, none when fixed); the chosen entry is `paint_rail_selection`, the band while the list has focus and `band_rest_fill` once the body has it; an away entry rests at `OPACITY_REST` |
 | Row ground | `components::RowGround` | pane at rest, band when the row is selected with the body focused, band hover through `group_hover(SETTINGS_ROW_GROUP)` |
 | Settings tile | `components::SettingsTile` with `TileArt`, `tile_layout`, `settings_tile_rows` and `TILE_HEIGHT` | `TILE_HEIGHT` 116, px `SPACE_SNUG`, gap `layout.gap`, rounded `RADIUS_CARD`; art 112 x 70 at three per row, 104 x 65 at four and 88 x 55 at five; grid gap `SPACE_CELL` at three and four per row and `SPACE_INSET` at five; name `TEXT_CAPTION`, `TEXT_MICRO` at five per row; tick 16 x 12 at top `SPACE_CELL`, right `SPACE_INSET`; `settings_tile_rows` pads the first row by `SPACE_INSET`; `tile_arts` gives each option its valid picture, else `letters_for` letters, else `letters:?`; `choose_step` moves the highlight and stops at every edge; `choose_hints` is `↵ choose` with `←→ move`, or `←→↑↓ move` once the tiles wrap |
-| Hint bar (question) | `components::SettingsHintBar` with `SettingsHint` and `HintTone` | resting: `kit().hint_bar()` with the left hints, a spacer and the right hints; question: the bar fills `translucent(grounds.pane.ink, Alpha::Wash)`, the question in the ListName style in ink, then the hints, with no mark on its edge; `hint_tone_color` gives `success` for `Save` and `danger` for `Discard`, each key chip edged in its hue at `Alpha::Veil`; `SettingsHint::busy(label)` draws `settings_action_spinner` at 12 px where the keycap would be, then its label |
+| Hint bar | `components::SettingsHintBar` with `SettingsHint` and `HintTone` | `kit().hint_bar()` with the left hints, a spacer and the right hints, and nothing else: it never carries a question; `hint_tone_color` gives `success` for `Save` and `danger` for `Discard`, each key chip edged in its hue at `Alpha::Veil`; `SettingsHint::busy(label)` draws `settings_action_spinner` at 12 px where the keycap would be, then its label |
+| Question card | `components::SettingsQuestion` with `SettingsAnswer` and `QuestionKey` | a card one level deeper: `SettingsGroupHeader` with the question's title and colophon, then one `SettingsRow::setting` per answer, a label group over its detail and its verb as a tag at the row end; a `Save` answer's label is `success`, a `Discard` answer's `danger` and its row `destroys`; the running answer swaps its detail for its busy detail and its tag for `settings_action_spinner` at 12 px, and no other row takes a click; `hints()` gives `↵ <verb>`, `↑↓ move` and `esc back`, or the busy hint alone |
 | Tile spinner | `components::settings_tile_spinner` | 44 px (`TILE_SPINNER_SIZE`) in `grounds.pane.faint` |
 | Tick | `pictures::tick` | the locked 16 x 12 markup: a 6 x 11 box with 2 px right and bottom borders turned 45 degrees about its centre; drawn in a tile in `grounds.pane.mark` at rest and `grounds.band.ink` when highlighted |
 | Deck | `deck::render` with `DeckFrame`, `deck::resting`, `deck::edge_alpha` and `deck::rail_opacity` | front card rests at `9d+1`; sliver `i` at left `9i`, 12 wide, inset `7(d-i)`; sliver edge `status_muted` at `max(0.08, 0.5 x 0.62^(d-1-i))`; rail `max(0.12, 0.5 x 0.65^(d-1))`, 0.5 at depth 0 and 1; mark `HEIGHT_INLINE` at `top(y - 14 - inset)`; `DeckFrame.on_sliver` takes a click on sliver `i`, and every card, sliver and drawer calls `.occlude()` |
@@ -389,9 +391,9 @@ Rules for settings scope:
   loading, same frame as `settings_message`). A value cell waiting on a query
   shows the spinner alone, status rows included. A status value that is null
   shows an en dash, not loading. A toast for an operation still running is
-  marked `Toast::live()` and sits on the menu ground. A core tool saving from
-  its question keeps the question up with `SettingsHint::busy("saving")`, the
-  action spinner where the keycap would be.
+  marked `Toast::live()` and sits on the menu ground. An answer that starts
+  work spins on its own row of the question card, and the hint bar shows its
+  busy hint, such as `SettingsHint::busy("saving")`.
 
 - **R8** Every heading in a settings surface is the masthead, and its colophon
   says what that group is for. See "The masthead, the colophon and the trail"
@@ -559,24 +561,42 @@ colour, shadow, alpha, time or chip does not build.
 - **Busy** is the spinner, alone in a value cell and beside a caption everywhere
   else. Text never animates.
 
+## Asking on a card
+
+Picked 2026-11-24 over the one-line question in the hint bar, which was too
+easy to miss. A settings surface asks a question only as a `SettingsQuestion`
+card pushed one level deeper with the usual slide: the trail gains the
+question's title, the answers are rows, and the hint bar keeps listing keys.
+qac's `footer-question` rule fails a question written into `CustomHints` or
+`SettingsHintBar`, anywhere in the repo.
+
+- `↵` answers the row under the cursor, `↑↓` moves, `esc` goes back to the card
+  it was asked from with nothing done. A click on an answer row answers it.
+- An answer that starts work, such as saving or restarting, spins on its own
+  row while the other rows go quiet, and keys are held until it ends.
+- The card closes with the card under it when the answer finishes that card,
+  and alone when the answer goes back to it.
+
 ## Leaving a changed card
 
 Locked 2026-09-13. There is no Save row, no autosave and no inline draft: a card
 holds its changes while it is open, and leaving it is what decides them.
 
-Esc on a changed form card turns the hint bar into the question. The bar is a
-plain ink lift, ink at `Alpha::Wash` over the hint bar, with the question in the
-ListName style in ink and nothing on its edge. `↵` save is in `success` and `esc`
-discard in `danger`, each key chip edged in its own hue at `Alpha::Veil`.
+Esc on a changed form card pushes `SettingsQuestion::save_changes`: trail
+"save changes", rows Save and Discard, the cursor on Save. `↵` saves and closes
+both cards, `↓ ↵` discards, and `esc` goes back to editing. A required empty
+field blocks the save with `SettingsQuestion::blocked`: trail "<field> is
+empty", rows "Fill in the <field>", which goes back to that field, and Discard.
 
-Any other key closes the question and does its normal job. A required empty
-field blocks with a sentence in the bar, and `↵` goes to that field. Esc twice
-discards.
+The contract panel's form cards and the Shortcuts and Hotkeys editors ask the
+same way. The editors' crumb is fixed when the card opens, `secondary+↵` saves
+at once or asks the blocked question, and while the save runs the Save row
+spins. A failed save keeps the card and its question.
 
-The Shortcuts and Hotkeys editors are form cards that ask the same way. Their
-crumb is fixed when the card opens, `secondary+↵` asks at once and saves when
-nothing blocks, and while the save runs the question stays up beside the busy
-`saving` hint. A failed save keeps the card and its question.
+The Updates page asks the same way when a pull request build carries qol-tray:
+↵ on a build keeps the picker open while that row spins, then the "restart
+qol-tray" card offers Restart on the build, which restarts qol-tray, and Keep
+the installed version, with the cursor on Keep.
 
 ## Picture choices
 

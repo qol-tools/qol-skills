@@ -34,7 +34,7 @@ use qol_gpui::settings_panel::{intent, settings_list, SettingsGroupHeader, Custo
 
 impl CustomSettingsBreadcrumbs for PeersView {
     fn settings_hints(&self) -> Option<CustomHints> {
-        Some(CustomHints { question: None, left: vec![SettingsHint::new(Key::ENTER, "open")], right: Vec::new() })
+        Some(CustomHints { left: vec![SettingsHint::new(Key::ENTER, "open")], right: Vec::new() })
     }
 }
 
@@ -412,6 +412,30 @@ test('blocks a settings file that ends a row in a mark other than the chevron', 
         assert.ok(r.stderr.includes(`ends a settings row in a mark other than the chevron (${name})`), r.stderr);
         assert.match(r.stderr, /a row that acts right here ends in its action word/);
     }
+});
+
+test('blocks a question asked in the hint bar anywhere in the repo', () => {
+    const cases = [
+        [SETTINGS, 'fn hints() -> CustomHints {\n    CustomHints {\n        question: Some("Save changes?".into()),\n        left: Vec::new(),\n        right: Vec::new(),\n    }\n}\n', 'through CustomHints'],
+        ['libs/gpui/src/settings_panel/navigation.rs', 'pub struct CustomHints {\n    pub question: Option<SharedString>,\n    pub left: Vec<SettingsHint>,\n}\n', 'through CustomHints'],
+        ['tools/fixture/src/lib.rs', 'fn hints() -> CustomHints {\n    CustomHints { left, question: None, right }\n}\n', 'through CustomHints'],
+        [SURFACE, 'fn bar() {\n    SettingsHintBar::new(kit)\n        .left(left)\n        .question(text)\n        .right(right);\n}\n', 'through SettingsHintBar::question'],
+    ];
+    for (const [relative, content, how] of cases) {
+        const root = workspace();
+        const r = write(root, relative, content);
+        assert.strictEqual(r.exitCode, 2, `${relative}: ${r.stderr}`);
+        assert.ok(r.stderr.includes(`asks a question in the hint bar ${how}`), r.stderr);
+        assert.match(r.stderr, /SettingsQuestion::new\(title, colophon\)/);
+    }
+});
+
+test('a question card and a form\'s own question pass', () => {
+    const root = workspace();
+    const card = write(root, SETTINGS, 'fn hints(question: &SettingsQuestion<Answer>) -> CustomHints {\n    let asked = form.question();\n    CustomHints { left: question.hints().left, right: Vec::new() }\n}\n');
+    assert.strictEqual(card.exitCode, 0, card.stderr);
+    const bar = write(root, SURFACE, 'fn bar() {\n    SettingsHintBar::new(kit).left(left);\n    let asked = form.question();\n}\n');
+    assert.strictEqual(bar.exitCode, 0, bar.stderr);
 });
 
 test('blocks a settings file that states a row fact as loose text', () => {

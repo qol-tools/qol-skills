@@ -70,6 +70,7 @@ const ROW_MARKS = ['Icon::Enter', 'Icon::Copy', 'Icon::Reveal', 'pictures::open_
 const ENDING_USE = 'nothing: the chevron is the only mark a settings row ends in, drawn by SettingsRow::opens(true) or SettingsRow::launches(..) when enter opens a page, a list or another app; a row that acts right here ends in its action word, settings_action_word(id, verb, busy, row, kit), the verb the hint bar names for enter';
 const ACTION_WORD = /\b(Row)?Action::[A-Z]/;
 const ACTION_WORD_USE = 'settings_action_word(id, verb, busy, row, kit) at the end of every row whose enter acts right here, with the verb the hint bar names for it, so the row says what enter does';
+const FOOTER_QUESTION_USE = 'SettingsQuestion::new(title, colophon).answer(SettingsAnswer::new(action, label, detail, verb)) pushed as a settings card one level deeper, its title in the trail and its answers as rows (SettingsQuestion::save_changes or ::blocked when a changed card is left): the hint bar only lists keys';
 const LINE_COMMENT = '/'.repeat(2);
 const TRANSPARENT = /^rgba\(\s*0(x0+)?\s*\)$/;
 
@@ -587,6 +588,34 @@ function settingsPageRules(relative, body, add) {
     }
 }
 
+function closingBrace(text, open) {
+    let depth = 0;
+    for (let at = open; at < text.length; at += 1) {
+        if (text[at] === '{') depth += 1;
+        if (text[at] === '}') depth -= 1;
+        if (depth === 0) return at;
+    }
+    return text.length;
+}
+
+function footerQuestionRules(body, add) {
+    const code = body.split('\n').map(line => (isCommentLine(line) ? '' : line)).join('\n');
+    for (const match of code.matchAll(/\bCustomHints\s*\{/g)) {
+        const open = match.index + match[0].length - 1;
+        if (/(^|[\s,{])question\s*:/.test(code.slice(open + 1, closingBrace(code, open)))) {
+            add('footer-question', lineOf(code, match.index), 'asks a question in the hint bar through CustomHints', FOOTER_QUESTION_USE);
+        }
+    }
+    const lines = code.split('\n').map(compact);
+    lines.forEach((flat, index) => {
+        if (!flat.includes('.question(')) return;
+        const chain = lines.slice(Math.max(0, index - 8), index + 1).join('');
+        if (chain.includes('SettingsHintBar::new(') && !chain.slice(chain.lastIndexOf('SettingsHintBar::new(')).includes(';')) {
+            add('footer-question', index + 1, 'asks a question in the hint bar through SettingsHintBar::question', FOOTER_QUESTION_USE);
+        }
+    });
+}
+
 function namesCrumbs(body) {
     const start = body.search(/fn settings_breadcrumbs\s*\(/);
     if (start < 0) return false;
@@ -735,7 +764,11 @@ function designViolations(relative, content, root) {
     if (!content || isTestFile(relative) || isGenerated(relative)) return [];
     if (relative.endsWith('.rs') && root && serde.isTestFile(path.join(root, relative))) return [];
     const extension = path.extname(relative);
-    if (extension === '.rs' && SURFACE_ROOT.test(relative)) return rustViolations(relative, content, root);
+    if (extension === '.rs') {
+        const found = SURFACE_ROOT.test(relative) ? rustViolations(relative, content, root) : [];
+        footerQuestionRules(beforeTests(content), (rule, line, what, use) => found.push({ rule, line, what, use }));
+        return found;
+    }
     if (WEB_ROOT.test(relative) && extension === '.css') return cssViolations(relative, content);
     if (WEB_ROOT.test(relative) && ['.js', '.mjs'].includes(extension)) return jsViolations(relative, content);
     return [];
