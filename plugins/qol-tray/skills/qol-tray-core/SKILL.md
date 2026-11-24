@@ -341,6 +341,15 @@ updates), and remembered windows were reopened next to ones still open.
   the tray icon, settings windows, toasts and hotkey capture; settings, `exec`,
   the MCP endpoint, daemon restarts and linked devices keep working. Restarts
   re-exec with the same arguments, so the flag persists.
+- **One restart owner**: every replacement of the running tray (a release
+  update on Linux and macOS, the dev restart, a pull request try and its
+  put-back) goes through `relaunch::restart_into`. It records the windows to
+  reopen, runs the caller's cleanup, replaces the process the platform's way
+  (exec on Linux, a successor started from the main thread on macOS, a
+  successor and exit on Windows) and drops the reopen list when that fails.
+  Only the Windows update keeps its own order, starting the new tray before it
+  stops plugins. A try's cleanup stops plugins with `stop_for_restart`, which
+  leaves the plugin manager usable, so a failed restart starts them again.
 - **One switch, checked at the owner**: `headless_mode::active()` is read inside
   the entry points that own each surface (the settings surface, plugin
   notifications, native notifications, `hotkeys::start_capture_with_fallback`,

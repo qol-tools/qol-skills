@@ -306,7 +306,9 @@ that register; the table above is the general one.
 A core tool reaches the panel chrome through `CustomSettingsBreadcrumbs`.
 `settings_breadcrumbs` adds its words to the trail, and `settings_hints` returns
 `CustomHints { question, left, right }`, where the panel adds `esc back` when
-`right` is empty. While a core tool reports a crumb its own deck is deeper than
+`right` is empty. The panel calls `settings_page_shown` every time it shows the
+tool's page, so a tool that keeps a snapshot reloads it there instead of waiting
+for its next poll. While a core tool reports a crumb its own deck is deeper than
 its list, so the panel draws no accent edge on the tool's card and the tool's
 `deck::render` draws every edge and mark. Both hosts build choose cards from the
 same `tile_arts`, `choose_step` and `choose_hints`.
