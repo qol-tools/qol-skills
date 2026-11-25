@@ -3,6 +3,8 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const path = require('node:path');
+const fs = require('node:fs');
+const os = require('node:os');
 const { spawnSync } = require('node:child_process');
 
 const HOOK = path.join(__dirname, '..', 'bin', 'build-deny-local.cjs');
@@ -102,6 +104,47 @@ test('scopes to qol-monorepo and its worktrees', () => {
     assert.equal(inMonorepo(OTHER, `cd ${WORKTREE} && cargo build`), true);
     assert.equal(inMonorepo(OTHER, `cargo build --manifest-path ${MONOREPO}/Cargo.toml`), true);
     assert.equal(inMonorepo('/media/x/Git/qol-monorepo-other', 'cargo build'), false);
+});
+
+function cloneNamedQol() {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'build-deny-'));
+    const clone = path.join(root, 'qol');
+    const agentTree = path.join(clone, '.claude', 'worktrees', 'agent-a1', 'libs');
+    fs.mkdirSync(path.join(clone, '.github'), { recursive: true });
+    fs.writeFileSync(path.join(clone, '.github', 'live-test-paths'), '');
+    fs.mkdirSync(agentTree, { recursive: true });
+    return { root, clone, agentTree };
+}
+
+test('finds a clone of any name by its live-test-paths file', () => {
+    const { root, clone, agentTree } = cloneNamedQol();
+    assert.equal(inMonorepo(clone, 'cargo test'), true);
+    assert.equal(inMonorepo(agentTree, 'cargo test'), true);
+    assert.equal(inMonorepo(root, 'cargo test'), false);
+    assert.equal(inMonorepo(OTHER, `cd ${clone} && cargo test`), true);
+    assert.equal(inMonorepo(OTHER, `cargo build --manifest-path ${clone}/Cargo.toml`), true);
+    assert.equal(run('cargo test --workspace', agentTree).decision, 'deny');
+    assert.equal(run('cargo test', root).decision, null);
+    fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('finds a clone of any name through a relative or home path', (t) => {
+    const { root, clone } = cloneNamedQol();
+    const home = process.env.HOME;
+    t.after(() => {
+        process.env.HOME = home;
+        fs.rmSync(root, { recursive: true, force: true });
+    });
+    process.env.HOME = root;
+    assert.equal(inMonorepo(root, 'cd qol && cargo test'), true);
+    assert.equal(inMonorepo(path.join(root, 'other'), 'cd ../qol/libs && cargo test'), true);
+    assert.equal(inMonorepo(root, 'cargo build --manifest-path qol/Cargo.toml'), true);
+    assert.equal(inMonorepo(OTHER, 'cd ~/qol && cargo test'), true);
+    assert.equal(inMonorepo(OTHER, 'cd $HOME/qol && cargo test'), true);
+    assert.equal(inMonorepo(OTHER, 'cd "${HOME}/qol" && cargo test'), true);
+    assert.equal(inMonorepo(root, 'cd elsewhere && cargo test'), false);
+    assert.equal(inMonorepo(root, 'cargo test -p qol'), false);
+    assert.equal(clone, path.join(root, 'qol'));
 });
 
 test('denies in the monorepo and allows elsewhere', () => {

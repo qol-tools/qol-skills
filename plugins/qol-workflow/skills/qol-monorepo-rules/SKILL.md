@@ -275,12 +275,19 @@ before reporting done.
 `check`, `test`, `clippy`, `run`, `nextest`, `bench`, `doc`, `install`, `fix`,
 `rustc`, `miri`, `llvm-cov` and `tarpaulin` (short forms too), and `qol build`,
 `check`, `dev`, `install`, `setup` and `qol env up --dev-worktree`, when the cwd,
-a `cd` target or a path in the command is in qol-monorepo or its worktrees. It
-looks past environment assignments and wrappers such as `nice` and `timeout`,
-and ignores text inside quotes, comments and heredoc bodies. A command ending in
+a `cd` or `--manifest-path` target (relative, `~/` and `$HOME` paths resolved) or
+an absolute path in the command is in qol-monorepo or its worktrees. It knows
+the repo by its folder name or by a `.github/live-test-paths` file in a folder
+above, so a clone with another name, such as `~/git/private/qol` on the Mac, and
+the agent worktrees inside it are covered too. It looks past environment
+assignments and wrappers such as `nice` and `timeout`, and ignores text inside
+quotes, comments and heredoc bodies. A command ending in
 ` # user approved local build` passes, for a build the user approved.
 Incident (2026-11-01): agents compiled the workspace locally for every check
 while the user worked on the same PC, and the user asked that CI do it.
+Incident (2026-11-25): on the Mac the clone is named `qol`, the guard never
+fired, and 11 agent worktrees compiled 135G of build files until the disk had
+119MB left.
 Residual: a compile started by a script, a Makefile, `qac gate` judges or an
 editor is not seen, and nothing stops an agent writing the approval comment
 without an approval.

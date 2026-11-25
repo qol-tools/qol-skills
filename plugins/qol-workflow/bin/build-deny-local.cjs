@@ -6,6 +6,7 @@ const path = require('node:path');
 
 const MONOREPO = /(^|[\\/])qol-monorepo(-worktrees)?([\\/]|$)/;
 const APPROVED = /#\s*user approved local build\b/;
+const MARKER = path.join('.github', 'live-test-paths');
 
 const CARGO_COMPILES = new Set([
     'build', 'b', 'check', 'c', 'test', 't', 'clippy', 'run', 'r', 'nextest',
@@ -122,9 +123,40 @@ function findLocalCompile(command) {
     return null;
 }
 
+function hasMarkerAbove(start) {
+    let dir = path.resolve(start);
+    for (;;) {
+        if (fs.existsSync(path.join(dir, MARKER))) return true;
+        const parent = path.dirname(dir);
+        if (parent === dir) return false;
+        dir = parent;
+    }
+}
+
+function expandHome(token) {
+    const home = process.env.HOME || '';
+    if (!home) return token;
+    return token.replace(/^(?:~|\$HOME|\$\{HOME\})(?=\/|$)/, home);
+}
+
+function commandPaths(text, cwd) {
+    const absolute = text.split(/[\s=;&|()`'"]+/)
+        .map(expandHome)
+        .filter((token) => path.isAbsolute(token));
+    if (typeof cwd !== 'string') return absolute;
+    const targets = [...text.matchAll(/(?:^|[\s;&|(])(?:cd|pushd)\s+['"]?([^\s;&|)'"]+)/g),
+        ...text.matchAll(/--manifest-path[=\s]+['"]?([^\s;&|)'"]+)/g)]
+        .map((match) => expandHome(match[1]))
+        .filter((target) => !path.isAbsolute(target))
+        .map((target) => path.resolve(cwd, target));
+    return [...absolute, ...targets];
+}
+
 function inMonorepo(cwd, command) {
-    if (typeof cwd === 'string' && MONOREPO.test(cwd)) return true;
-    return MONOREPO.test(stripHeredocs(command));
+    const text = stripHeredocs(command);
+    if (typeof cwd === 'string' && (MONOREPO.test(cwd) || hasMarkerAbove(cwd))) return true;
+    if (MONOREPO.test(text)) return true;
+    return commandPaths(text, cwd).some(hasMarkerAbove);
 }
 
 function denyReason(compile) {
@@ -147,11 +179,11 @@ function main() {
     const command = (payload.tool_input && payload.tool_input.command) || '';
     if (!command || APPROVED.test(command)) return 0;
 
-    const cwd = (payload.tool_input && payload.tool_input.cwd) || payload.cwd || process.cwd();
-    if (!inMonorepo(cwd, command)) return 0;
-
     const compile = findLocalCompile(command);
     if (!compile) return 0;
+
+    const cwd = (payload.tool_input && payload.tool_input.cwd) || payload.cwd || process.cwd();
+    if (!inMonorepo(cwd, command)) return 0;
 
     process.stdout.write(JSON.stringify({
         hookSpecificOutput: {
