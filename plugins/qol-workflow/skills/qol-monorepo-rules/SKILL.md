@@ -92,6 +92,14 @@ request with the watcher in the background (Bash `run_in_background: true`, then
 end the turn), reports with its final message instead of `session_send`, and asks
 the user by ending its turn with the question and a recommended answer.
 
+Pull requests belong to the fork the switchboard started, which orchestrates all
+of its work. A fork that another fork started never opens, readies, merges or
+watches a pull request: it commits and pushes its work on a branch and names the
+branch in its final message, and the fork that started it opens the pull request
+or takes the commits into its own, watches it and owns it. The user said on
+2026-11-26: "the main session should orchestrate it and be the single source of
+all work and PRs".
+
 Claude Code drops a subagent from the agent list 30 seconds after its turn ends
 unless a background command of its own still runs, and the user can then no
 longer select it or type to it, so a fork that seems dead is only idle. Before a
